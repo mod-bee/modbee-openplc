@@ -1,0 +1,7 @@
+TYPE
+  UT_SELECT_DATA : STRUCT
+    set : UT_SELECT_SET; (* settings (kept) *)
+    cmdReset : BOOL;
+    sts : UT_SELECT_STS;
+  END_STRUCT;
+END_TYPE

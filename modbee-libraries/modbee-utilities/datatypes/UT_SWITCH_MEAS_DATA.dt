@@ -1,0 +1,8 @@
+TYPE
+  UT_SWITCH_MEAS_DATA : STRUCT
+    set : UT_SWITCH_MEAS_SET; (* settings (kept) *)
+    cmdReset : BOOL;
+    sts : UT_SWITCH_MEAS_STS;
+    timeLeft : TIME; (* detail: the countdown shown *)
+  END_STRUCT;
+END_TYPE

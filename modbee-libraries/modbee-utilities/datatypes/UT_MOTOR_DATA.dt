@@ -1,0 +1,16 @@
+TYPE
+  UT_MOTOR_DATA : STRUCT
+    set : UT_MOTOR_SET; (* settings (kept) *)
+    simulate : BOOL; (* not kept: feedback follows the coil *)
+    cmdMode : INT := -1; (* 0 Off, 1 Hand, 2 Auto, 3 OOS; set back to -1 *)
+    cmdStart : BOOL;
+    cmdStop : BOOL;
+    cmdReset : BOOL;
+    cmdPreset : BOOL; (* set the totals to presetHours / presetStarts *)
+    presetHours : LREAL; (* 0 .. 1E7 *)
+    presetStarts : UDINT;
+    sts : UT_MOTOR_STS;
+    det : UT_MOTOR_DET;
+    tot : UT_MOTOR_TOT; (* totals (kept hourly) *)
+  END_STRUCT;
+END_TYPE

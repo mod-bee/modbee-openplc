@@ -1,0 +1,7 @@
+TYPE
+  UT_LEVEL_CHECK_DATA : STRUCT
+    set : UT_LEVEL_CHECK_SET;
+    cmdReset : BOOL;
+    sts : UT_LEVEL_CHECK_STS;
+  END_STRUCT;
+END_TYPE

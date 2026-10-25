@@ -1,0 +1,7 @@
+TYPE
+  UT_MIXER_DATA : STRUCT
+    set : UT_MIXER_SET;
+    sts : UT_MIXER_STS;
+    det : UT_MIXER_DET;
+  END_STRUCT;
+END_TYPE

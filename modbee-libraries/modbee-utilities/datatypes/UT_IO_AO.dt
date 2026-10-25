@@ -1,0 +1,9 @@
+TYPE
+  UT_IO_AO : STRUCT
+    v : REAL; (* your logic: the raw value wanted *)
+    out : REAL; (* status: what went to the channel *)
+    ok : BOOL;
+    fit : BOOL;
+    why : UT_IO_Q;
+  END_STRUCT;
+END_TYPE

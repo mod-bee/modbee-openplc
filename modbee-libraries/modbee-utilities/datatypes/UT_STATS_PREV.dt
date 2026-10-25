@@ -1,0 +1,9 @@
+TYPE
+  UT_STATS_PREV : STRUCT
+    min : REAL;
+    max : REAL;
+    average : REAL;
+    duration : TIME;
+    samples : UDINT;
+  END_STRUCT;
+END_TYPE

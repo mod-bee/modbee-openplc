@@ -1,0 +1,24 @@
+TYPE
+  UT_VESSEL_SET : STRUCT
+    tanks : USINT := 1; (* tanks joined at the bottom (1..6) *)
+    shape : UT_VESSEL_SHAPE; (* tank 1 *)
+    diameter : REAL := 1.0;
+    height : REAL := 1.0;
+    length : REAL := 1.0;
+    width : REAL := 1.0;
+    coneHeight : REAL;
+    outletDiameter : REAL;
+    slope : REAL; (* POND: bank slope, horizontal per 1 vertical *)
+    tableFull : REAL; (* TABLE: volume when full, in volumeUnit *)
+    more : ARRAY [2..6] OF UT_TANK_MORE;
+    levelUnit : UT_LEVEL_UNIT;
+    volumeUnit : UT_VOL_UNIT; (* NONE / M3 = m3, L, ML *)
+    massUnit : UT_MASS_UNIT;
+    levelOffset : REAL; (* added to the level (sensor zero above / below the bottom) *)
+    fraction : REAL := 1.0; (* share of the vessel (0.5 = half a divided silo) *)
+    density : REAL := 1000.0; (* kg/m3 *)
+    deadVolume : REAL; (* unusable volume, in volumeUnit *)
+    pctLow : REAL; (* levelPct 0 % at this level; both 0 = whole height *)
+    pctHigh : REAL; (* levelPct 100 % at this level *)
+  END_STRUCT;
+END_TYPE

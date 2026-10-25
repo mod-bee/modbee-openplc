@@ -1,0 +1,11 @@
+{
+  "name": "node-uio",
+  "displayName": "ModBee Node UIO",
+  "version": "0.0.1",
+  "namespace": "node_uio",
+  "description": "Function blocks for the ModBee Node UIO board. Eight digital inputs and eight digital outputs, four analog inputs and two analog outputs with a per-channel range and two-point calibration, the HAT power switch, the network, sleep and wake, a controlled restart, hardware pulse counting for flow meters, I2C expansion modules, and the controller's own health for on-site diagnosis. Hardware only \u2014 no protocol is built in, so a protocol library runs alongside it rather than inside it.",
+  "build": {
+    "verify": "arduino",
+    "core": "esp32:esp32"
+  }
+}

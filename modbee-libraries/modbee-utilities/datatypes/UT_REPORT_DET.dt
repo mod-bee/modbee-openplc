@@ -1,0 +1,5 @@
+TYPE
+  UT_REPORT_DET : STRUCT
+    sinceLast : TIME;
+  END_STRUCT;
+END_TYPE

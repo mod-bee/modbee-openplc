@@ -1,0 +1,12 @@
+TYPE
+  SPARKPLUG_MEMBER : STRUCT
+    NAME : STRING(32); (* the member's path, without PREFIX: 'levelMm', 'pump.hours', 'spare[3]', or 'spare' for the whole array *)
+    UNITS : STRING(12); (* engineering units, engUnit in the birth *)
+    DEADBAND : REAL; (* its own deadband, in its units; 0 = every change *)
+    DEADBAND_PCT : REAL; (* its own deadband, % of the value last sent *)
+    LOW : REAL; (* display range low, engLow in the birth *)
+    HIGH : REAL; (* display range high, engHigh; LOW = HIGH for none *)
+    PULSE : TIME; (* a command the PLC clears this long after a write; T#0s keeps it *)
+    SKIP : BOOL; (* TRUE leaves the member (or array, or nested STRUCT) out: not a metric *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,17 @@
+TYPE
+  UT_ALARM_SUM_REC : STRUCT
+    onCount : INT;
+    tripCount : INT;
+    unackedCount : INT;
+    firstTrip : INT;
+    firstWarn : INT;
+    tripNew : BOOL; (* a trip on and unacknowledged *)
+    tripRet : BOOL; (* a trip gone, unacknowledged *)
+    tripOn : BOOL; (* a trip on, acknowledged *)
+    warnNew : BOOL;
+    warnRet : BOOL;
+    warnOn : BOOL;
+    sounding : BOOL;
+    badSetting : BOOL;
+  END_STRUCT;
+END_TYPE

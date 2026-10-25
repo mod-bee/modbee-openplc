@@ -1,0 +1,8 @@
+TYPE
+  UT_IO_AI : STRUCT
+    v : REAL; (* the raw value for your logic -> a source's In *)
+    ok : BOOL;
+    fit : BOOL;
+    why : UT_IO_Q; (* -> a source's InQ *)
+  END_STRUCT;
+END_TYPE

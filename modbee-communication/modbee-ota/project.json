@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "name": "modbee-ota",
+    "type": "plc-library"
+  },
+  "data": {
+    "dataTypes": [],
+    "globalVariableLists": [],
+    "pous": [],
+    "configuration": {
+      "resource": {
+        "tasks": [],
+        "instances": [],
+        "globalVariables": []
+      }
+    },
+    "libraries": [
+      {
+        "name": "modbee-mqtt",
+        "version": "0.0.1"
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+TYPE
+  UT_IO_MOD : STRUCT
+    kind : UT_IO_KIND; (* DI, DO, AI or AO *)
+    src : UT_IO_SRC; (* board, I2C, field or remote *)
+    module : USINT; (* its number within that source (1 = the first) *)
+    first : INT; (* the image row of its channel 1 *)
+    count : USINT; (* how many channels it has *)
+    fitted : BOOL := TRUE; (* setting: installed on this site *)
+    ok : BOOL; (* present and answering: its driver / comms sets this every scan (board: TRUE) *)
+    state : UT_IO_Q; (* status: OK, NOT_FITTED or MISSING (UNUSED for an empty row) *)
+    used : USINT; (* status: functions mapped to it *)
+  END_STRUCT;
+END_TYPE

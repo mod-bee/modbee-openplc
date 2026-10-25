@@ -1,0 +1,10 @@
+TYPE
+  UT_ANNUN_SET : STRUCT
+    hornPriority : UT_PRIORITY := UT_PRIO_LOW; (* only alarms at or above this sound the horn *)
+    hornTimeout : TIME; (* the horn stops by itself after this (0 = never) *)
+    reHorn : TIME; (* sound again after this while still unacknowledged (0 = off) *)
+    fastFlash : TIME := T#250ms;
+    slowFlash : TIME := T#1s;
+    relayOnWarning : BOOL; (* Healthy drops for a warning alarm too *)
+  END_STRUCT;
+END_TYPE

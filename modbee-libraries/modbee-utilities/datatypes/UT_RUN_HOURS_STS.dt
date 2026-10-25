@@ -1,0 +1,17 @@
+TYPE
+  UT_RUN_HOURS_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    totalHours : LREAL;
+    serviceHours : LREAL;
+    todayHours : LREAL;
+    yesterdayHours : LREAL;
+    serviceLeft : LREAL;
+    serviceDue : BOOL;
+    lastRun : TIME; (* written at each run end *)
+  END_STRUCT;
+END_TYPE

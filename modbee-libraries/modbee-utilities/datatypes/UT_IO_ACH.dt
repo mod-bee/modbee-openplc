@@ -1,0 +1,8 @@
+TYPE
+  UT_IO_ACH : STRUCT
+    v : REAL; (* the raw value (inputs: before scaling) *)
+    bad : BOOL;
+    forced : BOOL;
+    fn : USINT;
+  END_STRUCT;
+END_TYPE

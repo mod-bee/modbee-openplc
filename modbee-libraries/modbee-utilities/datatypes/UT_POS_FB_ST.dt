@@ -1,0 +1,6 @@
+TYPE
+  UT_POS_FB_ST : STRUCT
+    dev : UT_PROT_ST;
+    fb : UT_PROT_ST;
+  END_STRUCT;
+END_TYPE

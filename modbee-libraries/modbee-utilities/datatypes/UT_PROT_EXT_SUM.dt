@@ -1,0 +1,14 @@
+TYPE
+  UT_PROT_EXT_SUM : STRUCT
+    trip : DWORD; (* faultCode bits of those tripping now *)
+    warn : DWORD; (* of those warning now *)
+    tripped : DWORD; (* of those latched (their sts.tripped) *)
+    cfgId : UT_FAULT; (* the first with a bad setting (UT_F_NONE = none) *)
+    resetDone : BOOL; (* one of them had a needed reset this scan *)
+    tripId : UT_FAULT; (* the first tripping: its name, *)
+    tripStatus : UT_STATUS; (* its status (reset / locked / retry / waiting), *)
+    tripTime : TIME; (* and its time left *)
+    warnId : UT_FAULT; (* the first warning *)
+    locked : BOOL; (* one needs a reset *)
+  END_STRUCT;
+END_TYPE

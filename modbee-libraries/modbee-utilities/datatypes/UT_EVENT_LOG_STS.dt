@@ -1,0 +1,16 @@
+TYPE
+  UT_EVENT_LOG_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    last : UT_EVENT; (* the newest event (published on change) *)
+    count : INT;
+    logged : UDINT;
+    lost : UDINT;
+    wrnConfig : BOOL; (* Buffer has no element or more than 16 while kept, a negative saveEvery *)
+    wrnSrc : BOOL; (* a call this scan had a Src outside Sources (ignored) *)
+  END_STRUCT;
+END_TYPE

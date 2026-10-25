@@ -1,0 +1,9 @@
+TYPE
+  UT_CMD_SET : STRUCT
+    stopMask : DWORD := 16#00000001; (* the stop / off bits: they win in a scan *)
+    localOnlyMask : DWORD; (* bits only the local master may give (e.g. a reset) *)
+    remoteModes : WORD := 16#FFFF; (* mode codes the remote master may ask for (bit n = code n) *)
+    remoteStop : BOOL := TRUE; (* remote stop bits and mode 0 still act under local control *)
+    remoteSel : BOOL := TRUE; (* the remote master may change the selection *)
+  END_STRUCT;
+END_TYPE

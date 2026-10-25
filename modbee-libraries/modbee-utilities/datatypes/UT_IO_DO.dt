@@ -1,0 +1,10 @@
+TYPE
+  UT_IO_DO : STRUCT
+    q : BOOL; (* your logic: the output wanted *)
+    holdOff : BOOL; (* your logic (a motor's HoldOff): TRUE holds the output off, forced or not *)
+    out : BOOL; (* status: what went to the channel (after a force or the hold) *)
+    ok : BOOL; (* status: the channel is fitted, answering and good *)
+    fit : BOOL;
+    why : UT_IO_Q;
+  END_STRUCT;
+END_TYPE

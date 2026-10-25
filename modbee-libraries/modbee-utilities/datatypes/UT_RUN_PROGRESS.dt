@@ -1,0 +1,14 @@
+TYPE
+  UT_RUN_PROGRESS : STRUCT
+    active : BOOL;
+    latched : BOOL;
+    partMs : LINT;
+    runMs : LINT;
+    partVol : LREAL;
+    runVol : LREAL;
+    runTime : TIME;
+    runVolume : LREAL;
+    cap : TIME;
+    totalAtSave : LREAL;
+  END_STRUCT;
+END_TYPE

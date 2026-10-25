@@ -1,0 +1,7 @@
+TYPE
+  UT_EVENT_LOG_SET : STRUCT
+    retained : BOOL := TRUE; (* keep the log over a power cut (up to 16 events) *)
+    saveEvery : TIME := T#1h; (* kept: copied at most this often (after a quiet spell: at once); T#0s = not kept *)
+    logPowerUp : BOOL := TRUE; (* log a power-up event (source 0) at every power-up *)
+  END_STRUCT;
+END_TYPE

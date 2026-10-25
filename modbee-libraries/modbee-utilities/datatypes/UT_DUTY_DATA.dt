@@ -1,0 +1,11 @@
+TYPE
+  UT_DUTY_DATA : STRUCT
+    set : UT_DUTY_SET;
+    cmdRotate : BOOL;
+    cmdStart : BOOL;
+    cmdStop : BOOL;
+    cmdReset : BOOL;
+    sts : UT_DUTY_STS;
+    det : UT_DUTY_DET;
+  END_STRUCT;
+END_TYPE

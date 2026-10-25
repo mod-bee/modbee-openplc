@@ -1,0 +1,13 @@
+TYPE
+  UT_STATS_CUR : STRUCT
+    min : REAL;
+    max : REAL;
+    sum : LREAL; (* value x milliseconds *)
+    comp : LREAL; (* Kahan compensation *)
+    samples : UDINT;
+    duration : TIME;
+    minAt : TIME;
+    maxAt : TIME;
+    elapsed : TIME; (* time since the period started *)
+  END_STRUCT;
+END_TYPE

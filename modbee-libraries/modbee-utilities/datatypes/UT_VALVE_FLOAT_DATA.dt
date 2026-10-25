@@ -1,0 +1,7 @@
+TYPE
+  UT_VALVE_FLOAT_DATA : STRUCT
+    set : UT_VALVE_FLOAT_SET;
+    cmdHome : BOOL;
+    sts : UT_VALVE_FLOAT_STS;
+  END_STRUCT;
+END_TYPE

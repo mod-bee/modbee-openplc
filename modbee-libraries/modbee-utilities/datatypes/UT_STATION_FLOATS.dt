@@ -1,0 +1,9 @@
+TYPE
+  UT_STATION_FLOATS : STRUCT
+    runAll : BOOL := TRUE; (* the overflow backup runs every pump *)
+    highHold : TIME := T#2m; (* the overflow keeps running this long after the float clears *)
+    runTime : TIME := T#5m; (* float / timer control: each run at most this long *)
+    lockout : TIME := T#1m; (* float / timer control: then this long before the next *)
+    checkDelay : TIME := T#10s; (* transducer check *)
+  END_STRUCT;
+END_TYPE

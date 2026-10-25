@@ -1,0 +1,10 @@
+TYPE
+  UT_HOA_DATA : STRUCT
+    set : UT_HOA_SET;
+    cmdMode : INT := -1;
+    cmdStart : BOOL;
+    cmdStop : BOOL;
+    sts : UT_HOA_STS;
+    handLeft : TIME; (* detail *)
+  END_STRUCT;
+END_TYPE

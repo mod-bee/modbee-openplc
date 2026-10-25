@@ -1,0 +1,7 @@
+TYPE
+  UT_RUN_LIMIT_TOT : STRUCT
+    lastVolume : LREAL;
+    lastDuration : TIME;
+    lastEndReason : UT_STOP;
+  END_STRUCT;
+END_TYPE

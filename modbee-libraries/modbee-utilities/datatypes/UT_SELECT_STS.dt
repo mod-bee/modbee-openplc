@@ -1,0 +1,20 @@
+TYPE
+  UT_SELECT_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    out : REAL;
+    spread : REAL;
+    selected : INT; (* the sensor used (1..3), 0 = a combination or none *)
+    goodCount : INT;
+    deviating : INT; (* the sensor dropped (1..3), 0 none *)
+    deviation : BOOL;
+    fault : BOOL;
+    configBad : BOOL;
+    dev : UT_PROT_STS;
+    noAgree : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,5 @@
+TYPE
+  UT_ROUTE_DET : STRUCT
+    timeLeft : TIME;
+  END_STRUCT;
+END_TYPE

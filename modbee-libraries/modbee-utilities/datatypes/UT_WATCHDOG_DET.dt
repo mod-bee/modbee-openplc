@@ -1,0 +1,6 @@
+TYPE
+  UT_WATCHDOG_DET : STRUCT
+    lastChange : TIME; (* time since the remote last changed *)
+    downTime : TIME; (* total time the link was dead *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,6 @@
+TYPE
+  UT_STATS_SET : STRUCT
+    ignoreBelow : REAL; (* values below this are left out (0 = off) *)
+    ignoreAbove : REAL; (* values above this are left out (0 = off) *)
+  END_STRUCT;
+END_TYPE

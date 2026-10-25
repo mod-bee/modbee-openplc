@@ -1,0 +1,5 @@
+TYPE
+  UT_IRR_DEFER_DET : STRUCT
+    timeLeft : TIME;
+  END_STRUCT;
+END_TYPE

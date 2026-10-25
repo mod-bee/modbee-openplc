@@ -1,0 +1,22 @@
+TYPE
+  UT_ROTATION_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    speed : REAL;
+    rotating : BOOL;
+    wrnTooFast : BOOL;
+    wrnConfig : BOOL;
+    configBad : BOOL;
+    fault : BOOL;
+    warning : BOOL;
+    faultCode : DWORD; (* b0 stall, b1 underspeed, b2 overspeed, b3 sensor, b4 config *)
+    stall : UT_PROT_STS;
+    underspeed : UT_PROT_STS;
+    overspeed : UT_PROT_STS;
+    sensor : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

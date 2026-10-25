@@ -1,0 +1,12 @@
+TYPE
+  UT_REPORT_SET : STRUCT
+    deadband : REAL := 1.0;
+    deadbandPct : BOOL; (* TRUE: as deadbandMode PCT_VALUE *)
+    deadbandMode : UT_DEADBAND_MODE;
+    span : REAL; (* PCT_SPAN: the measuring span *)
+    resolution : REAL; (* round to this step first (0 = off) *)
+    minInterval : TIME; (* 0 = no rate cap (68) *)
+    heartbeat : TIME; (* 0 = off *)
+    reportOnStart : BOOL := TRUE;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,22 @@
+TYPE
+  UT_VESSEL_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    volume : REAL; (* in volumeUnit *)
+    totalVolume : REAL; (* when full *)
+    percent : REAL; (* of totalVolume *)
+    mass : REAL;
+    totalMass : REAL;
+    free : REAL; (* space left *)
+    levelPct : REAL; (* level as a % of pctLow .. pctHigh *)
+    area : REAL; (* water surface, m2, all tanks *)
+    good : BOOL;
+    overfull : BOOL;
+    configBad : BOOL;
+    levelBad : BOOL;
+  END_STRUCT;
+END_TYPE

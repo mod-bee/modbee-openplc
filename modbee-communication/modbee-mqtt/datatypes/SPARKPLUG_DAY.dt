@@ -1,0 +1,6 @@
+TYPE
+  SPARKPLUG_DAY : STRUCT
+    DAY : DATE; (* the day the total belongs to (local date, from CLOCK) *)
+    TOTAL : REAL; (* that day's total, in the units the total is kept in *)
+  END_STRUCT;
+END_TYPE

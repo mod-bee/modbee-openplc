@@ -1,0 +1,17 @@
+TYPE
+  UT_VALVE_DATA : STRUCT
+    set : UT_VALVE_SET;
+    simulate : BOOL; (* not kept *)
+    cmdMode : INT := -1;
+    cmdOpen : BOOL;
+    cmdClose : BOOL;
+    cmdStop : BOOL; (* Hand: stop travel where it is *)
+    cmdExercise : BOOL;
+    cmdReset : BOOL;
+    cmdPreset : BOOL;
+    presetStrokes : UDINT;
+    sts : UT_VALVE_STS;
+    det : UT_VALVE_DET;
+    tot : UT_VALVE_TOT;
+  END_STRUCT;
+END_TYPE

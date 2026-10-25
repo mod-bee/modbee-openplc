@@ -1,0 +1,8 @@
+TYPE
+  UT_LEVEL_CHECK_STS : STRUCT
+    level : UT_PROT_STS;
+    sensorBad : UT_PROT_STS;
+    value : REAL;
+    refused : UT_FAULT;
+  END_STRUCT;
+END_TYPE

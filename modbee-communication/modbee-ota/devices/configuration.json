@@ -1,0 +1,16 @@
+{
+  "deviceBoard": "OpenPLC Simulator",
+  "communicationPort": "",
+  "runtimeIpAddress": "",
+  "vendorScreenData": {},
+  "vendorScreenDataByBoard": {},
+  "persistentStorage": {
+    "enabled": false,
+    "path": "",
+    "flushSeconds": 5
+  },
+  "persistentStorageByBoard": {},
+  "outputsOnStop": "off",
+  "selectedPlatformOptions": {},
+  "vppPackagePinsByBoard": {}
+}

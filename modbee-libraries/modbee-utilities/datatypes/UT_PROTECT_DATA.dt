@@ -1,0 +1,8 @@
+TYPE
+  UT_PROTECT_DATA : STRUCT
+    set : UT_PROTECTION := (response := UT_RESP_OFF, delay := T#0s, reset := UT_RST_AUTO, recover := T#10s, maxRetries := 3);
+    cmdReset : BOOL;
+    sts : UT_PROT_STS;
+    refused : UT_FAULT; (* the last refused write *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,38 @@
+TYPE
+  UT_DOSE_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    stopReason : UT_STOP;
+    lastFaultCode : DWORD;
+    lastFault : UT_FAULT;
+    trips : UDINT;
+    mode : UT_MODE;
+    phase : UT_DOSE_PHASE;
+    modeActive : UT_DOSE_MODE;
+    held : BOOL;
+    configBad : BOOL;
+    fault : BOOL;
+    warning : BOOL;
+    carrierOk : BOOL;
+    faultCode : DWORD; (* 0 settings, 1 no flow, 2 max time, 3 over capacity, 4 tolerance, 5 stock low, 6 quantity *)
+    targetActive : REAL;
+    lastError : REAL;
+    preactActive : REAL;
+    required : REAL;
+    rate : REAL;
+    ratioActive : REAL;
+    delivered : LREAL;
+    lastDelivered : LREAL;
+    dosedTotal : LREAL;
+    doses : UDINT;
+    noFlow : UT_PROT_STS;
+    maxTime : UT_PROT_STS;
+    overCapacity : UT_PROT_STS;
+    outOfTolerance : UT_PROT_STS;
+    stockLow : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

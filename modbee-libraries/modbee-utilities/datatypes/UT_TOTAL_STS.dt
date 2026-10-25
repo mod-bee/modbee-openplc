@@ -1,0 +1,33 @@
+TYPE
+  UT_TOTAL_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    total : LREAL; (* lifetime total *)
+    batch : LREAL;
+    today : LREAL;
+    yesterday : LREAL;
+    lastHour : LREAL;
+    prevPeriod : LREAL;
+    totalIn : LREAL;
+    totalOut : LREAL;
+    intervalVolume : LREAL; (* the quantity in the last interval *)
+    intervalTotal : LREAL; (* the lifetime total at its end *)
+    rate : REAL;
+    intervalEnd : DT;
+    intervalSeq : UDINT;
+    good : BOOL;
+    limitReached : BOOL;
+    estimating : BOOL;
+    configBad : BOOL;
+    wrnRegisterJump : BOOL; (* a register / count step was rejected (until the next good step) *)
+    wrnPulseTooFast : BOOL; (* pulses at the scan-rate limit (held 5 s) *)
+    wrnBadValue : BOOL; (* the reading is not a number, or adds over 1E9 in a scan (ignored) *)
+    wrnConfig : BOOL;
+    inputBad : UT_PROT_STS;
+    noCount : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

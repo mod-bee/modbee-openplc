@@ -1,0 +1,11 @@
+TYPE
+  UT_BEACON_SET : STRUCT
+    style : UT_BEACON_STYLE := UT_BEACON_COUNT; (* count flashes, or binary *)
+    bits : INT := 6; (* binary: bits shown (1..15) *)
+    shortTime : TIME := T#250ms; (* short flash (count, and binary 0) *)
+    longTime : TIME := T#1s; (* long flash (binary 1) *)
+    gapTime : TIME := T#500ms; (* lamp off between flashes *)
+    pauseTime : TIME := T#3s; (* lamp off between numbers *)
+    steadyWhenNone : BOOL; (* lamp on steady when no alarm is active *)
+  END_STRUCT;
+END_TYPE

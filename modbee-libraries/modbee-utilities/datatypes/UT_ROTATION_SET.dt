@@ -1,0 +1,19 @@
+TYPE
+  UT_ROTATION_SET : STRUCT
+    pulsesPerRev : INT := 1; (* pulses per revolution, for rpm and rev/s *)
+    speedUnit : UT_SPEED_UNIT; (* rpm, rev/s, m/min, m/s *)
+    distPerPulse : REAL; (* m/min and m/s: travel per pulse, m *)
+    startDelay : TIME := T#5s; (* after a start, stall and underspeed are ignored this long *)
+    stallTime : TIME := T#3s; (* no pulse this long while running = stalled *)
+    minSpeed : REAL; (* underspeed below this (0 = off) *)
+    maxSpeed : REAL; (* overspeed above this (0 = off) *)
+    speedDelay : TIME := T#5s;
+    filterTime : TIME := T#1s;
+    coastDown : TIME := T#10s; (* after a stop, pulses are expected this long *)
+    retryWindow : TIME := T#1h;
+    stall : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#0s, reset := UT_RST_MANUAL);
+    underspeed : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#0s, reset := UT_RST_AUTO, recover := T#10s);
+    overspeed : UT_PROTECTION := (response := UT_RESP_OFF);
+    sensor : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#0s, reset := UT_RST_AUTO, recover := T#10s);
+  END_STRUCT;
+END_TYPE

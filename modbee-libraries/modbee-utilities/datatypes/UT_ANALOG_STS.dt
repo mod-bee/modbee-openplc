@@ -1,0 +1,24 @@
+TYPE
+  UT_ANALOG_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    value : REAL;
+    percent : REAL;
+    valueAlt : REAL; (* the value in the second unit *)
+    quality : UT_QUALITY;
+    underRange : BOOL;
+    overRange : BOOL;
+    failLow : BOOL;
+    failHigh : BOOL;
+    inBad : BOOL; (* InGood FALSE / IO quality bad now *)
+    configBad : BOOL; (* a span / signal setting refuses the value (BAD) *)
+    wrnConfig : BOOL; (* a display-only setting is invalid *)
+    notFitted : BOOL; (* the IO map says this input is not on this site *)
+    fault : UT_PROT_STS;
+    frozen : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

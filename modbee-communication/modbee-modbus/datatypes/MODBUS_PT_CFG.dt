@@ -1,0 +1,16 @@
+TYPE
+  MODBUS_PT_CFG : STRUCT
+    unit : BYTE; (* the device's address, 1..247 *)
+    fc : MODBUS_PT_FC; (* how: FC01..FC04 read, FC05/FC06/FC16 write *)
+    address : UINT; (* the register or coil, as the device manual numbers it from 0 *)
+    dtype : MODBUS_PT_TYPE; (* what the register holds: BIT, INT16, UINT16, INT32, UINT32, FLOAT32, REG_BIT *)
+    order : MODBUS_ORDER; (* word order of a 32-bit value, from the manual: ABCD, CDAB, BADC, DCBA *)
+    bit : USINT; (* REG_BIT only: which bit of the register, 0..15 *)
+    scale : REAL := 1.0; (* engineering value = raw x scale + offset (0 is taken as 1) *)
+    offset : REAL;
+    every : TIME := T#1s; (* how often to read it, or to send it again *)
+    stale : TIME; (* no answer for this long = lost (BAD); T#0s = 3 x every *)
+    timeout : TIME; (* this device's answer time limit: a few seconds over radio; T#0s = measured *)
+    enable : BOOL := TRUE; (* FALSE = not fitted: never asked, never ok *)
+  END_STRUCT;
+END_TYPE

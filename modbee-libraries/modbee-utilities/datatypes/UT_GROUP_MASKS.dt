@@ -1,0 +1,17 @@
+TYPE
+  UT_GROUP_MASKS : STRUCT
+    count : INT; (* members (1..32) *)
+    fitted : DWORD;
+    available : DWORD; (* Auto, healthy, will start (may be waiting) *)
+    waiting : DWORD; (* called but held by its own timers *)
+    running : DWORD; (* running, any mode *)
+    inHand : DWORD;
+    startsHeld : DWORD; (* held by its starts-per-hour limit *)
+    exercising : DWORD; (* exercising itself *)
+    preferLead : DWORD; (* called first, released last *)
+    hours : ARRAY [0..31] OF REAL; (* kept run hours (HOURS rotation) *)
+    call : DWORD; (* from the engine: run *)
+    skipped : DWORD; (* from the engine: failed over *)
+    exercise : DWORD; (* from the engine: an exercise run (part of call) *)
+  END_STRUCT;
+END_TYPE

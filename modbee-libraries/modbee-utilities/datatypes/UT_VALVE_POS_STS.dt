@@ -1,0 +1,9 @@
+TYPE
+  UT_VALVE_POS_STS : STRUCT
+    fbOk : BOOL;
+    feedback : REAL;
+    estimate : REAL;
+    deviation : UT_PROT_STS;
+    posFeedback : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

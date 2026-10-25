@@ -1,0 +1,9 @@
+TYPE
+  UT_AT_SET : STRUCT
+    prot : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#0s, reset := UT_RST_AUTO, recover := T#0s, maxRetries := 3);
+    retryWindow : TIME; (* RETRY: the window from the first raise (T#0s: until a reset) *)
+    siren : BOOL := TRUE; (* this alarm sounds the siren *)
+    rearm : TIME; (* silenced / acknowledged but still on after this long: again (0 = never) *)
+    code : UT_FAULT := UT_F_CONDITION;
+  END_STRUCT;
+END_TYPE

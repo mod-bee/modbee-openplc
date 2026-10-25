@@ -1,0 +1,11 @@
+TYPE
+  UT_HOA_SET : STRUCT
+    mode : UT_MODE;
+    modeSource : UT_MODE_SOURCE;
+    powerUp : UT_POWERUP;
+    handPowerUp : UT_HAND_POWERUP; (* OFF: a Hand comes back Off after a power cut *)
+    handTimeout : TIME; (* Hand -> Off after this (0 = never) *)
+    handByStart : BOOL; (* Hand needs a Start (Interlock drops it) *)
+    run : UT_RUN_IN_SET;
+  END_STRUCT;
+END_TYPE

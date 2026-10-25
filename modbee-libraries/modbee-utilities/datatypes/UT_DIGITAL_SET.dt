@@ -1,0 +1,11 @@
+TYPE
+  UT_DIGITAL_SET : STRUCT
+    onDelay : TIME := T#50ms; (* debounce turning on *)
+    offDelay : TIME := T#50ms; (* debounce turning off *)
+    alarmOn : UT_DI_ALARM; (* none, when TRUE, when FALSE *)
+    alarmDelay : TIME; (* the alarm state must last this long *)
+    alarmReset : UT_RESET_MODE; (* AUTO clears when Q returns; MANUAL holds until reset *)
+    chatterCount : INT; (* more than this many clean changes within chatterTime = chatter (0 = off) *)
+    chatterTime : TIME := T#10s;
+  END_STRUCT;
+END_TYPE

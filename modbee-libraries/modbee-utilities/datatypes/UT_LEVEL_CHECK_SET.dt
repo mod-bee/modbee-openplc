@@ -1,0 +1,6 @@
+TYPE
+  UT_LEVEL_CHECK_SET : STRUCT
+    level : UT_LEVEL := (response := UT_RESP_OFF, delay := T#0s, reset := UT_RST_AUTO, recover := T#10s, maxRetries := 3);
+    sensorBad : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#5s, reset := UT_RST_AUTO, recover := T#10s);
+  END_STRUCT;
+END_TYPE

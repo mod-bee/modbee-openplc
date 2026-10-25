@@ -1,0 +1,13 @@
+TYPE
+  UT_STEP_SEQ_DATA : STRUCT
+    set : UT_STEP_SEQ_SET;
+    cmdStart : BOOL;
+    cmdStop : BOOL;
+    cmdPause : BOOL;
+    cmdNext : BOOL;
+    cmdReset : BOOL;
+    cmdJump : INT := -1;
+    sts : UT_STEP_SEQ_STS;
+    det : UT_STEP_SEQ_DET;
+  END_STRUCT;
+END_TYPE

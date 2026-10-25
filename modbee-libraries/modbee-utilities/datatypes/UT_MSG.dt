@@ -1,0 +1,8 @@
+TYPE
+  UT_MSG : STRUCT
+    stamp : DT; (* Clock when it came (or changed) *)
+    src : INT; (* source number (the Src pin) *)
+    status : UT_STATUS; (* its status *)
+    fault : UT_FAULT; (* its fault *)
+  END_STRUCT;
+END_TYPE

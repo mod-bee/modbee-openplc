@@ -1,0 +1,5 @@
+TYPE
+  UT_BEACON_DET : STRUCT
+    code : INT; (* the alarm number shown (0 = none) *)
+  END_STRUCT;
+END_TYPE

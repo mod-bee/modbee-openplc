@@ -1,0 +1,13 @@
+TYPE
+  UT_INTLK_COND_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    bad : BOOL; (* not OK now (before the delay) *)
+    tripped : BOOL; (* counts against Ok *)
+    latched : BOOL; (* held until a reset *)
+    bypassed : BOOL;
+    retries : INT;
+  END_STRUCT;
+END_TYPE

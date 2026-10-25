@@ -1,0 +1,6 @@
+TYPE
+  UT_STEP_SEQ_DET : STRUCT
+    elapsed : TIME;
+    remaining : TIME;
+  END_STRUCT;
+END_TYPE

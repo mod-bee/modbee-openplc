@@ -1,0 +1,5 @@
+TYPE
+  UT_IO_MAP_DET : STRUCT
+    forceLeftS : UINT; (* the longest time left of the active forces, whole seconds *)
+  END_STRUCT;
+END_TYPE

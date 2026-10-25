@@ -1,0 +1,8 @@
+TYPE
+  UT_ANNUN_DATA : STRUCT
+    set : UT_ANNUN_SET;
+    cmdAck : BOOL;
+    cmdSilence : BOOL;
+    sts : UT_ANNUN_STS;
+  END_STRUCT;
+END_TYPE

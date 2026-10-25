@@ -1,0 +1,25 @@
+TYPE
+  UT_ROUTE_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    outlet : USINT;
+    openMask : BYTE; (* bit n-1: requested open *)
+    provenMask : BYTE; (* bit n-1: IsOpen *)
+    faultOutlet : USINT;
+    kind : UT_OUTLET_KIND;
+    routeOk : BOOL;
+    routeLost : BOOL;
+    opening : BOOL;
+    closing : BOOL;
+    diverted : BOOL;
+    noStorage : BOOL;
+    blocked : BOOL;
+    fault : BOOL;
+    warning : BOOL;
+    configBad : BOOL;
+  END_STRUCT;
+END_TYPE

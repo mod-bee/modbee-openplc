@@ -1,0 +1,36 @@
+TYPE
+  UT_DOSE_SET : STRUCT
+    mode : UT_MODE := UT_MODE_AUTO;
+    modeSource : UT_MODE_SOURCE;
+    tag : STRING(12) := 'Dosing';
+    doseMode : UT_DOSE_MODE; (* taken when idle *)
+    target : REAL; (* BATCH quantity (Target pin 0) *)
+    slowAt : REAL;
+    preact : REAL;
+    learnPreact : BOOL;
+    tolerance : REAL;
+    settleTime : TIME := T#2s;
+    actualIsTotal : BOOL; (* BATCH: the rise of Meter.GetTotal() *)
+    flowPer : UT_RATE_UNIT := UT_PER_HOUR; (* time unit of the rates when the meter gives none *)
+    ratio : REAL; (* dose units per carrier unit *)
+    pumpCapacity : REAL; (* dosing pump at 100 %, units per flowPer *)
+    pulseVolume : REAL; (* dose per stroke pulse (0 = no pulses) *)
+    pulseWidth : TIME := T#200ms;
+    minFlow : REAL; (* carrier flow needed *)
+    maxRate : REAL := 100.0; (* % *)
+    carrierProven : TIME := T#10s;
+    onTime : TIME := T#10s; (* TIMED *)
+    offTime : TIME := T#5m;
+    handRate : REAL := 50.0;
+    handNeedsCarrier : BOOL := TRUE;
+    handMax : TIME := T#5m;
+    maxQuantity : LREAL; (* per dose, 0 = off *)
+    noFlow : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#30s, reset := UT_RST_RETRY, recover := T#1m, maxRetries := 3);
+    maxTime : UT_PROTECTION := (response := UT_RESP_OFF, delay := T#1h, reset := UT_RST_MANUAL);
+    overCapacity : UT_PROTECTION := (response := UT_RESP_WARN, reset := UT_RST_AUTO);
+    outOfTolerance : UT_PROTECTION := (response := UT_RESP_WARN, reset := UT_RST_AUTO);
+    stockLow : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#5s, reset := UT_RST_AUTO, recover := T#30s);
+    retryWindow : TIME := T#1h;
+    run : UT_RUN_IN_SET;
+  END_STRUCT;
+END_TYPE

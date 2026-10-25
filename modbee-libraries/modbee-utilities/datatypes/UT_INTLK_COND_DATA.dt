@@ -1,0 +1,8 @@
+TYPE
+  UT_INTLK_COND_DATA : STRUCT
+    set : UT_INTLK_COND_SET;
+    bypass : BOOL; (* the bypass request (never kept) *)
+    sts : UT_INTLK_COND_STS;
+    det : UT_INTLK_COND_DET;
+  END_STRUCT;
+END_TYPE

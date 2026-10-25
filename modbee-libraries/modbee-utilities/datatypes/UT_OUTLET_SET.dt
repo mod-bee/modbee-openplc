@@ -1,0 +1,6 @@
+TYPE
+  UT_OUTLET_SET : STRUCT
+    kind : UT_OUTLET_KIND;
+    preset : SINT := -1; (* -1 none, 0 NORMAL, 1 LOW, 2 HIGH *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,7 @@
+TYPE
+  UT_RUN_IN_SET : STRUCT
+    style : UT_RUN_STYLE; (* HELD (Run as is), TOGGLE, KEEPALIVE, PULSE + TIMER *)
+    keepAlive : TIME := T#30s; (* KEEPALIVE: off this long after the Run wire last changed *)
+    pulseTime : TIME; (* PULSE + TIMER: a press runs this long (blocks without their own target) *)
+  END_STRUCT;
+END_TYPE

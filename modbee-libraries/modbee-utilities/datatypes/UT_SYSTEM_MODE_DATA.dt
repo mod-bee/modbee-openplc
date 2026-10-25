@@ -1,0 +1,11 @@
+TYPE
+  UT_SYSTEM_MODE_DATA : STRUCT
+    set : UT_SYSTEM_MODE_SET;
+    cmdMode : INT := -1; (* 0 Off, 1 Manual, 2 Auto (set back to -1) *)
+    cmdAutoType : INT := -1; (* 1..autoTypes (set back to -1) *)
+    cmdStart : BOOL;
+    cmdStop : BOOL;
+    sts : UT_SYSTEM_MODE_STS;
+    det : UT_SYSTEM_MODE_DET;
+  END_STRUCT;
+END_TYPE

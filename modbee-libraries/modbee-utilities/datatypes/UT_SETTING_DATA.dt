@@ -1,0 +1,8 @@
+TYPE
+  UT_SETTING_DATA : STRUCT
+    set : UT_SETTING_SET;
+    request : REAL; (* the value wanted: checked when it changes *)
+    cmdCheck : BOOL; (* check the request again even if unchanged *)
+    sts : UT_SETTING_STS;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,6 @@
+TYPE
+  UT_ANALOG_DET : STRUCT
+    raw : REAL; (* the raw reading (noisy) *)
+    timeLeft : TIME;
+  END_STRUCT;
+END_TYPE

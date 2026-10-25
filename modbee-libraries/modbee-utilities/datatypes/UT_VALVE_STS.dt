@@ -1,0 +1,45 @@
+TYPE
+  UT_VALVE_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    stopReason : UT_STOP;
+    lastFaultCode : DWORD;
+    lastFault : UT_FAULT;
+    trips : UDINT;
+    linked : BOOL;
+    held : BOOL; (* a Stop holds the owner's open at rest *)
+    owner : STRING(12);
+    mode : UT_MODE;
+    state : UT_STATE;
+    isOpen : BOOL;
+    isClosed : BOOL;
+    moving : BOOL;
+    confirmed : BOOL;
+    ready : BOOL;
+    interlocked : BOOL;
+    notPermitted : BOOL;
+    fault : BOOL;
+    warning : BOOL;
+    configBad : BOOL;
+    notAuto : BOOL;
+    selectorFault : BOOL;
+    exercising : BOOL;
+    position : REAL; (* %, -1 unknown *)
+    lastOpenStroke : TIME;
+    lastCloseStroke : TIME;
+    faultCode : DWORD; (* 0 open timeout, 1 close timeout, 2 both limits, 3 position lost, 4 no movement, *)
+    openTimeout : UT_PROT_STS;
+    closeTimeout : UT_PROT_STS;
+    bothLimits : UT_PROT_STS;
+    positionLost : UT_PROT_STS;
+    noMovement : UT_PROT_STS;
+    drive : UT_PROT_STS;
+    torque : UT_PROT_STS;
+    actLocal : UT_PROT_STS;
+    slowStroke : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

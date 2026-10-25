@@ -1,0 +1,7 @@
+TYPE
+  UT_PUMP_CASCADE_DET : STRUCT
+    timeLeft : TIME;
+    phaseTime : TIME;
+    ctrl : UT_SPEED_CTRL_DET;
+  END_STRUCT;
+END_TYPE

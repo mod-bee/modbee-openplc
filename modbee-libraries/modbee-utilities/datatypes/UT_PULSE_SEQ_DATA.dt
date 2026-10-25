@@ -1,0 +1,9 @@
+TYPE
+  UT_PULSE_SEQ_DATA : STRUCT
+    set : UT_PULSE_SEQ_SET;
+    cmdStart : BOOL; (* one full cleaning cycle now *)
+    cmdStop : BOOL; (* stop now *)
+    sts : UT_PULSE_SEQ_STS;
+    det : UT_PULSE_SEQ_DET;
+  END_STRUCT;
+END_TYPE

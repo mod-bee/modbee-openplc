@@ -1,0 +1,7 @@
+TYPE
+  UT_DOSE_DET : STRUCT
+    doseTime : TIME;
+    timeLeft : TIME;
+    pulses : UDINT;
+  END_STRUCT;
+END_TYPE

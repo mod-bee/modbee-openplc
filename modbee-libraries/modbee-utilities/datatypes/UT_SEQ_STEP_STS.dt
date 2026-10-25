@@ -1,0 +1,10 @@
+TYPE
+  UT_SEQ_STEP_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    state : UT_STATE; (* OFF, STARTING, ON, STOPPING, FAULT, OOS (bypassed) *)
+  END_STRUCT;
+END_TYPE

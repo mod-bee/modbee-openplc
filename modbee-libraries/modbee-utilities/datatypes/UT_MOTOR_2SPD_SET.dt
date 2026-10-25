@@ -1,0 +1,14 @@
+TYPE
+  UT_MOTOR_2SPD_SET : STRUCT
+    speedChangeDelay : TIME := T#1s; (* dead time low -> high *)
+    downChangeDelay : TIME; (* high -> low (0 = speedChangeDelay) *)
+    startInLow : BOOL := TRUE;
+    lowStartTime : TIME := T#3s;
+    dahlander : BOOL;
+    lowSpeedPct : REAL := 50.0; (* low speed as % of high *)
+    handHigh : BOOL; (* Hand speed chosen last (kept) *)
+    jogSpeed : UT_JOG_SPEED;
+    changeoverTime : TIME := T#2s;
+    changeover : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#0s, reset := UT_RST_MANUAL);
+  END_STRUCT;
+END_TYPE

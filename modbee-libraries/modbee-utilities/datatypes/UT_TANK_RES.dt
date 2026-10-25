@@ -1,0 +1,10 @@
+TYPE
+  UT_TANK_RES : STRUCT
+    volume : REAL;
+    full : REAL;
+    area : REAL; (* water surface at the level, m2 *)
+    top : REAL; (* the level when full, m *)
+    overfull : BOOL;
+    bad : UT_FAULT; (* a geometry setting that is not usable (UT_F_NONE when fine) *)
+  END_STRUCT;
+END_TYPE

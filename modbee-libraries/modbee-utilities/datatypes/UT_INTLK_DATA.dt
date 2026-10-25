@@ -1,0 +1,8 @@
+TYPE
+  UT_INTLK_DATA : STRUCT
+    set : UT_INTLK_SET;
+    cmdReset : BOOL;
+    sts : UT_INTLK_STS;
+    det : UT_INTLK_DET;
+  END_STRUCT;
+END_TYPE

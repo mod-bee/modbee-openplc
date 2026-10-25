@@ -1,0 +1,6 @@
+TYPE
+  UT_STEP_SEQ_SET : STRUCT
+    stopStep : INT; (* position of the safe end step for a stop (0 = end at once, outputs off) *)
+    pauseOutputs : DWORD; (* outputs while paused or held on a timeout *)
+  END_STRUCT;
+END_TYPE

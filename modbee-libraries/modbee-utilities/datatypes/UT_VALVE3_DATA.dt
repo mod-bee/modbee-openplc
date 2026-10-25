@@ -1,0 +1,7 @@
+TYPE
+  UT_VALVE3_DATA : STRUCT
+    set : UT_VALVE3_SET;
+    cmdPos : INT := -1; (* Hand position 1..3 (set back to -1) *)
+    sts : UT_VALVE3_STS;
+  END_STRUCT;
+END_TYPE

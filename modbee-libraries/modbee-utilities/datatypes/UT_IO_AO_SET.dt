@@ -1,0 +1,7 @@
+TYPE
+  UT_IO_AO_SET : STRUCT
+    src : UT_IO_SRC;
+    module : USINT;
+    ch : USINT;
+  END_STRUCT;
+END_TYPE

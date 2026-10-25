@@ -1,0 +1,154 @@
+{
+  "formatVersion": "1.0",
+  "package": {
+    "id": "com.modbee.node",
+    "name": "ModBee boards",
+    "version": "1.2.4",
+    "vendor": {
+      "name": "ModBee",
+      "url": "https://modbee.org",
+      "logo": "assets/logo.png"
+    },
+    "description": "OpenPLC support for the ModBee Node UIO: ESP32-S3FH4R2 with its 2 MB PSRAM enabled.",
+    "license": "GPL-3.0",
+    "minEditorVersion": "4.3.0",
+    "inDevelopment": false
+  },
+  "devices": [
+    {
+      "id": "modbee-node-uio",
+      "name": "ModBee Node UIO",
+      "category": "ModBee",
+      "preview": "assets/boards/modbee-node.png",
+      "target": {
+        "type": "arduino-cli",
+        "core": "esp32:esp32",
+        "platform": "esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,PSRAM=enabled,PartitionScheme=min_spiffs",
+        "partitions": "partitions/modbee-node.csv",
+        "plcDataMemory": "external"
+      },
+      "specs": {
+        "CPU": "ESP32-S3FH4R2 (dual core, 240 MHz)",
+        "RAM": "512 KB + 2 MB PSRAM",
+        "Flash": "4 MB",
+        "Digital Pins": "34",
+        "Analog Pins": "18",
+        "PWM Pins": "16",
+        "WiFi": "Yes",
+        "Bluetooth": "Yes",
+        "Ethernet": "No"
+      },
+      "hal": {
+        "type": "arduino-hal",
+        "source": "hal/arduino/esp32.cpp",
+        "define": "BOARD_ESP32",
+        "compilerFlags": {
+          "c_flags": [
+            "-MMD",
+            "-c",
+            "-Wno-incompatible-pointer-types",
+            "-DESP32_ARDUINO_NO_RGB_BUILTIN",
+            "-DOPENPLC_RTOS_WORK_STACK=16384"
+          ],
+          "cxx_flags": [
+            "-DOPENPLC_RTOS_WORK_STACK=16384",
+            "'-DMQTT_CA_CERT_PEM=\"-----BEGIN CERTIFICATE-----\\nMIIB4DCCAWegAwIBAgIUXl4Xc/dLMYcNdbE6IOz2zRNq5FMwCgYIKoZIzj0EAwMw\\nLzEPMA0GA1UECgwGTW9kQmVlMRwwGgYDVQQDDBNNb2RCZWUgUm9vdCBDQSAyMDI2\\nMCAXDTI2MTAxNTA3NDMxNloYDzIwNTExMDE1MDc0MzE2WjAvMQ8wDQYDVQQKDAZN\\nb2RCZWUxHDAaBgNVBAMME01vZEJlZSBSb290IENBIDIwMjYwdjAQBgcqhkjOPQIB\\nBgUrgQQAIgNiAATw70b8V2qFlSardx8hv8ecC1QjOv3QN3wEhNpBkGoL8iKSW7o2\\nufd11elHAN07sX4CB5sioW2prS87Fn2ymWjgvaXZa3Gf0kTbJVU3xoQHz2Ld3dHS\\nh5WmhYi7tlEnTtajQjBAMA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgEG\\nMB0GA1UdDgQWBBQy3Ago6P/918j8Ds27Fn8iGWvteTAKBggqhkjOPQQDAwNnADBk\\nAjBdMIaMkIMBy3kfnoCeb1ygxUHmzaQ5vshB5CaCbjZAkGj8FSnsL0R/0OitMHmW\\nnOICMED8t1XZN+/UnKtTGImXyYOUtOayGy5WREnLddNx6BNnRZCzFG1Oh7JBcAUo\\nY45aFw==\\n-----END CERTIFICATE-----\\n-----BEGIN CERTIFICATE-----\\nMIICGzCCAaGgAwIBAgIQQdKd0XLq7qeAwSxs6S+HUjAKBggqhkjOPQQDAzBPMQsw\\nCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2gg\\nR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMjAeFw0yMDA5MDQwMDAwMDBaFw00\\nMDA5MTcxNjAwMDBaME8xCzAJBgNVBAYTAlVTMSkwJwYDVQQKEyBJbnRlcm5ldCBT\\nZWN1cml0eSBSZXNlYXJjaCBHcm91cDEVMBMGA1UEAxMMSVNSRyBSb290IFgyMHYw\\nEAYHKoZIzj0CAQYFK4EEACIDYgAEzZvVn4CDCuwJSvMWSj5cz3es3mcFDR0HttwW\\n+1qLFNvicWDEukWVEYmO6gbf9yoWHKS5xcUy4APgHoIYOIvXRdgKam7mAHf7AlF9\\nItgKbppbd9/w+kHsOdx1ymgHDB/qo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0T\\nAQH/BAUwAwEB/zAdBgNVHQ4EFgQUfEKWrt5LSDv6kviejM9ti6lyN5UwCgYIKoZI\\nzj0EAwMDaAAwZQIwe3lORlCEwkSHRhtFcP9Ymd70/aTSVaYgLXTWNLxBo1BfASdW\\ntL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1\\n/q4AaOeMSQ+2b1tbFfLn\\n-----END CERTIFICATE-----\\n\"'"
+          ]
+        }
+      },
+      "defaults": {
+        "pins": {
+          "defaultDin": [],
+          "defaultDout": [],
+          "defaultAin": [],
+          "defaultAout": []
+        }
+      },
+      "screens": {
+        "Serial": "screens/serial.json",
+        "Network": "screens/network.json"
+      },
+      "serialPorts": [
+        "Serial",
+        "Serial1"
+      ],
+      "defaultSerial": "Serial",
+      "networkInterfaces": [
+        "Wi-Fi"
+      ],
+      "debug": {
+        "channels": [
+          {
+            "label": "Modbus RTU",
+            "channel": "rtu",
+            "params": {
+              "port": {
+                "$ref": "configuration.communicationPort",
+                "required": "No serial port selected. Pick a port in the Board Settings screen."
+              },
+              "baudRate": {
+                "$ref": "screens.serial.baud_rate",
+                "default": "115200",
+                "as": "number"
+              },
+              "slaveId": 1
+            }
+          },
+          {
+            "label": "Modbus TCP",
+            "channel": "tcp",
+            "enabledWhen": {
+              "$ref": "screens.network.enabled"
+            },
+            "params": {
+              "ipAddress": {
+                "$ref": "screens.network.ip_address"
+              }
+            },
+            "prompts": [
+              {
+                "when": {
+                  "$ref": "screens.network.enable_dhcp"
+                },
+                "field": "ipAddress",
+                "title": "Target IP Address",
+                "message": "Enter the device's current DHCP-assigned IP address.",
+                "cacheKey": "lastDhcpIp"
+              }
+            ]
+          }
+        ]
+      },
+      "capabilities": {
+        "s7Server": true,
+        "s7": {
+          "maxClients": 2,
+          "pduSize": 480
+        },
+        "opcuaServer": true,
+        "opcua": {
+          "arenaBytes": 65536,
+          "maxNodes": 1024,
+          "maxSessions": 1,
+          "nodePoolSlots": 8,
+          "maxNodesPerRead": 20,
+          "maxNodesPerWrite": 20,
+          "maxNodesPerBrowse": 10,
+          "maxReferencesPerNode": 32,
+          "maxArrayLength": 256,
+          "security": "none",
+          "certificates": false,
+          "subscriptions": false,
+          "passwordScheme": "plain",
+          "hw": {
+            "sha256": false,
+            "aes": false,
+            "pk": false,
+            "trng": false,
+            "rtc": false
+          }
+        }
+      }
+    }
+  ]
+}

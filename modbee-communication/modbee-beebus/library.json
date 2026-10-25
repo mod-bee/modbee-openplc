@@ -1,0 +1,11 @@
+{
+  "name": "modbee-beebus",
+  "displayName": "BeeBus",
+  "version": "0.0.1",
+  "namespace": "modbee_beebus",
+  "description": "Function blocks that put a BeeBus node inside an OpenPLC program. One node block starts the node — serial, WiFi or Ethernet on Arduino, serial or UDP on the Runtime — and hands out a handle the other blocks take, so a program can hold two segments at once. Registers for Modbus compatibility, and a native topic layer with typed values, publish and subscribe, data quality and store-and-forward. Nothing here configures timing: every protocol timeout is measured from the network.",
+  "build": {
+    "verify": "arduino",
+    "core": "esp32:esp32"
+  }
+}

@@ -1,0 +1,9 @@
+TYPE
+  UT_WATCHDOG_DATA : STRUCT
+    set : UT_WATCHDOG_SET;
+    cmdReset : BOOL;
+    cmdResetCount : BOOL;
+    sts : UT_WATCHDOG_STS;
+    det : UT_WATCHDOG_DET;
+  END_STRUCT;
+END_TYPE

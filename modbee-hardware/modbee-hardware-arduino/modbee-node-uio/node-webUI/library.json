@@ -1,0 +1,11 @@
+{
+  "name": "node-webUI",
+  "displayName": "ModBee Node UIO Web UI",
+  "version": "0.0.1",
+  "namespace": "node_webui",
+  "description": "A web interface for the ModBee Node UIO: a live view of the digital and analog channels, and the analog calibration, over HTTP and a WebSocket. One block starts it. It reads and writes the board through the same surface the hardware blocks use, so the page and the program cannot disagree, and it does not bring a network up \u2014 something else owns the radio and this binds a port on it. The page itself is a filesystem image, uploaded separately.",
+  "build": {
+    "verify": "arduino",
+    "core": "esp32:esp32"
+  }
+}

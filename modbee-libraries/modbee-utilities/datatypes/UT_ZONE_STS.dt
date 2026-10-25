@@ -1,0 +1,21 @@
+TYPE
+  UT_ZONE_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    valve : BOOL; (* the zone's valve is wanted (= ValveOut) *)
+    active : BOOL;
+    done : BOOL;
+    skipped : BOOL;
+    capped : BOOL;
+    flowAlarm : BOOL;
+    cycle : INT; (* cycles finished *)
+    delivered : LREAL; (* this run *)
+    result : UT_STOP; (* how the zone ended this run *)
+    lastRun : DT;
+    flowCheck : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

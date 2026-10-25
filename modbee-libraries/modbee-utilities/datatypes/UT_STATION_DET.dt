@@ -1,0 +1,9 @@
+TYPE
+  UT_STATION_DET : STRUCT
+    timeLeft : TIME;
+    phaseTime : TIME;
+    cleanElapsed : TIME;
+    rotateIn : TIME;
+    run : UT_RUN_DET;
+  END_STRUCT;
+END_TYPE

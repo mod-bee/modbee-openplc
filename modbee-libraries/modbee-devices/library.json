@@ -1,0 +1,7 @@
+{
+  "name": "modbee-devices",
+  "displayName": "ModBee Devices",
+  "version": "0.1.0",
+  "namespace": "modbee_devices",
+  "description": "Ready-made blocks for field devices on Modbus: wire the block to the line's MODBUS_NODE, set the device's address, and read engineering values with a status that says what is wrong in words. First device: the 7-in-1 RS485 soil sensor (moisture, temperature, EC, pH, N, P, K)."
+}

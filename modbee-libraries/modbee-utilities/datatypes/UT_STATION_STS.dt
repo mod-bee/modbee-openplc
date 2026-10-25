@@ -1,0 +1,52 @@
+TYPE
+  UT_STATION_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    stopReason : UT_STOP;
+    lastFaultCode : DWORD;
+    lastFault : UT_FAULT;
+    trips : UDINT;
+    lead : INT;
+    runningCount : INT;
+    calledCount : INT;
+    availableCount : INT;
+    running : BOOL;
+    shortfall : BOOL;
+    highLevel : BOOL;
+    floatControl : BOOL;
+    transducerFault : BOOL;
+    configFault : BOOL;
+    configBad : BOOL;
+    cleaning : BOOL;
+    cleanFailed : BOOL;
+    warning : BOOL;
+    fault : BOOL;
+    demand : BOOL;
+    inhibited : BOOL;
+    levelCall : BOOL;
+    atStop : BOOL;
+    waiting : BOOL;
+    sourceLow : BOOL;
+    floatsDisagree : BOOL;
+    levelBadNow : BOOL;
+    runOn : BOOL;
+    boosterOn : BOOL;
+    allHeld : BOOL;
+    startHold : BOOL;
+    inflow : REAL; (* per hour, in the vessel's volume unit (+ outflow) *)
+    outflow : REAL;
+    startPointNow : REAL;
+    cycleVolume : REAL;
+    statusUnit : UT_UNIT;
+    run : UT_RUN_STS;
+    faultCode : DWORD; (* 0 config, 1 transducer, 2 level bad, 3 no pump, 4 floats disagree, 5 source bad, *)
+    transducer : UT_PROT_STS;
+    levelBad : UT_PROT_STS;
+    sourceBad : UT_PROT_STS;
+    boosterLost : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

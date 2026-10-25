@@ -1,0 +1,13 @@
+TYPE
+  UT_LINK_SUPERVISOR_SET : STRUCT
+    restartAfter : TIME := T#30s; (* link down this long: restart the modem (T#0s = step off) *)
+    powerCycleAfter : TIME := T#5m; (* link down this long: power cycle the modem (T#0s = step off) *)
+    rebootAfter : TIME; (* link down this long: reboot the controller once (T#0s = off, the default) *)
+    pulseTime : TIME := T#1s; (* RestartModem pulse length *)
+    powerOffTime : TIME := T#10s; (* PowerCycle: how long the modem stays off *)
+    maxBackoff : TIME := T#10m; (* the longest wait between retries *)
+    maxRebootsPerDay : INT := 3; (* reboots allowed in one day (0 = never reboot) *)
+    rebootSaveWait : TIME := T#3s; (* the count is saved this long before RebootReq *)
+    countWindow : TIME := T#24h; (* no clock: the count starts again this long after the first counted reboot *)
+  END_STRUCT;
+END_TYPE

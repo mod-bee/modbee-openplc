@@ -1,0 +1,7 @@
+TYPE
+  UT_ZONE_SEQ_DET : STRUCT
+    programRemaining : TIME;
+    timeLeft : TIME;
+    phaseTime : TIME;
+  END_STRUCT;
+END_TYPE

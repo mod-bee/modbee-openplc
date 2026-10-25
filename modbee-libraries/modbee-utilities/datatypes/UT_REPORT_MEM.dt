@@ -1,0 +1,10 @@
+TYPE
+  UT_REPORT_MEM : STRUCT
+    started : BOOL;
+    good : REAL; (* the last In that was a number *)
+    lastAt : TIME; (* when it last reported *)
+    force : BOOL; (* a Force waiting for minInterval *)
+    change : BOOL;
+    held : BOOL; (* the wait is counted in suppressed *)
+  END_STRUCT;
+END_TYPE

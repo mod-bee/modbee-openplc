@@ -1,0 +1,9 @@
+TYPE
+  UT_VALVE_FLOAT_STS : STRUCT
+    refused : UT_FAULT;
+    notHomed : BOOL;
+    demand : REAL;
+    handPos : REAL;
+    pos : UT_VALVE_POS_STS;
+  END_STRUCT;
+END_TYPE

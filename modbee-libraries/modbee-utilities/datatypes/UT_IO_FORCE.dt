@@ -1,0 +1,19 @@
+TYPE
+  UT_IO_FORCE : STRUCT
+    kind : UT_IO_KIND; (* the channel to force: DI, DO, AI or AO (NONE = slot not used) *)
+    src : UT_IO_SRC;
+    module : USINT;
+    ch : USINT;
+    q : BOOL; (* digital: the state (inputs: the terminal, as if the contact were made) *)
+    v : REAL; (* analog: the raw value (inputs: before scaling) *)
+    cmdForce : BOOL; (* HMI: force now, or start the time again *)
+    cmdRelease : BOOL; (* HMI: release now *)
+    active : BOOL; (* status: forcing now *)
+    leftS : UINT; (* status: whole seconds until it releases by itself *)
+    state : UT_IO_Q; (* status: FORCED, or why not (NO_MODULE, NO_CHANNEL, NOT_PERMITTED) *)
+    row : INT; (* private: the image row it forces *)
+    forceSeen : BOOL; (* private *)
+    releaseSeen : BOOL; (* private *)
+    endAt : TIME; (* private: when it releases *)
+  END_STRUCT;
+END_TYPE

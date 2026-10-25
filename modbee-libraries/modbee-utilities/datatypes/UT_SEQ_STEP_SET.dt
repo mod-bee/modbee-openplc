@@ -1,0 +1,9 @@
+TYPE
+  UT_SEQ_STEP_SET : STRUCT
+    startDelay : TIME := T#2s; (* after the feedback proves, wait this before the next step *)
+    stopDelay : TIME := T#2s; (* after this step stops, wait this before the next stop *)
+    timeout : TIME := T#10s; (* the feedback must come (start) or go (stop) within this (T#0s = no limit) *)
+    bypass : BOOL; (* do not start this step (maintenance) *)
+    noFeedback : BOOL; (* no feedback: proved by startDelay alone *)
+  END_STRUCT;
+END_TYPE

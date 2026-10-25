@@ -1,0 +1,20 @@
+FUNCTION UT_VALVE3_CHECK : BOOL
+  VAR_IN_OUT
+    S : UT_VALVE3_SET;
+  END_VAR
+  VAR_OUTPUT
+    Id : UT_FAULT;
+  END_VAR
+
+
+Id := UT_F_NONE;
+IF NOT (S.type3 = UT_V3_SPRING_CENTRE OR S.type3 = UT_V3_THREE_COIL OR S.type3 = UT_V3_MOTOR) THEN
+  Id := UT_F_VALVE_TYPE;
+ELSIF S.travelTime <= T#0s OR S.midTime < T#0s OR S.midTime >= S.travelTime THEN
+  Id := UT_F_TRAVEL_TIME;
+ELSIF S.safePosition < 1 OR S.safePosition > 3 OR S.restPos < 1 OR S.restPos > 3 THEN
+  Id := UT_F_SAFE_POSITION;
+END_IF;
+UT_VALVE3_CHECK := Id = UT_F_NONE;
+
+END_FUNCTION

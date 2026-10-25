@@ -1,0 +1,10 @@
+TYPE
+  UT_SPEED_CTRL_DET : STRUCT
+    error : REAL;
+    pTerm : REAL;
+    iTerm : REAL;
+    dTerm : REAL;
+    timeLeft : TIME;
+    phaseTime : TIME;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,12 @@
+TYPE
+  UT_HOA_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    mode : UT_MODE;
+    out : BOOL;
+    selectorFault : BOOL;
+  END_STRUCT;
+END_TYPE

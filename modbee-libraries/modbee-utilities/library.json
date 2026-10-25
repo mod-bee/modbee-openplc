@@ -1,0 +1,7 @@
+{
+  "name": "modbee-utilities",
+  "displayName": "ModBee Utilities",
+  "version": "0.1.0",
+  "namespace": "modbee_utilities",
+  "description": "Ready-made blocks for pump stations, motors, valves, dosing, irrigation, conveyors and remote sites: motor starters (DOL, reversing, star-delta, two-speed, VSD), pumps, pump stations, duty and cascade groups, speed control, valves, signal conditioning, timers, run hours, starts and flow totals, alarms and an HMI message queue, and sequencers. Every block that can stop equipment says what it is doing and why on the HMI."
+}

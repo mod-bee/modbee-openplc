@@ -1,0 +1,39 @@
+TYPE
+  UT_PUMP_CASCADE_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    stopReason : UT_STOP;
+    lastFaultCode : DWORD;
+    lastFault : UT_FAULT;
+    trips : UDINT;
+    stage : INT;
+    runningCount : INT;
+    calledCount : INT;
+    availableCount : INT;
+    capacity : REAL;
+    flowPerPump : REAL;
+    speed : REAL;
+    stageByUsed : UT_PC_STAGE;
+    statusUnit : INT; (* the pump the status is about (0 = the set) *)
+    faultCode : DWORD; (* 0 config, 1 the loop, 2 high flow, 3 no pump, 10 warn setting, 11 pvStaging, 12 flow bad *)
+    running : BOOL;
+    jockeyOn : BOOL;
+    shortfall : BOOL;
+    configBad : BOOL;
+    wrnConfig : BOOL;
+    flowBad : BOOL;
+    pvStaging : BOOL;
+    fault : BOOL;
+    warning : BOOL;
+    stopping : BOOL;
+    filled : BOOL;
+    inhibited : BOOL;
+    allHeld : BOOL;
+    ctrl : UT_SPEED_CTRL_STS;
+    highFlow : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

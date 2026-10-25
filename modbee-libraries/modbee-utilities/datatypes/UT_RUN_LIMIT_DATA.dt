@@ -1,0 +1,11 @@
+TYPE
+  UT_RUN_LIMIT_DATA : STRUCT
+    set : UT_RUN_LIMIT_SET;
+    cmdStart : BOOL;
+    cmdStop : BOOL;
+    cmdReset : BOOL;
+    sts : UT_RUN_LIMIT_STS;
+    det : UT_RUN_LIMIT_DET;
+    tot : UT_RUN_LIMIT_TOT; (* kept at each run end *)
+  END_STRUCT;
+END_TYPE

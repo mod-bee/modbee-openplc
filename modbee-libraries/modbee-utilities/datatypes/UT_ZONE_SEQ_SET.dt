@@ -1,0 +1,20 @@
+TYPE
+  UT_ZONE_SEQ_SET : STRUCT
+    mode : UT_MODE := UT_MODE_AUTO; (* Off / Auto *)
+    tag : STRING(12) := 'Zones';
+    valveOverlap : TIME := T#5s;
+    pumpStartDelay : TIME := T#3s;
+    valveCloseDelay : TIME := T#5s;
+    masterCloseDelay : TIME;
+    valveLostDelay : TIME := T#5s; (* a linked valve not open this long when wanted = not proven *)
+    rainAction : UT_RAIN_ACTION;
+    repeats : INT := 1;
+    defaultSp : REAL;
+    maxPumpWait : TIME; (* 0 = wait for ever *)
+    pumpWaitSkips : BOOL;
+    flushTime : TIME := T#2m; (* dosing stops this long before each zone cycle ends *)
+    dose : BOOL; (* runs dose by default (DoseReq -1) *)
+    run : UT_RUN_IN_SET;
+    core : UT_RUN_SET; (* maxTime = a zone's cap *)
+  END_STRUCT;
+END_TYPE

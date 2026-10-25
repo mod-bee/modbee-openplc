@@ -1,0 +1,10 @@
+TYPE
+  UT_IO_DI : STRUCT
+    q : BOOL; (* the value for your logic, TRUE = active *)
+    ok : BOOL; (* q comes from a good channel, or a force *)
+    fit : BOOL; (* mapped on this site (src not NONE, module fitted) *)
+    why : UT_IO_Q; (* the quality and why *)
+    raw : BOOL; (* private: the last state after NC *)
+    left : UINT; (* private: debounce ms left *)
+  END_STRUCT;
+END_TYPE

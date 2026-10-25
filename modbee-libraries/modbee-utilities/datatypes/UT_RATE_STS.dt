@@ -1,0 +1,16 @@
+TYPE
+  UT_RATE_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    rate : REAL; (* the rate, per unit *)
+    risingFast : BOOL;
+    fallingFast : BOOL;
+    ready : BOOL; (* a full window of good readings has been measured *)
+    badInput : BOOL; (* In not usable now: Rate held *)
+    configBad : BOOL;
+    wrnConfig : BOOL;
+  END_STRUCT;
+END_TYPE

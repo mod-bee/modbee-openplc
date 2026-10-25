@@ -1,0 +1,10 @@
+TYPE
+  UT_TANK_MORE : STRUCT
+    shape : UT_VESSEL_SHAPE := UT_SHAPE_SAME; (* SAME (as tank 1), VERTICAL, RECT or POND *)
+    diameter : REAL;
+    length : REAL;
+    width : REAL;
+    height : REAL;
+    slope : REAL;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,19 @@
+TYPE
+  UT_PUMP_CASCADE_SET : STRUCT
+    tag : STRING(12) := 'Booster set';
+    run : UT_RUN_IN_SET;
+    stageBy : UT_PC_STAGE;
+    addBand : REAL := 0.3; (* no VSD running: add when Pv is this far below sp *)
+    dropBand : REAL := 0.3; (* no VSD running: drop when Pv is this far above sp *)
+    dropSpeed : REAL; (* PV with a VSD running: drop below this speed % (0 = minimum only) *)
+    addPct : REAL := 90.0; (* FLOW and jockey: add above this % of the running capacity *)
+    dropPct : REAL := 75.0; (* FLOW and jockey: drop below this % of the capacity left *)
+    bepMin : REAL; (* PER_PUMP *)
+    bepMax : REAL;
+    stopMode : UT_PC_STOP;
+    stopStep : TIME := T#3s; (* STAGED: between pump stops *)
+    group : UT_GROUP_SET := (swapWhileRunning := TRUE);
+    highFlow : UT_LEVEL := (response := UT_RESP_TRIP, delay := T#10s, reset := UT_RST_RETRY, recover := T#5m, maxRetries := 3); (* burst main; sp 0 = off *)
+    ctrl : UT_SPEED_CTRL_SET;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,15 @@
+TYPE
+  UT_SCHED_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    active : BOOL;
+    overridden : BOOL;
+    nextChange : DT; (* local; DT#1970-01-01-00:00:00 = never / no clock *)
+    dayOfWeek : INT; (* 1 Monday ... 7 Sunday, 0 = no clock *)
+    configWindow : INT; (* the first window with a bad setting (0 none) *)
+  END_STRUCT;
+END_TYPE

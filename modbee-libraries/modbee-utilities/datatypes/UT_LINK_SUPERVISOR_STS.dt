@@ -1,0 +1,18 @@
+TYPE
+  UT_LINK_SUPERVISOR_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    linkOk : BOOL;
+    nextStep : INT; (* 1 modem restart, 2 power cycle, 3 reboot, 0 none *)
+    rebootPending : BOOL; (* the reboot is due but RebootAllowed is FALSE *)
+    rebootsToday : INT; (* kept over a reboot *)
+    restarts : UDINT;
+    powerCycles : UDINT;
+    outages : UDINT;
+    lastDownFor : TIME;
+  END_STRUCT;
+END_TYPE

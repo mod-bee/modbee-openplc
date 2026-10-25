@@ -1,0 +1,7 @@
+TYPE
+  UT_MOTOR_SD_STS : STRUCT
+    refused : UT_FAULT;
+    inStar : BOOL;
+    changeover : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

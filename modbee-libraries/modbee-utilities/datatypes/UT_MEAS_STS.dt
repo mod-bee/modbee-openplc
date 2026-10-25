@@ -1,0 +1,12 @@
+TYPE
+  UT_MEAS_STS : STRUCT
+    value : REAL; (* the value in use *)
+    good : BOOL; (* the measurement is good (InGood, a number) *)
+    hiHi : UT_PROT_STS;
+    hi : UT_PROT_STS;
+    lo : UT_PROT_STS;
+    loLo : UT_PROT_STS;
+    sensorBad : UT_PROT_STS;
+    badOrder : BOOL; (* the analog setpoints in use are out of order (HH >= H > L >= LL) *)
+  END_STRUCT;
+END_TYPE

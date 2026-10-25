@@ -1,0 +1,20 @@
+TYPE
+  UT_MEAS_ST : STRUCT
+    hh : UT_PROT_ST;
+    h : UT_PROT_ST;
+    l : UT_PROT_ST;
+    ll : UT_PROT_ST;
+    sb : UT_PROT_ST; (* sensor bad *)
+    badOrder : BOOL;
+    goodHeld : BOOL; (* riding through a bad reading (sensorBad not yet active) *)
+    trip : BOOL;
+    warn : BOOL;
+    hiHi : BOOL;
+    hi : BOOL;
+    lo : BOOL;
+    loLo : BOOL;
+    reset : BOOL;
+    badInput : BOOL;
+    badSetting : BOOL;
+  END_STRUCT;
+END_TYPE

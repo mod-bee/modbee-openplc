@@ -1,0 +1,31 @@
+TYPE
+  UT_STATION_SET : STRUCT
+    tag : STRING(12) := 'Station';
+    stationMode : UT_STATION_MODE;
+    run : UT_RUN_IN_SET;
+    stage : ARRAY [1..4] OF UT_STAGE := [(start := 60.0, stop := 20.0), (start := 75.0, stop := 25.0), (start := 85.0, stop := 30.0), (start := 90.0, stop := 35.0)];
+    levelVariation : REAL; (* stage 1 start moved at random by up to this each cycle *)
+    highLevelAlarm : REAL := 90.0;
+    pumpsUsed : INT; (* 0 = the whole array *)
+    group : UT_GROUP_SET;
+    floats : UT_STATION_FLOATS;
+    transducer : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#0s, reset := UT_RST_AUTO, recover := T#10s);
+    levelBad : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#5s, reset := UT_RST_AUTO, recover := T#10s);
+    levelFail : UT_LEVEL_FAIL;
+    levelRunOn : TIME := T#10m;
+    demandPumps : INT := 1;
+    demandStop : REAL; (* 0 = stage 1 stop *)
+    demandRestart : REAL; (* held Demand reruns here (0 = stage 1 start) *)
+    cleanEvery : INT; (* cycles (0 = off) *)
+    cleanLevel : REAL := 5.0;
+    cleanTime : TIME := T#20s;
+    maxCleanTime : TIME := T#5m;
+    onTime : TIME := T#5m; (* TIMED *)
+    offTime : TIME := T#5m;
+    transfer : UT_TRANSFER_SET;
+    source : UT_SOURCE_SET;
+    noFlow : UT_NOFLOW_SET;
+    booster : UT_BOOSTER_SET;
+    firstPump : INT := 1; (* the station's first pump: its position in the array (1 = the first) *)
+  END_STRUCT;
+END_TYPE

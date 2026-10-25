@@ -1,0 +1,204 @@
+{
+  "sections": [
+    {
+      "id": "network",
+      "title": "Network",
+      "layout": "form",
+      "collapsible": true,
+      "collapsed": false,
+      "fields": [
+        {
+          "id": "enabled",
+          "label": "Enable Network",
+          "type": "boolean",
+          "default": false,
+          "help": "Bring up Ethernet or Wi-Fi at boot. Modbus TCP needs this on."
+        },
+        {
+          "id": "interface",
+          "label": "Interface",
+          "type": "select",
+          "optionsRef": "board.networkInterfaces",
+          "options": [
+            "Ethernet",
+            "Wi-Fi"
+          ],
+          "visible": {
+            "condition": "fields.enabled",
+            "operator": "equals",
+            "value": true
+          },
+          "default": "Wi-Fi"
+        },
+        {
+          "id": "mac_address",
+          "label": "MAC Address",
+          "type": "mac-address",
+          "default": "",
+          "placeholder": "DE:AD:BE:EF:00:01",
+          "help": "Required only when the board has no built-in MAC, which is the usual case for a classic Ethernet shield.",
+          "visible": {
+            "operator": "and",
+            "conditions": [
+              {
+                "condition": "fields.enabled",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "condition": "fields.interface",
+                "operator": "equals",
+                "value": "Ethernet"
+              }
+            ]
+          }
+        },
+        {
+          "id": "wifi_ssid",
+          "label": "Wi-Fi SSID",
+          "type": "text",
+          "default": "",
+          "maxLength": 32,
+          "visible": {
+            "operator": "and",
+            "conditions": [
+              {
+                "condition": "fields.enabled",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "condition": "fields.interface",
+                "operator": "equals",
+                "value": "Wi-Fi"
+              }
+            ]
+          }
+        },
+        {
+          "id": "wifi_password",
+          "label": "Wi-Fi Password",
+          "type": "password",
+          "default": "",
+          "maxLength": 63,
+          "validation": "^(.{8,63})?$",
+          "visible": {
+            "operator": "and",
+            "conditions": [
+              {
+                "condition": "fields.enabled",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "condition": "fields.interface",
+                "operator": "equals",
+                "value": "Wi-Fi"
+              }
+            ]
+          }
+        },
+        {
+          "id": "enable_dhcp",
+          "label": "Use DHCP",
+          "type": "boolean",
+          "default": true,
+          "help": "Turn off to set the host fields below by hand.",
+          "visible": {
+            "condition": "fields.enabled",
+            "operator": "equals",
+            "value": true
+          }
+        },
+        {
+          "id": "ip_address",
+          "label": "IP Address",
+          "type": "ip-address",
+          "default": "",
+          "placeholder": "192.168.0.10",
+          "visible": {
+            "operator": "and",
+            "conditions": [
+              {
+                "condition": "fields.enabled",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "condition": "fields.enable_dhcp",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "gateway",
+          "label": "Gateway",
+          "type": "ip-address",
+          "default": "",
+          "placeholder": "192.168.0.1",
+          "visible": {
+            "operator": "and",
+            "conditions": [
+              {
+                "condition": "fields.enabled",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "condition": "fields.enable_dhcp",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "subnet",
+          "label": "Subnet Mask",
+          "type": "ip-address",
+          "default": "",
+          "placeholder": "255.255.255.0",
+          "visible": {
+            "operator": "and",
+            "conditions": [
+              {
+                "condition": "fields.enabled",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "condition": "fields.enable_dhcp",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "dns",
+          "label": "DNS",
+          "type": "ip-address",
+          "default": "",
+          "placeholder": "8.8.8.8",
+          "visible": {
+            "operator": "and",
+            "conditions": [
+              {
+                "condition": "fields.enabled",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "condition": "fields.enable_dhcp",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

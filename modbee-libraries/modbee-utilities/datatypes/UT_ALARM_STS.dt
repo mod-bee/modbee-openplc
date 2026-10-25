@@ -1,0 +1,21 @@
+TYPE
+  UT_ALARM_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    state : UT_ALARM_STATE;
+    active : BOOL;
+    unacked : BOOL;
+    count : UDINT;
+    lastDuration : TIME;
+    sequence : UDINT; (* when it was last raised (ms), orders the first-out *)
+    raisedAt : DT;
+    ackedAt : DT;
+    clearedAt : DT;
+    code : UT_FAULT;
+    badSetting : BOOL;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,7 @@
+TYPE
+  UT_IO_MAP_DATA : STRUCT
+    set : UT_IO_MAP_SET;
+    sts : UT_IO_MAP_STS;
+    det : UT_IO_MAP_DET;
+  END_STRUCT;
+END_TYPE

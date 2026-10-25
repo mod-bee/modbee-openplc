@@ -1,0 +1,12 @@
+TYPE
+  UT_DIGITAL_DATA : STRUCT
+    set : UT_DIGITAL_SET; (* settings (kept) *)
+    simulate : BOOL; (* not kept *)
+    simValue : BOOL;
+    cmdReset : BOOL; (* reset a MANUAL alarm *)
+    cmdDayRollover : BOOL; (* midnight pulse: onTime back to 0 *)
+    sts : UT_DIGITAL_STS;
+    stateFor : TIME; (* detail: time Q has been in its present state *)
+    tot : UT_DIGITAL_TOT; (* totals (kept hourly) *)
+  END_STRUCT;
+END_TYPE

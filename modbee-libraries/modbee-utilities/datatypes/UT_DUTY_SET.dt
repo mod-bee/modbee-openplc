@@ -1,0 +1,7 @@
+TYPE
+  UT_DUTY_SET : STRUCT
+    tag : STRING(12) := 'Duty group';
+    run : UT_RUN_IN_SET;
+    group : UT_GROUP_SET;
+  END_STRUCT;
+END_TYPE

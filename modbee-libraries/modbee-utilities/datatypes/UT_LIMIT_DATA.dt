@@ -1,0 +1,8 @@
+TYPE
+  UT_LIMIT_DATA : STRUCT
+    set : UT_LIMIT_SET;
+    cmdReset : BOOL;
+    sts : UT_LIMIT_STS;
+    timeLeft : TIME; (* detail *)
+  END_STRUCT;
+END_TYPE

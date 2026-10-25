@@ -1,0 +1,8 @@
+TYPE
+  UT_RUN_HOURS_TOT : STRUCT
+    totalMs : LINT;
+    serviceMs : LINT;
+    todayMs : LINT;
+    yesterdayMs : LINT;
+  END_STRUCT;
+END_TYPE

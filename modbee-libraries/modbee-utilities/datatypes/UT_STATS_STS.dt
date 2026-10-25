@@ -1,0 +1,21 @@
+TYPE
+  UT_STATS_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    minimum : REAL; (* current period (0 while samples = 0) *)
+    maximum : REAL;
+    average : REAL; (* time-weighted *)
+    minimumAt : TIME; (* time into the period of the minimum *)
+    maximumAt : TIME;
+    samples : UDINT;
+    duration : TIME; (* time collected *)
+    prevMinimum : REAL;
+    prevMaximum : REAL;
+    prevAverage : REAL;
+    prevDuration : TIME;
+    prevSamples : UDINT;
+  END_STRUCT;
+END_TYPE

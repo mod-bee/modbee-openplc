@@ -1,0 +1,12 @@
+TYPE
+  UT_SYSTEM_MODE_SET : STRUCT
+    mode : UT_MODE; (* OFF / HAND (= Manual) / AUTO *)
+    autoType : INT := 1;
+    autoTypes : INT := 1; (* 1..8 offered *)
+    modeSource : UT_MODE_SOURCE;
+    powerUp : UT_POWERUP;
+    manualMaxRun : TIME; (* 0 = no limit *)
+    run : UT_RUN_IN_SET;
+    powerOnDelay : TIME;
+  END_STRUCT;
+END_TYPE

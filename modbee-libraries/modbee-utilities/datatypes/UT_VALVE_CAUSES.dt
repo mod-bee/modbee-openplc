@@ -1,0 +1,11 @@
+TYPE
+  UT_VALVE_CAUSES : STRUCT
+    openTimeout : BOOL;
+    closeTimeout : BOOL;
+    bothLimits : BOOL;
+    positionLost : BOOL;
+    noMovement : BOOL;
+    torque : BOOL;
+    slowStroke : BOOL;
+  END_STRUCT;
+END_TYPE

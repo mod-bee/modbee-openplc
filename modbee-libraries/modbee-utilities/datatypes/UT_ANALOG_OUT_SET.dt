@@ -1,0 +1,17 @@
+TYPE
+  UT_ANALOG_OUT_SET : STRUCT
+    engMin : REAL; (* engineering value at rawMin *)
+    engMax : REAL := 100.0; (* engineering value at rawMax *)
+    rawMin : REAL; (* raw value at engMin *)
+    rawMax : REAL := 65535.0; (* raw value at engMax *)
+    outMin : REAL; (* lowest output (clamp) *)
+    outMax : REAL := 100.0; (* highest output (clamp) *)
+    rampUp : REAL; (* engineering units per rateUnit rising (0 = off) *)
+    rampDown : REAL; (* falling (0 = off) *)
+    rateUnit : UT_RATE_UNIT;
+    failValue : REAL; (* output while the interlock is FALSE *)
+    holdOnInterlock : BOOL; (* TRUE: hold the output instead *)
+    hand : BOOL; (* Hand chosen (kept) *)
+    handValue : REAL; (* output in Hand (kept) *)
+  END_STRUCT;
+END_TYPE

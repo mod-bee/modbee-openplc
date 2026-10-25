@@ -1,0 +1,9 @@
+TYPE
+  UT_SC_FILL_SET : STRUCT
+    mode : UT_FILL_MODE; (* off, fixed speed, or setpoint ramp *)
+    speed : REAL := 50.0; (* FIXED: speed while filling, % *)
+    target : REAL; (* fill is complete at this Pv (0 = 90 % of sp) *)
+    rate : REAL := 0.1; (* RAMP: setpoint rise, units per rateUnit *)
+    timeout : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#10m, reset := UT_RST_RETRY, maxRetries := 2);
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,10 @@
+TYPE
+  UT_TRANSFER_SET : STRUCT
+    pumps : INT := 1;
+    runTime : TIME;
+    runVolume : LREAL;
+    minFlow : REAL;
+    stopAtFull : BOOL := TRUE; (* a full destination ends a latched / timed run, pauses a held one *)
+    core : UT_RUN_SET;
+  END_STRUCT;
+END_TYPE

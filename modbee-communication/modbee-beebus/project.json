@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "name": "modbee-beebus",
+    "type": "plc-library"
+  },
+  "data": {
+    "dataTypes": [],
+    "globalVariableLists": [],
+    "pous": [],
+    "configuration": {
+      "resource": {
+        "tasks": [],
+        "instances": [],
+        "globalVariables": []
+      }
+    },
+    "libraries": []
+  }
+}

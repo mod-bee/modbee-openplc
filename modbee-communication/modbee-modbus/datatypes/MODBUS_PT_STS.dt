@@ -1,0 +1,12 @@
+TYPE
+  MODBUS_PT_STS : STRUCT
+    w : REAL; (* your logic: the value to write (write points), in engineering units *)
+    v : REAL; (* status: the value in engineering units; the last good one is held while not ok *)
+    q : BOOL; (* status: v <> 0, for a bit *)
+    ok : BOOL; (* status: v is good or a little late; FALSE before the first answer and once lost *)
+    quality : MODBUS_QUALITY; (* status: UNKNOWN never answered, GOOD, UNCERTAIN late, BAD lost *)
+    age : TIME; (* status: since the last good answer *)
+    failures : UINT; (* status: failed attempts in a row *)
+    result : MODBUS_RESULT; (* status: the last attempt's result *)
+  END_STRUCT;
+END_TYPE

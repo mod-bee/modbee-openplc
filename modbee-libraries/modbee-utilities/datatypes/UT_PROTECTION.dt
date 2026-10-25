@@ -1,0 +1,9 @@
+TYPE
+  UT_PROTECTION : STRUCT
+    response : UT_RESPONSE; (* off, warn, trip, or signal (a control point, no alarm) *)
+    delay : TIME; (* the condition must last this long *)
+    reset : UT_RESET_MODE; (* auto, retry, or manual (latched) *)
+    recover : TIME := T#10s; (* auto / retry: wait this long after the CAUSE is gone (a reset: at once) *)
+    maxRetries : INT := 3; (* retry: attempts in the retry window, then locked out *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,6 @@
+TYPE
+  UT_SEQ_DET : STRUCT
+    restartIn : TIME;
+    timeLeft : TIME;
+  END_STRUCT;
+END_TYPE

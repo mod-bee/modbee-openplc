@@ -1,0 +1,13 @@
+TYPE
+  UT_VALVE3_SET : STRUCT
+    type3 : UT_VALVE3_TYPE;
+    posPulse : BOOL; (* Pos pins held (FALSE) or pulse (TRUE) *)
+    useLs1 : BOOL;
+    useLs2 : BOOL;
+    useLs3 : BOOL;
+    travelTime : TIME := T#10s; (* per move: timeout with a switch, arrival without *)
+    midTime : TIME; (* motor without Ls2: end -> mid (0 = half travelTime) *)
+    safePosition : INT := 2;
+    restPos : INT := 2; (* when nothing is asked *)
+  END_STRUCT;
+END_TYPE

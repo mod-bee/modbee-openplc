@@ -1,0 +1,8 @@
+TYPE
+  UT_INTLK_COND_DET : STRUCT
+    badFor : TIME;
+    bypassFor : TIME;
+    delayLeft : TIME;
+    bypassLeft : TIME;
+  END_STRUCT;
+END_TYPE

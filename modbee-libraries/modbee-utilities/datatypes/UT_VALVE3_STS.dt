@@ -1,0 +1,8 @@
+TYPE
+  UT_VALVE3_STS : STRUCT
+    refused : UT_FAULT;
+    targetPos : INT; (* going to (0 = hold) *)
+    actualPos : INT; (* reached (-1 unknown) *)
+    lastStroke : TIME;
+  END_STRUCT;
+END_TYPE

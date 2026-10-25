@@ -1,0 +1,5 @@
+TYPE
+  UT_IO_MAP_SET : STRUCT
+    forceTime : TIME := T#5s; (* how long a force lasts (at most 10 min); cmdForce again starts it again *)
+  END_STRUCT;
+END_TYPE

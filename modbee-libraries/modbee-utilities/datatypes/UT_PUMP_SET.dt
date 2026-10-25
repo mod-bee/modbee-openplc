@@ -1,0 +1,31 @@
+TYPE
+  UT_PUMP_SET : STRUCT
+    mode : UT_MODE;
+    modeSource : UT_MODE_SOURCE;
+    powerUp : UT_POWERUP;
+    tag : STRING(12) := 'Pump'; (* passed to the motor ("Auto: by Pump 1") *)
+    run : UT_RUN_IN_SET;
+    role : UT_PUMP_ROLE;
+    capacity : REAL; (* flow at full speed (0 = unknown) *)
+    startDelay : TIME; (* the request must last this long to start *)
+    stopDelay : TIME; (* the request must be gone this long to stop *)
+    minRunTime : TIME; (* anti-short-cycle (trips always stop at once) *)
+    minOffTime : TIME; (* (power-up counts as a stop) *)
+    startMask : TIME := T#10s; (* low levels with maskAtStart ignored after a start *)
+    retryWindow : TIME := T#1h;
+    resetByOff : BOOL := TRUE;
+    exerciseInterval : TIME; (* run an idle pump after this long (0 = off) *)
+    exerciseTime : TIME := T#30s;
+    pressure : UT_MEAS := (sensor := UT_SENSOR_SWITCH, highSwitch := UT_LVL_HIHI, lowSwitch := UT_LVL_LOLO, onlyWhenRunning := TRUE, maskAtStart := TRUE, hiHi := (response := UT_RESP_TRIP, delay := T#1s, reset := UT_RST_RETRY, recover := T#1m, maxRetries := 3, sp := 10.0, deadband := 0.2), hi := (response := UT_RESP_WARN, delay := T#5s, sp := 8.0, deadband := 0.2), lo := (response := UT_RESP_WARN, delay := T#5s, sp := 2.0, deadband := 0.2), loLo := (response := UT_RESP_TRIP, delay := T#2s, reset := UT_RST_RETRY, recover := T#5m, maxRetries := 3, sp := 1.0, deadband := 0.2));
+    flow : UT_MEAS := (sensor := UT_SENSOR_SWITCH, highSwitch := UT_LVL_NONE, lowSwitch := UT_LVL_LOLO, onlyWhenRunning := TRUE, maskAtStart := TRUE, hiHi := (response := UT_RESP_OFF, delay := T#5s, sp := 120.0, deadband := 2.0), hi := (response := UT_RESP_WARN, delay := T#5s, sp := 100.0, deadband := 2.0), lo := (response := UT_RESP_WARN, delay := T#5s, sp := 20.0, deadband := 2.0), loLo := (response := UT_RESP_TRIP, delay := T#2s, reset := UT_RST_RETRY, recover := T#5m, maxRetries := 3, sp := 10.0, deadband := 2.0));
+    suction : UT_MEAS := (sensor := UT_SENSOR_SWITCH, highSwitch := UT_LVL_NONE, lowSwitch := UT_LVL_LOLO, hiHi := (sp := 10.0, deadband := 0.2), hi := (sp := 8.0, deadband := 0.2), lo := (sp := 2.0, deadband := 0.2), loLo := (response := UT_RESP_TRIP, delay := T#1s, reset := UT_RST_AUTO, recover := T#2m, sp := 1.0, deadband := 0.2));
+    sealLeak : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#0s, reset := UT_RST_AUTO, recover := T#10s);
+    extFault : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#0s, reset := UT_RST_AUTO, recover := T#10s);
+    primeTimeout : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#0s, reset := UT_RST_RETRY, recover := T#2m, maxRetries := 3);
+    maxRun : UT_PROTECTION := (response := UT_RESP_OFF, delay := T#4h, reset := UT_RST_MANUAL);
+    startFail : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#30s, reset := UT_RST_RETRY, recover := T#1m, maxRetries := 3);
+    dropped : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#0s, reset := UT_RST_MANUAL);
+    prime : UT_PUMP_PRIME;
+    starts : UT_START_LIMIT_SET;
+  END_STRUCT;
+END_TYPE

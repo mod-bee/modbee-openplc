@@ -1,0 +1,8 @@
+TYPE
+  UT_SETTING_STS : STRUCT
+    refused : BOOL; (* the last request was refused (until one is accepted) *)
+    bad : BOOL;
+    refusedWhy : UT_FAULT;
+    seen : REAL; (* the request as last read *)
+  END_STRUCT;
+END_TYPE

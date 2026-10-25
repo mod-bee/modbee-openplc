@@ -1,0 +1,8 @@
+TYPE
+  UT_ALARM_TABLE_DATA : STRUCT
+    set : UT_ALARM_TABLE_SET;
+    cmdSilence : BOOL;
+    cmdReset : BOOL;
+    sts : UT_ALARM_TABLE_STS;
+  END_STRUCT;
+END_TYPE

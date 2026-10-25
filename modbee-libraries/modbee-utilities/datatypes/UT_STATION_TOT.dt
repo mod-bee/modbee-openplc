@@ -1,0 +1,7 @@
+TYPE
+  UT_STATION_TOT : STRUCT
+    cycles : UDINT;
+    highFloatEvents : UDINT;
+    highFloatTime : TIME;
+  END_STRUCT;
+END_TYPE

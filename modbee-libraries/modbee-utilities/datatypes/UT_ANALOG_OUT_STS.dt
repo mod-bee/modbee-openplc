@@ -1,0 +1,14 @@
+TYPE
+  UT_ANALOG_OUT_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    out : REAL;
+    hand : BOOL;
+    wrnBadInput : BOOL;
+    configBad : BOOL;
+    wrnConfig : BOOL;
+  END_STRUCT;
+END_TYPE

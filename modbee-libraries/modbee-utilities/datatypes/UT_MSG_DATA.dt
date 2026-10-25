@@ -1,0 +1,8 @@
+TYPE
+  UT_MSG_DATA : STRUCT
+    set : UT_MSG_SET;
+    cmdClear : BOOL; (* QUEUE empties it; ACTIVE builds it again from the sources' codes *)
+    cmdNext : BOOL; (* the next message now (QUEUE drops the one on display) *)
+    sts : UT_MSG_STS;
+  END_STRUCT;
+END_TYPE

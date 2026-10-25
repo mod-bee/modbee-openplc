@@ -1,0 +1,13 @@
+TYPE
+  UT_LIMIT_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    meas : UT_MEAS_STS;
+    inhibited : BOOL;
+    activeLevel : INT; (* 0 none, 1 HH, 2 H, 3 L, 4 LL *)
+    configBad : BOOL; (* setpoints out of order *)
+  END_STRUCT;
+END_TYPE

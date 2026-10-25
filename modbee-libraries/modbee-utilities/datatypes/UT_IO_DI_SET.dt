@@ -1,0 +1,10 @@
+TYPE
+  UT_IO_DI_SET : STRUCT
+    src : UT_IO_SRC; (* where it is wired (NONE = not fitted) *)
+    module : USINT;
+    ch : USINT;
+    nc : BOOL; (* normally-closed contact, inverted here (q TRUE = active) *)
+    failSafe : BOOL; (* q when the source is missing, bad or not fitted *)
+    debounceMs : UINT; (* a new state must hold this long (0 = none, at most 60000) *)
+  END_STRUCT;
+END_TYPE

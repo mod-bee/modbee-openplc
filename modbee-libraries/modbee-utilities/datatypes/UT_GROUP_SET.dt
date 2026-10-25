@@ -1,0 +1,16 @@
+TYPE
+  UT_GROUP_SET : STRUCT
+    rotation : UT_ROTATE_MODE := UT_ROT_HOURS; (* FIXED, EACH_START, HOURS, INTERVAL *)
+    rotateInterval : TIME := T#24h; (* INTERVAL *)
+    hoursBand : TIME := T#1h; (* HOURS: re-rank only past this difference *)
+    fixedLead : INT := 1; (* FIXED: the lead (1..members) *)
+    maxRunning : INT; (* most running at once, Hand included (0 = no limit) *)
+    handCounts : BOOL := TRUE; (* a member running in Hand counts toward Required *)
+    stageDelay : TIME := T#5s; (* gap between calls *)
+    destageDelay : TIME := T#2s; (* gap between releases *)
+    failoverDelay : TIME := T#10s; (* called, not running, not waiting this long: skipped *)
+    swapWhileRunning : BOOL; (* rotation while running: start the next, then stop the old *)
+    exerciseEvery : TIME; (* exercise idle members after this long (0 = off) *)
+    exerciseTime : TIME := T#30s; (* exercise run time *)
+  END_STRUCT;
+END_TYPE

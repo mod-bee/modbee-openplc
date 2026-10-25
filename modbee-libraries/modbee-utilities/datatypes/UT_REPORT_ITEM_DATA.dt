@@ -1,0 +1,7 @@
+TYPE
+  UT_REPORT_ITEM_DATA : STRUCT
+    set : UT_REPORT_SET;
+    cmdForce : BOOL;
+    sts : UT_REPORT_STS;
+  END_STRUCT;
+END_TYPE

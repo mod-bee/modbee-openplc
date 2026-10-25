@@ -1,0 +1,4 @@
+This library's C++ is ESP32 only: its own sources guard themselves out of a
+host build, and the ADS1X15 and GP8XXX drivers it vendors include Arduino.h
+unguarded. check.sh host compiles the blocks, and arduino-cli compiles the
+sources for the target.

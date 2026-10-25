@@ -1,0 +1,10 @@
+TYPE
+  DEV_SOIL_DATA : STRUCT
+    unit : USINT := 1; (* the sensor's Modbus address, 1..247 (factory 1) *)
+    map : DEV_SOIL_MAP; (* its register map (JXCT unless the maker's sheet says otherwise) *)
+    every : TIME := T#10s; (* read it this often (at least 1 s: the sensor answers within 1 s) *)
+    status : DEV_STATUS; (* status *)
+    statusText : STRING(30); (* status, in words *)
+    age : TIME; (* status: since the last good reading *)
+  END_STRUCT;
+END_TYPE

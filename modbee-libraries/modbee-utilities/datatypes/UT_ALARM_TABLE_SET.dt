@@ -1,0 +1,9 @@
+TYPE
+  UT_ALARM_TABLE_SET : STRUCT
+    beaconWarnings : BOOL := TRUE;
+    relayOnWarning : BOOL;
+    sirenTimeout : TIME; (* 0 = until silenced *)
+    fastFlash : TIME := T#250ms;
+    slowFlash : TIME := T#1s;
+  END_STRUCT;
+END_TYPE

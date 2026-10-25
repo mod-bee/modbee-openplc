@@ -1,0 +1,10 @@
+TYPE
+  UT_RATE_SET : STRUCT
+    unit : UT_RATE_UNIT := UT_PER_MIN; (* Rate is change per second, minute, hour or day *)
+    window : TIME := T#10s; (* rate measured over this window (0 = off) *)
+    filterTime : TIME; (* smooths Rate (low-pass time constant), 0 = none *)
+    riseLimit : REAL; (* RisingFast above this rate (0 = off) *)
+    fallLimit : REAL; (* FallingFast when falling faster than this (0 = off) *)
+    alarmDelay : TIME := T#5s; (* the rate must stay past a limit this long *)
+  END_STRUCT;
+END_TYPE

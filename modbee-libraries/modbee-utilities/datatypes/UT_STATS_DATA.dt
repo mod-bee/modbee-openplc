@@ -1,0 +1,8 @@
+TYPE
+  UT_STATS_DATA : STRUCT
+    set : UT_STATS_SET;
+    cmdResetStats : BOOL; (* clear the current and previous period *)
+    sts : UT_STATS_STS;
+    tot : UT_STATS_TOT; (* kept hourly *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,15 @@
+TYPE
+  UT_MEAS : STRUCT
+    installed : BOOL; (* anything fitted at all? *)
+    sensor : UT_SENSOR; (* switch, analog transmitter, or both *)
+    highSwitch : UT_LEVEL_ID; (* level the high switch triggers (none, HH, H) *)
+    lowSwitch : UT_LEVEL_ID; (* level the low switch triggers (none, L, LL) *)
+    hiHi : UT_LEVEL;
+    hi : UT_LEVEL;
+    lo : UT_LEVEL;
+    loLo : UT_LEVEL;
+    onlyWhenRunning : BOOL; (* only check while the equipment runs *)
+    maskAtStart : BOOL; (* ignore the low levels during the start mask *)
+    sensorBad : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#5s, reset := UT_RST_AUTO, recover := T#10s);
+  END_STRUCT;
+END_TYPE

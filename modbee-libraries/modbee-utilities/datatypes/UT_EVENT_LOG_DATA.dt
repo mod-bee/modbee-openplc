@@ -1,0 +1,7 @@
+TYPE
+  UT_EVENT_LOG_DATA : STRUCT
+    set : UT_EVENT_LOG_SET;
+    cmdClear : BOOL; (* empty the log (and the kept copy) *)
+    sts : UT_EVENT_LOG_STS;
+  END_STRUCT;
+END_TYPE

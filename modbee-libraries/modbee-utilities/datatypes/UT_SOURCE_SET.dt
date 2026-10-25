@@ -1,0 +1,9 @@
+TYPE
+  UT_SOURCE_SET : STRUCT
+    stop : REAL; (* source value at or below this: wait (or its L / LL band) *)
+    restart : REAL; (* back above this: resume *)
+    stopDelay : TIME := T#5s;
+    restartDelay : TIME := T#1m;
+    bad : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#5s, reset := UT_RST_AUTO, recover := T#10s);
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,7 @@
+TYPE
+  UT_LINK_SUPERVISOR_DET : STRUCT
+    downFor : TIME;
+    timeLeft : TIME;
+    countResetIn : TIME;
+  END_STRUCT;
+END_TYPE

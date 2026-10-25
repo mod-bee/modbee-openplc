@@ -1,0 +1,9 @@
+TYPE
+  UT_MSG_SET : STRUCT
+    mode : UT_MQ_MODE; (* QUEUE (each new message once) or ACTIVE (each source's current one) *)
+    showTime : TIME := T#3s; (* each message is on display this long *)
+    minKind : UT_KIND := UT_KIND_HELD; (* only statuses of this kind or worse (NORMAL = every change) *)
+    whenFull : UT_MQ_FULL; (* DROP_OLDEST, or HOLD_NEW (new ones wait for room) *)
+    clearFullAfter : TIME; (* QUEUE: a buffer full this long is emptied (T#0s = never) *)
+  END_STRUCT;
+END_TYPE

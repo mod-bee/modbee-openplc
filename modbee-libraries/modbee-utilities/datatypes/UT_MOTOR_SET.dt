@@ -1,0 +1,35 @@
+TYPE
+  UT_MOTOR_SET : STRUCT
+    mode : UT_MODE; (* the operator's Off / Hand / Auto choice (kept) *)
+    modeSource : UT_MODE_SOURCE;
+    powerUp : UT_POWERUP;
+    tag : STRING(12) := 'Motor'; (* name shown *)
+    run : UT_RUN_IN_SET; (* Auto run style (HELD / TOGGLE / KEEPALIVE) *)
+    useFeedback : BOOL := TRUE; (* run feedback fitted *)
+    runByCurrent : BOOL; (* the CT confirms running *)
+    runCurrentPct : REAL := 20.0; (* running at or above this % FLC *)
+    fullLoadCurrent : REAL; (* A; 0 = no current monitoring *)
+    currentStartMask : TIME := T#5s; (* current checks masked after the start is done *)
+    useTopOfRamp : BOOL; (* TopOfRamp wired (soft starter) *)
+    stopTime : TIME; (* soft stop / drive decel: stuck masked this long *)
+    restartDelay : TIME := T#5s; (* minimum off time before a restart (counts from power-up too) *)
+    restartAfterReset : BOOL; (* after a reset that needed one, run without the command cycling *)
+    resetByOff : BOOL := TRUE; (* Off resets trips *)
+    retryWindow : TIME := T#1h;
+    localStopInAuto : BOOL := TRUE;
+    handMaxRun : TIME; (* Hand run limit (0 = none) *)
+    jogMax : TIME; (* longest jog (0 = none) *)
+    extReason : UT_FAULT := UT_F_EXTERNAL; (* text of ExtFault: EXTERNAL / SUPPLY / SEAL_LEAK / MOTOR_HOT / DRIVE *)
+    overload : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#100ms, reset := UT_RST_RETRY, recover := T#10s, maxRetries := 3);
+    thermistor : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#0s, reset := UT_RST_AUTO, recover := T#5m, maxRetries := 3);
+    noFeedback : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#3s, reset := UT_RST_RETRY, recover := T#30s, maxRetries := 3);
+    feedbackLost : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#500ms, reset := UT_RST_RETRY, recover := T#30s, maxRetries := 3);
+    stuck : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#2s, reset := UT_RST_MANUAL);
+    drive : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#0s, reset := UT_RST_RETRY, recover := T#10s, maxRetries := 3);
+    extFault : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#1s, reset := UT_RST_AUTO, recover := T#5s, maxRetries := 3);
+    currentBad : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#5s, reset := UT_RST_AUTO, recover := T#10s, maxRetries := 3);
+    currentHigh : UT_LEVEL := (response := UT_RESP_OFF, delay := T#5s, reset := UT_RST_RETRY, recover := T#5m, maxRetries := 3, sp := 115.0, deadband := 5.0);
+    currentLow : UT_LEVEL := (response := UT_RESP_OFF, delay := T#5s, reset := UT_RST_RETRY, recover := T#5m, maxRetries := 3, sp := 40.0, deadband := 5.0);
+    startTooLong : UT_LEVEL := (response := UT_RESP_OFF, delay := T#15s, reset := UT_RST_MANUAL, sp := 150.0);
+  END_STRUCT;
+END_TYPE

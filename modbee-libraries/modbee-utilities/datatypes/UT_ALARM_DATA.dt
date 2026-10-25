@@ -1,0 +1,15 @@
+TYPE
+  UT_ALARM_DATA : STRUCT
+    set : UT_ALARM_SET;
+    cmdAck : BOOL;
+    cmdShelve : BOOL;
+    cmdUnshelve : BOOL;
+    cmdOutOfService : BOOL;
+    cmdInService : BOOL;
+    cmdResetCount : BOOL;
+    cmdReset : BOOL;
+    grp : UT_ALARM_GRP;
+    sts : UT_ALARM_STS;
+    det : UT_ALARM_DET;
+  END_STRUCT;
+END_TYPE

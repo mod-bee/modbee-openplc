@@ -1,0 +1,11 @@
+TYPE
+  UT_TOTAL_DET : STRUCT
+    thisHour : LREAL;
+    period : LREAL; (* this user period (SNAPSHOT: the last difference) *)
+    snapshot : LREAL;
+    prevSnapshot : LREAL;
+    pulses : UDINT; (* rising edges seen on Pulse *)
+    rejectedSteps : UDINT; (* register / count steps not counted *)
+    timeLeft : TIME;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,12 @@
+TYPE
+  UT_VALVE_FLOAT_SET : STRUCT
+    strokeTime : TIME := T#60s; (* full stroke *)
+    minPulse : TIME := T#500ms; (* shortest move *)
+    overTravel : TIME := T#5s; (* extra drive at 0 / 100 % to re-sync *)
+    homeOnStart : BOOL := TRUE; (* home at power-up *)
+    safePosition : REAL; (* % on Off / interlock / trip (< 0 = stay) *)
+    restPos : REAL; (* % while linked and the owner's open is off *)
+    handPos : REAL; (* kept Hand position (written on an operator action) *)
+    pos : UT_VALVE_POS_SET;
+  END_STRUCT;
+END_TYPE

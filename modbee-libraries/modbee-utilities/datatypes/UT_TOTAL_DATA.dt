@@ -1,0 +1,14 @@
+TYPE
+  UT_TOTAL_DATA : STRUCT
+    set : UT_TOTAL_SET; (* settings (kept) *)
+    cmdResetBatch : BOOL;
+    cmdResetTotal : BOOL; (* total, totalIn, totalOut to 0 (needs cmdConfirm in the same write) *)
+    cmdConfirm : BOOL;
+    cmdPreset : BOOL; (* set the total to presetTotal *)
+    presetTotal : LREAL; (* 0 .. 1E12 *)
+    cmdRollover : BOOL; (* close the user period *)
+    sts : UT_TOTAL_STS;
+    det : UT_TOTAL_DET;
+    tot : UT_TOTAL_TOT; (* totals (kept) *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,8 @@
+TYPE
+  UT_RUN_LIMIT_DET : STRUCT
+    elapsed : TIME;
+    timeLeft : TIME;
+    phaseTime : TIME;
+    pauseTime : TIME;
+  END_STRUCT;
+END_TYPE

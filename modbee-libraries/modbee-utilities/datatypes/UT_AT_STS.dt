@@ -1,0 +1,9 @@
+TYPE
+  UT_AT_STS : STRUCT
+    state : UT_AT_STATE;
+    q : BOOL; (* on: ACTIVE, LATCHED or LOCKED *)
+    unacked : BOOL;
+    retries : USINT;
+    code : UT_FAULT;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,16 @@
+TYPE
+  UT_PULSE_SEQ_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    channel : INT; (* pulsing, or next after its channel gap (0 = none) *)
+    pulse : INT;
+    cycles : UDINT;
+    busy : BOOL;
+    postLeft : INT;
+    configBad : BOOL;
+  END_STRUCT;
+END_TYPE

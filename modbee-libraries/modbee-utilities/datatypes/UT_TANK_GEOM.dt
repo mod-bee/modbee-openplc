@@ -1,0 +1,13 @@
+TYPE
+  UT_TANK_GEOM : STRUCT
+    shape : UT_VESSEL_SHAPE;
+    diameter : REAL;
+    height : REAL;
+    length : REAL;
+    width : REAL;
+    coneHeight : REAL;
+    outletDiameter : REAL;
+    slope : REAL; (* POND: horizontal per 1 vertical *)
+    tableFull : REAL; (* TABLE: volume when full *)
+  END_STRUCT;
+END_TYPE

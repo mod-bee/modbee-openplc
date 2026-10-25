@@ -1,0 +1,11 @@
+TYPE
+  UT_RUN_LIMIT_SET : STRUCT
+    byTime : BOOL;
+    byVolume : BOOL;
+    runTime : TIME := T#1h;
+    targetVolume : LREAL; (* in the meter's total unit *)
+    minFlow : REAL; (* expected minimum flow (worked-out cap) *)
+    run : UT_RUN_IN_SET;
+    core : UT_RUN_SET;
+  END_STRUCT;
+END_TYPE

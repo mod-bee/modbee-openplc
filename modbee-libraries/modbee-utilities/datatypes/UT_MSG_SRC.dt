@@ -1,0 +1,7 @@
+TYPE
+  UT_MSG_SRC : STRUCT
+    status : UT_STATUS;
+    fault : UT_FAULT;
+    known : BOOL; (* FALSE: nothing seen yet (ACTIVE builds again) *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,15 @@
+TYPE
+  UT_ZONE_SET : STRUCT
+    enable : BOOL; (* in the program *)
+    runTime : TIME; (* water time *)
+    volume : LREAL; (* water to apply, in the meter's total unit *)
+    endBy : UT_ZONE_END; (* AUTO: volume if set, else time *)
+    cycles : INT := 1;
+    soakTime : TIME;
+    sp : REAL; (* zone pressure (0 = the program's defaultSp) *)
+    minFlow : REAL; (* flow band (0 = not checked), meter rate unit *)
+    maxFlow : REAL;
+    flowCheck : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#60s, reset := UT_RST_AUTO, recover := T#10s, maxRetries := 3);
+    dose : BOOL := TRUE; (* this zone may be dosed *)
+  END_STRUCT;
+END_TYPE

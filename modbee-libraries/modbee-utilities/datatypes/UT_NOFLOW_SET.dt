@@ -1,0 +1,8 @@
+TYPE
+  UT_NOFLOW_SET : STRUCT
+    enable : BOOL;
+    sp : REAL; (* flow below this *)
+    delay : TIME := T#10s;
+    minRun : TIME := T#30s;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,6 @@
+TYPE
+  UT_RATE_DATA : STRUCT
+    set : UT_RATE_SET; (* settings (kept) *)
+    sts : UT_RATE_STS;
+  END_STRUCT;
+END_TYPE

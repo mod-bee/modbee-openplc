@@ -1,0 +1,7 @@
+TYPE
+  UT_MOTOR_2SPD_STS : STRUCT
+    refused : UT_FAULT;
+    highSpeed : BOOL;
+    changeover : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,9 @@
+TYPE
+  UT_VALVE_POS_SET : STRUCT
+    openThreshold : REAL := 98.0; (* IsOpen at or above, % *)
+    closedThreshold : REAL := 2.0; (* IsClosed at or below, % *)
+    deadband : REAL := 1.0; (* % error ignored *)
+    deviation : UT_LEVEL := (response := UT_RESP_WARN, delay := T#10s, reset := UT_RST_AUTO, sp := 5.0);
+    posFeedback : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#500ms, reset := UT_RST_AUTO);
+  END_STRUCT;
+END_TYPE

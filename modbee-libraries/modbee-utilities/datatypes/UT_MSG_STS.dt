@@ -1,0 +1,13 @@
+TYPE
+  UT_MSG_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    count : INT;
+    full : BOOL;
+    lost : UDINT;
+    wrnConfig : BOOL;
+    wrnSrc : BOOL;
+  END_STRUCT;
+END_TYPE

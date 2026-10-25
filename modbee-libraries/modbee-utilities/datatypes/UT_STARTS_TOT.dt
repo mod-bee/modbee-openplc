@@ -1,0 +1,7 @@
+TYPE
+  UT_STARTS_TOT : STRUCT
+    total : UDINT;
+    todayStarts : UDINT;
+    yesterdayStarts : UDINT;
+  END_STRUCT;
+END_TYPE

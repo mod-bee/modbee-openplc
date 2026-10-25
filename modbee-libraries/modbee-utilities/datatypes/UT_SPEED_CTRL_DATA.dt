@@ -1,0 +1,10 @@
+TYPE
+  UT_SPEED_CTRL_DATA : STRUCT
+    set : UT_SPEED_CTRL_SET; (* settings (kept) *)
+    cmdReset : BOOL; (* reset trips whose cause has gone (set back to FALSE) *)
+    cmdManual : BOOL; (* manual speed (set back to FALSE) *)
+    cmdAuto : BOOL; (* back to the loop (set back to FALSE) *)
+    sts : UT_SPEED_CTRL_STS; (* status (published on change) *)
+    det : UT_SPEED_CTRL_DET; (* detail (published on request) *)
+  END_STRUCT;
+END_TYPE

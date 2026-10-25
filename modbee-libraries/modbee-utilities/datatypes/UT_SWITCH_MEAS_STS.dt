@@ -1,0 +1,21 @@
+TYPE
+  UT_SWITCH_MEAS_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    ll : BOOL; (* each fitted switch after debounce *)
+    l : BOOL;
+    h : BOOL;
+    hh : BOOL;
+    good : BOOL;
+    isHiHi : BOOL;
+    isHi : BOOL;
+    isLo : BOOL;
+    isLoLo : BOOL;
+    disagree : UT_PROT_STS;
+    inputBad : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

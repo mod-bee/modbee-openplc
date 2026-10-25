@@ -1,0 +1,14 @@
+TYPE
+  UT_PUMP_DATA : STRUCT
+    set : UT_PUMP_SET;
+    cmdMode : INT := -1;
+    cmdStart : BOOL;
+    cmdStop : BOOL;
+    cmdReset : BOOL;
+    cmdExercise : BOOL;
+    cmdPrimeNext : BOOL;
+    sts : UT_PUMP_STS;
+    det : UT_PUMP_DET;
+    cmdPrimeCancel : BOOL; (* withdraw cmdPrimeNext before that start (last: the members above keep their places) *)
+  END_STRUCT;
+END_TYPE

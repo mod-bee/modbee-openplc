@@ -1,0 +1,8 @@
+TYPE
+  UT_WATCHDOG_SET : STRUCT
+    timeout : TIME := T#90s; (* no change for this long = link dead *)
+    recoverTime : TIME; (* alive this long before Ok returns (and AUTO clears CommsFail) *)
+    beatPeriod : TIME := T#30s; (* HeartbeatOut toggles every beatPeriod (T#0s = off) *)
+    failReset : UT_RESET_MODE := UT_RST_AUTO;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,15 @@
+TYPE
+  UT_CMD_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    lastSource : UT_CMD_FROM;
+    lastCmd : DWORD;
+    lastMode : INT := -1;
+    lastSel : INT := -1;
+    refusedCount : UDINT; (* remote requests refused (not kept) *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,7 @@
+TYPE
+  UT_BEACON_DATA : STRUCT
+    set : UT_BEACON_SET;
+    sts : UT_BEACON_STS;
+    det : UT_BEACON_DET;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,10 @@
+TYPE
+  UT_EVENT_SRC : STRUCT
+    code : INT;
+    stop : UT_STOP;
+    fault : UT_FAULT;
+    count : UDINT;
+    newPrev : BOOL;
+    seen : BOOL;
+  END_STRUCT;
+END_TYPE

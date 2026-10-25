@@ -1,0 +1,7 @@
+TYPE
+  UT_SCHED_DET : STRUCT
+    overrideLeft : TIME;
+    nextChangeIn : TIME;
+    localTime : DT;
+  END_STRUCT;
+END_TYPE

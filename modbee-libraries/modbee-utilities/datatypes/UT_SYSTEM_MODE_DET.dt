@@ -1,0 +1,7 @@
+TYPE
+  UT_SYSTEM_MODE_DET : STRUCT
+    runTime : TIME;
+    timeLeft : TIME;
+    powerUpLeft : TIME;
+  END_STRUCT;
+END_TYPE

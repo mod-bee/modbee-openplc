@@ -1,0 +1,7 @@
+TYPE
+  UT_SEQ_STEP_DATA : STRUCT
+    set : UT_SEQ_STEP_SET;
+    sts : UT_SEQ_STEP_STS;
+    det : UT_SEQ_STEP_DET;
+  END_STRUCT;
+END_TYPE

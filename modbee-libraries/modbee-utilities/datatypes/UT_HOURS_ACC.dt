@@ -1,0 +1,8 @@
+TYPE
+  UT_HOURS_ACC : STRUCT
+    tPrev : TIME;
+    rest : TIME; (* part of a millisecond not yet counted *)
+    runningPrev : BOOL;
+    started : BOOL;
+  END_STRUCT;
+END_TYPE

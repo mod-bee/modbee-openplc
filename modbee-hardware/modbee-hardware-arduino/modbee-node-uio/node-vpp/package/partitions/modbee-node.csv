@@ -1,0 +1,17 @@
+# ModBee Node UIO, 4 MB flash: two OTA program slots of 1.875 MB (1,966,080
+# bytes each, the same as the core's min_spiffs scheme, so arduino-cli's size
+# check matches), 128 KB NVS for retained values and settings, no file system.
+#
+# otadata MUST stay at 0xe000. The ESP32 core's upload writes boot_app0.bin
+# (an empty boot record) at 0xe000 and the program at 0x10000 (app0) - both
+# addresses are fixed in its platform.txt. With the boot record here, every USB
+# upload also resets it, so the board boots the program just uploaded even
+# after an OTA update has switched it to app1. Elsewhere (it was at 0x9000),
+# a USB upload after an OTA went to app0 and the board kept booting app1.
+# 0x9000-0xdfff is left unused.
+# Name,   Type, SubType,  Offset,   Size
+otadata,  data, ota,      0xe000,   0x2000,
+app0,     app,  ota_0,    0x10000,  0x1E0000,
+app1,     app,  ota_1,    0x1F0000, 0x1E0000,
+nvs,      data, nvs,      0x3D0000, 0x20000,
+coredump, data, coredump, 0x3F0000, 0x10000,

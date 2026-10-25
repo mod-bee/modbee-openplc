@@ -1,0 +1,47 @@
+TYPE
+  UT_SPEED_CTRL_SET : STRUCT
+    control : UT_SC_CTRL; (* PV: PID on Pv; FLOW: PID on Flow; FIXED: a fixed speed *)
+    preset : UT_SC_PRESET; (* the operator's preset (kept); the Preset pin wins while wired *)
+    spLow : REAL; (* PV: the LOW setpoint (0 = sp) *)
+    spHigh : REAL; (* PV: the HIGH setpoint (0 = sp) *)
+    flowSp : REAL; (* FLOW: the NORMAL flow setpoint (0 = config fault) *)
+    flowSpLow : REAL; (* FLOW: LOW (0 = flowSp) *)
+    flowSpHigh : REAL; (* FLOW: HIGH (0 = flowSp) *)
+    fixedSpeed : REAL := 100.0; (* FIXED: NORMAL speed, % *)
+    fixedSpeedLow : REAL := 50.0; (* FIXED: LOW speed, % *)
+    fixedSpeedHigh : REAL := 100.0; (* FIXED: HIGH speed, % *)
+    spSource : UT_SP_SOURCE; (* record sp, or the Sp pin (PV control) *)
+    sp : REAL; (* PV: the NORMAL setpoint (0 = config fault) *)
+    spRamp : REAL; (* setpoint change rate, units per rateUnit (0 = step) *)
+    reverseActing : BOOL; (* TRUE: above sp -> speed up (emptying, cooling) *)
+    loop : UT_LOOP; (* internal PI(D) or ExtSpeed *)
+    kp : REAL := 5.0; (* % speed per unit of error *)
+    ti : TIME := T#5s; (* integral time (0 = no integral) *)
+    td : TIME; (* derivative time (0 = none) *)
+    deadband : REAL; (* error ignored inside this *)
+    minSpeed : REAL := 30.0; (* % *)
+    maxSpeed : REAL := 100.0; (* % *)
+    startSpeed : REAL := 40.0; (* speed on start, % *)
+    rateLimit : REAL := 5.0; (* max output change, % per rateUnit (0 = no limit) *)
+    rateUnit : UT_RATE_UNIT; (* rateLimit, spRamp and pipeFill.rate: per second (default), minute, hour, day *)
+    atSpBand : REAL := 0.2; (* AtSetpoint band, +/- *)
+    pipeFill : UT_SC_FILL_SET;
+    sleep : UT_SC_SLEEP_SET;
+    flowLimit : REAL; (* speed is reduced to hold Flow below this (0 = off) *)
+    highPv : UT_LEVEL := (response := UT_RESP_TRIP, reset := UT_RST_AUTO);
+    lowPvAtMax : UT_LEVEL := (response := UT_RESP_TRIP, delay := T#60s, reset := UT_RST_RETRY, recover := T#5m, maxRetries := 3); (* sp 0 = half the setpoint *)
+    notReaching : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#2m, reset := UT_RST_AUTO);
+    hunting : UT_PROTECTION := (response := UT_RESP_WARN, reset := UT_RST_AUTO);
+    huntCycles : INT := 6; (* crossings allowed in huntWindow (1..15) *)
+    huntWindow : TIME := T#60s; (* (0 = hunting check off) *)
+    huntBand : REAL := 0.3; (* a crossing counts when the swing is more than this *)
+    pvFail : UT_PVFAIL; (* stop, fallback speed, or hold the speed *)
+    pvRecover : TIME := T#5s; (* the sensor must be good this long before control resumes *)
+    fallbackSpeed : REAL := 60.0; (* % *)
+    stageDelay : TIME := T#30s; (* for MoreNeeded / LessNeeded *)
+    retryWindow : TIME := T#1h;
+    restartAfterReset : BOOL; (* after a MANUAL reset, restart without Enable cycling *)
+    manualSpeed : REAL := 50.0; (* the operator's manual speed, % (kept); the ManualSpeed pin wins while wired *)
+    manual : BOOL; (* manual speed chosen (kept) *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,7 @@
+TYPE
+  UT_INTLK_SET : STRUCT
+    bypassTimeout : TIME := T#8h; (* 0 = never drops out *)
+    maxRetries : INT := 3; (* RETRY conditions *)
+    retryWindow : TIME := T#1h;
+  END_STRUCT;
+END_TYPE

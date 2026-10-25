@@ -1,0 +1,10 @@
+TYPE
+  UT_SCHED_WINDOW_SET : STRUCT
+    enable : BOOL := TRUE;
+    days : BYTE := 16#7F; (* bit 0 Monday ... bit 6 Sunday *)
+    start : TOD := TOD#06:00:00;
+    stop : TOD := TOD#18:00:00; (* earlier than start: crosses midnight *)
+    everyDays : INT; (* 2 or more: every N-th day from startDate *)
+    startDate : DATE := DATE#1970-01-01;
+  END_STRUCT;
+END_TYPE

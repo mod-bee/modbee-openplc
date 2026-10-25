@@ -1,0 +1,6 @@
+TYPE
+  UT_DIGITAL_TOT : STRUCT
+    changes : UDINT; (* changes of the real input after debounce *)
+    onTime : TIME; (* time Q has been TRUE since the last day rollover *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,10 @@
+TYPE
+  UT_AT_MEM : STRUCT
+    cond : BOOL; (* the condition after the delays *)
+    inPrev : BOOL;
+    silenced : BOOL;
+    t : TIME; (* when In last changed *)
+    tWin : TIME; (* when the retry window started *)
+    tAck : TIME; (* when it was silenced or acknowledged *)
+  END_STRUCT;
+END_TYPE

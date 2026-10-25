@@ -1,0 +1,22 @@
+TYPE
+  UT_MOTOR_VSD_SET : STRUCT
+    minSpeed : REAL; (* % *)
+    maxSpeed : REAL := 100.0; (* % *)
+    accelRate : REAL; (* % per rateUnit (0 = the drive ramps) *)
+    decelRate : REAL;
+    rateUnit : UT_RATE_UNIT;
+    skipLow : REAL; (* resonance band (equal = off) *)
+    skipHigh : REAL;
+    handSpeed : REAL := 50.0; (* kept Hand speed *)
+    jogSpeed : REAL := 20.0; (* jog speed %, within min..max *)
+    rawMin : REAL;
+    rawMax : REAL := 65535.0;
+    resetPulse : TIME := T#500ms;
+    autoDriveReset : BOOL := TRUE; (* pulse DriveReset for each retry *)
+    driveRamp : TIME; (* the drive's own 0 -> 100 % time (AtSpeed / speedDev wait) *)
+    ratedHz : REAL; (* display *)
+    ratedRpm : REAL;
+    driveNotReady : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#0s, reset := UT_RST_AUTO, recover := T#10s, maxRetries := 3);
+    speedDev : UT_LEVEL := (response := UT_RESP_WARN, delay := T#10s, reset := UT_RST_AUTO, recover := T#10s, maxRetries := 3, sp := 10.0);
+  END_STRUCT;
+END_TYPE

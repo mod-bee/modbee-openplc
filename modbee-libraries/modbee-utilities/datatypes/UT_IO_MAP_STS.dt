@@ -1,0 +1,13 @@
+TYPE
+  UT_IO_MAP_STS : STRUCT
+    statusCode : UT_STATUS; (* OK, a warning, or a configuration problem *)
+    faultId : UT_FAULT; (* which (IO forced, IO module missing, IO address, ...) *)
+    statusText : STRING(30);
+    refused : UT_FAULT; (* the last settings write put back *)
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    forcedCount : INT; (* force slots active *)
+    badCount : INT; (* fitted functions whose source is not good *)
+    missingCount : INT; (* fitted modules not answering *)
+  END_STRUCT;
+END_TYPE

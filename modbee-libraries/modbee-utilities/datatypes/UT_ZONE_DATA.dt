@@ -1,0 +1,7 @@
+TYPE
+  UT_ZONE_DATA : STRUCT
+    set : UT_ZONE_SET;
+    sts : UT_ZONE_STS;
+    det : UT_ZONE_DET;
+  END_STRUCT;
+END_TYPE

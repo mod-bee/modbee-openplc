@@ -1,0 +1,6 @@
+TYPE
+  UT_CMD_DATA : STRUCT
+    set : UT_CMD_SET;
+    sts : UT_CMD_STS;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,10 @@
+TYPE
+  UT_RUN_STS : STRUCT
+    active : BOOL;
+    paused : BOOL;
+    waiting : BOOL;
+    delivered : LREAL;
+    volumeLeft : LREAL;
+    timeCap : TIME;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,6 @@
+TYPE
+  UT_STAGE : STRUCT
+    start : REAL;
+    stop : REAL;
+  END_STRUCT;
+END_TYPE

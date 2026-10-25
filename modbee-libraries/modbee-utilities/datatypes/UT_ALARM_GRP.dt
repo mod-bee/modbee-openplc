@@ -1,0 +1,5 @@
+TYPE
+  UT_ALARM_GRP : STRUCT
+    ack : BOOL; (* written only by the annunciator *)
+  END_STRUCT;
+END_TYPE

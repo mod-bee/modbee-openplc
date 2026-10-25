@@ -1,0 +1,9 @@
+TYPE
+  UT_PUMP_PRIME : STRUCT
+    enable : BOOL; (* prime at every start *)
+    doneBy : UT_PRIME_DONE; (* pressure above L, flow above L, the PrimeDone pin, or a time *)
+    timeout : TIME := T#60s; (* priming always ends here (primeTimeout acts per its response) *)
+    holdTime : TIME := T#2s; (* the primed condition must last this long *)
+    runTime : TIME := T#30s; (* TIME: primed after running this long (`time` is an IEC keyword) *)
+  END_STRUCT;
+END_TYPE

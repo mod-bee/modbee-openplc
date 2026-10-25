@@ -1,0 +1,6 @@
+TYPE
+  UT_STATS_TOT : STRUCT
+    cur : UT_STATS_CUR;
+    prev : UT_STATS_PREV;
+  END_STRUCT;
+END_TYPE

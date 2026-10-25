@@ -1,0 +1,6 @@
+TYPE
+  UT_VESSEL_DATA : STRUCT
+    set : UT_VESSEL_SET; (* settings (kept) *)
+    sts : UT_VESSEL_STS;
+  END_STRUCT;
+END_TYPE

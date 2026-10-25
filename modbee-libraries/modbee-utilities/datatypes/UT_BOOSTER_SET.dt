@@ -1,0 +1,11 @@
+TYPE
+  UT_BOOSTER_SET : STRUCT
+    startBy : UT_BOOST_START;
+    delay : TIME := T#10s;
+    startSp : REAL;
+    stopSp : REAL;
+    stopGap : TIME := T#2s;
+    required : BOOL := TRUE;
+    lost : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#5s, reset := UT_RST_AUTO, recover := T#30s);
+  END_STRUCT;
+END_TYPE

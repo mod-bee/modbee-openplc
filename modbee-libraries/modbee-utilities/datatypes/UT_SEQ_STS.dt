@@ -1,0 +1,19 @@
+TYPE
+  UT_SEQ_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    mode : UT_SEQ_MODE;
+    fault : BOOL;
+    faultStep : INT; (* the first faulted step (0 = none) *)
+    faultCode : DWORD; (* bit 0 timeout, bit 1 feedback lost, bit 2 config *)
+    fltTimeout : BOOL;
+    fltLoss : BOOL;
+    fltConfig : BOOL;
+    configStep : INT;
+    restart : UT_PROT_STS; (* the auto restarts: retries used, locked *)
+  END_STRUCT;
+END_TYPE

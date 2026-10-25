@@ -1,0 +1,14 @@
+TYPE
+  UT_SELECT_SET : STRUCT
+    selectMode : UT_SELECT_METHOD; (* combine the agreeing sensors *)
+    twoDisagree : UT_SELECT_METHOD := UT_SEL_MAX; (* two that disagree: MAX (the higher) or MIN *)
+    warnSpread : REAL := 1.0;
+    faultSpread : REAL := 2.0; (* sensors further apart than this do not agree *)
+    deviation : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#5s, reset := UT_RST_AUTO, recover := T#0s);
+    noAgree : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#10s, reset := UT_RST_AUTO, recover := T#10s);
+    retryWindow : TIME := T#1h;
+    filterTime : TIME;
+    noGoodAction : UT_AI_FAULT; (* Out while not Good: hold, min, max, substitute, pass *)
+    substValue : REAL;
+  END_STRUCT;
+END_TYPE

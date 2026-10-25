@@ -1,0 +1,6 @@
+TYPE
+  UT_AT_ALARM_DATA : STRUCT
+    set : UT_AT_SET;
+    sts : UT_AT_STS;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,11 @@
+TYPE
+  UT_LEVEL : STRUCT
+    response : UT_RESPONSE;
+    delay : TIME;
+    reset : UT_RESET_MODE;
+    recover : TIME := T#10s;
+    maxRetries : INT := 3;
+    sp : REAL; (* setpoint *)
+    deadband : REAL; (* must come back past sp by this much to clear *)
+  END_STRUCT;
+END_TYPE

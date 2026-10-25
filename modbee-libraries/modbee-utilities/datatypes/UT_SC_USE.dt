@@ -1,0 +1,26 @@
+TYPE
+  UT_SC_USE : STRUCT
+    setOk : BOOL; (* every setting is usable (nothing to put back) *)
+    setId : UT_FAULT; (* the first setting that is not *)
+    cfgBad : BOOL; (* no run: a setting or a pin *)
+    cfgId : UT_FAULT;
+    cfgWarn : BOOL; (* a safe value is used *)
+    warnId : UT_FAULT;
+    preset : UT_SC_PRESET;
+    manSpd : REAL; (* manual speed in use (pin or kept) *)
+    spTarget : REAL;
+    fixedOn : BOOL;
+    perS : REAL; (* seconds per rateUnit *)
+    rateUse : REAL; (* rateLimit (units per rateUnit, 0 = none) *)
+    rampUse : REAL; (* spRamp (0 = step) *)
+    fillUse : REAL; (* pipeFill.rate (0 = jump) *)
+    wake : REAL;
+    band : REAL;
+    db : REAL;
+    boostV : REAL;
+    pvf : UT_PVFAIL;
+    minS : REAL;
+    maxS : REAL;
+    speedUse : REAL; (* the manual / fixed speed in use *)
+  END_STRUCT;
+END_TYPE

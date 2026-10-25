@@ -1,0 +1,8 @@
+TYPE
+  UT_ANALOG_OUT_DATA : STRUCT
+    set : UT_ANALOG_OUT_SET;
+    cmdMode : INT := -1; (* 1 Hand, 2 Auto; set back to -1 *)
+    sts : UT_ANALOG_OUT_STS;
+    raw : UINT; (* detail: OutRaw *)
+  END_STRUCT;
+END_TYPE

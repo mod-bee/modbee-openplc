@@ -1,0 +1,6 @@
+TYPE
+  UT_DOSE_TOT : STRUCT
+    dosed : LINT; (* millionths of a unit *)
+    doses : UDINT;
+  END_STRUCT;
+END_TYPE

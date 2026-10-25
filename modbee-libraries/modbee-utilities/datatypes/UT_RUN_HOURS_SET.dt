@@ -1,0 +1,5 @@
+TYPE
+  UT_RUN_HOURS_SET : STRUCT
+    serviceInterval : LREAL; (* hours between services (0 = off) *)
+  END_STRUCT;
+END_TYPE

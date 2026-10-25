@@ -1,0 +1,5 @@
+TYPE
+  UT_ALARM_DET : STRUCT
+    shelvedFor : TIME; (* shelve time left *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,7 @@
+TYPE
+  UT_DUTY_DET : STRUCT
+    rotateIn : TIME;
+    nextExerciseIn : TIME;
+    timeLeft : TIME;
+  END_STRUCT;
+END_TYPE

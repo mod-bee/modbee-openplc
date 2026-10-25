@@ -1,0 +1,13 @@
+TYPE
+  UT_PUMP_CASCADE_DATA : STRUCT
+    set : UT_PUMP_CASCADE_SET;
+    cmdStart : BOOL;
+    cmdStop : BOOL;
+    cmdRotate : BOOL;
+    cmdReset : BOOL;
+    cmdManual : BOOL;
+    cmdAuto : BOOL;
+    sts : UT_PUMP_CASCADE_STS;
+    det : UT_PUMP_CASCADE_DET;
+  END_STRUCT;
+END_TYPE

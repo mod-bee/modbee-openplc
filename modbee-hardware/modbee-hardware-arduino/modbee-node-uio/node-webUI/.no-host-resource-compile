@@ -1,0 +1,4 @@
+This library's C++ is ESP32 only: the web server needs Arduino networking, and
+the ArduinoJson, AsyncTCP and ESPAsyncWebServer sources it carries include
+Arduino headers unguarded. check.sh host compiles the blocks, and arduino-cli
+compiles the sources for the target.

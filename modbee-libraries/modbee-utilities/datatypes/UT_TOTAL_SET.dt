@@ -1,0 +1,26 @@
+TYPE
+  UT_TOTAL_SET : STRUCT
+    countMethod : UT_TOTAL_METHOD; (* how to count *)
+    rateUnit : UT_RATE_UNIT := UT_PER_HOUR; (* time unit of the flow (RATE / SAMPLE) and of Rate *)
+    inUnit : UT_VOL_UNIT; (* unit of pulseValue, the register / count and the flow (NONE = no conversion) *)
+    outUnit : UT_VOL_UNIT; (* unit of every total and of Rate (NONE = no conversion) *)
+    pulseValue : REAL := 1.0; (* PULSE / COUNT: quantity per pulse, in inUnit *)
+    nominalRate : REAL; (* RUNTIME: rate while Active; badEstimate: the estimate, in rateUnit *)
+    lowCutoff : REAL; (* RATE: flow below this counts as 0 *)
+    rolloverAt : REAL; (* REGISTER / COUNT: wraps at this value (0: REGISTER never, COUNT at 2^32) *)
+    maxStep : REAL; (* REGISTER / COUNT: reject single steps bigger than this (0 = off) *)
+    deadband : REAL; (* CHANGE: ignore smaller changes *)
+    sampleTime : TIME := T#1m; (* SAMPLE / SNAPSHOT *)
+    sampleAsQuantity : BOOL; (* SAMPLE: each sample is a quantity, not a rate *)
+    scale : REAL := 1.0; (* multiplier on every addition *)
+    recordEvery : TIME := T#15m; (* interval records (T#0s = off) *)
+    changeCountFalls : BOOL; (* CHANGE: totals and Rate count the falls (drawdown) *)
+    batchTarget : LREAL; (* BatchDone threshold (0 = off) *)
+    dayLimit : LREAL; (* day limit in outUnit (0 = off) *)
+    countReverse : BOOL; (* RATE: reverse flow into totalOut *)
+    badEstimate : BOOL; (* RATE / PULSE / SAMPLE: count nominalRate while the source is bad *)
+    inputBad : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#5s, reset := UT_RST_AUTO, recover := T#10s);
+    noCount : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#2m, reset := UT_RST_AUTO, recover := T#10s);
+    retryWindow : TIME := T#1h;
+  END_STRUCT;
+END_TYPE

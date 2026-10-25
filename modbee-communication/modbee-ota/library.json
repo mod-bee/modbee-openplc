@@ -1,0 +1,11 @@
+{
+  "name": "modbee-ota",
+  "displayName": "OTA",
+  "version": "0.1.0",
+  "namespace": "modbee_ota",
+  "description": "Firmware updates for a ModBee node over MQTT, from inside the PLC program. The node pulls the new firmware a piece at a time, checks it, switches to it and reboots - and if the new firmware does not come back on MQTT, the board goes back to the old one by itself. The program decides when: accept an update, hold a verified one until the machine is stopped, apply it, or abort. A dropped connection or a power cut resumes where it stopped, so a slow cellular link is not paid for twice. Signing is optional and costs nothing when it is not used. The flash work runs in the background, so the PLC scan never waits for it.",
+  "build": {
+    "verify": "arduino",
+    "core": "esp32:esp32"
+  }
+}

@@ -1,0 +1,7 @@
+TYPE
+  UT_ZONE_DET : STRUCT
+    watered : TIME;
+    remaining : TIME;
+    soakLeft : TIME;
+  END_STRUCT;
+END_TYPE

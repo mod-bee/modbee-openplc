@@ -1,0 +1,7 @@
+TYPE
+  UT_SCHED_SET : STRUCT
+    enable : BOOL := TRUE;
+    utcOffset : TIME; (* added to the clock to give local time *)
+    overrideFor : TIME := T#1h; (* 0 = until the schedule next changes *)
+  END_STRUCT;
+END_TYPE

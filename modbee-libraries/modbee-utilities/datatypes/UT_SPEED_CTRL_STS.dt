@@ -1,0 +1,35 @@
+TYPE
+  UT_SPEED_CTRL_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT; (* the last refused setting *)
+    refusedWhy : UT_FAULT; (* why it was refused *)
+    stopReason : UT_STOP;
+    lastFaultCode : DWORD;
+    lastFault : UT_FAULT;
+    trips : UDINT;
+    ne107 : UT_NE107;
+    spActive : REAL; (* setpoint in use (ramped, fill ramp, boost) *)
+    pv : REAL; (* the value under control (Pv, or Flow with FLOW control) *)
+    speed : REAL; (* speed request, % *)
+    phase : UT_SC_PHASE;
+    huntCount : INT;
+    sleeping : BOOL;
+    flowLimiting : BOOL;
+    pvBad : BOOL;
+    configBad : BOOL;
+    fault : BOOL;
+    warning : BOOL;
+    faultCode : DWORD; (* bit 0 config, 1 sensor, 2 high, 3 low at max, 4 fill, 5 not reaching, 6 hunting, 7 setting warning *)
+    filled : BOOL;
+    manual : BOOL; (* manual speed in use *)
+    presetUsed : UT_SC_PRESET;
+    manualSpeedUsed : REAL;
+    highPv : UT_PROT_STS;
+    lowPvAtMax : UT_PROT_STS;
+    notReaching : UT_PROT_STS;
+    hunting : UT_PROT_STS;
+    pipeFill : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

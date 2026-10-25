@@ -1,0 +1,8 @@
+TYPE
+  UT_IO_DCH : STRUCT
+    q : BOOL; (* the terminal: input contact made / output energised *)
+    bad : BOOL; (* its driver: this channel can't be trusted (stale point, failed write) *)
+    forced : BOOL; (* status: a force slot holds it *)
+    fn : USINT; (* status: the function row on it (inputs: the first one); 0 = spare *)
+  END_STRUCT;
+END_TYPE

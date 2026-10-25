@@ -1,0 +1,16 @@
+TYPE
+  UT_MIXER_SET : STRUCT
+    tag : STRING(12) := 'Stirrer';
+    cycle : BOOL := TRUE;
+    onTime : TIME := T#5m;
+    offTime : TIME := T#1h;
+    preRun : BOOL := TRUE;
+    preRunTime : TIME := T#2m;
+    postRun : BOOL := TRUE;
+    postRunTime : TIME := T#30s;
+    withPump : BOOL := TRUE;
+    minLevel : REAL := 0.3;
+    minDeadband : REAL := 0.05;
+    lowLevel : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#5m, reset := UT_RST_AUTO);
+  END_STRUCT;
+END_TYPE

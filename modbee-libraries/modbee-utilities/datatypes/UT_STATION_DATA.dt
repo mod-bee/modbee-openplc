@@ -1,0 +1,16 @@
+TYPE
+  UT_STATION_DATA : STRUCT
+    set : UT_STATION_SET;
+    cmdStart : BOOL;
+    cmdStop : BOOL;
+    cmdExercise : BOOL;
+    cmdRotate : BOOL;
+    cmdClean : BOOL;
+    cmdReset : BOOL;
+    cmdResetStats : BOOL;
+    cmdPumpDown : BOOL;
+    sts : UT_STATION_STS;
+    det : UT_STATION_DET;
+    tot : UT_STATION_TOT;
+  END_STRUCT;
+END_TYPE

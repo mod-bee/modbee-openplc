@@ -1,0 +1,13 @@
+TYPE
+  UT_SC_SLEEP_SET : STRUCT
+    enable : BOOL; (* sleep when the demand has gone *)
+    speed : REAL := 35.0; (* at or below this speed (and satisfied) ... *)
+    flow : REAL; (* ... or Flow below this (0 = not used) ... *)
+    delay : TIME := T#30s; (* ... for this long: boost, then sleep *)
+    boost : REAL := 5.0; (* % of sp added before sleeping *)
+    boostTime : TIME := T#10s; (* how long the boost lasts *)
+    wakeDrop : REAL := 0.3; (* wake when Pv is this far below sp ... *)
+    wakeDelay : TIME := T#2s; (* ... for this long *)
+    minSleep : TIME := T#30s; (* sleep at least this long *)
+  END_STRUCT;
+END_TYPE

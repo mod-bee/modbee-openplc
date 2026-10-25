@@ -1,0 +1,6 @@
+TYPE
+  UT_VALVE_TOT : STRUCT
+    strokes : UDINT; (* lifetime strokes (kept hourly) *)
+    lastPos : USINT; (* latching: last commanded position (0 unknown, 1 closed, 2 open), kept on each move *)
+  END_STRUCT;
+END_TYPE

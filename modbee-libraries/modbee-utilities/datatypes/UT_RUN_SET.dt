@@ -1,0 +1,12 @@
+TYPE
+  UT_RUN_SET : STRUCT
+    powerUp : UT_RUN_POWERUP;
+    maxTime : TIME; (* the owner's cap setting (0 = worked out + warning, volume parts) *)
+    defaultCap : TIME := T#2h; (* cap when maxTime and MinFlow are 0 *)
+    maxPause : TIME; (* paused this long ends the run (0 = no limit) *)
+    meterFailTime : TIME := T#2m;
+    volFrom : UT_VOL_FROM; (* TOTAL (the meter's own total) or FLOW (the integrated rate) *)
+    flowPer : UT_RATE_UNIT := UT_PER_HOUR; (* rate time base when the meter's unit is NONE *)
+    progressSave : TIME := T#1h;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,10 @@
+TYPE
+  UT_EVENT : STRUCT
+    seq : UDINT; (* running number of the event (0 = empty slot) *)
+    stamp : DT; (* when it happened (Clock) *)
+    src : INT; (* the source (the Src pin; 0 = the log itself, power-up) *)
+    code : INT; (* your own code (the Code pin; 0 = none) *)
+    stop : UT_STOP; (* the stop reason (the Stop pin) *)
+    fault : UT_FAULT; (* the fault (the Fault pin) *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,19 @@
+TYPE
+  UT_VALVE_MOD_SET : STRUCT
+    outMin : REAL; (* demand clamp, % *)
+    outMax : REAL := 100.0;
+    rampRate : REAL; (* % per rateUnit (0 = off) *)
+    rateUnit : UT_RATE_UNIT;
+    tightShutoff : REAL; (* demand below this -> 0 % (0 = off) *)
+    fullOpenAbove : REAL := 100.0; (* demand above this -> 100 % (100 = off) *)
+    reverseActing : BOOL; (* air to close: Out = 100 - demand *)
+    safePosition : REAL; (* % on Off / interlock / trip (< 0 = stay) *)
+    holdOnFault : BOOL; (* a trip holds the last demand *)
+    restPos : REAL; (* % while linked and the owner's open is off *)
+    strokeTime : TIME := T#60s; (* travel estimate without feedback (0 = at once) *)
+    handPos : REAL; (* kept Hand position *)
+    rawMin : REAL; (* OutRaw at 0 % *)
+    rawMax : REAL := 65535.0; (* OutRaw at 100 % *)
+    pos : UT_VALVE_POS_SET;
+  END_STRUCT;
+END_TYPE

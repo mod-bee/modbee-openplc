@@ -1,0 +1,10 @@
+TYPE
+  UT_ALARM_SET : STRUCT
+    alarm : UT_AT_SET; (* as a table row *)
+    latch : BOOL;
+    ackRequired : BOOL := TRUE;
+    prio : UT_PRIORITY := UT_PRIO_MEDIUM;
+    maxShelve : TIME := T#8h; (* 0 = shelving not allowed *)
+    shelveFor : TIME; (* 0 = maxShelve *)
+  END_STRUCT;
+END_TYPE

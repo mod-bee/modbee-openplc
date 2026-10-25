@@ -1,0 +1,37 @@
+TYPE
+  UT_VALVE_SET : STRUCT
+    mode : UT_MODE;
+    modeSource : UT_MODE_SOURCE;
+    powerUp : UT_POWERUP;
+    tag : STRING(12) := 'Valve';
+    input : UT_RUN_IN_SET; (* style of Open (HELD / TOGGLE / KEEPALIVE / PULSE_TIMER = open for a time) *)
+    cmdPulse : BOOL := TRUE; (* FLOAT / MOD: OpenCmd / CloseCmd pulses (drive fully there and latch) or held *)
+    valveType : UT_VALVE_TYPE; (* UT_VALVE only *)
+    useOpenLs : BOOL;
+    useClosedLs : BOOL;
+    openTime : TIME := T#10s; (* timeout with a switch; open after this without *)
+    closeTime : TIME := T#10s;
+    openPulse : TIME := T#250ms; (* latching pulses, 10 ms .. 2 s *)
+    closePulse : TIME := T#250ms;
+    driveHold : BOOL; (* motorised: keep the drive on at the end *)
+    closeOnTorque : BOOL; (* motorised: close torque at the end of a close = seated *)
+    reversalDelay : TIME := T#500ms;
+    safePosition : UT_SAFE_POS; (* UT_VALVE: on Off, interlock, trip *)
+    resetByOff : BOOL := TRUE;
+    restartAfterReset : BOOL;
+    retryWindow : TIME := T#1h;
+    exerciseEnable : BOOL;
+    exerciseEvery : TIME; (* idle this long -> one cycle (0 = only the Exercise trigger) *)
+    exerciseTime : TIME := T#10s; (* hold open this long *)
+    strokeWarn : TIME; (* a stroke slower than this warns (0 = off) *)
+    openTimeout : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#0s, reset := UT_RST_RETRY, recover := T#1m, maxRetries := 3);
+    closeTimeout : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#0s, reset := UT_RST_RETRY, recover := T#1m, maxRetries := 3);
+    bothLimits : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#1s, reset := UT_RST_AUTO, recover := T#10s, maxRetries := 3);
+    positionLost : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#1s, reset := UT_RST_RETRY, recover := T#30s, maxRetries := 3);
+    noMovement : UT_PROTECTION := (response := UT_RESP_OFF, delay := T#2s, reset := UT_RST_RETRY, recover := T#1m, maxRetries := 3);
+    drive : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#0s, reset := UT_RST_RETRY, recover := T#10s, maxRetries := 3);
+    torque : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#0s, reset := UT_RST_RETRY, recover := T#1m, maxRetries := 3);
+    actLocal : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#2s, reset := UT_RST_AUTO, recover := T#2s, maxRetries := 3);
+    slowStroke : UT_PROTECTION := (response := UT_RESP_WARN, delay := T#0s, reset := UT_RST_AUTO, recover := T#0s, maxRetries := 3);
+  END_STRUCT;
+END_TYPE

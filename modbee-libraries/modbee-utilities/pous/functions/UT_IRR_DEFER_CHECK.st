@@ -1,0 +1,18 @@
+FUNCTION UT_IRR_DEFER_CHECK : BOOL
+  VAR_IN_OUT
+    S : UT_IRR_DEFER_SET;
+  END_VAR
+  VAR_OUTPUT
+    Id : UT_FAULT;
+  END_VAR
+
+
+Id := UT_F_NONE;
+IF S.onDelay < T#0s OR S.clearDelay < T#0s THEN
+  Id := UT_F_DEFER_DELAY;
+ELSIF NOT (ABS(S.soilWet) <= 3.4E38 AND ABS(S.soilDry) <= 3.4E38 AND S.soilDry < S.soilWet) THEN
+  Id := UT_F_SETTING;
+END_IF;
+UT_IRR_DEFER_CHECK := Id = UT_F_NONE;
+
+END_FUNCTION

@@ -1,0 +1,10 @@
+TYPE
+  UT_SCHED_DATA : STRUCT
+    set : UT_SCHED_SET;
+    cmdOverrideOn : BOOL;
+    cmdOverrideOff : BOOL;
+    cmdCancelOverride : BOOL;
+    sts : UT_SCHED_STS;
+    det : UT_SCHED_DET;
+  END_STRUCT;
+END_TYPE

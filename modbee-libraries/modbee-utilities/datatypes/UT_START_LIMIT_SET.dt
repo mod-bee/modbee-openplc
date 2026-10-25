@@ -1,0 +1,8 @@
+TYPE
+  UT_START_LIMIT_SET : STRUCT
+    maxPerHour : INT; (* 0 = off; 1..30 *)
+    window : TIME := T#1h; (* the sliding window *)
+    minBetween : TIME; (* shortest gap between two starts *)
+    failWait : TIME; (* wait after a failed start *)
+  END_STRUCT;
+END_TYPE

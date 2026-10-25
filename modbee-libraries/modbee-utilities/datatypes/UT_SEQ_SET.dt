@@ -1,0 +1,11 @@
+TYPE
+  UT_SEQ_SET : STRUCT
+    tag : STRING(12) := 'Chain';
+    stopMode : UT_SEQ_STOP; (* REVERSE (last started, first stopped), ALL_AT_ONCE, FORWARD *)
+    onLoss : UT_SEQ_LOSS; (* CASCADE, STOP_ALL, DOWNSTREAM_ONLY *)
+    autoRestart : BOOL; (* restart by itself after a fault stop (Run held) *)
+    restartDelay : TIME := T#30s;
+    maxRetries : INT := 3; (* auto restarts within retryWindow, then a Reset is needed *)
+    retryWindow : TIME := T#1h;
+  END_STRUCT;
+END_TYPE

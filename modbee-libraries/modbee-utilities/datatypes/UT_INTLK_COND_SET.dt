@@ -1,0 +1,7 @@
+TYPE
+  UT_INTLK_COND_SET : STRUCT
+    delay : TIME; (* must be not OK this long to count *)
+    reset : UT_RESET_MODE; (* AUTO, MANUAL (held until reset) or RETRY *)
+    bypassAllowed : BOOL; (* a bypass may be asked for this condition *)
+  END_STRUCT;
+END_TYPE

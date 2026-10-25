@@ -1,0 +1,9 @@
+TYPE
+  UT_ROTATION_DATA : STRUCT
+    set : UT_ROTATION_SET;
+    cmdReset : BOOL;
+    sts : UT_ROTATION_STS;
+    period : TIME; (* detail: time between the last two pulses *)
+    timeLeft : TIME; (* detail *)
+  END_STRUCT;
+END_TYPE

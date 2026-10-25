@@ -1,0 +1,18 @@
+FUNCTION UT_CHECK_INT : UT_FAULT
+  VAR_INPUT
+    Value : DINT;
+    MinValue : DINT;
+    MaxValue : DINT;
+  END_VAR
+
+IF MinValue > MaxValue THEN
+  UT_CHECK_INT := UT_F_LIMITS;
+ELSIF Value < MinValue THEN
+  UT_CHECK_INT := UT_F_BELOW_MIN;
+ELSIF Value > MaxValue THEN
+  UT_CHECK_INT := UT_F_ABOVE_MAX;
+ELSE
+  UT_CHECK_INT := UT_F_NONE;
+END_IF;
+
+END_FUNCTION

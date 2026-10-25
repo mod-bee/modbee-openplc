@@ -1,0 +1,13 @@
+TYPE
+  UIO_XMOD : STRUCT
+    kind : UIO_XKIND; (* setting: what the module is; NONE = an empty row *)
+    address : BYTE; (* setting: its I2C address, 16#08..16#77 (not 16#49 or 16#5F: the board's own) *)
+    fitted : BOOL := TRUE; (* setting: installed on this site *)
+    first : INT; (* setting: the image row of its channel 1 - in XD for a digital kind, XA for an analog one *)
+    count : USINT; (* status: its channels *)
+    present : BOOL; (* status: answers at its address *)
+    ok : BOOL; (* status: present and read/written; its channels can be trusted *)
+    state : UIO_XSTATE; (* status: OK, or why not *)
+    errors : UINT; (* status: failed transactions since start *)
+  END_STRUCT;
+END_TYPE

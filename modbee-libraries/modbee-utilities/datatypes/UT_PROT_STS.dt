@@ -1,0 +1,10 @@
+TYPE
+  UT_PROT_STS : STRUCT
+    active : BOOL; (* the condition is present (after the delay) *)
+    tripped : BOOL; (* holding off, warning, or signalling *)
+    locked : BOOL; (* needs a reset (manual, or retries used up) *)
+    retries : INT; (* attempts used in this window *)
+    count : UDINT; (* events since the counter was cleared *)
+    timeLeft : TIME; (* delay counting, or the recover / retry wait still to go *)
+  END_STRUCT;
+END_TYPE

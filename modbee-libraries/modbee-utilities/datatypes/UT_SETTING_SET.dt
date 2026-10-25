@@ -1,0 +1,9 @@
+TYPE
+  UT_SETTING_SET : STRUCT
+    value : REAL; (* the value in use (kept) *)
+    minValue : REAL := -3.4E38;
+    maxValue : REAL := 3.4E38;
+    above : INT; (* must be above this item's value (position; 0 = none) *)
+    below : INT; (* must be below this item's value (position; 0 = none) *)
+  END_STRUCT;
+END_TYPE

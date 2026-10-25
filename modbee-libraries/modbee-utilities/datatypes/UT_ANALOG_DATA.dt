@@ -1,0 +1,10 @@
+TYPE
+  UT_ANALOG_DATA : STRUCT
+    set : UT_ANALOG_SET; (* settings (kept) *)
+    simulate : BOOL; (* not kept: off after a power cut *)
+    simValue : REAL;
+    cmdReset : BOOL;
+    sts : UT_ANALOG_STS;
+    det : UT_ANALOG_DET;
+  END_STRUCT;
+END_TYPE

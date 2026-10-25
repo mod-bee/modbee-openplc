@@ -1,0 +1,25 @@
+TYPE
+  UT_TOTAL_TOT : STRUCT
+    total : LINT;
+    batch : LINT;
+    period : LINT;
+    prevPeriod : LINT;
+    hour : LINT;
+    lastHour : LINT;
+    day : LINT;
+    yesterday : LINT;
+    in : LINT;
+    out : LINT;
+    estimated : LINT; (* the part counted as an estimate *)
+    hourNo : LINT; (* the hour (since 1970) the hour total belongs to, 0 = none *)
+    dayNo : LINT;
+    reg : LREAL; (* register reading *)
+    regBefore : LREAL; (* where it was before a drop *)
+    snap : LREAL;
+    prevSnap : LREAL;
+    cnt : UDINT; (* count reading *)
+    regValid : BOOL;
+    regDropped : BOOL;
+    snapValid : BOOL;
+  END_STRUCT;
+END_TYPE

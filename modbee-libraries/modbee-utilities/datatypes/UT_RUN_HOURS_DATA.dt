@@ -1,0 +1,12 @@
+TYPE
+  UT_RUN_HOURS_DATA : STRUCT
+    set : UT_RUN_HOURS_SET;
+    cmdResetService : BOOL;
+    cmdPreset : BOOL;
+    presetHours : LREAL; (* 0 .. 1E7 *)
+    cmdDayRollover : BOOL;
+    sts : UT_RUN_HOURS_STS;
+    currentRun : TIME; (* detail *)
+    tot : UT_RUN_HOURS_TOT; (* kept hourly *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,18 @@
+TYPE
+  UT_ALARM_TABLE_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    first : INT; (* the row in the status line (0 none) *)
+    latest : INT; (* the row raised last *)
+    firstOut : INT; (* the first row raised since the last reset *)
+    onCount : INT;
+    tripCount : INT;
+    unackedCount : INT;
+    badRow : INT; (* the first row with a bad setting *)
+    latestCode : UT_FAULT;
+  END_STRUCT;
+END_TYPE

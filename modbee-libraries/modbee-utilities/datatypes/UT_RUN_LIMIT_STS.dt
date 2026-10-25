@@ -1,0 +1,23 @@
+TYPE
+  UT_RUN_LIMIT_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    stopReason : UT_STOP; (* the end reason *)
+    lastFaultCode : DWORD;
+    lastFault : UT_FAULT;
+    trips : UDINT;
+    active : BOOL;
+    paused : BOOL;
+    waiting : BOOL;
+    configBad : BOOL;
+    fault : BOOL;
+    warning : BOOL;
+    delivered : LREAL;
+    volumeLeft : LREAL;
+    timeCap : TIME;
+    runs : UDINT;
+  END_STRUCT;
+END_TYPE

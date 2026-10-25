@@ -1,0 +1,17 @@
+TYPE
+  UT_REPORT_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    lastValue : REAL;
+    quality : UT_QUALITY;
+    report : BOOL;
+    reason : UT_REPORT_REASON;
+    reports : UDINT;
+    suppressed : UDINT; (* held back by minInterval *)
+    badSetting : BOOL;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,27 @@
+# Local development material (sources, tests, tools, notes): not published.
+internal/
+temp/
+
+# Build output. The .stlib is produced from source by `openplc-cli library
+# build`, so committing it would mean two sources of truth for the same blocks.
+build/
+# Built board packages (.vpp, from node-vpp/build-vpp.mjs).
+dist/
+
+# Python caches.
+__pycache__/
+*.pyc
+
+# Keys: only public halves are published (the VPP signing key's private half
+# lives outside the repo).
+*.pem
+!*.pub.pem
+
+# Local tool and editor state.
+CLAUDE.md
+AGENTS.md
+.claude/
+.kilo/
+.vscode/
+.idea/
+.DS_Store

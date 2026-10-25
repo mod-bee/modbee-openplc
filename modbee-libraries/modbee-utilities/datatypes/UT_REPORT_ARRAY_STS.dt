@@ -1,0 +1,14 @@
+TYPE
+  UT_REPORT_ARRAY_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    reports : UDINT;
+    suppressed : UDINT;
+    badItem : INT; (* the first item with a bad setting or not called (0 none) *)
+    badSetting : BOOL;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,10 @@
+TYPE
+  UT_MOTOR_SD_SET : STRUCT
+    starTime : TIME := T#6s;
+    starCurrentPct : REAL; (* > 0: delta early once the star current falls below this % FLC *)
+    transitionTime : TIME := T#60ms; (* open-transition gap *)
+    useStarDeltaFb : BOOL;
+    changeoverTime : TIME := T#2s; (* contactors must open / close within this *)
+    changeover : UT_PROTECTION := (response := UT_RESP_TRIP, delay := T#0s, reset := UT_RST_MANUAL);
+  END_STRUCT;
+END_TYPE

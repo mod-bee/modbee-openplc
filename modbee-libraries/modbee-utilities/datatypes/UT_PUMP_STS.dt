@@ -1,0 +1,52 @@
+TYPE
+  UT_PUMP_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    stopReason : UT_STOP;
+    lastFaultCode : DWORD;
+    lastFault : UT_FAULT;
+    trips : UDINT;
+    linked : BOOL;
+    held : BOOL; (* the pump holds its motor (Hold) *)
+    owner : STRING(12);
+    mode : UT_MODE;
+    state : UT_STATE;
+    request : BOOL; (* asked to run (after its delays) *)
+    runCmd : BOOL; (* the run command to the motor *)
+    running : BOOL;
+    healthy : BOOL;
+    available : BOOL;
+    ready : BOOL;
+    waiting : BOOL; (* asked, held back by a wait (delay, min off, hold, starts limit, motor restart) *)
+    startsHeld : BOOL;
+    notAuto : BOOL; (* ExpectAuto and the pump or its motor not in Auto *)
+    priming : BOOL;
+    masked : BOOL;
+    exercising : BOOL;
+    configBad : BOOL;
+    fault : BOOL;
+    warning : BOOL;
+    inhibited : BOOL;
+    startHold : BOOL;
+    powerUpHold : BOOL;
+    flowProven : BOOL;
+    motorInHand : BOOL;
+    primeNext : BOOL;
+    diagnosis : UT_PUMP_DIAG;
+    startsLeft : INT;
+    faultCode : DWORD; (* 0 dry run, 1 pressure HH, 2 pressure LL, 3 no flow, 4 flow HH, 5 suction HH, 6 prime, *)
+    pressure : UT_MEAS_STS;
+    flow : UT_MEAS_STS;
+    suction : UT_MEAS_STS;
+    sealLeak : UT_PROT_STS;
+    extFault : UT_PROT_STS;
+    primeTimeout : UT_PROT_STS;
+    maxRun : UT_PROT_STS;
+    startFail : UT_PROT_STS;
+    dropped : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

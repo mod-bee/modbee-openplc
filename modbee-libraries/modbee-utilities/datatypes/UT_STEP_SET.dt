@@ -1,0 +1,12 @@
+TYPE
+  UT_STEP_SET : STRUCT
+    outputs : DWORD; (* bit n = the (n+1)-th output on during this step *)
+    duration : TIME; (* time in the step (T#0s = the condition alone) *)
+    waitCond : BOOL; (* also wait for the step's Cond *)
+    timeout : TIME; (* longest time in the step (T#0s = none) *)
+    onTimeout : UT_STEP_TIMEOUT; (* FAULT (hold here), NEXT (carry on), STOP (go to the stop step) *)
+    next : INT; (* position to go to next (0 = the following step) *)
+    loops : INT; (* with next pointing back: repeat this many times, then carry on *)
+    skip : BOOL; (* pass over this step *)
+  END_STRUCT;
+END_TYPE

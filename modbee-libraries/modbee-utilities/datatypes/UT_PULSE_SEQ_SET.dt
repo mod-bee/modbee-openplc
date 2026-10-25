@@ -1,0 +1,12 @@
+TYPE
+  UT_PULSE_SEQ_SET : STRUCT
+    pulsesPerChannel : INT := 1; (* pulses per channel *)
+    pulseOn : TIME := T#100ms; (* valve open time (at least one scan) *)
+    pulseOff : TIME := T#1s; (* gap between pulses on the same channel *)
+    channelGap : TIME := T#10s; (* gap between channels (air tank recovers) *)
+    cyclePause : TIME := T#60s; (* pause after a full cycle *)
+    startDelay : TIME; (* after Enable and Demand come on *)
+    postCycles : INT; (* full cycles after Demand or Enable drops (post-clean) *)
+    skip : DWORD; (* bit n = skip channel n+1 (faulty valve) *)
+  END_STRUCT;
+END_TYPE

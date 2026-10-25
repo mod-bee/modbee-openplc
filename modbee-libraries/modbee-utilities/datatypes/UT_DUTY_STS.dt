@@ -1,0 +1,22 @@
+TYPE
+  UT_DUTY_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    lead : INT;
+    runningCount : INT;
+    calledCount : INT;
+    availableCount : INT;
+    running : BOOL;
+    shortfall : BOOL;
+    exercising : BOOL;
+    fault : BOOL;
+    warning : BOOL;
+    cfgFault : BOOL;
+    allHeld : BOOL;
+    statusUnit : INT; (* the unit the status is about (0 = the group) *)
+  END_STRUCT;
+END_TYPE

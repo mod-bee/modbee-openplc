@@ -1,0 +1,10 @@
+TYPE
+  UT_ROUTE_SET : STRUCT
+    tag : STRING(12) := 'Route';
+    outlet : ARRAY [1..4] OF UT_OUTLET_SET;
+    levelOutlet : USINT; (* 0 = no valve *)
+    runOutlet : USINT;
+    storageOutlet : USINT; (* 0 = no storage *)
+    closeDelay : TIME := T#5s; (* 0 .. 10 min *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,22 @@
+TYPE
+  UT_STEP_SEQ_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    activeStep : INT;
+    cycles : UDINT;
+    busy : BOOL;
+    paused : BOOL;
+    stopping : BOOL;
+    timedOutStep : INT;
+    stepTimeout : BOOL;
+    config : BOOL;
+    fault : BOOL;
+    faultCode : DWORD; (* bit 0 step timeout, bit 1 config *)
+    lastResult : UT_STOP;
+    configStep : INT;
+  END_STRUCT;
+END_TYPE

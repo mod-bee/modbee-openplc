@@ -1,0 +1,47 @@
+TYPE
+  UT_MOTOR_STS : STRUCT
+    statusCode : UT_STATUS;
+    faultId : UT_FAULT;
+    statusText : STRING(30);
+    refused : UT_FAULT;
+    refusedWhy : UT_FAULT;
+    ne107 : UT_NE107;
+    stopReason : UT_STOP;
+    lastFaultCode : DWORD;
+    lastFault : UT_FAULT;
+    trips : UDINT;
+    linked : BOOL;
+    held : BOOL;
+    owner : STRING(12); (* the owner's tag *)
+    mode : UT_MODE;
+    state : UT_STATE;
+    run : BOOL; (* the run request granted *)
+    running : BOOL;
+    ready : BOOL;
+    available : BOOL;
+    fault : BOOL;
+    warning : BOOL;
+    interlocked : BOOL;
+    notPermitted : BOOL;
+    restartBlocked : BOOL;
+    holdOff : BOOL;
+    jogging : BOOL;
+    notAuto : BOOL; (* ExpectAuto and not in Auto *)
+    selectorFault : BOOL;
+    wrnConfig : BOOL;
+    current : REAL; (* A *)
+    currentPct : REAL; (* % FLC *)
+    faultCode : DWORD; (* bits: 0 overload, 1 thermistor, 2 no feedback, 3 feedback lost, 4 stuck, *)
+    overload : UT_PROT_STS;
+    thermistor : UT_PROT_STS;
+    noFeedback : UT_PROT_STS;
+    feedbackLost : UT_PROT_STS;
+    stuck : UT_PROT_STS;
+    drive : UT_PROT_STS;
+    extFault : UT_PROT_STS;
+    currentBad : UT_PROT_STS;
+    currentHigh : UT_PROT_STS;
+    currentLow : UT_PROT_STS;
+    startTooLong : UT_PROT_STS;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,6 @@
+TYPE
+  UT_STEP_DATA : STRUCT
+    set : UT_STEP_SET;
+    sts : UT_STEP_STS;
+  END_STRUCT;
+END_TYPE
