@@ -1,0 +1,89 @@
+name: Release
+
+# Builds every library (.stlib) and the Node UIO board package (.vpp) and
+# publishes them as a GitHub release, using the command line tool of the
+# ModBee OpenPLC Editor release named below.
+#
+# - Push a tag such as v0.1.0 to build and publish a release.
+# - Run it by hand (Actions > Release > Run workflow) to build without
+#   publishing; the files are attached to the run as an artifact.
+#
+# Needs the repository secret MODBEE_VPP_SIGNING_KEY: the PEM private key
+# that signs the board package (the editor trusts its public half).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  EDITOR_VERSION: v4.3.3-modbee.3
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Get the OpenPLC Editor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$EDITOR_VERSION" --repo mod-bee/openplc-editor \
+            --pattern "ModBee.OpenPLC.Editor-${EDITOR_VERSION#v}.AppImage" --dir "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP"
+          chmod +x ModBee.OpenPLC.Editor-*.AppImage
+          ./ModBee.OpenPLC.Editor-*.AppImage --appimage-extract > /dev/null
+
+      # The Arduino cores the libraries' verify compiles download (the esp32
+      # core for the Node UIO is large), kept between runs.
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/editor-data/arduino
+          key: editor-arduino-${{ env.EDITOR_VERSION }}-${{ hashFiles('modbee-hardware/modbee-hardware-arduino/modbee-node-uio/node-vpp/package/manifest.json') }}
+
+      - name: Signing key
+        env:
+          MODBEE_VPP_SIGNING_KEY: ${{ secrets.MODBEE_VPP_SIGNING_KEY }}
+        run: |
+          if [ -z "$MODBEE_VPP_SIGNING_KEY" ]; then
+            echo "::error::The repository secret MODBEE_VPP_SIGNING_KEY is not set"
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$MODBEE_VPP_SIGNING_KEY" > "$RUNNER_TEMP/vpp-key.pem"
+
+      - name: Build
+        env:
+          MODBEE_VPP_KEY: ${{ runner.temp }}/vpp-key.pem
+        run: >-
+          node tools/build-release.mjs
+          --editor "$RUNNER_TEMP/squashfs-root/modbee-openplc-editor"
+          --out release
+          --user-data "$RUNNER_TEMP/editor-data"
+          --editor-version "$EDITOR_VERSION"
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/vpp-key.pem"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: modbee-openplc-${{ github.ref_name }}
+          path: release/
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" release/*.stlib release/*.vpp
+          --title "ModBee OpenPLC $GITHUB_REF_NAME"
+          --notes-file release/RELEASE-NOTES.md

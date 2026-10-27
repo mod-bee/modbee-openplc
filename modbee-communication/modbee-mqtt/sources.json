@@ -1,0 +1,14 @@
+{
+  "resources": {
+    "modbee-mqtt": {
+      "repo": "mod-bee/modbee-mqtt",
+      "ref": "v0.1.0",
+      "path": "",
+      "include": [
+        "library.properties",
+        "src",
+        "LICENSE"
+      ]
+    }
+  }
+}

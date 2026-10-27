@@ -43,12 +43,20 @@ for the libraries with C++ blocks, the C++ code they compile against in
 `resources/`. That code goes into the library when it is built, so there is
 nothing else to install.
 
+The C++ code is not kept here. Each library's `sources.json` names the GitHub
+repository and release tag its code comes from (for example
+`mod-bee/modbee-mqtt` at `v0.1.0`), and `tools/fetch-sources.mjs` fetches it
+into `resources/`. Code that exists only here, such as the vendored wolfSSL in
+`modbee-mqtt`, stays committed in `resources/`.
+
 ## Using a library
 
-1. Open the library's folder in the OpenPLC Editor as a project and build it.
-   The build writes `build/<library>.stlib`. With the command line tool:
+1. Fetch the C++ code, then open the library's folder in the OpenPLC Editor as
+   a project and build it. The build writes `build/<library>.stlib`. With the
+   command line tool:
 
    ```bash
+   node tools/fetch-sources.mjs
    openplc-cli library build modbee-communication/modbee-mqtt
    ```
 

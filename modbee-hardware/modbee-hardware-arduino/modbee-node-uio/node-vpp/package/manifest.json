@@ -3,13 +3,13 @@
   "package": {
     "id": "com.modbee.node",
     "name": "ModBee boards",
-    "version": "1.2.4",
+    "version": "1.3.0",
     "vendor": {
       "name": "ModBee",
       "url": "https://modbee.org",
       "logo": "assets/logo.png"
     },
-    "description": "OpenPLC support for the ModBee Node UIO: ESP32-S3FH4R2 with its 2 MB PSRAM enabled.",
+    "description": "ModBee Node UIO: DIN-rail I/O controller with 8 digital inputs, 8 digital outputs, 4 analog inputs, 2 analog outputs, 2 RS485 ports and Wi-Fi.",
     "license": "GPL-3.0",
     "minEditorVersion": "4.3.0",
     "inDevelopment": false
@@ -28,15 +28,17 @@
         "plcDataMemory": "external"
       },
       "specs": {
-        "CPU": "ESP32-S3FH4R2 (dual core, 240 MHz)",
-        "RAM": "512 KB + 2 MB PSRAM",
-        "Flash": "4 MB",
-        "Digital Pins": "34",
-        "Analog Pins": "18",
-        "PWM Pins": "16",
-        "WiFi": "Yes",
-        "Bluetooth": "Yes",
-        "Ethernet": "No"
+        "Digital In": "8, isolated, 5-24 V DC",
+        "Digital Out": "8, MOSFET, 5-24 V DC",
+        "Analog In": "4, 0-20 mA or 0-10 V",
+        "Analog Out": "2, 0-10 V or 0-20 mA",
+        "Serial": "2 x RS485, USB-C",
+        "Wireless": "Wi-Fi, Bluetooth LE",
+        "Expansion": "2 x Grove I2C, HATs",
+        "Supply": "5-24 V DC",
+        "Controller": "ESP32-S3, 240 MHz",
+        "Memory": "4 MB flash, 2 MB PSRAM",
+        "Mounting": "35 mm DIN rail"
       },
       "hal": {
         "type": "arduino-hal",

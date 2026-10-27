@@ -21,27 +21,6 @@
           ],
           "default": "115200",
           "help": "Speed of the default serial port, the one the USB cable lands on. Always active: the debugger answers here whether or not Modbus is enabled, and Modbus RTU shares it when it runs on this port."
-        },
-        {
-          "id": "enable_rs485_en_pin",
-          "label": "Use RS485 EN Pin",
-          "type": "boolean",
-          "default": false,
-          "help": "Turn on when the board drives an external RS485 transceiver through an explicit driver-enable pin."
-        },
-        {
-          "id": "rs485_en_pin",
-          "label": "RS485 EN Pin",
-          "type": "text",
-          "default": "",
-          "placeholder": "e.g. 2",
-          "help": "GPIO that drives DE/RE on the RS485 transceiver.",
-          "validation": "^[A-Z]{0,2}\\d{1,3}$",
-          "visible": {
-            "condition": "fields.enable_rs485_en_pin",
-            "operator": "equals",
-            "value": true
-          }
         }
       ]
     }

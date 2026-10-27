@@ -1,0 +1,45 @@
+{
+  "resources": {
+    "node-webUI": {
+      "repo": "mod-bee/modbee-node-uio",
+      "ref": "v0.1.0",
+      "path": "node-webUI",
+      "include": [
+        "library.properties",
+        "src",
+        "LICENSE"
+      ]
+    },
+    "ArduinoJson": {
+      "repo": "bblanchon/ArduinoJson",
+      "ref": "v7.4.1",
+      "path": "",
+      "include": [
+        "library.properties",
+        "src",
+        "LICENSE.txt"
+      ]
+    },
+    "AsyncTCP": {
+      "repo": "ESP32Async/AsyncTCP",
+      "ref": "v3.4.1",
+      "path": "",
+      "include": [
+        "library.properties",
+        "src",
+        "LICENSE"
+      ]
+    },
+    "ESPAsyncWebServer": {
+      "note": "v3.9.4 plus upstream RFC 9110 ETag fix (first released in v3.9.5)",
+      "repo": "ESP32Async/ESPAsyncWebServer",
+      "ref": "f24633e348f577228fab6f4da9260dac942ba858",
+      "path": "",
+      "include": [
+        "library.properties",
+        "src",
+        "LICENSE"
+      ]
+    }
+  }
+}

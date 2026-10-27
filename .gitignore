@@ -7,6 +7,8 @@ temp/
 build/
 # Built board packages (.vpp, from node-vpp/build-vpp.mjs).
 dist/
+# Release output of tools/build-release.mjs.
+/release/
 
 # Python caches.
 __pycache__/
@@ -25,3 +27,17 @@ AGENTS.md
 .vscode/
 .idea/
 .DS_Store
+
+# Library sources fetched from GitHub by tools/fetch-sources.mjs, at the
+# repository and tag each library's sources.json pins. The pin is the source
+# of truth; resources/ folders not listed in a sources.json stay committed.
+modbee-communication/modbee-beebus/resources/modbee-beebus/
+modbee-communication/modbee-gsm/resources/modbee-gsm/
+modbee-communication/modbee-modbus/resources/modbee-modbus/
+modbee-communication/modbee-mqtt/resources/modbee-mqtt/
+modbee-communication/modbee-ota/resources/modbee-ota/
+modbee-hardware/modbee-hardware-arduino/modbee-node-uio/node-uio/resources/node-uio/
+modbee-hardware/modbee-hardware-arduino/modbee-node-uio/node-webUI/resources/node-webUI/
+modbee-hardware/modbee-hardware-arduino/modbee-node-uio/node-webUI/resources/ArduinoJson/
+modbee-hardware/modbee-hardware-arduino/modbee-node-uio/node-webUI/resources/AsyncTCP/
+modbee-hardware/modbee-hardware-arduino/modbee-node-uio/node-webUI/resources/ESPAsyncWebServer/

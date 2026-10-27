@@ -10,6 +10,8 @@ from `dist/` in the editor's packages screen (Add from file…), then pick
 | Arduino board | `esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,PSRAM=enabled,PartitionScheme=min_spiffs` |
 | Partitions | `package/partitions/modbee-node.csv`: two 1.875 MB program slots (the running program and the OTA update), 128 KB NVS for retained values and settings, 64 KB crash log, no file system |
 | Default I/O pins | None. The Node's I/O is read and written by the `node-uio` library blocks, so the board claims no GPIO (GPIO 9, 39 and 40 are the HAT power, LED and button). |
+| Serial screen | Baud rate only. The Node's RS485 transceivers have DE and RE tied high, so there is no driver-enable pin to set. |
+| Specs and preview | The Node's own I/O and ratings, from `docs/HARDWARE.md` in [modbee-node-uio](https://github.com/mod-bee/modbee-node-uio). The preview is that repo's `node-uio-br-assem-1` render, cropped and saved as PNG (the editor shows previews as PNG). |
 | Compiler flags | `-DESP32_ARDUINO_NO_RGB_BUILTIN`, see below |
 
 ## The boot record (otadata) is at 0xe000

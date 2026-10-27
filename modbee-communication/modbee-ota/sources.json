@@ -1,0 +1,14 @@
+{
+  "resources": {
+    "modbee-ota": {
+      "repo": "mod-bee/modbee-ota",
+      "ref": "v0.1.0",
+      "path": "",
+      "include": [
+        "library.properties",
+        "src",
+        "LICENSE"
+      ]
+    }
+  }
+}

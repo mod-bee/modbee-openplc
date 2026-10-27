@@ -1,0 +1,14 @@
+{
+  "resources": {
+    "node-uio": {
+      "repo": "mod-bee/modbee-node-uio",
+      "ref": "v0.1.0",
+      "path": "node-uio",
+      "include": [
+        "library.properties",
+        "src",
+        "LICENSE"
+      ]
+    }
+  }
+}
