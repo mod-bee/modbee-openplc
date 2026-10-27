@@ -20,7 +20,7 @@ permissions:
   contents: write
 
 env:
-  EDITOR_VERSION: v4.3.3-modbee.3
+  EDITOR_VERSION: v4.3.3-modbee.4
 
 jobs:
   release:
