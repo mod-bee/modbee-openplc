@@ -23,7 +23,9 @@
 // 3. Build every library found under this repository, the ones a library
 //    uses (its project's `data.libraries`) first, installing each as it is built.
 // 4. Copy the results to --out as <library>-<version>.stlib and
-//    com.modbee.node-<version>.vpp, and write RELEASE-NOTES.md there.
+//    com.modbee.node-<version>.vpp, put every .stlib in one ZIP
+//    (modbee-openplc-libraries.zip, which the editor's Install Library
+//    takes whole), and write RELEASE-NOTES.md there.
 
 import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -34,6 +36,8 @@ import { fileURLToPath } from 'node:url'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SKIP = new Set(['.git', 'node_modules', 'build', 'dist', 'internal', 'temp', 'resources'])
 const VPP_DIR = join(ROOT, 'modbee-hardware/modbee-hardware-arduino/modbee-node-uio/node-vpp')
+// One name for every release, so a link to the latest release's ZIP stays valid.
+const ZIP_FILE = 'modbee-openplc-libraries.zip'
 
 function option(name) {
   const i = process.argv.indexOf(name)
@@ -134,6 +138,10 @@ try {
     cli('library', 'install', join(out, lib.file))
     console.log(`built    ${lib.file}`)
   }
+  execFileSync('zip', ['-q', '-j', join(out, ZIP_FILE), ...libraries.map((lib) => join(out, lib.file))], {
+    stdio: 'inherit',
+  })
+  console.log(`zipped   ${ZIP_FILE}`)
 
   const rows = libraries.map(({ name, version, file, uses, sources }) => {
     const pins = Object.values(sources).map(
@@ -148,7 +156,7 @@ try {
     '',
     '## Libraries',
     '',
-    "Install a `.stlib` from the editor's Manage libraries screen, together with the libraries it needs. The C/C++ code each one carries comes from the source repositories listed.",
+    `To install them all at once, pick \`${ZIP_FILE}\` in the editor's Install Library; or install a \`.stlib\` on its own, together with the libraries it needs. The C/C++ code each one carries comes from the source repositories listed.`,
     '',
     '| Library | Version | File | Needs | Sources |',
     '| --- | --- | --- | --- | --- |',

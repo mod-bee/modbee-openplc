@@ -84,6 +84,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          gh release create "$GITHUB_REF_NAME" release/*.stlib release/*.vpp
+          gh release create "$GITHUB_REF_NAME" release/*.stlib release/*.zip release/*.vpp
           --title "ModBee OpenPLC $GITHUB_REF_NAME"
           --notes-file release/RELEASE-NOTES.md
