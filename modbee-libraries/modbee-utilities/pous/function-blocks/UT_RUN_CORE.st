@@ -18,7 +18,9 @@ LINT ms, volumes LREAL; TOTAL = the rise of Meter.GetTotal().
 Progress is kept (VAR RETAIN) on events and every progressSave. Power-up:
 RESUME continues a run that was latched or whose request is back, from its
 saved progress (at most one progressSave repeated; TOTAL counts the meter's
-rise meanwhile); RESTART the same from zero; NONE ends it (POWER_CUT). *)
+rise meanwhile); RESTART the same from zero; NONE ends it (POWER_CUT). A
+meter that is not good yet on that first scan (a block that runs later in
+the scan has no total yet) gives the base at its first good total. *)
 
 FUNCTION_BLOCK UT_RUN_CORE
   VAR_INPUT
@@ -93,6 +95,8 @@ FUNCTION_BLOCK UT_RUN_CORE
     meterBadSince : TIME;
     lastRise : TIME;
     lastTotal : LREAL;
+    baseWait : BOOL; (* power-up: the meter not worked out yet - the base waits for its first good total *)
+    catchUp : BOOL; (* ... and then adds what it counted since the last save (RESUME) *)
     haveMeter : BOOL;
     mTotal : LREAL;
     mRate : REAL;
@@ -227,6 +231,9 @@ IF NOT started THEN
       END_IF;
       totalAtPart := mTotal - partVol;
       lastTotal := mTotal;
+      (* a meter that runs later in the scan (a later program) has no total yet on this first scan: 0, not good *)
+      baseWait := haveMeter AND NOT mGood AND Set.volFrom = UT_VF_TOTAL;
+      catchUp := baseWait AND Set.powerUp = UT_RPU_RESUME;
       lastRise := tCur;
       meterBadSince := tCur;
       Resumed := TRUE;
@@ -274,6 +281,7 @@ IF Active THEN
   IF Part AND NOT partPrev THEN
     partMs := 0;
     partVol := 0.0;
+    catchUp := FALSE;            (* a new part starts from zero *)
     rt := RunTime;
     rv := RunVolume;
     totalAtPart := mTotal;
@@ -320,7 +328,17 @@ IF Active THEN
     pausedMs := pausedMs + dMs;
   END_IF;
   IF haveMeter AND mGood THEN
-    IF Set.volFrom = UT_VF_TOTAL THEN
+    IF baseWait THEN             (* the meter's first good total after a power-up: the base, never a rise *)
+      IF catchUp AND mTotal >= prog.totalAtSave THEN
+        x := mTotal - prog.totalAtSave;   (* the meter kept counting *)
+        partVol := partVol + x;
+        runVol := runVol + x;
+      END_IF;
+      baseWait := FALSE;
+      catchUp := FALSE;
+      totalAtPart := mTotal - partVol;
+      lastTotal := mTotal;
+    ELSIF Set.volFrom = UT_VF_TOTAL THEN
       IF mTotal > lastTotal THEN
         x := mTotal - lastTotal;
         partVol := partVol + x;
@@ -409,7 +427,9 @@ IF saveNow THEN
   prog.runTime := rt;
   prog.runVolume := rv;
   prog.cap := cap;
-  prog.totalAtSave := mTotal;
+  IF NOT baseWait THEN
+    prog.totalAtSave := mTotal;  (* not a meter that has no total yet *)
+  END_IF;
   lastSave := tCur;
 END_IF;
 

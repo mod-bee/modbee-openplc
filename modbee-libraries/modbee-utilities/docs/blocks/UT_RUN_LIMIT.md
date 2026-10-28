@@ -125,7 +125,9 @@ commercial irrigation controller does. `powerUp` chooses:
   is not counted again, and the run never goes past `runTime` or `targetVolume` (a
   run already at its limit ends at once, `Done`). The volume carries on from where
   the `Volume` total reads at power-up, so a total that came back lower (a totaliser
-  saved every 12 h) is not counted backwards.
+  saved every 12 h) is not counted backwards. A `Volume` meter that runs later in
+  the scan (in a later program) has no total yet on the first scan: the run waits
+  for its first good total and counts from there, never the meter's whole total.
 - The resumed run starts from its **last save**: the progress is saved when the run
   starts and ends, and every `progressSave` (default 1 min) while it is active, never
   every scan (flash wear: a few hundred saves on a day of irrigation, none when idle).
