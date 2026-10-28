@@ -1,7 +1,9 @@
 # modbee-openplc
 
-Function block libraries for the [OpenPLC Editor](https://autonomylogic.com/),
-and the board package for the ModBee Node UIO.
+Function block libraries for OpenPLC, and the board package for the
+**ModBee Node UIO**.
+
+![The ModBee Node UIO](docs/images/node-uio.webp)
 
 They are for electricians and integrators who build control panels with
 OpenPLC. You get the protocols a remote site needs (BeeBus, Modbus, MQTT,
@@ -9,6 +11,31 @@ Sparkplug B, cellular), the Node UIO's own I/O, and a library of ready-made
 blocks for motors, pumps, valves and alarms. Every block works from Ladder,
 FBD and Structured Text, and every library runs on a board as well as on the
 OpenPLC Runtime unless its docs say otherwise.
+
+## Start here
+
+New to OpenPLC or the Node UIO? The **[getting started guide](docs/README.md)**
+walks you through it with a screenshot for every step:
+
+1. [Overview](docs/01-overview.md): the pieces and how they fit together
+2. [Install](docs/02-install.md): the editor, the board package and the libraries
+3. [First project](docs/03-first-project.md): the Node UIO and PLC tasks
+4. [First Ladder program](docs/04-first-ladder.md): build, upload and watch it run
+5. [Next steps](docs/05-next-steps.md)
+
+## Download
+
+| What | Where |
+| --- | --- |
+| **ModBee OpenPLC Editor** (Windows, macOS, Linux) | [mod-bee/openplc-editor releases](https://github.com/mod-bee/openplc-editor/releases/latest) |
+| **All libraries in one file**, `modbee-openplc-libraries.zip` | [latest release](https://github.com/mod-bee/modbee-openplc/releases/latest) |
+| Each library on its own, `<library>-<version>.stlib` | [latest release](https://github.com/mod-bee/modbee-openplc/releases/latest) |
+| Node UIO board package, `com.modbee.node-<version>.vpp` | [latest release](https://github.com/mod-bee/modbee-openplc/releases/latest) |
+
+These libraries and the board package need the **ModBee OpenPLC Editor**. The
+standard OpenPLC Editor cannot use them until ModBee's changes are merged into
+OpenPLC. The ModBee editor follows OpenPLC and is kept up to date with it.
+[Why the ModBee editor](docs/01-overview.md#why-the-modbee-openplc-editor).
 
 ## What is here
 
@@ -37,6 +64,8 @@ OpenPLC Runtime unless its docs say otherwise.
 | `modbee-utilities` | Ready-made blocks for motors (DOL, reversing, star-delta, two-speed, VSD), pumps and pump stations, valves, dosing, signals, run hours and totals, alarms and HMI messages, and sequences. Every block that can stop equipment says on the HMI what it is doing and why | [docs](modbee-libraries/modbee-utilities/docs/README.md) |
 | `modbee-devices` | One ready-made block per field device on Modbus, with the device's registers and scaling built in. First device: the 7-in-1 RS-485 soil sensor | [docs](modbee-libraries/modbee-devices/docs/README.md) |
 
+## For maintainers: building from source
+
 Each library folder is an OpenPLC library project: `library.json`, the blocks
 in `pous/`, the data types in `datatypes/`, its documentation in `docs/`, and,
 for the libraries with C++ blocks, the C++ code they compile against in
@@ -49,7 +78,7 @@ repository and release tag its code comes from (for example
 into `resources/`. Code that exists only here, such as the vendored wolfSSL in
 `modbee-mqtt`, stays committed in `resources/`.
 
-## Using a library
+To build a library yourself:
 
 1. Fetch the C++ code, then open the library's folder in the OpenPLC Editor as
    a project and build it. The build writes `build/<library>.stlib`. With the
@@ -62,25 +91,15 @@ into `resources/`. Code that exists only here, such as the vendored wolfSSL in
 
 2. Install the `.stlib` in the editor, or with
    `openplc-cli library install modbee-communication/modbee-mqtt/build/modbee-mqtt.stlib`.
-3. The blocks then show in the library tree of every project. Each block's
-   help text says what it does and what every pin is for. The library's
-   `docs/` has getting-started pages, a full block reference, worked examples
-   and troubleshooting.
+
+Releases are built by the GitHub workflow `.github/workflows/release.yml` with
+`tools/build-release.mjs`: pushing a `v*` tag builds every library and the
+board package with the ModBee editor's command line tool and publishes them.
 
 Libraries are made to be installed side by side. Every block and type name
 carries its library's prefix (`BEEBUS_`, `MODBUS_`, `MQTT_`, `GSM_`, `OTA_`, `UT_`, `DEV_`),
 because the editor checks a new name against every installed library, not
 only the ones a project uses.
-
-## Using the ModBee Node UIO
-
-1. Install the board package: download `com.modbee.node-<version>.vpp` from
-   this repository's releases, then in the editor's packages screen choose
-   **Add from file…** and pick it. The package is signed, and its partition
-   table needs a ModBee build of the editor. See the [node-vpp README](modbee-hardware/modbee-hardware-arduino/modbee-node-uio/node-vpp/README.md).
-2. Pick **ModBee Node UIO** as the project's target.
-3. Install `node-uio` (above) for the board's I/O. Add the protocol libraries
-   the site needs beside it.
 
 ## Licence
 
