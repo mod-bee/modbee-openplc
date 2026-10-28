@@ -51,7 +51,9 @@ login again every five minutes, so a login put back on the broker works
 again by itself. The site's group changed on
 the broker: the broker refuses a connect whose Will (the Sparkplug NDEATH) is
 on the old group, so the PLC connects once without a Will, asks again, and
-reconnects with the new one. An admin DISABLES the PLC: it stays out -
+reconnects with the new one. If asking again gives the same group, the
+login's rights no longer cover its Will: REFUSED, REASON says so, and it
+tries again every five minutes. An admin DISABLES the PLC: it stays out -
 registering again does not undo that.
 
 LEAVE USERNAME AND PASSWORD ON MQTT_CONFIG EMPTY. This block's login is used
@@ -361,13 +363,34 @@ void loop()
             // The whole set: a value the broker no longer has is gone here too.
             mq_provisionField((const char*)buffer, length, "group", group);
             mq_provisionField((const char*)buffer, length, "prefix", prefix);
+            const bool moved = group.size() <= 64 && group != std::string(fbGroup.c_str(), fbGroup.length());
             if (group.size() <= 64) fbGroup = group.c_str();
             if (prefix.size() <= 127) fbPrefix = prefix.c_str();
             GROUP = fbGroup.c_str();
             PREFIX = fbPrefix.c_str();
-            fbLockedAt = 0;
-            // Only asking: back to the real session, with the Will on the new group.
-            if ((bool)fbWithoutWill) fbSwitchTo = 1;
+            if (!(bool)fbWithoutWill) {
+                fbLockedAt = 0;
+            } else {
+                // Only asking: back to the real session, with the Will on the new group.
+                fbSwitchTo = 1;
+                if (moved) {
+                    // The group moved: that was why the Will was refused, and
+                    // the next session carries it on the new one.
+                    fbLockedAt = 0;
+                } else {
+                    // THE SAME GROUP: asking again changes nothing, so the
+                    // login is fine and its Will is what the broker refuses -
+                    // rights an admin changed, not the site. The hold is KEPT:
+                    // cleared here, a refused session started this round again
+                    // at once, over and over (134 sessions in 6 s in the rig;
+                    // on a modem each one a TLS handshake), and the link never
+                    // came up. It tries again when the hold is over.
+                    REFUSED = true;
+                    ERROR = true;
+                    STATUS = MQTT_RESULT::MQTT_NOT_AUTHORIZED;
+                    REASON = "the broker refuses this PLC's Will";
+                }
+            }
         }
 
         PROVISIONED = fbLoginUser.length() > 0 && client->isConnected() && !(bool)fbWithoutWill;

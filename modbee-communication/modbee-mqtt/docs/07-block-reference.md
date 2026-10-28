@@ -1041,7 +1041,9 @@ login again every five minutes, so a login put back on the broker works
 again by itself. The site's group changed on
 the broker: the broker refuses a connect whose Will (the Sparkplug NDEATH) is
 on the old group, so the PLC connects once without a Will, asks again, and
-reconnects with the new one. An admin DISABLES the PLC: it stays out -
+reconnects with the new one. If asking again gives the same group, the
+login's rights no longer cover its Will: REFUSED, REASON says so, and it
+tries again every five minutes. An admin DISABLES the PLC: it stays out -
 registering again does not undo that.
 
 LEAVE USERNAME AND PASSWORD ON MQTT_CONFIG EMPTY. This block's login is used

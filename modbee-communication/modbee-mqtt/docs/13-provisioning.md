@@ -88,6 +88,7 @@ topic path - and renaming the PLC moves everything built from its name.
 | The key needs approval (`--approval manual`) | `PENDING` is TRUE until an admin runs `modbee user approve pump-station-3`. The PLC asks again every thirty seconds |
 | The key is wrong, or removed | `REFUSED` and `ERROR` are TRUE, with the broker's reason in `REASON`. It asks again every five minutes |
 | The site's group is changed on the broker | The broker refuses a connect whose Will (the Sparkplug NDEATH) is on the old group. The PLC connects once without its Will, asks again, and reconnects on the new `GROUP` - by itself |
+| Its rights no longer cover its Will, and the group is the same (`modbee user permissions ...`) | `REFUSED` and `ERROR` are TRUE, `REASON` says the broker refuses its Will. It tries again every five minutes, so rights put back work again by itself |
 | Its values are changed on the broker (`modbee user set ... --data`) | It has them at its next connect |
 
 `FORGET` (a rising edge) throws the stored login away and registers again.
