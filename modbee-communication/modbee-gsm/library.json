@@ -1,7 +1,7 @@
 {
   "name": "modbee-gsm",
   "displayName": "GSM",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "namespace": "modbee_gsm",
   "description": "Function blocks that put a cellular modem inside an OpenPLC program: the ModBee GSM HAT on a Node UIO, or a USB modem on the Runtime. One block brings the modem up and keeps it up - power, SIM, network, data - and recovers it by itself; the others send and receive SMS, open a TCP or TLS socket, read the signal, the network time and a GNSS fix, and send any AT command. MQTT_CLIENT uses the same modem with TRANSPORT := MQTT_CELLULAR. Every connection setting is a pin, so it can come from a retained variable. Nothing here blocks a scan.",
   "build": {

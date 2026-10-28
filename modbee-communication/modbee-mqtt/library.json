@@ -1,7 +1,7 @@
 {
   "name": "modbee-mqtt",
   "displayName": "MQTT",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "namespace": "modbee_mqtt",
   "description": "Function blocks that put an MQTT client inside an OpenPLC program. One node block covers every combination - MQTT 5.0 or 3.1.1, plain or TLS, on a board over WiFi, Ethernet or cellular, or on the Runtime - and hands itself to the other blocks, so a program can hold two brokers at once. Publish on demand or when a value moves, subscribe with a data quality that says how much to believe a number, announce yourself online and register the Will that says when you are not. A PLC can register itself with a provisioning key and keep the login it is given. A bridge carries topics between two brokers, and the PLC can be the site broker itself. Sparkplug B nodes keep their events through a link outage and send them afterwards flagged historical, and publish a table of daily totals on every birth. Every connection setting may change while running: the client reconnects by itself. Nothing here blocks: connect included, so a scan cycle never waits on a network.",
   "build": {
