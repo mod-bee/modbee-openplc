@@ -181,6 +181,10 @@ void loop()
             if (job->busy) return;
             job->done = false;
             if (!job->result.isOk()) {
+                // A module that does not answer its reset is the one a restart
+                // is for: start the bring-up again, which powers it up afresh.
+                gsm.stop();
+                if ((bool)MODEM.CONNECT && !gsmplc::heldOff()) gsm.start();
                 fbOp = 0;
                 BUSY = false;
                 ERROR = true;
