@@ -1,7 +1,7 @@
 {
   "name": "modbee-modbus",
   "displayName": "Modbus",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "namespace": "modbee_modbus",
   "description": "Function blocks that put Modbus inside an OpenPLC program. One node block covers every combination — RTU, ASCII or TCP, client, server or both, on a board or on the Runtime — and hands itself to the other blocks, so a program can hold two links at once. Read and write by function code, bind your variables at Modbus addresses for others to read, keep a value up to date with a data quality that says how much to believe it, define a point - or a whole table of them - entirely by settings (unit, function code, address, type, word order, scaling, timeout) so a sensor is changed from an HMI rather than in the program, and bridge TCP clients onto a serial segment. Nothing here guesses a length: the variable you pass says how many.",
   "build": {
