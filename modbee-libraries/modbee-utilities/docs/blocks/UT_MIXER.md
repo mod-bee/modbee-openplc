@@ -107,8 +107,10 @@ The one main thing, in the order below (top first). The numbers are in
 **The pump is never held for a mixer that can't run.** `StartHold` lets the pump go:
 - at once, with no warning, when there is no pre-run (`preRun` off or
   `preRunTime` 0), `StartNow` is on, `LevelOk` is FALSE or the pump already runs;
-- at once, **with** `Warning`, when `MixerReady` is FALSE (the mixer motor is not in
-  Auto, or has tripped);
+- at once, **with** `Warning`, when the mixer motor is not available: `MixerReady`
+  FALSE, or with the `Mixer` plug the motor's `IsAvailable()` FALSE (not in Auto,
+  tripped, held off). A motor only in its restart wait (`restartDelay`: just stopped,
+  or after power-up) is available: the pre-run waits for it and the pump stays held;
 - with `Warning`, `preRunTime` + 1 min after `PumpCall` came on, if the mixer still
   has not run its pre-run (it never started, or it stopped). The 1 min is fixed.
 

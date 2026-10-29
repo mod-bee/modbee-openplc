@@ -15,7 +15,9 @@ Run is on (while the level is OK) for any of:
   cycle      off for offTime, on for onTime, over and over (off first);
              any other run restarts the off time.
 The pump is never held for a stirrer that cannot run: StartHold drops at
-once with StartNow, a low level or a stirrer not ready, and after
+once with StartNow, a low level or a stirrer not available (not in Auto,
+tripped, held off; a stirrer in its restart wait - just stopped, or after
+power-up - can run: the pre-run waits for it), and after
 preRunTime + 1 min if it still has not run (Warning "no pre-run" until
 PumpCall ends). Level OK = LevelOk AND the Level plug: its value at / above
 minLevel (back on at minLevel + minDeadband), or not in its L band; a bad
@@ -63,6 +65,7 @@ FUNCTION_BLOCK UT_MIXER
     postT : TIME;
     cycOk : BOOL;
     ready : BOOL;
+    avail : BOOL; (* the stirrer can run: ready, or only in its restart wait *)
     running : BOOL;
     lvlOk : BOOL;
     lvlHigh : BOOL; (* the value part (with its deadband) *)
@@ -126,9 +129,11 @@ cycOk := Data.set.cycle AND Data.set.onTime > T#0s AND Data.set.offTime > T#0s A
 (* the stirrer and the level *)
 IF Mixer <> NULL THEN
   ready := Mixer.IsReady();
+  avail := Mixer.IsAvailable();
   running := Mixer.IsRunning();
 ELSE
   ready := MixerReady;
+  avail := MixerReady;
   running := MixerRunning;
 END_IF;
 lvlOk := LevelOk;
@@ -174,7 +179,7 @@ IF NOT Enable OR NOT PumpCall THEN
 ELSIF NOT let THEN
   IF preT = T#0s OR StartNow OR NOT lvlOk OR PumpRunning OR ranFor >= preT THEN
     let := TRUE;                 (* no pre-run wanted, or it is done *)
-  ELSIF NOT ready OR tCur - callSince >= preT + T#1m THEN
+  ELSIF NOT avail OR tCur - callSince >= preT + T#1m THEN
     let := TRUE;                 (* never hold the pump for a stirrer that cannot run *)
     noPre := TRUE;
   ELSE
