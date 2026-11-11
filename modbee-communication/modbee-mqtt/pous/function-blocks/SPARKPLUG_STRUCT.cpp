@@ -92,6 +92,23 @@ SPARKPLUG_MEMBER, one entry per member that needs its own settings:
                 (NAME := 'sts.mode', SKIP := FALSE)] leaves out all of sts
                 but sts.mode. Read once, when the metrics are declared.
 
+THE SAME SETTINGS AS ONE STRING. SETTINGS may instead be a STRING holding the
+entries one after another, separated by ';', each its NAME then its numbers:
+
+    '-set;-det;+sts.value,db=10,u=mm;+sts.percent,db=1,u=%'
+
+  -name / +name   SKIP TRUE / FALSE (no sign: FALSE, as an entry's default)
+  db=  pct=       DEADBAND, DEADBAND_PCT
+  u=              UNITS (up to 12 characters)
+  lo=  hi=        LOW, HIGH
+  pulse=          PULSE in milliseconds
+Spaces around the parts are ignored; a ';' ends an entry and ',' parts. The
+entries apply in order, as in the array, and BAD_SETTING counts them from 1.
+Why: an ARRAY OF SPARKPLUG_MEMBER is eight values an entry in every program's
+variables (the debugger and retain table lists each of them), so a program
+that describes several hundred members carries thousands of them. The string
+is one variable for the whole list; the block reads it into its own memory.
+
   VAR
     sp      : SPARKPLUG_NODE;
     core    : SPARKPLUG_STRUCT;
@@ -317,6 +334,17 @@ struct MqSpMemberLayout {
     uint32_t nameCap = 0, unitsCap = 0;    // the STRINGs' capacities
 };
 
+// One SETTINGS entry, whichever form SETTINGS takes (the array, or the string
+// of entries): what the declare, the fingerprint and the apply read.
+struct MqSpEntry {
+    std::string name;            // '' = an unused array entry
+    std::string units;
+    float band = 0.0f, pct = 0.0f, low = 0.0f, high = 0.0f;
+    int64_t pulseNs = 0;
+    bool skip = false;
+    bool fault = false;          // could not be read: BAD_SETTING
+};
+
 struct MqSpStructPlan {
     std::vector<MqSpStructLeaf> leaves;    // declared values, in walk order
     std::vector<MqSpStructPulse> pulses;   // empty until a PULSE is set
@@ -461,6 +489,107 @@ static bool mq_spMemberLayout(const strucpp::TypeDesc* d,
            out.pulse >= 0 && out.skip >= 0;
 }
 
+// SETTINGS as text: entries separated by ';', each '[-|+]name' then
+// ',key=value' parts (db, pct, u, lo, hi, pulse in ms). Bounded by the
+// STRING's declared width. An entry with a part it cannot read is kept with
+// `fault` set, so BAD_SETTING points at it and the others still apply.
+static void mq_spParseText(const char* text, int32_t bound,
+                           std::vector<MqSpEntry>& out) {
+    std::string all;
+    for (int32_t i = 0; (bound <= 0 || i < bound) && text[i] != '\0'; i++) {
+        all += text[i];
+    }
+    auto trim = [](std::string t) {
+        size_t a = 0, b = t.size();
+        while (a < b && (unsigned char)t[a] <= ' ') a++;
+        while (b > a && (unsigned char)t[b - 1] <= ' ') b--;
+        return t.substr(a, b - a);
+    };
+    size_t at = 0;
+    while (at <= all.size()) {
+        size_t end = all.find(';', at);
+        if (end == std::string::npos) end = all.size();
+        std::string item = trim(all.substr(at, end - at));
+        at = end + 1;
+        if (item.empty()) {
+            if (end >= all.size()) break;
+            continue;
+        }
+        MqSpEntry e;
+        size_t comma = item.find(',');
+        std::string name = trim(item.substr(0, comma));
+        if (!name.empty() && (name[0] == '-' || name[0] == '+')) {
+            e.skip = name[0] == '-';
+            name = trim(name.substr(1));
+        }
+        e.name = name;
+        if (name.empty()) e.fault = true;
+        while (comma != std::string::npos) {
+            const size_t next = item.find(',', comma + 1);
+            std::string part = trim(item.substr(comma + 1,
+                next == std::string::npos ? std::string::npos : next - comma - 1));
+            comma = next;
+            const size_t eq = part.find('=');
+            if (eq == std::string::npos) { e.fault = true; continue; }
+            const std::string key = trim(part.substr(0, eq));
+            const std::string val = trim(part.substr(eq + 1));
+            if (strcasecmp(key.c_str(), "u") == 0) {
+                if (val.size() > 12) e.fault = true;
+                e.units = val.substr(0, 12);
+                continue;
+            }
+            char* stop = nullptr;
+            const double num = strtod(val.c_str(), &stop);
+            if (val.empty() || stop == nullptr || *stop != '\0') {
+                e.fault = true;
+                continue;
+            }
+            if (strcasecmp(key.c_str(), "db") == 0) e.band = (float)num;
+            else if (strcasecmp(key.c_str(), "pct") == 0) e.pct = (float)num;
+            else if (strcasecmp(key.c_str(), "lo") == 0) e.low = (float)num;
+            else if (strcasecmp(key.c_str(), "hi") == 0) e.high = (float)num;
+            else if (strcasecmp(key.c_str(), "pulse") == 0)
+                e.pulseNs = (int64_t)(num * 1000000.0);
+            else e.fault = true;
+        }
+        out.push_back(e);
+        if (end >= all.size()) break;
+    }
+}
+
+// SETTINGS as a list of entries, from either form. FALSE: SETTINGS is wired
+// but is neither a STRING nor an ARRAY OF SPARKPLUG_MEMBER.
+static bool mq_spReadEntries(const strucpp::IEC_ANY& settings,
+                             const MqSpMemberLayout& layout, bool haveLayout,
+                             std::vector<MqSpEntry>& out) {
+    out.clear();
+    if (!settings.wired()) return true;
+    if (settings.TYPECLASS == strucpp::TYPE_STRING) {
+        mq_spParseText((const char*)settings.PVALUE, settings.DISIZE, out);
+        return true;
+    }
+    if (!haveLayout) return false;
+    const bool array = settings.TYPECLASS == strucpp::TYPE_ARRAY;
+    const int32_t count = array ? settings.count() : 1;
+    out.reserve(count > 0 ? (size_t)count : 0);
+    for (int32_t k = 0; k < count; k++) {
+        const uint8_t* entry = array ? settings.at(k) : settings.PVALUE;
+        MqSpEntry e;
+        e.name = (const char*)(entry + layout.name);
+        if (!e.name.empty()) {
+            e.units = (const char*)(entry + layout.units);
+            e.band = *(const float*)(entry + layout.deadband);
+            e.pct = *(const float*)(entry + layout.deadbandPct);
+            e.low = *(const float*)(entry + layout.low);
+            e.high = *(const float*)(entry + layout.high);
+            e.pulseNs = *(const int64_t*)(entry + layout.pulse);
+            e.skip = *(const bool*)(entry + layout.skip);
+        }
+        out.push_back(e);
+    }
+    return true;
+}
+
 // Whether a SETTINGS NAME covers a value's path: the value itself, or an
 // array or nested STRUCT it is inside - 'spare' covers spare[1] and spare[2],
 // 'pump' covers pump.hours. Case does not matter, as in ST.
@@ -495,23 +624,20 @@ static int mq_spStructApply(MqttSparkplugNode* node, MqSpStructPlan& plan,
         node->unitsAt(leaf.point, leaf.cls == strucpp::TYPE_TIME ? "ms" : "");
         node->rangeAt(leaf.point, 0.0, 0.0);
     }
-    if (!haveLayout || !settings.wired()) return 0;
-
-    const bool array = settings.TYPECLASS == strucpp::TYPE_ARRAY;
-    const int32_t count = array ? settings.count() : 1;
+    if (!settings.wired()) return 0;
+    std::vector<MqSpEntry> entries;
+    if (!mq_spReadEntries(settings, layout, haveLayout, entries)) return 0;
+    const int32_t count = (int32_t)entries.size();
     if (count <= 0) return 0;
     // Per entry: 0 unused, 1 in use, 2 in use and matched; and whether it
     // could not be used. BAD_SETTING is the first entry with a fault.
     std::vector<uint8_t> state((size_t)count, 0);
     std::vector<uint8_t> fault((size_t)count, 0);
     for (int32_t k = 0; k < count; k++) {
-        uint8_t* entry = array ? settings.at(k) : settings.PVALUE;
-        const char* path = (const char*)(entry + layout.name);
-        if (path[0] == '\0') continue;             // an unused entry
-        const float ownBand = *(const float*)(entry + layout.deadband);
-        const float ownPct = *(const float*)(entry + layout.deadbandPct);
-        const int64_t pulse = *(const int64_t*)(entry + layout.pulse);
-        if (!(ownBand >= 0.0f) || !(ownPct >= 0.0f) || pulse < 0) {
+        const MqSpEntry& e = entries[(size_t)k];
+        if (e.fault) { fault[(size_t)k] = 1; continue; }
+        if (e.name.empty()) continue;               // an unused entry
+        if (!(e.band >= 0.0f) || !(e.pct >= 0.0f) || e.pulseNs < 0) {
             fault[(size_t)k] = 1;                  // its numbers cannot be used
             continue;
         }
@@ -531,31 +657,24 @@ static int mq_spStructApply(MqttSparkplugNode* node, MqSpStructPlan& plan,
         const size_t index = declared ? next++ : 0;
         for (int32_t k = 0; k < count; k++) {
             if (state[(size_t)k] == 0) continue;
-            uint8_t* entry = array ? settings.at(k) : settings.PVALUE;
-            const char* path = (const char*)(entry + layout.name);
+            const MqSpEntry& e = entries[(size_t)k];
+            const char* path = e.name.c_str();
             if (!mq_spPathCovers(valuePath.c_str(), path)) continue;
             state[(size_t)k] = 2;
             // An entry that leaves its members out has no numbers to give
             // them: a member in after all is in by a LATER entry, and takes
             // that one's. A value left out or refused takes nothing.
-            const bool skip = *(const bool*)(entry + layout.skip);
-            if (!declared || skip) continue;
-            const char* units = (const char*)(entry + layout.units);
-            const float ownBand = *(const float*)(entry + layout.deadband);
-            const float ownPct = *(const float*)(entry + layout.deadbandPct);
-            const float low = *(const float*)(entry + layout.low);
-            const float high = *(const float*)(entry + layout.high);
-            const int64_t pulse = *(const int64_t*)(entry + layout.pulse);
+            if (!declared || e.skip) continue;
             const size_t point = plan.leaves[index].point;
-            if (pulse > 0 && plan.pulses.empty()) {
+            if (e.pulseNs > 0 && plan.pulses.empty()) {
                 plan.pulses.resize(plan.leaves.size());
             }
-            if (!plan.pulses.empty()) plan.pulses[index].pulseNs = pulse;
+            if (!plan.pulses.empty()) plan.pulses[index].pulseNs = e.pulseNs;
             // ITS OWN NUMBERS: a member listed here takes this entry's
             // deadband, not the struct's - 0 means every change. A deadband on
             // a BOOL or a STRING is refused, as SPARKPLUG_METRIC refuses it: it
             // would freeze the value.
-            if (!node->deadbandAt(point, (double)ownBand, (double)ownPct)) {
+            if (!node->deadbandAt(point, (double)e.band, (double)e.pct)) {
                 // Named by itself, that is a mistake to report. Covered as
                 // part of an array or STRUCT, the BOOLs and STRINGs in it just
                 // keep reporting every change.
@@ -565,8 +684,8 @@ static int mq_spStructApply(MqttSparkplugNode* node, MqSpStructPlan& plan,
                     node->deadbandAt(point, 0.0, 0.0);
                 }
             }
-            if (units[0] != '\0') node->unitsAt(point, units);
-            node->rangeAt(point, (double)low, (double)high);
+            if (!e.units.empty()) node->unitsAt(point, e.units.c_str());
+            node->rangeAt(point, (double)e.low, (double)e.high);
         }
     };
     std::string path;
@@ -609,6 +728,11 @@ static uint32_t mq_spMixReal(uint32_t h, const uint8_t* at) {
 static uint32_t mq_spStructSettingsSum(const strucpp::IEC_ANY& settings,
                                        const MqSpMemberLayout& layout,
                                        bool haveLayout) {
+    // The text form: its characters are all it says.
+    if (settings.wired() && settings.TYPECLASS == strucpp::TYPE_STRING) {
+        return mq_spMixText(2166136261u, (const char*)settings.PVALUE,
+                            settings.DISIZE > 0 ? (uint32_t)settings.DISIZE : 0u);
+    }
     // Not SPARKPLUG_MEMBER, or not wired: nothing in it is read.
     if (!settings.wired() || !haveLayout) return 0;
     const bool array = settings.TYPECLASS == strucpp::TYPE_ARRAY;
@@ -760,18 +884,17 @@ void loop()
         // lost with it.
         {
             MqSpMemberLayout memberLayout;
+            std::vector<MqSpEntry> entries;
+            const bool haveLayout = SETTINGS.wired() &&
+                mq_spMemberLayout(SETTINGS.TYPEDESC, memberLayout);
             if (SETTINGS.wired() &&
-                mq_spMemberLayout(SETTINGS.TYPEDESC, memberLayout)) {
-                const bool array = SETTINGS.TYPECLASS == strucpp::TYPE_ARRAY;
-                const int32_t entries = array ? SETTINGS.count() : 1;
-                for (int32_t k = 0; k < entries; k++) {
-                    uint8_t* entry = array ? SETTINGS.at(k) : SETTINGS.PVALUE;
-                    const char* path = (const char*)(entry + memberLayout.name);
-                    if (path[0] == '\0') continue;   // an unused entry
-                    const bool skip = *(const bool*)(entry + memberLayout.skip);
+                mq_spReadEntries(SETTINGS, memberLayout, haveLayout, entries)) {
+                for (size_t k = 0; k < entries.size(); k++) {
+                    const MqSpEntry& e = entries[k];
+                    if (e.name.empty() || e.fault) continue;   // unused / unreadable
                     for (size_t i = 0; i < values.size(); i++) {
-                        if (mq_spPathCovers(values[i].path.c_str(), path)) {
-                            values[i].excluded = skip;
+                        if (mq_spPathCovers(values[i].path.c_str(), e.name.c_str())) {
+                            values[i].excluded = e.skip;
                         }
                     }
                 }
@@ -862,7 +985,8 @@ void loop()
             plan->settingsApplied = false;
         }
         const MqSpMemberLayout& memberLayout = plan->settingsLayout;
-        const bool haveLayout = SETTINGS.wired() && plan->settingsLayoutOk;
+        const bool haveLayout = SETTINGS.wired() &&
+            (plan->settingsLayoutOk || SETTINGS.TYPECLASS == strucpp::TYPE_STRING);
         const float band = (float)DEADBAND;
         const float pct = (float)DEADBAND_PCT;
         const uint32_t sum =
