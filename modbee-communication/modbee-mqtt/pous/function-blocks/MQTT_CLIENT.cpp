@@ -46,6 +46,12 @@ TRUST_NEW  for MQTT_TLS_PINNED and nothing else. TRUE lets the FIRST key a
 
 LINK_UP      the client exists and its link is open.
 CONNECTED  the broker has acknowledged us. This is the one to interlock on.
+HEARD_AGO  how long since anything at all arrived from the broker on this
+           connection (T#0s while not connected). A healthy broker is heard
+           at least once a keep-alive interval - it answers our ping - so a
+           link supervisor can take "CONNECTED and HEARD_AGO under three
+           intervals" as proof the broker is really there, which a modem
+           that only buffers our bytes cannot fake.
 SESSION_PRESENT  the broker had our session waiting. FALSE after a clean start,
            and FALSE on a first connection - which is how you tell a resumed
            session from a fresh one.
@@ -160,6 +166,7 @@ FUNCTION_BLOCK MQTT_CLIENT
   VAR_OUTPUT
     LINK_UP : BOOL;
     CONNECTED : BOOL;
+    HEARD_AGO : TIME;
     SESSION_PRESENT : BOOL;
     ASSIGNED_ID : STRING(48);
     STATE : MQTT_STATE;
@@ -247,6 +254,7 @@ FUNCTION_BLOCK MQTT_CLIENT
     fbReconnectMs : DINT;
     fbReconnectMaxMs : DINT;
     fbConnectTimeoutMs : DINT;
+    fbMaxSilenceMs : DINT;
     fbAutoReconnect : BOOL := TRUE;
     fbCaFile : STRING(128);
     fbCertFile : STRING(128);
@@ -1433,6 +1441,7 @@ void setup()
 {
     LINK_UP = false;
     CONNECTED = false;
+    HEARD_AGO = mq_timeOf(0);
     SESSION_PRESENT = false;
     ASSIGNED_ID = "";
     STATE = MQTT_STATE::MQTT_IDLE;
@@ -1596,6 +1605,7 @@ void loop()
         }
         LINK_UP = false;
         CONNECTED = false;
+        HEARD_AGO = mq_timeOf(0);
         fbTried = false;
         fbConnectAsked = false;
         fbWanted = false;
@@ -1999,6 +2009,11 @@ void loop()
         if ((int32_t)fbConnectTimeoutMs > 0) {
             behaviour.connectTimeoutMs = (mq_time_t)(int32_t)fbConnectTimeoutMs;
         }
+        // MQTT_CONFIG MAX_SILENCE: nothing from the broker this long ends the
+        // connection however our own bytes move (a modem says "sent" either way).
+        if ((int32_t)fbMaxSilenceMs > 0) {
+            behaviour.maxSilenceMs = (mq_time_t)(int32_t)fbMaxSilenceMs;
+        }
         behaviour.autoReconnect = (bool)fbAutoReconnect;
 
         // OFF UNLESS MQTT_CONFIG ASKED FOR IT. After a CONNACK that rejected
@@ -2072,6 +2087,7 @@ void loop()
             client->client.poll();
             LINK_UP = false;
             CONNECTED = false;
+            HEARD_AGO = mq_timeOf(0);
             fbConnectAsked = false;
             fbTried = false;
             STATE = (MQTT_STATE)(int32_t)(int)client->client.status().state;
@@ -2101,6 +2117,7 @@ void loop()
     // Connected with only a provisioning key is not connected as this PLC:
     // nothing it publishes would be allowed, so the program is told to wait.
     CONNECTED = client->client.isConnected() && !(bool)fbProvisioning;
+    HEARD_AGO = mq_timeOf((int32_t)client->client.heardAgoMs());
     STATE = (MQTT_STATE)(int32_t)(int)status.state;
     SESSION_PRESENT = client->client.capabilities().sessionPresent;
 

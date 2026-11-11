@@ -29,6 +29,15 @@ RECONNECT          first backoff after a drop. T#0s for one second.
 RECONNECT_MAX      ceiling on that backoff. T#0s for a minute.
 CONNECT_TIMEOUT    how long to wait for a broker that accepts a socket and
                    then says nothing. T#0s for twenty seconds.
+MAX_SILENCE        nothing at all from the broker for this long ends the
+                   connection, however our own sending looks. T#0s (the
+                   default) leaves it to the keep-alive, under which our
+                   backlog draining counts as the link being alive - which on
+                   a cellular modem it is not: the module takes our bytes into
+                   its own buffer and says "sent" whether or not anything
+                   reaches the broker. Three keep-alive intervals is a safe
+                   value on cellular, unless one of your messages takes longer
+                   than that to upload.
 AUTO_RECONNECT     TRUE reconnects by itself. Turn it OFF on a cellular link,
                    where the reconnect is the one call that can stall a scan.
 
@@ -93,6 +102,7 @@ FUNCTION_BLOCK MQTT_CONFIG
     RECONNECT : TIME;
     RECONNECT_MAX : TIME;
     CONNECT_TIMEOUT : TIME;
+    MAX_SILENCE : TIME;
     AUTO_RECONNECT : BOOL := TRUE;
     RETRY_REJECTED_CREDENTIAL : BOOL := FALSE;
   END_VAR
@@ -152,6 +162,7 @@ void loop()
     CLIENT.FBRECONNECTMS = mq_millisOf(RECONNECT);
     CLIENT.FBRECONNECTMAXMS = mq_millisOf(RECONNECT_MAX);
     CLIENT.FBCONNECTTIMEOUTMS = mq_millisOf(CONNECT_TIMEOUT);
+    CLIENT.FBMAXSILENCEMS = mq_millisOf(MAX_SILENCE);
     CLIENT.FBAUTORECONNECT = AUTO_RECONNECT;
     CLIENT.FBRETRYREJECTED = RETRY_REJECTED_CREDENTIAL;
 
