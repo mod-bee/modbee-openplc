@@ -8,6 +8,11 @@ NODE         this node's ID. GROUP and NODE together are the node's address in
              the whole system and MUST be unique in it.
 PRIMARY_HOST the Sparkplug Host ID this node answers to, or empty for none.
              EMPTY BY DEFAULT - see below.
+REBIRTH_HOLDOFF  the shortest time between two answers to rebirth requests
+             (Node Control/Rebirth): requests in between are answered together,
+             once, when it is up. T#2s by default. On a metered link (a cellular
+             SIM) set a minute or more: a host that asks again and again then
+             costs one birth a minute at most, whatever it sends.
 ENABLE       FALSE keeps the node down without losing its metric declarations.
 CLIENT       the MQTT_CLIENT whose connection this node rides on. Must be
              wired. Everything about the connection is set there - broker,
@@ -135,6 +140,7 @@ FUNCTION_BLOCK SPARKPLUG_NODE
        new one. FALSE with nothing stored refuses to connect. *)
     TRUST_NEW : BOOL;
     PRIMARY_HOST : STRING(47);
+    REBIRTH_HOLDOFF : TIME := T#2s;
     (* THE CERTIFICATES, and without them SECURITY has almost no use on a
        plant.
        MQTT_TLS_VERIFY with no CA_FILE trusts the system certificate store,
@@ -615,6 +621,10 @@ void loop()
         LAST_ERROR = "CLIENT changed while running - restart the PLC";
         return;
     }
+
+    // The shortest time between two answers to rebirth requests. Read every scan.
+    const int32_t holdoffMs = mq_millisOf(REBIRTH_HOLDOFF);
+    node->rebirthHoldoff((mq_time_t)(holdoffMs > 0 ? holdoffMs : 0));
 
     // --- A NEW IDENTITY IS A NEW NODE TO THE HOST ---
     //
