@@ -1,16 +1,41 @@
 # 06 - Diagnostics
 
-Two blocks, and neither of them puts anything extra on the bus except when you
-ask it to.
+What a link and a device are doing: the node's own error pins, `Statistics`,
+`Device` and `ReadDeviceIdentification`. None of them puts anything extra on
+the bus unless you ask it to.
 
-## MODBUS_STATUS — how the link is doing
+## The node's error pins
+
+`bError`, `eErrorId` and `sLastError` on `FB_ModbusNode` say what is wrong, in
+this order:
+
+1. **The link would not open** - `sLastError` in the operating system's words:
+   *"No such file or directory"*, *"Permission denied"*, *"Address already in
+   use"*. `bLinkUp` stays `FALSE` and the node tries again every two seconds.
+2. **The link is open with nobody at the other end** - a TCP client whose
+   device refused or dropped the connection: `eErrorId` is `LinkDown`,
+   `sLastError` says *"not connected"*, and the node keeps trying.
+3. **A method call failed** - named by method and variable, *"ReadHoldingRegisters
+   aRegs: Timeout"*, until that same call succeeds. The last failing call is
+   the one shown.
+4. **An input the target does not use** - a board's network settings on the
+   Runtime, say.
+
+A program that wants one alarm per link wires `bError`; one that wants to know
+which call failed reads the call's own result.
+
+## node.Statistics - how the link is doing
 
 ```
-health( NODE := node );
+node.Statistics(nSent => nSent, nReceived => nReceived,
+                nChecksumErrors => nCrc, nNoiseBytes => nNoise,
+                nFramingErrors => nFraming, sFramingReason => sWhy);
 ```
 
-No inputs at all. It reports and changes nothing, which is why it is safe to
-drop onto a diagnostic page anywhere.
+It reports and changes nothing - except that a rising edge of `bReset` zeroes
+the counters - which is why it is safe to call from a diagnostic page anywhere
+in the node's task. It counts across outages: `nReconnects` is worth reading
+most while the link is down.
 
 ### The three error counters, and what each one means
 
@@ -20,88 +45,96 @@ application's point of view:
 
 | climbing | means |
 | --- | --- |
-| `CHECKSUM_ERRORS` | the bytes arrive and the maths does not agree. Noise, a baud rate mismatch, or a missing termination resistor |
-| `NOISE_BYTES` | bytes discarded while hunting for the start of a frame. A **floating bus** — nothing is holding the line at idle. Fit the bias resistors |
-| `FRAMING_ERRORS` | structurally impossible frames. Something on the bus is speaking a different protocol, or frames are being split — read `FRAMING_REASON` |
+| `nChecksumErrors` | the bytes arrive and the maths does not agree. Noise, a baud rate mismatch, or a missing termination resistor |
+| `nNoiseBytes` | bytes discarded while hunting for the start of a frame. A **floating bus** - nothing is holding the line at idle. Fit the bias resistors |
+| `nFramingErrors` | structurally impossible frames. Something on the bus is speaking a different protocol, or frames are being split - read `sFramingReason` |
 
 **All three flat while a device does not answer means the bytes are not
 arriving at all**: wrong port, wrong wires, transmit and receive swapped, or the
 device is off. That is a useful negative result and it takes two seconds to
 check.
 
-`SENT` and `RECEIVED` are frames, both directions. On a healthy client they
-track each other. `SENT` climbing while `RECEIVED` stays put is nobody
+A corrupt reply is discarded and counted, never matched to a request: the
+request that was waiting for it times out (`Timeout`), and `nChecksumErrors`
+is where the corruption shows.
+
+`nSent` and `nReceived` are frames, both directions. On a healthy client they
+track each other. `nSent` climbing while `nReceived` stays put is nobody
 answering.
 
-`PENDING` is requests queued and not yet concluded. It should hover near zero
+`nPending` is requests queued and not yet concluded. It should hover near zero
 and come back down. One that climbs steadily is a program issuing requests
-faster than the bus can carry them — see [10 - Scan rate](10-scan-rate.md).
+faster than the bus can carry them - see [10 - Scan rate](10-scan-rate.md).
 
-To zero the counters, pulse `RESET_STATS` on the node that owns the link.
+`nReconnects` counts the times the link dropped and came back on its own. A
+link that works but reconnects nightly is a different problem from one that has
+never worked.
 
-### FRAMING_REASON
+### sFramingReason
 
 The first thing to read when frames go missing, and the answer to the commonest
 question asked of any Modbus library: **why is my RTU splitting frames.**
 
-RTU marks the end of a frame with silence — three and a half character times of
+RTU marks the end of a frame with silence - three and a half character times of
 it. A USB adapter, a virtual serial port or a busy PLC scan can all destroy
 that silence by delivering bytes in clumps. So the library measures the line and
-picks a rule, and this pin says which rule and why, in a sentence you can read
-off the screen.
+picks a rule, and `sFramingReason` says which rule and why, in a sentence you
+can read off the screen.
 
-On a TCP link it says so and stops there — the header carries the length, so
+On a TCP link it says so and stops there - the header carries the length, so
 there is nothing to predict and nothing to measure. On an **RTU-over-TCP** link
-it reports the RTU rule instead, which is how you tell from one pin which of
+it reports the RTU rule instead, which is how you tell from one output which of
 the two a terminal server actually gave you.
 
-## MODBUS_DEVICE — how one device is doing
+## node.Device - how one device is doing
 
 ```
-drive( NODE := node, UNIT := 2, IDENTIFY := askOnce );
+node.Device(nUnitId := 2, bAnswering => bDriveAnswering, bSeen => bDriveSeen,
+            tSilent => tDriveSilent, tRoundTrip => tDriveRtt);
 ```
 
-**`ANSWERING`, `SILENT` and `ROUND_TRIP` are read off traffic you are
-already making.** With `POLL` at 0 this block sends nothing at all, so a
-screen showing thirty devices you already read costs not one extra frame.
+A standing method: call it every scan. **`bAnswering`, `tSilent` and
+`tRoundTrip` are read off traffic you are already making.** With `tPoll` at
+`T#0s` it sends nothing at all, so a screen showing thirty devices you already
+read costs not one extra frame.
 
 **Which means a device nobody asks anything reads as not answering.** That is
-literally true and thoroughly unhelpful — the device may be in perfect health
-and simply have nothing to say, because nothing has spoken to it. If this block
-is the only thing pointed at a device, give it a `POLL`:
+literally true and thoroughly unhelpful - the device may be in perfect health
+and simply have nothing to say, because nothing has spoken to it. If this is
+the only call pointed at a device, give it a `tPoll`:
 
 ```
-standby( NODE := node, UNIT := 5, POLL := T#2s );
+node.Device(nUnitId := 5, tPoll := T#2s, bAnswering => bStandbyAnswering);
 ```
 
 It sends the standard link test, function code 8: whatever goes out comes back
 unchanged, and no register is touched. A device that does not implement FC 8
-answers with an **exception** — which still proves it is alive and still counts
+answers with an **exception** - which still proves it is alive and still counts
 as answering, because a unit that is transmitting is a unit that is there. So
 the check works even on devices that refuse it.
 
-### SILENT = -1 is not a long silence
+### Never answered is not a long silence
 
-It means this device has **never answered at all**, which is a different fault
-from one that has gone quiet — and the two send an engineer to opposite ends of
-the site:
+`bSeen` `FALSE` means this device has **never answered at all**, which is a
+different fault from one that has gone quiet - and the two send an engineer to
+opposite ends of the site:
 
 | | |
 | --- | --- |
-| **never answered** | the unit id is wrong, the device was never fitted, or it is set to a different address. A **commissioning fault**, found at the desk with a wiring drawing |
-| **gone quiet** | it was answering and has stopped. A cable, a power supply, a failed device. A **running fault**, found in the plant |
+| **never answered** (`bSeen` `FALSE`) | the unit id is wrong, the device was never fitted, or it is set to a different address. A **commissioning fault**, found at the desk with a wiring drawing |
+| **gone quiet** (`bSeen`, not `bAnswering`) | it was answering and has stopped. A cable, a power supply, a failed device. A **running fault**, found in the plant |
 
 An alarm list that shows both as "no comms" throws that away. Keep them apart:
 
 ```
-deviceMissing := (drive.SILENT < 0);              (* never there *)
-deviceLost    := (drive.SILENT > 5000);           (* was, is not *)
+bDeviceMissing := NOT bDriveSeen;                       (* never there *)
+bDeviceLost    := bDriveSeen AND NOT bDriveAnswering;   (* was, is not *)
 ```
 
-`ANSWERING` is the simple form: `TRUE` while the device has answered within
-`GONE`, which defaults to five seconds.
+`bAnswering` is `TRUE` while the device has answered within `tGone`, which
+defaults to five seconds. Give it room for at least two `tPoll` periods.
 
-### ROUND_TRIP
+### tRoundTrip
 
 The number to quote when somebody asks whether a device is slow or the bus is.
 It is measured, not configured.
@@ -111,76 +144,78 @@ slow drive**, and no amount of changing the baud rate will help. A bus where
 everything answers slowly is a bus problem. Without this number the two
 arguments go round for an afternoon.
 
-### IDENTIFY — the device's own nameplate
+## node.ReadDeviceIdentification - the device's own nameplate
 
-A rising edge asks the device who it is, using function code 43 — the same
-information a handheld tool shows:
+A request: a rising edge asks the device who it is, using function code 43 -
+the same information a handheld tool shows:
 
 ```
-drive( NODE := node, UNIT := 2, IDENTIFY := askOnce );
-
-IF drive.IDENTIFIED THEN
-    (* one scan, when the nameplate arrived *)
-    logLine := CONCAT(drive.VENDOR, drive.PRODUCT);
-    askOnce := FALSE;
+eIdent := node.ReadDeviceIdentification(nUnitId := 2, bExecute := bAskOnce,
+                                        sVendor => sVendor, sProduct => sProduct,
+                                        sRevision => sRevision);
+IF eIdent = E_ModbusResult.Ok THEN
+    sLogLine := CONCAT(sVendor, sProduct);
 END_IF;
 ```
 
 **Ask once at start-up and keep what comes back.** It does not change.
 
 Not every device implements it. One that does not answers with an exception,
-which arrives as `MODBUS_REFUSED` — that is a normal answer, not a fault worth
+which arrives as `Refused` - that is a normal answer, not a fault worth
 alarming on.
 
-## Every status code
+## Every result
 
-`STATUS` is on every block. `MODBUS_OK` when fine.
+Every method returns an `E_ModbusResult`, and the node's `eErrorId` carries
+one. `Ok` when fine.
 
 ### Accepted
 
 | | |
 | --- | --- |
-| `MODBUS_QUEUED` | accepted; the outcome arrives on a later scan |
-| `MODBUS_OK` | it completed. This is what success looks like |
+| `Queued` | accepted; the outcome arrives on a later scan |
+| `Ok` | it completed. This is what success looks like. A standing method returns it while its record is valid |
 
 ### Refused before anything reached the wire
 
-These are your program's mistakes, and being told immediately is the point —
+These are your program's mistakes, and being told immediately is the point -
 you can fix a bad request, and you cannot tell a bad request from an absent
 device once it has timed out.
 
 | | |
 | --- | --- |
-| `MODBUS_NOT_INITIALISED` | the link is not open. Check `node.READY` and `node.LAST_ERROR` |
-| `MODBUS_INVALID_ARGUMENT` | a zero count, a length past the end of the variable, a quantity Modbus disallows, or a `BOOL` aimed at a register list |
-| `MODBUS_NOT_MAPPED` | a local address with nothing bound to it |
-| `MODBUS_DUPLICATE` | an identical request is already outstanding. Not an error — this is what stops a held `REQ` flooding the bus |
-| `MODBUS_QUEUE_FULL` | more outstanding requests than the queue holds. You are asking faster than the bus can answer - or, if the bursts are expected, `MODBUS_CONFIG`'s `QUEUE` / `QUEUE_BYTES` are too small |
-| `MODBUS_UNKNOWN_UNIT` | the destination is not reachable |
-| `MODBUS_SUPERSEDED` | a newer write to the same address replaced this one before it went out. Not an error |
-| `MODBUS_CANCELLED` | discarded by a restart |
+| `NotInitialised` | on the node: the link would not open. Read `sLastError` |
+| `InvalidArgument` | a zero count, a length past the end of the variable, a quantity Modbus disallows, a `BOOL` aimed at a register table, a `REAL` given to `Map`, or settings that cannot work. Also the device's exception 03 |
+| `Duplicate` | an identical request from another variable is already outstanding |
+| `QueueFull` | more outstanding requests than the queue holds - you are asking faster than the bus can answer, or `stTimingConfig.nMaxPending` / `nMaxPendingBytes` are too small for expected bursts. Also: more than 256 records on one node |
+| `Superseded` | a newer write to the same address replaced this one before it went out. Not an error |
+| `Cancelled` | the link was closed (`bConnect` `FALSE`) while it was out |
+| `WrongTask` | called from a task other than the node's. Nothing was done |
 
 ### Concluded on the wire
 
 | | |
 | --- | --- |
-| `MODBUS_TIMEOUT` | nothing answered, after every retry. The device is off, unplugged, at a different address, or on a different baud rate |
-| `MODBUS_REFUSED` | the device answered and said no. **The wiring works** — the address or the function code is wrong for that device |
-| `MODBUS_ACKNOWLEDGED` | the device took the job and is still doing it. **Poll, do not retry** — retrying sends a second copy of a command already running |
-| `MODBUS_BUSY` | the device is busy. Retry later |
-| `MODBUS_GATEWAY_PATH_UNAVAILABLE` | a bridge has no route to that unit. A problem with the **bridge** |
-| `MODBUS_GATEWAY_TARGET_FAILED` | the route exists and the device did not answer. A problem with the **device** |
+| `Timeout` | nothing answered, after every retry. The device is off, unplugged, at a different address, or on a different baud rate - or its reply arrived corrupt (see `nChecksumErrors`) |
+| `Refused` | the device answered and said no (exception 01, 04 and others). **The wiring works** - the function code is wrong for that device |
+| `NotMapped` | the device has nothing at that address (exception 02) |
+| `Acknowledged` | the device took the job and is still doing it (exception 05). **Poll, do not retry** - retrying sends a second copy of a command already running |
+| `Busy` | the device is busy (exception 06). Retry later |
+| `GatewayPathUnavailable` | a bridge has no route to that unit (exception 0A). A problem with the **bridge** |
+| `GatewayTargetFailed` | the route exists and the device did not answer (exception 0B). A problem with the **device** |
+| `ProtocolError` | a reply arrived and made no sense |
 
 ### Link faults
 
 | | |
 | --- | --- |
-| `MODBUS_LINK_DOWN` | the transport is not usable. On a block other than the node, this also means the `NODE` pin has no started node behind it |
-| `MODBUS_CHECKSUM_ERROR` | a reply arrived corrupt |
-| `MODBUS_PROTOCOL_ERROR` | a reply arrived and made no sense |
+| `LinkDown` | the link is not open, or a TCP client's device is not connected. A request is refused at once; a standing method keeps its record |
 
-**`MODBUS_REFUSED` is the most encouraging failure on this list.** It means
-frames are going out, arriving, being understood and being answered. Everything
-below the application layer works, and you are arguing about an address.
+`UnknownUnit` and `ChecksumError` are in the enumeration because it mirrors the
+protocol library's result list value for value; no method returns them today.
+
+**`Refused` is the most encouraging failure on this list.** It means frames
+are going out, arriving, being understood and being answered. Everything below
+the application layer works, and you are arguing about a function code.
 
 **Next:** [07 - Block reference](07-block-reference.md)
