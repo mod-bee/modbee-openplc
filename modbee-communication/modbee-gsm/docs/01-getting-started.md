@@ -105,6 +105,11 @@ most 160 characters.
 To follow one message to the network instead, `SendSmsRequest(anyText,
 sNumber, bExecute)` returns `Queued` until the network has it, then `Ok`.
 
+Every request method (`SendSmsRequest`, `AtCommand`, `Power`, `Socket`) works
+the same way: read its result only after its own `bExecute` edge. Before the
+first edge nothing has run, and the result still reads its default, `Ok`. After
+the edge it is `Queued` while busy, then `Ok` or the reason it failed.
+
 ## 6. Changing the wiring
 
 On another board, or a HAT wired differently, set `stSerialConfig` and
