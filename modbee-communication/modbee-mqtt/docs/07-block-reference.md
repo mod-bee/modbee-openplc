@@ -1610,6 +1610,11 @@ A metric first declared after the birth makes the node birth again.
      follow later changes of the text, of anyUnits and of fDeadbandPct (units
      and ranges show at the next birth); adding or removing a clause later is
      reported on nBadClause - restart the PLC to change membership.
+     A record is found by where it is, so two instances of one block can
+     each record their own local; give each its own sPrefix, as their metric
+     names would otherwise collide (refused: InvalidArgument, nBadClause -4).
+     nLostCnt counts host writes to cmd and set members dropped because four
+     were already waiting.
      Ok, NotConnected, InvalidArgument (a bad clause, or tLogInterval or
      tLiveInterval T#0s where it is used), QueueFull (out of memory, or a message
      asked for could not be queued: it asks again).
@@ -1753,7 +1758,8 @@ A metric first declared after the birth makes the node birth again.
 
 ```
 result := sp.Record(anyData := ..., sSettings := ..., sPrefix := ...,
-                    bSend := ..., nMetricCnt => ..., nBadClause => ...);
+                    bSend := ..., nMetricCnt => ..., nBadClause => ...,
+                    nLostCnt => ...);
 ```
 
 Returns `E_MqttResult`.
@@ -1774,6 +1780,7 @@ A STRUCT's members as metrics, each by its class, from one point list of clauses
 | --- | --- | --- | --- |
 | `nMetricCnt` | `INT` |  | metrics the record declared |
 | `nBadClause` | `INT` |  | the first clause that cannot be used, from 1; 0 none |
+| `nLostCnt` | `DINT` |  | host writes to cmd and set members dropped with four already waiting |
 
 ### FB_SparkplugNode.Metric
 

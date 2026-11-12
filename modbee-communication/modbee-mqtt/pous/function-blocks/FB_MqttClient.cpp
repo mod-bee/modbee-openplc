@@ -1943,6 +1943,7 @@ struct MqRecord {
     std::string name;
     std::string type;
     const uint8_t* cache = nullptr;
+    uint32_t calledCycle = 0;     // the client cycle of its last call, from 1
 
     std::string topic;            // Response: the request filter the hook matches
     std::string replyTopic;       // Request: where the answer comes; Response: where it goes
@@ -2034,6 +2035,9 @@ struct MqMethods {
     std::string failKey;
     std::string failText;
     uint8_t failResult = 0;
+    // The client's cycles, one per call of the block: a record called in this
+    // cycle or the last is in use where it is.
+    uint32_t cycle = 1;
 
     void drop() {
         if (MqttClient* attached = hook.attachedTo()) attached->detach(hook);
@@ -2112,7 +2116,9 @@ static E_MQTTRESULT mq_noteCall(strucpp::XWORD_t held, const char* method,
                                 const strucpp::IEC_ANY* any, const char* topic,
                                 E_MQTTRESULT result) {
     MqMethods* m = (MqMethods*)(uintptr_t)held;
-    if (m == nullptr) return result;
+    // A call from another task is refused and touches nothing: the client's
+    // state belongs to the client's task.
+    if (m == nullptr || result == E_MQTTRESULT::WRONGTASK) return result;
     const char* record = any != nullptr && any->NAME != nullptr && any->NAME[0] != '\0'
                              ? any->NAME : topic;
     std::string key = method;
@@ -2149,14 +2155,25 @@ static MqRecord* mq_recordOf(MqMethods* m, uint8_t kind, const strucpp::IEC_ANY&
     uint32_t key = mq_fingerprint(2166136261u, &kind, sizeof kind);
     key = mq_fingerprintText(mq_fingerprintText(key, name), type);
 
+    // Where the record is first: two instances of one block that each pass
+    // their own local carry the same name. By name only when that record is
+    // not in use elsewhere (called this cycle or the last), as after an online
+    // change moved it.
     for (size_t i = 0; i < m->records.size(); i++) {
         MqRecord* r = m->records[i];
-        if (r->kind != kind || r->key != key) continue;
-        if (any.PVALUE != nullptr && r->cache == any.PVALUE && any.NAME != nullptr) return r;
-        if (r->name == name && r->type == type) {
-            r->cache = any.PVALUE;
+        if (r->kind == kind && r->key == key && any.PVALUE != nullptr && r->cache == any.PVALUE &&
+            any.NAME != nullptr) {
+            r->calledCycle = m->cycle;
             return r;
         }
+    }
+    for (size_t i = 0; i < m->records.size(); i++) {
+        MqRecord* r = m->records[i];
+        if (r->kind != kind || r->key != key || r->name != name || r->type != type) continue;
+        if (r->calledCycle + 1 >= m->cycle && r->cache != any.PVALUE) continue;
+        r->cache = any.PVALUE;
+        r->calledCycle = m->cycle;
+        return r;
     }
     if (m->records.size() >= (size_t)MQ_MAX_RECORDS) return nullptr;
     MqRecord* r = new (std::nothrow) MqRecord();
@@ -2166,6 +2183,7 @@ static MqRecord* mq_recordOf(MqMethods* m, uint8_t kind, const strucpp::IEC_ANY&
     r->name = name;
     r->type = type;
     r->cache = any.PVALUE;
+    r->calledCycle = m->cycle;
     m->records.push_back(r);
     return r;
 }
@@ -2242,6 +2260,7 @@ void setup()
 void loop()
 {
     nTask = mq_currentTask();   // every block on this one shares it: ONE TASK, above
+    if (MqMethods* calls = (MqMethods*)(uintptr_t)(strucpp::XWORD_t)nMethods) calls->cycle++;
     MqNode* client = (MqNode*)(uintptr_t)(strucpp::XWORD_t)nLink;
 
     // What the medium is built from. A change rebuilds it under the same

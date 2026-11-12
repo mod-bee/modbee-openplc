@@ -92,9 +92,11 @@ ota(fbClient := mqtt, sBaseTopic := 'modbee/pump-01/ota', sVersion := '1.4.0',
 | `sPublicKey` | the P-256 public key, 128 hex characters; empty: no check |
 | `bRequireSigned` | refuse every update until `sPublicKey` holds a valid key - for a key that arrives after the first scan |
 
-`bSigned` says the key is in use. A key that is not 128 hex characters sets
-`bError` with `eErrorId = E_OtaResult.InvalidArgument`; the updater keeps
-running, and `bRequireSigned` decides whether anything installs meanwhile. The
+`bSigned` says the key is in use. A key that is set but cannot be used (not
+128 hex characters, or a board that cannot check signatures) fails safe: no
+update is taken until it is fixed, whatever `bRequireSigned` says, and `bError`
+with `eErrorId = E_OtaResult.InvalidArgument` says why (0.2.1; 0.2.0 still took
+unsigned updates). `bRequireSigned` covers a key that is not there yet. The
 check takes about 160 ms on a Node UIO, on the background task, never in a scan.
 
 ## Over Sparkplug
