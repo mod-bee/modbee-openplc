@@ -2,7 +2,7 @@
   "resources": {
     "modbee-ota": {
       "repo": "mod-bee/modbee-ota",
-      "ref": "v0.1.0",
+      "ref": "7ce6a99451a6cbb5e64bb403f59934d2a0977523",
       "path": "",
       "include": [
         "library.properties",

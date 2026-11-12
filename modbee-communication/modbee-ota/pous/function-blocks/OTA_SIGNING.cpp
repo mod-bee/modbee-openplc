@@ -43,7 +43,7 @@ FUNCTION_BLOCK OTA_SIGNING
 // OTA_NODE's code, which sorts before this file in the one translation unit
 // every C++ POU lands in.
 
-#if defined(OTA_NODE_ON_BOARD) && defined(MODBEE_OTA_HAS_WOLFSSL) && \
+#if defined(OTA_NODE_ON_BOARD) && defined(MODBEE_OTA_HAS_ECDSA) && \
     defined(MODBEE_OTA_HAS_ASYNC_VERIFIER)
 #define OTA_SIGNING_ON_BOARD 1
 
