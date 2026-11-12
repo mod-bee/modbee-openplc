@@ -15,6 +15,7 @@ only decides how long.
 | --- | --- | --- | --- | --- |
 | in | `Start` | BOOL | FALSE | Rising edge: start a run (a local button, a SCADA start pulse). Wire `FALSE` if only `RunHeld` starts it |
 | in | `Stop` | BOOL | FALSE | Rising edge: end the run |
+| in | `Restart` | BOOL | FALSE | Rising edge: a running run starts over - time and volume from zero, with the targets as they are now (e.g. a new `runTime` just set); the equipment keeps running. Ignored with no run active |
 | in | `RunHeld` | BOOL | FALSE | A remote run signal: its rising edge starts a run, dropping it ends the run |
 | in | `Permit` | BOOL | TRUE | FALSE ends the run (`Stopped: not permitted`) and refuses a start |
 | in | `Abort` | BOOL | FALSE | Ends the run and refuses a start, e.g. the sump low level or a pump fault |
@@ -103,6 +104,9 @@ no numbers: how far the run got is in `elapsed` and `delivered` (`lastDuration` 
   or reads not-a-number is handled: the run carries on from the new value, never
   counting backwards. A total that is not a number when the run starts is not
   counted from 0: the run counts from the first valid reading.
+- `Restart` while a run is active starts it over: `Elapsed` / `Delivered` from zero, the
+  targets taken again, `RunCmd` held on throughout. The last run's volume and duration
+  (`tot.lastVolume`, `tot.lastDuration`) are the whole run, from its first start.
 - The first reason found ends the run: Stop, Abort, Permit, RunHeld dropping, lost
   comms, an invalid setting, the limit, `maxPause`.
 

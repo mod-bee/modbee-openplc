@@ -10,6 +10,9 @@ A volume run always has a time cap (UT_RUN_CORE). Interlock FALSE ends the
 run and refuses a start; Permissive FALSE makes a new run wait; Pause holds
 it (RunCmd off, no counting; maxPause ends it); Abort ends it with a code.
 RunTime / RunVolume pins (> 0) override the settings for the next run.
+Restart starts a running run over: time and volume from zero, with the
+targets as they are then, the equipment kept running (the last run's volume
+and duration are the whole run's).
 Progress is kept over a power cut (UT_RUN_CORE); the last run's volume,
 duration and end reason are kept. Settings kept; a bad write is put back. *)
 
@@ -19,6 +22,7 @@ FUNCTION_BLOCK UT_RUN_LIMIT
     Start : BOOL R_EDGE; (* start (latched) *)
     Stop : BOOL R_EDGE; (* end the run (wins) *)
     Reset : BOOL R_EDGE; (* clear the fault status *)
+    Restart : BOOL R_EDGE; (* a running run starts over: time and volume from zero, the equipment kept running *)
     Interlock : BOOL := TRUE; (* FALSE ends the run and refuses a start *)
     Permissive : BOOL := TRUE; (* FALSE: a new run waits *)
     Pause : BOOL; (* hold: RunCmd off, no counting *)
@@ -125,7 +129,7 @@ runIn(Run := Run, Start := Start, Stop := Stop, CmdStart := cStart, CmdStop := c
       HasTarget := rtUse > T#0s OR rvUse > 0.0, Set := Data.set.run);
 core(Request := runIn.Request AND Interlock, StopEdge := Stop OR cStop, Latched := runIn.Latched, Permissive := Permissive,
      Pause := Pause, Counting := EquipRunning, Abort := Abort OR NOT Interlock,
-     AbortCode := SEL(Interlock, UT_STOP_INTERLOCK, AbortCode), Part := FALSE, EndAtTarget := TRUE,
+     AbortCode := SEL(Interlock, UT_STOP_INTERLOCK, AbortCode), Part := Restart, EndAtTarget := TRUE,
      RunTime := rtUse, RunVolume := rvUse, MaxTime := Data.set.core.maxTime, MinFlow := Data.set.minFlow,
      Finish := FALSE, Meter := Meter, Set := Data.set.core);
 
@@ -138,8 +142,8 @@ Delivered := core.Delivered;
 VolumeLeft := core.VolumeLeft;
 IF core.Done THEN
   Data.sts.runs := Data.sts.runs + 1;
-  Data.tot.lastVolume := core.Delivered;
-  Data.tot.lastDuration := core.Elapsed;
+  Data.tot.lastVolume := core.RunDelivered;         (* the whole run, over a Restart *)
+  Data.tot.lastDuration := core.RunElapsed;
   Data.tot.lastEndReason := core.StopReason;
   Data.sts.stopReason := core.StopReason;
   faultShown := core.StopReason = UT_STOP_METER_FAILED OR core.StopReason = UT_STOP_SETTING;
