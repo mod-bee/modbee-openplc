@@ -7,6 +7,7 @@
 #include "ModBeeGsmPlc.h"
 #include "GsmPlcUart.h"
 
+#include <cstddef>   // std::max_align_t
 #include <new>
 #include <stddef.h>
 #include <stdio.h>
