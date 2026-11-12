@@ -1,0 +1,3 @@
+TYPE
+  E_MqttQos : (AtMostOnceDelivery, AtLeastOnceDelivery, ExactlyOnceDelivery) := AtMostOnceDelivery;
+END_TYPE

@@ -14,7 +14,7 @@ APP_TASK  T#20ms  prio 0    PROGRAM main    ->  the machine, no communication bl
 The two trade values through globals, each written by one task. Page 10 has the
 numbers; the short version is that the node only notices things when it is
 called, so its interval is the floor on how quickly anything happens - and a
-block given the node from the machine's task refuses with `MQTT_WRONG_TASK`.
+block given the node from the machine's task refuses with `E_MqttResult.WrongTask`.
 On the Runtime the network task can run at `T#1ms`; on a board, not faster than
 `T#50ms`.
 
@@ -23,7 +23,7 @@ On the Runtime the network task can run at `T#1ms`; on a board, not faster than
 The shape most PLCs want. Five blocks.
 
 ```
-net     ( TRANSPORT := MQTT_RUNTIME_TCP, HOST := BROKER,
+net     ( TRANSPORT := E_MqttTransport.RuntimeTcp, HOST := BROKER,
           CLIENT_ID := 'plc-intake' );
 presence( CLIENT := net, TOPIC := 'plant/intake/status',
           RETAINED := TRUE, DELAY := T#30s );
@@ -56,7 +56,7 @@ cmd( CLIENT := net, REQ := bSendSetpoint,
 sp( CLIENT := net, TOPIC := 'plant/intake/cmd/level-setpoint',
     VALUE := rSetpoint, QOS := 2 );
 
-IF sp.QUALITY >= MQTT_QUALITY_UNCERTAIN THEN
+IF sp.QUALITY >= E_MqttQuality.Uncertain THEN
   rWorkingSetpoint := rSetpoint;
 ELSE
   rWorkingSetpoint := rSafeDefault;
@@ -95,13 +95,13 @@ broker( ENABLE := TRUE, PORT := 1883, MAX_CLIENTS := 32 );
 bridge( ENABLE := TRUE,
         LOCAL_HOST := '127.0.0.1',
         REMOTE_HOST := 'mqtt.example.com',
-        REMOTE_SECURITY := MQTT_TLS_VERIFY,
+        REMOTE_SECURITY := E_MqttSecurity.TlsVerify,
         REMOTE_USER := 'site7', REMOTE_PASSWORD := sPassword,
         BRIDGE_NAME := 'site7',
-        TOPIC := 'plant/#', DIRECTION := MQTT_OUT, QOS := 1,
+        TOPIC := 'plant/#', DIRECTION := E_MqttDirection.Out, QOS := 1,
         REMOTE_PREFIX := 'sites/site7/' );
 
-bridge( ENABLE := TRUE, TOPIC := 'cmd/#', DIRECTION := MQTT_IN, QOS := 2,
+bridge( ENABLE := TRUE, TOPIC := 'cmd/#', DIRECTION := E_MqttDirection.In, QOS := 2,
         REMOTE_PREFIX := 'sites/site7/' );
 ```
 
@@ -151,7 +151,7 @@ to set to 1 stays 0 and nothing says so.
 ## Habits worth keeping
 
 **Give every device its own `CLIENT_ID`.** Two sharing one will knock each
-other off for ever, each looking healthy on its own. `MQTT_SESSION_TAKEN_OVER`
+other off for ever, each looking healthy on its own. `E_MqttResult.SessionTakenOver`
 is what that looks like from the inside.
 
 **Decide a topic scheme before the second device.** Nothing enforces one, and
@@ -186,7 +186,7 @@ everything you send it until it falls over. Use `MQTT_REPORT`, not
 `MQTT_PUBLISH` on a timer.
 
 **Wildcards in a publish topic.** `+` and `#` are for subscribing. The block
-refuses them with `MQTT_INVALID_TOPIC`.
+refuses them with `E_MqttResult.InvalidTopic`.
 
 **Expecting request-and-response.** MQTT is a noticeboard. `MQTT_REQUEST`
 exists and works at 5.0, but if most of your traffic is questions and answers

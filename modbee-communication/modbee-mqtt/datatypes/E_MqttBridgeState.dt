@@ -1,0 +1,3 @@
+TYPE
+  E_MqttBridgeState : (Idle, Connecting, Up, Degraded) := Idle;
+END_TYPE

@@ -7,10 +7,10 @@ connections and takes no `CLIENT`.
 bridge( ENABLE := TRUE,
         LOCAL_HOST := '127.0.0.1',
         REMOTE_HOST := 'mqtt.example.com',
-        REMOTE_SECURITY := MQTT_TLS_VERIFY,
+        REMOTE_SECURITY := E_MqttSecurity.TlsVerify,
         REMOTE_USER := 'site7', REMOTE_PASSWORD := sPassword,
         BRIDGE_NAME := 'site7',
-        TOPIC := 'plant/#', DIRECTION := MQTT_OUT, QOS := 1,
+        TOPIC := 'plant/#', DIRECTION := E_MqttDirection.Out, QOS := 1,
         REMOTE_PREFIX := 'sites/site7/' );
 ```
 
@@ -54,11 +54,11 @@ intake level in one go.
 
 | | |
 | --- | --- |
-| `MQTT_OUT` | local to remote. Readings going upstream |
-| `MQTT_IN` | remote to local. Commands and setpoints coming down |
-| `MQTT_BOTH` | both |
+| `E_MqttDirection.Out` | local to remote. Readings going upstream |
+| `E_MqttDirection.In` | remote to local. Commands and setpoints coming down |
+| `E_MqttDirection.Both` | both |
 
-Prefer two `MQTT_OUT` and `MQTT_IN` rules over one `MQTT_BOTH` unless you mean
+Prefer two `E_MqttDirection.Out` and `E_MqttDirection.In` rules over one `E_MqttDirection.Both` unless you mean
 it. A topic tree carried both ways is the shape that loops.
 
 ## One instance, many rules
@@ -69,9 +69,9 @@ first call:
 
 ```
 bridge( ENABLE := TRUE, LOCAL_HOST := ..., REMOTE_HOST := ..., BRIDGE_NAME := 'site7',
-        TOPIC := 'plant/#', DIRECTION := MQTT_OUT, QOS := 1,
+        TOPIC := 'plant/#', DIRECTION := E_MqttDirection.Out, QOS := 1,
         REMOTE_PREFIX := 'sites/site7/' );
-bridge( ENABLE := TRUE, TOPIC := 'cmd/#', DIRECTION := MQTT_IN, QOS := 2,
+bridge( ENABLE := TRUE, TOPIC := 'cmd/#', DIRECTION := E_MqttDirection.In, QOS := 2,
         REMOTE_PREFIX := 'sites/site7/' );
 ```
 
@@ -85,7 +85,7 @@ Two rules that carry this bridge's own output back into it are a message storm
 that takes a broker down. At 5.0 the **No Local** subscription option prevents
 it outright — the bridge does not receive its own publishes. Where the version
 cannot express that, the configuration is **rejected at start** with
-`MQTT_INVALID_ARGUMENT` rather than accepted and regretted.
+`E_MqttResult.InvalidArgument` rather than accepted and regretted.
 
 That is a real answer rather than a formality: the library names the two
 filters that would feed each other.
@@ -109,7 +109,7 @@ state on connecting, and pair it with `MQTT_PRESENCE` so the age is knowable.
 | `FORWARDED_OUT` / `FORWARDED_IN` | running totals carried |
 | `REFUSED_OUT` / `REFUSED_IN` | the far side would not take it |
 
-**`MQTT_BRIDGE_DEGRADED` is the state worth alarming on.** One end is
+**`E_MqttBridgeState.Degraded` is the state worth alarming on.** One end is
 connected and the other is not, so half the traffic flows and the other half
 piles up — which from the site looks like everything working and from head
 office looks like the site has died. Neither end sees it; this pin does.
@@ -124,15 +124,15 @@ box — which happens on a bench more often than you would think.
 ## What it refuses, and why
 
 Three things are refused at start rather than half-applied. Each sets `ERROR`
-with `STATUS := MQTT_INVALID_ARGUMENT`.
+with `STATUS := E_MqttResult.InvalidArgument`.
 
 **No rules.** A bridge with no `TOPIC` is two connections and a session on each
 broker, carrying nothing, and looking healthy on every pin. Call the block at
 least once with a topic.
 
-**`MQTT_TLS_PINNED` on either side.** Pinning needs a key, and this block has
+**`E_MqttSecurity.TlsPinned` on either side.** Pinning needs a key, and this block has
 no pin to put one on — `MQTT_CLIENT` has `PINNED_KEY` and `TRUST_NEW` for that.
-Refused rather than quietly falling back to `MQTT_TLS_VERIFY`, which would mean
+Refused rather than quietly falling back to `E_MqttSecurity.TlsVerify`, which would mean
 trusting every public CA when the engineer asked for exactly one broker.
 
 **A mapping that would loop.** Two rules that would carry this bridge's own

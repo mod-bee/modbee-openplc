@@ -30,10 +30,10 @@ sampled ten times a second.
 
 | | |
 | --- | --- |
-| `MQTT_QUALITY_UNKNOWN` | nothing has **ever** arrived |
-| `MQTT_QUALITY_BAD` | the link is down, or the value is more than twice overdue |
-| `MQTT_QUALITY_UNCERTAIN` | overdue, but not by much |
-| `MQTT_QUALITY_GOOD` | arrived inside the interval |
+| `E_MqttQuality.Unknown` | nothing has **ever** arrived |
+| `E_MqttQuality.Bad` | the link is down, or the value is more than twice overdue |
+| `E_MqttQuality.Uncertain` | overdue, but not by much |
+| `E_MqttQuality.Good` | arrived inside the interval |
 
 **UNKNOWN and BAD are deliberately different**, and the difference is worth
 protecting:
@@ -46,7 +46,7 @@ protecting:
 An alarm list that shows both as "no comms" throws that away.
 
 **`SEEN` is that same distinction in a BOOL**, and it exists because a ladder
-cannot compare an enumeration — `EQ(QUALITY, MQTT_QUALITY_GOOD)` does not
+cannot compare an enumeration — `EQ(QUALITY, E_MqttQuality.Good)` does not
 compile, and neither does `TO_INT` of one. So a rung asks `SEEN` instead:
 
 ```
@@ -67,7 +67,7 @@ little more than the publisher's own `PERIOD`.
 Gate on it:
 
 ```
-IF sp.QUALITY >= MQTT_QUALITY_UNCERTAIN THEN
+IF sp.QUALITY >= E_MqttQuality.Uncertain THEN
   rWorkingSetpoint := rSetpoint;
 ELSE
   (* hold the last good value, or fail safe *)
@@ -153,7 +153,7 @@ Where a member needs judging on its own, give it an `MQTT_SUBSCRIBE`.
 **Each member costs a topic handle and a subscription.** The client's tables
 grow with the program, on a board and the Runtime alike, so a struct may have
 as many members as memory holds. Past that the block says so with
-`MQTT_QUEUE_FULL` - and `MQTT_CLIENT`'s `LAST_ERROR` reads "out of memory for
+`E_MqttResult.QueueFull` - and `MQTT_CLIENT`'s `LAST_ERROR` reads "out of memory for
 topics or subscriptions" - rather than silently subscribing to some of them. More subscriptions than the client's queue holds at once is fine:
 they go as it drains.
 

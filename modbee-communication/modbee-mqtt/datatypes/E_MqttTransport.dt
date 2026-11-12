@@ -1,0 +1,3 @@
+TYPE
+  E_MqttTransport : (RuntimeTcp, ArduinoWiFi, ArduinoEthernet, Cellular, External) := RuntimeTcp;
+END_TYPE

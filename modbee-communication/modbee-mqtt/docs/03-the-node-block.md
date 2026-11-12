@@ -14,7 +14,7 @@ reason to let it happen.
 `net` is the client, not a handle to it:
 
 ```
-net    ( TRANSPORT := MQTT_RUNTIME_TCP, HOST := '10.0.0.20' );
+net    ( TRANSPORT := E_MqttTransport.RuntimeTcp, HOST := '10.0.0.20' );
 status ( CLIENT := net );
 level  ( CLIENT := net, ... );
 ```
@@ -29,7 +29,7 @@ follow:
   `status.CLIENT.CONNECTED`. Reaching into another block's in-out pin from
   outside is refused.
 - **One instance can serve as many blocks as you like** - in the same task as
-  the node. A block given the node from another task says `MQTT_WRONG_TASK`
+  the node. A block given the node from another task says `E_MqttResult.WrongTask`
   and does nothing (page 10).
 
 ## Two pins decide the link
@@ -44,20 +44,20 @@ make the combinations that do not exist look legal — a Runtime-only transport
 with a board-only option, say — and the wrong one would be a silence nobody
 could explain.
 
-| `MQTT_LINK` | runs on | pins that matter |
+| `E_MqttTransport` | runs on | pins that matter |
 | --- | --- | --- |
-| `MQTT_RUNTIME_TCP` | the Runtime | `HOST`, `PORT` |
-| `MQTT_ARDUINO_WIFI` | a board | `HOST`, `PORT`, and `MQTT_ARDUINO` |
-| `MQTT_ARDUINO_ETHERNET` | a board | `HOST`, `PORT`, and `MQTT_ARDUINO` |
-| `MQTT_CELLULAR` | a board | `HOST`, `PORT`, and a `GSM_MODEM` from the `modbee-gsm` library |
-| `MQTT_LINK_EXTERNAL` | either | `LINK`, and nothing else |
+| `E_MqttTransport.RuntimeTcp` | the Runtime | `HOST`, `PORT` |
+| `E_MqttTransport.ArduinoWiFi` | a board | `HOST`, `PORT`, and `MQTT_ARDUINO` |
+| `E_MqttTransport.ArduinoEthernet` | a board | `HOST`, `PORT`, and `MQTT_ARDUINO` |
+| `E_MqttTransport.Cellular` | a board | `HOST`, `PORT`, and a `GSM_MODEM` from the `modbee-gsm` library |
+| `E_MqttTransport.External` | either | `LINK`, and nothing else |
 
-| `MQTT_SECURITY` | |
+| `E_MqttSecurity` | |
 | --- | --- |
-| `MQTT_PLAIN` | no encryption. Port 1883 |
-| `MQTT_TLS_VERIFY` | encrypted, and a **certificate authority** vouches for the broker. Port 8883. What a cloud broker needs |
-| `MQTT_TLS_PINNED` | encrypted, and **one key** is trusted. What a plant broker needs, because nobody signed for it |
-| `MQTT_TLS_INSECURE` | encrypted, and it is **not** checked |
+| `E_MqttSecurity.Plain` | no encryption. Port 1883 |
+| `E_MqttSecurity.TlsVerify` | encrypted, and a **certificate authority** vouches for the broker. Port 8883. What a cloud broker needs |
+| `E_MqttSecurity.TlsPinned` | encrypted, and **one key** is trusted. What a plant broker needs, because nobody signed for it |
+| `E_MqttSecurity.TlsInsecure` | encrypted, and it is **not** checked |
 
 Choosing a transport the target does not have is reported on `ERROR`,
 `STATUS` and `LAST_ERROR` — never built, and never a build failure. *"that
@@ -68,12 +68,12 @@ transport needs a board, not the Runtime"* is a sentence you can act on.
 ### Which `SECURITY` for a board
 
 **A board talking to its own broker** - a site Mosquitto, or a ModBee PLC
-broker - uses `MQTT_TLS_PINNED` with `TRUST_NEW`, and a login (`USER` and
+broker - uses `E_MqttSecurity.TlsPinned` with `TRUST_NEW`, and a login (`USER` and
 `PASSWORD` on `MQTT_CONFIG`). Nothing to install and nothing to define: the
 broker's key is learned on the first connection and enforced from then on
-(see *About `MQTT_TLS_PINNED`* below). This is the simple default for a site.
+(see *About `E_MqttSecurity.TlsPinned`* below). This is the simple default for a site.
 
-`MQTT_TLS_VERIFY` is for a broker somebody signed for - a cloud platform - and
+`E_MqttSecurity.TlsVerify` is for a broker somebody signed for - a cloud platform - and
 needs that authority's certificate in the board package (see *Defines*).
 
 ### TLS on a board
@@ -83,18 +83,18 @@ On an ESP32 — the ModBee Node and every other ESP32 board — **every
 Ethernet and cellular each open a plain connection, and the TLS runs on the
 controller with the mbedTLS the board already carries for its Wi-Fi. So:
 
-- `MQTT_TLS_VERIFY` checks the chain and the host name against the CA in
+- `E_MqttSecurity.TlsVerify` checks the chain and the host name against the CA in
   `MQTT_CA_CERT_PEM`, a define the board package supplies (see *Defines*).
   Dates are not judged: a controller has no clock to judge them with until
   something sets it.
-- `MQTT_TLS_PINNED` and `TRUST_NEW` work exactly as on the Runtime, below.
+- `E_MqttSecurity.TlsPinned` and `TRUST_NEW` work exactly as on the Runtime, below.
 - `BROKER_KEY` shows the broker's key on every medium.
 - Mutual TLS takes the board's own certificate and key from the
   `MQTT_CLIENT_CERT_PEM` and `MQTT_CLIENT_KEY_PEM` defines, also from the
   board package — see `MQTT_TLS`.
 - Opening the socket and the handshake run on a short task of their own,
   below the PLC's tasks: the block's task never waits for them, and `STATE`
-  says `MQTT_CONNECTING` meanwhile. A plain connection's socket opens the same
+  says `E_MqttState.Connecting` meanwhile. A plain connection's socket opens the same
   way.
 
 A TLS session holds about 40 kB of memory while it is up and none while it is
@@ -102,10 +102,10 @@ down. On a board with PSRAM, the Node included, it is placed there.
 
 Over cellular this replaces the modem's own TLS, which encrypted and checked
 nothing. A board **without** that engine keeps what its medium offers:
-`WiFiClientSecure` (no `MQTT_TLS_PINNED`), no TLS over Ethernet, and the
-modem's TLS (`MQTT_TLS_INSECURE` only).
+`WiFiClientSecure` (no `E_MqttSecurity.TlsPinned`), no TLS over Ethernet, and the
+modem's TLS (`E_MqttSecurity.TlsInsecure` only).
 
-### About `MQTT_TLS_INSECURE`
+### About `E_MqttSecurity.TlsInsecure`
 
 It encrypts the traffic and does not check who is at the other end, which
 means an encrypted conversation with whoever answered. It is named at length
@@ -115,7 +115,7 @@ connection.
 
 Use it to get a link working on a bench. Take it off before the plant runs.
 
-### About `MQTT_TLS_PINNED`
+### About `E_MqttSecurity.TlsPinned`
 
 A certificate authority answers *"is this certificate vouched for"*. On a plant
 broker nobody vouched for anything — a ModBee PLC serving its own certificate,
@@ -124,8 +124,8 @@ authority to ask. Pinning trusts **one key** instead, and there is nothing to
 type:
 
 ```
-net( TRANSPORT := MQTT_RUNTIME_TCP,
-     SECURITY  := MQTT_TLS_PINNED,
+net( TRANSPORT := E_MqttTransport.RuntimeTcp,
+     SECURITY  := E_MqttSecurity.TlsPinned,
      HOST      := '10.0.0.10',
      PORT      := 8883,
      TRUST_NEW := commissioning );   (* TRUE once, FALSE for ever after *)
@@ -152,7 +152,7 @@ what it was shown on `BROKER_KEY` too. Read one, compare with the other.
 > The runtime says so in its log at start.
 
 **Do not pin a cloud broker.** AWS IoT, HiveMQ and the rest rotate every ninety
-days, and the key usually rotates with the certificate. Use `MQTT_TLS_VERIFY`
+days, and the key usually rotates with the certificate. Use `E_MqttSecurity.TlsVerify`
 there; it needs no configuration at all.
 
 ## Defines come from the board package
@@ -182,14 +182,14 @@ WiFi needs no flag because it ships inside the ESP32 core.
 ## Which version you get
 
 ```
-PROTOCOL := MQTT_V5_THEN_V311      (* the default *)
+PROTOCOL := E_MqttProtocol.V5ThenV311      (* the default *)
 ```
 
 | | |
 | --- | --- |
-| `MQTT_V5` | 5.0 only. Refuse anything older |
-| `MQTT_V311` | 3.1.1 only |
-| `MQTT_V5_THEN_V311` | try 5.0, drop to 3.1.1 if the broker is older |
+| `E_MqttProtocol.V5` | 5.0 only. Refuse anything older |
+| `E_MqttProtocol.V311` | 3.1.1 only |
+| `E_MqttProtocol.V5ThenV311` | try 5.0, drop to 3.1.1 if the broker is older |
 
 **Fallback happens only on evidence that the VERSION is the problem** — a 5.0
 reason code `0x84`, or a 3.1.1 return code `0x01`. Never on an authentication
@@ -228,7 +228,7 @@ password at all: [13 Provisioning](13-provisioning.md). Otherwise they live on
 ```
 tls ( CLIENT := net, CA_FILE := '/etc/ssl/certs/ca-certificates.crt' );
 cfg ( CLIENT := net, USERNAME := 'plant-operator', PASSWORD := sPassword );
-net ( TRANSPORT := MQTT_RUNTIME_TCP, SECURITY := MQTT_TLS_VERIFY,
+net ( TRANSPORT := E_MqttTransport.RuntimeTcp, SECURITY := E_MqttSecurity.TlsVerify,
       HOST := 'mqtt.example.com', PORT := 8883 );
 ```
 
@@ -244,7 +244,7 @@ up in the project file, in every backup of it, and on the screen of whoever
 opens the program next.
 
 **A rejected credential stops, and says why.** `ERROR` goes true, `STATUS`
-carries `MQTT_NOT_AUTHORIZED`, and `LAST_ERROR` reads *"the broker refused the
+carries `E_MqttResult.NotAuthorized`, and `LAST_ERROR` reads *"the broker refused the
 connection: Not authorized"* — the broker's own reason rather than a blank
 field, which is what it used to be. The node does **not** repeat it at its
 usual backoff — a PLC sending a rejected password every second is how a site
@@ -285,7 +285,7 @@ A Wi-Fi login on `MQTT_ARDUINO` that changes makes the client leave the
 network and join again with the new one (a radio `NETWORK` brought up is
 `NETWORK`'s to rejoin).
 
-**A pinned key stays pinned.** With `MQTT_TLS_PINNED`, a new `HOST` is a new
+**A pinned key stays pinned.** With `E_MqttSecurity.TlsPinned`, a new `HOST` is a new
 broker with a different key, and it is refused until `TRUST_NEW` is switched
 off and on - exactly as for a broker replaced on purpose. An address typed on a
 panel is not a way round the pin.

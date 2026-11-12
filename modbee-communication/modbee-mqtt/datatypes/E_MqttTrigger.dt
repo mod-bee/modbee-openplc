@@ -1,0 +1,3 @@
+TYPE
+  E_MqttTrigger : (OnChange, OnInterval, OnRequest, ChangedEvery) := OnChange;
+END_TYPE

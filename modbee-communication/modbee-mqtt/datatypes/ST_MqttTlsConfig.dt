@@ -1,0 +1,7 @@
+TYPE
+  ST_MqttTlsConfig : STRUCT
+    sCaFile   : STRING(128);   (* the certificate authority (Runtime: a file path); empty = the system's *)
+    sCertFile : STRING(128);   (* this client's certificate, for mutual TLS; empty for none *)
+    sKeyFile  : STRING(128);   (* its private key *)
+  END_STRUCT;
+END_TYPE

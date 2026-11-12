@@ -1,0 +1,10 @@
+TYPE
+  ST_MqttWillConfig : STRUCT
+    sTopic   : STRING(128);              (* where this device says it is online or gone; empty = no presence *)
+    sOnline  : STRING(128);              (* sent on every connection *)
+    sOffline : STRING(128);              (* the Will: sent by the broker when this device is gone *)
+    bRetain  : BOOL := TRUE;             (* the broker keeps the last one for late subscribers *)
+    eQos     : E_MqttQos;
+    tDelay   : TIME;                     (* MQTT 5: how long the broker waits before sending the Will *)
+  END_STRUCT;
+END_TYPE

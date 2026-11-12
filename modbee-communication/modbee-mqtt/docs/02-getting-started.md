@@ -14,7 +14,7 @@ VAR
   status : MQTT_STATUS;
 END_VAR
 
-net( TRANSPORT := MQTT_RUNTIME_TCP,
+net( TRANSPORT := E_MqttTransport.RuntimeTcp,
      HOST      := '10.0.0.20',
      CLIENT_ID := 'plc-intake' );
 ```
@@ -43,7 +43,7 @@ its task interval is the floor on how quickly anything happens. Page 10 has
 the measured numbers.
 
 **Every block given `net` runs in `net`'s task.** OpenPLC runs each task on a
-thread of its own, and a block in another task says `MQTT_WRONG_TASK` and does
+thread of its own, and a block in another task says `E_MqttResult.WrongTask` and does
 nothing rather than race the client. The machine's program trades values with
 the network task through globals - page 10 shows how.
 
@@ -100,15 +100,15 @@ sp( CLIENT := net,
     EXPECT := T#0s,
     QOS := 1 );
 
-IF sp.QUALITY = MQTT_QUALITY_GOOD THEN
+IF sp.QUALITY = E_MqttQuality.Good THEN
   (* rSetpoint is worth acting on *)
 END_IF
 ```
 
 The value lands in `rSetpoint` directly — there is no copy to keep in step.
 
-`QUALITY` is the pin that makes it safe. `MQTT_QUALITY_UNKNOWN` means nothing
-has ever arrived, which is a commissioning fault. `MQTT_QUALITY_BAD` means the
+`QUALITY` is the pin that makes it safe. `E_MqttQuality.Unknown` means nothing
+has ever arrived, which is a commissioning fault. `E_MqttQuality.Bad` means the
 link is down or the value is long overdue, which is a running fault. They send
 you to opposite ends of the site, which is why they are different values.
 
@@ -132,7 +132,7 @@ the announcement entirely.
 ## The whole thing
 
 ```
-net     ( TRANSPORT := MQTT_RUNTIME_TCP, HOST := '10.0.0.20',
+net     ( TRANSPORT := E_MqttTransport.RuntimeTcp, HOST := '10.0.0.20',
           CLIENT_ID := 'plc-intake' );
 presence( CLIENT := net, TOPIC := 'plant/intake/status',
           RETAINED := TRUE, DELAY := T#30s );

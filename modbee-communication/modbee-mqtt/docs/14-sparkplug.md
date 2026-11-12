@@ -35,22 +35,22 @@ check when it does not report.
 
 | `TRANSPORT` | Where | Who brings the network up |
 | --- | --- | --- |
-| `MQTT_RUNTIME_TCP` | the OpenPLC Runtime. The default | the computer |
-| `MQTT_ARDUINO_WIFI` | a board's Wi-Fi | `NETWORK` (node-uio), or `MQTT_ARDUINO` |
-| `MQTT_ARDUINO_ETHERNET` | a board's Ethernet | `MQTT_CLIENT` with `MQTT_ARDUINO` |
-| `MQTT_CELLULAR` | the modem on the GSM HAT | `GSM_MODEM` (modbee-gsm) |
-| `MQTT_LINK_EXTERNAL` | a transport wired to `EXTERNAL_LINK` | whoever made it |
+| `E_MqttTransport.RuntimeTcp` | the OpenPLC Runtime. The default | the computer |
+| `E_MqttTransport.ArduinoWiFi` | a board's Wi-Fi | `NETWORK` (node-uio), or `MQTT_ARDUINO` |
+| `E_MqttTransport.ArduinoEthernet` | a board's Ethernet | `MQTT_CLIENT` with `MQTT_ARDUINO` |
+| `E_MqttTransport.Cellular` | the modem on the GSM HAT | `GSM_MODEM` (modbee-gsm) |
+| `E_MqttTransport.External` | a transport wired to `EXTERNAL_LINK` | whoever made it |
 
 Moving a site from Wi-Fi to cellular is one pin on `MQTT_CLIENT` and one on
 the clock. `SECURITY` does not change with it: on the Node every TLS setting
 works on Wi-Fi, Ethernet and cellular alike, because the TLS runs on the
 controller rather than in the modem (page 03, "TLS on a board").
 
-**For a secure link to the site's own broker** use `SECURITY := MQTT_TLS_PINNED`
+**For a secure link to the site's own broker** use `SECURITY := E_MqttSecurity.TlsPinned`
 with `TRUST_NEW := TRUE` on `MQTT_CLIENT`, and a login on `MQTT_CONFIG`.
 Nothing to install or define: the client learns the broker's key on its first
 connection, keeps it over power cuts (turn on persistent storage), and refuses
-any other key after that. `MQTT_TLS_VERIFY` is for a broker somebody signed
+any other key after that. `E_MqttSecurity.TlsVerify` is for a broker somebody signed
 for, such as a cloud platform, and needs that CA in the board package.
 
 ## One connection for everything
@@ -63,7 +63,7 @@ login, one session for Sparkplug, your own MQTT topics and firmware updates
 What Sparkplug needs of that session the node takes on every CONNECT:
 
 - **the Will is its NDEATH.** A connection carries one Will, so there is no
-  `MQTT_PRESENCE` on a client with a Sparkplug node (it says `MQTT_REFUSED`):
+  `MQTT_PRESENCE` on a client with a Sparkplug node (it says `E_MqttResult.Refused`):
   the birth and death certificates are the presence. And one node per client -
   a second node needs a second `MQTT_CLIENT`.
 - **the session is always clean**, whatever `MQTT_CONFIG` says.
@@ -77,15 +77,15 @@ address - publishes the NDEATH too. `ENABLE := FALSE` on the node sends the
 NDEATH and leaves the connection to everything else on it.
 
 **One task.** The client, the node and every `SPARKPLUG_*` block run in the
-network task (page 10). In any other task a block says `MQTT_WRONG_TASK` and
+network task (page 10). In any other task a block says `E_MqttResult.WrongTask` and
 does nothing.
 
 ## A ModBee Node, Wi-Fi now
 
 ```
 wifi ( ENABLE := TRUE, SSID := CFG.wifiSsid, PASSWORD := CFG.wifiKey );
-clock( TRANSPORT := MQTT_LINK#MQTT_ARDUINO_WIFI );
-mqtt ( TRANSPORT := MQTT_LINK#MQTT_ARDUINO_WIFI, HOST := CFG.scadaBroker,
+clock( TRANSPORT := E_MqttTransport#E_MqttTransport.ArduinoWiFi );
+mqtt ( TRANSPORT := E_MqttTransport#E_MqttTransport.ArduinoWiFi, HOST := CFG.scadaBroker,
        CLIENT_ID := 'plant1-pumps' );
 sp   ( CLIENT := mqtt, GROUP := 'Plant1', NODE := 'pumps1',
        PRIMARY_HOST := 'scada' );
@@ -97,8 +97,8 @@ sets ( NODE := sp, DATA := CMD, WRITABLE := TRUE );
 
 ```
 modem( CONNECT := TRUE, APN := CFG.gsmApn );
-clock( TRANSPORT := MQTT_LINK#MQTT_CELLULAR );
-mqtt ( TRANSPORT := MQTT_LINK#MQTT_CELLULAR, HOST := CFG.scadaBroker,
+clock( TRANSPORT := E_MqttTransport#E_MqttTransport.Cellular );
+mqtt ( TRANSPORT := E_MqttTransport#E_MqttTransport.Cellular, HOST := CFG.scadaBroker,
        CLIENT_ID := 'plant1-pumps' );
 ```
 
@@ -238,10 +238,10 @@ is worth a message:
 
 | `MODE` | Sends | Its members otherwise |
 | --- | --- | --- |
-| `MQTT_ON_CHANGE` | what moved, past its deadband; all of them every `PERIOD` (if set) | go with any report |
-| `MQTT_ON_INTERVAL` | all of them, every `PERIOD` | **held**: never with other blocks' reports |
-| `MQTT_ON_REQUEST` | all of them on `REQ`'s rising edge | **held** |
-| `MQTT_CHANGED_EVERY` | what moved past its deadband since it was last sent, together, every `PERIOD` on the node's clock (every set with the same `PERIOD` in one message); nothing when none moved | **held** |
+| `E_MqttTrigger.OnChange` | what moved, past its deadband; all of them every `PERIOD` (if set) | go with any report |
+| `E_MqttTrigger.OnInterval` | all of them, every `PERIOD` | **held**: never with other blocks' reports |
+| `E_MqttTrigger.OnRequest` | all of them on `REQ`'s rising edge | **held** |
+| `E_MqttTrigger.ChangedEvery` | what moved past its deadband since it was last sent, together, every `PERIOD` on the node's clock (every set with the same `PERIOD` in one message); nothing when none moved | **held** |
 
 - "All of them" is the block's own members, never the rest of the node.
 - **One message a scan, for every block.** A STRUCT (or a `SPARKPLUG_METRIC`)
@@ -250,18 +250,18 @@ is worth a message:
   its next scan, carrying everything on the node that moved. The values are
   the ones the blocks set; the message's timestamp is when the node sends it.
   A STRUCT's `SENT` counts the message on the scan after it asked, and its
-  `ERROR`/`MQTT_QUEUE_FULL` then says one could not be queued (it asks again).
+  `ERROR`/`E_MqttResult.QueueFull` then says one could not be queued (it asks again).
 - The **birth** carries every member: a device coming online sends the whole
   set in its DBIRTH, and `PERIOD` counts from that birth. `ENABLE` going TRUE
-  sends an `MQTT_ON_INTERVAL` set at once, and an `MQTT_CHANGED_EVERY` set's
+  sends an `E_MqttTrigger.OnInterval` set at once, and an `E_MqttTrigger.ChangedEvery` set's
   changes at once. Nothing is sent for a device that is offline.
 - **A held set switched off** (`ENABLE` FALSE) still keeps its values current
   in the node, so a birth carries them as they are; nothing is sent for it.
-- **`MQTT_CHANGED_EVERY` is for a metered link.** A logged value checked every
+- **`E_MqttTrigger.ChangedEvery` is for a metered link.** A logged value checked every
   15 minutes goes only when it has moved past its deadband; one that sits still
   costs nothing. The same mode with a short `PERIOD` (10 s) and `ENABLE` wired
   to "someone is viewing" streams a screen's values without sending the ones
-  that did not move. Alarms that must reach SCADA at once stay `MQTT_ON_CHANGE`.
+  that did not move. Alarms that must reach SCADA at once stay `E_MqttTrigger.OnChange`.
 
 ## Writes from SCADA
 
@@ -442,9 +442,9 @@ value of `NAME` is the last closed day.
 | `waiting for Wi-Fi - is NETWORK enabled?` | the radio is not joined yet |
 | `no STATE from primary host 'scada'` | SCADA has never connected to this broker - or `PRIMARY_HOST` is spelt differently from SCADA's host ID |
 | `offline STATE from primary host 'scada'` | SCADA is down. The node waits, as it should |
-| `MQTT_CELLULAR needs the modbee-gsm library and a GSM_MODEM` | add the GSM library and a `GSM_MODEM` |
-| `a board needs the CA in MQTT_CA_CERT_PEM` | `MQTT_TLS_VERIFY` with no CA defined: use `MQTT_TLS_PINNED` with `TRUST_NEW` for the site's own broker, or add the CA to the board package |
-| `no pinned key yet - set TRUST_NEW once to learn it` | `MQTT_TLS_PINNED` on a node that has never connected |
-| `on a board, set TRANSPORT - MQTT_ARDUINO_WIFI, ...` | `TRANSPORT` was left at the Runtime's default |
+| `E_MqttTransport.Cellular needs the modbee-gsm library and a GSM_MODEM` | add the GSM library and a `GSM_MODEM` |
+| `a board needs the CA in MQTT_CA_CERT_PEM` | `E_MqttSecurity.TlsVerify` with no CA defined: use `E_MqttSecurity.TlsPinned` with `TRUST_NEW` for the site's own broker, or add the CA to the board package |
+| `no pinned key yet - set TRUST_NEW once to learn it` | `E_MqttSecurity.TlsPinned` on a node that has never connected |
+| `on a board, set TRANSPORT - E_MqttTransport.ArduinoWiFi, ...` | `TRANSPORT` was left at the Runtime's default |
 
 **Next:** [07 Block reference](07-block-reference.md) for every pin.

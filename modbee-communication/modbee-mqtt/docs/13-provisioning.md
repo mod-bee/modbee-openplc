@@ -35,7 +35,7 @@ VAR
 END_VAR
 
 prov ( CLIENT := net, KEY := sKey );
-net  ( TRANSPORT := MQTT_RUNTIME_TCP, SECURITY := MQTT_TLS_VERIFY,
+net  ( TRANSPORT := E_MqttTransport.RuntimeTcp, SECURITY := E_MqttSecurity.TlsVerify,
        HOST := 'mqtt.example.com', CLIENT_ID := 'pump-station-3' );
 ```
 

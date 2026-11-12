@@ -21,7 +21,7 @@ losing them — read `STATUS` on the block that sends them, which names the
 reason.
 
 **`VERSION`.** 5 or 4, whichever is actually in force. Ask for
-`MQTT_V5_THEN_V311` and you may be speaking either; a 5.0-only feature quietly
+`E_MqttProtocol.V5ThenV311` and you may be speaking either; a 5.0-only feature quietly
 unavailable makes much more sense when this pin says 4.
 
 **`QUEUED`.** Operations accepted and not yet concluded. A number that climbs
@@ -43,9 +43,9 @@ result codes member for member, so a program compares names rather than text.
 
 | | |
 | --- | --- |
-| `MQTT_OK` | finished, and it worked |
-| `MQTT_QUEUED` | accepted; the outcome arrives on a later scan |
-| `MQTT_DUPLICATE` | the identical operation is already in flight. **This is what stops a held REQ flooding the broker** |
+| `E_MqttResult.Ok` | finished, and it worked |
+| `E_MqttResult.Queued` | accepted; the outcome arrives on a later scan |
+| `E_MqttResult.Duplicate` | the identical operation is already in flight. **This is what stops a held REQ flooding the broker** |
 
 ### Refused before anything reached the wire
 
@@ -55,20 +55,20 @@ broker once it has timed out.
 
 | | |
 | --- | --- |
-| `MQTT_NOT_INITIALISED` | the node block has not run |
-| `MQTT_INVALID_ARGUMENT` | a pin the block cannot use — a type the wire cannot carry, a transport this target does not have |
-| `MQTT_INVALID_TOPIC` | the topic failed validation: a wildcard where one is not allowed, an empty level, a `#` that is not last |
-| `MQTT_NOT_CONNECTED` | no link, and no session to queue into either |
-| `MQTT_QUEUE_FULL` | too much outstanding at once. Never a silent drop |
-| `MQTT_SUPERSEDED` | a newer write to the same topic replaced it before it went out |
-| `MQTT_CANCELLED` | discarded, usually because the node disconnected |
-| `MQTT_NOT_SUPPORTED_BY_PROTOCOL` | 3.1.1 cannot express this at all |
-| `MQTT_NOT_SUPPORTED_BY_PEER` | 5.0 can, and **this broker said no** |
-| `MQTT_PACKET_TOO_LARGE` | over the broker's stated maximum packet size |
-| `MQTT_QUOTA_EXCEEDED` | our own send quota is exhausted |
-| `MQTT_NO_PACKET_IDENTIFIER` | every identifier is in flight |
+| `E_MqttResult.NotInitialised` | the node block has not run |
+| `E_MqttResult.InvalidArgument` | a pin the block cannot use — a type the wire cannot carry, a transport this target does not have |
+| `E_MqttResult.InvalidTopic` | the topic failed validation: a wildcard where one is not allowed, an empty level, a `#` that is not last |
+| `E_MqttResult.NotConnected` | no link, and no session to queue into either |
+| `E_MqttResult.QueueFull` | too much outstanding at once. Never a silent drop |
+| `E_MqttResult.Superseded` | a newer write to the same topic replaced it before it went out |
+| `E_MqttResult.Cancelled` | discarded, usually because the node disconnected |
+| `E_MqttResult.NotSupportedByProtocol` | 3.1.1 cannot express this at all |
+| `E_MqttResult.NotSupportedByPeer` | 5.0 can, and **this broker said no** |
+| `E_MqttResult.PacketTooLarge` | over the broker's stated maximum packet size |
+| `E_MqttResult.QuotaExceeded` | our own send quota is exhausted |
+| `E_MqttResult.NoPacketIdentifier` | every identifier is in flight |
 
-**`MQTT_NOT_SUPPORTED_BY_PROTOCOL` and `MQTT_NOT_SUPPORTED_BY_PEER` are
+**`E_MqttResult.NotSupportedByProtocol` and `E_MqttResult.NotSupportedByPeer` are
 different on purpose**, because they send you to different places. The first
 means upgrade the connection. The second means change the broker's
 configuration, or stop asking.
@@ -77,33 +77,33 @@ configuration, or stop asking.
 
 | | |
 | --- | --- |
-| `MQTT_REFUSED` | a failure with no more specific name |
-| `MQTT_NO_MATCHING_SUBSCRIBERS` | delivered nowhere, **which may be fine** |
-| `MQTT_TOPIC_NAME_INVALID` | the broker would not accept that topic |
-| `MQTT_NOT_AUTHORIZED` | credentials, or an access rule. On a CONNECT it means the broker refused the user name or password, `LAST_ERROR` carries the broker's own words, and the node does **not** retry — page 09 |
-| `MQTT_PAYLOAD_FORMAT_INVALID` | we said it was UTF-8 text and it was not |
-| `MQTT_QUOTA_EXCEEDED_BY_PEER` | the broker's own limit, not ours |
-| `MQTT_PACKET_IDENTIFIER_IN_USE` | the two ends disagree about what is in flight |
+| `E_MqttResult.Refused` | a failure with no more specific name |
+| `E_MqttResult.NoMatchingSubscribers` | delivered nowhere, **which may be fine** |
+| `E_MqttResult.TopicNameInvalid` | the broker would not accept that topic |
+| `E_MqttResult.NotAuthorized` | credentials, or an access rule. On a CONNECT it means the broker refused the user name or password, `LAST_ERROR` carries the broker's own words, and the node does **not** retry — page 09 |
+| `E_MqttResult.PayloadFormatInvalid` | we said it was UTF-8 text and it was not |
+| `E_MqttResult.QuotaExceededByPeer` | the broker's own limit, not ours |
+| `E_MqttResult.PacketIdentifierInUse` | the two ends disagree about what is in flight |
 
 ### Link faults
 
 | | |
 | --- | --- |
-| `MQTT_CONNECTION_LOST` | dropped while this was outstanding |
-| `MQTT_SESSION_LOST` | dropped, and the session did not survive it |
-| `MQTT_CONNECTION_REFUSED` | the broker's CONNACK said no |
-| `MQTT_PROTOCOL_ERROR` | the broker said something the standard does not allow |
-| `MQTT_MALFORMED_PACKET` | the broker's bytes did not parse |
-| `MQTT_KEEPALIVE_TIMEOUT` | no answer inside the interval. Also what a `MQTT_REQUEST` timeout looks like |
-| `MQTT_SESSION_TAKEN_OVER` | **another connection claimed our client identifier** |
+| `E_MqttResult.ConnectionLost` | dropped while this was outstanding |
+| `E_MqttResult.SessionLost` | dropped, and the session did not survive it |
+| `E_MqttResult.ConnectionRefused` | the broker's CONNACK said no |
+| `E_MqttResult.ProtocolError` | the broker said something the standard does not allow |
+| `E_MqttResult.MalformedPacket` | the broker's bytes did not parse |
+| `E_MqttResult.KeepAliveTimeout` | no answer inside the interval. Also what a `MQTT_REQUEST` timeout looks like |
+| `E_MqttResult.SessionTakenOver` | **another connection claimed our client identifier** |
 
-**`MQTT_SESSION_TAKEN_OVER` is the one people meet first on a new site.** MQTT
+**`E_MqttResult.SessionTakenOver` is the one people meet first on a new site.** MQTT
 says a second connection using an existing identifier displaces the first, so
 two devices flashed with the same `CLIENT_ID` will knock each other off for
 ever — each reconnecting, each looking perfectly healthy on its own. Give
 every device its own.
 
-**`MQTT_NO_MATCHING_SUBSCRIBERS` is the most encouraging failure on this
+**`E_MqttResult.NoMatchingSubscribers` is the most encouraging failure on this
 list.** It means the connection works, the broker understood the topic and
 accepted the message, and nobody happened to be listening. Everything below
 the application layer is fine.

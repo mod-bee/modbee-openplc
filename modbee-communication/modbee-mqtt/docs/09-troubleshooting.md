@@ -16,7 +16,7 @@ because no status code can say which of forty things went wrong at a socket.
 | *that transport needs a board, not the Runtime* | `TRANSPORT` names an Arduino link on the Runtime |
 | *set HOST to the broker* | the pin is empty |
 
-If `LAST_ERROR` is empty and `STATE` sits at `MQTT_CONNECTING`, the socket
+If `LAST_ERROR` is empty and `STATE` sits at `E_MqttState.Connecting`, the socket
 opened and the broker has not answered. That is a broker that accepted a
 connection and then said nothing — check it is actually an MQTT broker on that
 port, and not, say, a web server.
@@ -35,8 +35,8 @@ If that fails too, the PLC is not the problem.
 
 | | |
 | --- | --- |
-| **Another device has the same `CLIENT_ID`** | `STATUS` shows `MQTT_SESSION_TAKEN_OVER`. Two devices are displacing each other for ever. **Check this first** — it is the commonest cause and it looks healthy from either end |
-| **Keepalive too short for the link** | `MQTT_KEEPALIVE_TIMEOUT`. Raise `KEEP_ALIVE` on `MQTT_CONFIG`, especially on cellular |
+| **Another device has the same `CLIENT_ID`** | `STATUS` shows `E_MqttResult.SessionTakenOver`. Two devices are displacing each other for ever. **Check this first** — it is the commonest cause and it looks healthy from either end |
+| **Keepalive too short for the link** | `E_MqttResult.KeepAliveTimeout`. Raise `KEEP_ALIVE` on `MQTT_CONFIG`, especially on cellular |
 | **The broker is restarting** | its own log will say |
 | **A NAT or firewall dropping idle connections** | lower `KEEP_ALIVE` so traffic keeps the mapping alive. The opposite fix to the one above, which is why the log matters |
 
@@ -56,7 +56,7 @@ If that shows nothing, the problem is upstream of this PLC.
 
 **Check `MQTT_SUBSCRIBE.SUBSCRIBED`.** False means the subscription is not
 established — usually not connected, sometimes refused by an access rule, in
-which case `STATUS` says `MQTT_NOT_AUTHORIZED`.
+which case `STATUS` says `E_MqttResult.NotAuthorized`.
 
 **Check `MALFORMED`.** Climbing means messages *are* arriving and none of them
 parse as `VALUE`'s type. A publisher sending `23,5` to a `REAL`, or JSON to a
@@ -79,7 +79,7 @@ rather than a torch to the plant.
 
 ## Publishing says DONE but nobody sees it
 
-**`MQTT_NO_MATCHING_SUBSCRIBERS` on `STATUS`** means the broker took it and
+**`E_MqttResult.NoMatchingSubscribers` on `STATUS`** means the broker took it and
 nobody was listening. The link is fine.
 
 **Check retain.** A subscriber that connects afterwards hears nothing unless
@@ -94,13 +94,13 @@ means the far side sees `sites/site7/plant/intake/level`, not
 On `MQTT_PUBLISH` at QoS 1 or 2, `BUSY` stays until the broker acknowledges.
 If it never does:
 
-- the link dropped mid-flight — `STATUS` becomes `MQTT_CONNECTION_LOST`
-- the broker's receive maximum is exhausted — `MQTT_QUOTA_EXCEEDED_BY_PEER`
+- the link dropped mid-flight — `STATUS` becomes `E_MqttResult.ConnectionLost`
+- the broker's receive maximum is exhausted — `E_MqttResult.QuotaExceededByPeer`
 
 On `MQTT_REQUEST`, `BUSY` clears at `TIMEOUT` with
-`MQTT_KEEPALIVE_TIMEOUT`. If you left `TIMEOUT` at `T#0s` that is five seconds.
+`E_MqttResult.KeepAliveTimeout`. If you left `TIMEOUT` at `T#0s` that is five seconds.
 
-## STATUS says MQTT_NOT_SUPPORTED_BY_PROTOCOL
+## STATUS says E_MqttResult.NotSupportedByProtocol
 
 You asked for something 3.1.1 cannot express, on a 3.1.1 connection. Check
 `MQTT_STATUS.VERSION` — if it says 4, the fallback happened.
@@ -114,7 +114,7 @@ delay set, rather than dropping it — a delay silently lost turns a flapping
 link into a stream of false offline alarms, which is the exact failure the
 delay was set to prevent.
 
-## STATUS says MQTT_WRONG_TASK
+## STATUS says E_MqttResult.WrongTask
 
 The block is in a different task from its client - or, for a `SPARKPLUG_*`
 block, from its node; for `MQTT_BROKER_USER`, from its broker. It does nothing
@@ -132,7 +132,7 @@ A connection carries one Will, and a `SPARKPLUG_HOST` or a second
 `MQTT_CLIENT` of its own.
 
 An `MQTT_PRESENCE` on that client is the other way round: the node keeps the
-Will and the presence block says `MQTT_REFUSED` - Sparkplug's birth and death
+Will and the presence block says `E_MqttResult.Refused` - Sparkplug's birth and death
 certificates are the presence.
 
 ## Everything works but feels slow
@@ -156,8 +156,8 @@ number, for when the line is not enough.
 
 | `LAST_ERROR` on a board | What to do |
 | --- | --- |
-| *a board needs the CA in MQTT_CA_CERT_PEM* | `MQTT_TLS_VERIFY` with no CA defined. For the site's own broker use `MQTT_TLS_PINNED` with `TRUST_NEW`; for a signed one, add the CA to the board package |
-| *no pinned key yet - set TRUST_NEW once to learn it* | `MQTT_TLS_PINNED` on a link that has never connected |
+| *a board needs the CA in MQTT_CA_CERT_PEM* | `E_MqttSecurity.TlsVerify` with no CA defined. For the site's own broker use `E_MqttSecurity.TlsPinned` with `TRUST_NEW`; for a signed one, add the CA to the board package |
+| *no pinned key yet - set TRUST_NEW once to learn it* | `E_MqttSecurity.TlsPinned` on a link that has never connected |
 | *cannot connect to the broker* | nothing answered on `HOST` and `PORT`: the broker is down, the port is wrong, or the network is not up. On cellular the modem's own reason is shown instead when it has one |
 | *TLS: certificate not trusted* | `MQTT_CA_CERT_PEM` is not the CA that signed this broker - or the broker sends its certificate without the intermediate |
 | *TLS: wrong host name* | `HOST` is not a name on the certificate. Use the name it was issued to, not the address |
@@ -184,7 +184,7 @@ its own.
 
 ## It says not authorised
 
-`STATUS = MQTT_NOT_AUTHORIZED` and `LAST_ERROR` reading *"the broker refused
+`STATUS = E_MqttResult.NotAuthorized` and `LAST_ERROR` reading *"the broker refused
 the connection: ..."* means the broker answered the CONNECT with a no. The TCP
 connection worked; the credential did not.
 
@@ -219,7 +219,7 @@ Ethernet needs `MQTT_ENABLE_ETHERNET`, same as the node block.
 no file system this block may assume. Clear them and let it mint its own, or
 serve plain.
 
-**`SECURITY` other than `MQTT_PLAIN` with no wolfSSL** on the include path.
+**`SECURITY` other than `E_MqttSecurity.Plain` with no wolfSSL** on the include path.
 Serving plain needs nothing installed; serving TLS needs an engine.
 
 **The port is already taken** by another block or another program. `LISTENING`
@@ -234,7 +234,7 @@ connections, two sessions and two send queues, usually with TLS on one of them.
 On a board that is most of the heap before the ladder logic gets any.
 
 On the Runtime it refuses three things at start rather than half-applying them
-— no rules, `MQTT_TLS_PINNED` on a block with no key pin, and a mapping that
+— no rules, `E_MqttSecurity.TlsPinned` on a block with no key pin, and a mapping that
 would loop. Page 12 says what each means.
 
 **Next:** [10 Scan rate](10-scan-rate.md)

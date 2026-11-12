@@ -46,7 +46,7 @@ reason the node block needs it (page 03).
 | `CERT_FILE`, `KEY_FILE` | **refused**, not ignored. They are paths on a file system, and a board has none this block may assume. Naming one sets `ERROR` rather than quietly serving a different certificate than the pins asked for |
 | `BROKER_KEY` | the fingerprint of a certificate made on **this run**. See below |
 | the defaults | sized for a panel: four connections, eight sessions, 1 kB buffers, 32 retained. The Runtime's defaults would be tens of kilobytes |
-| TLS | needs wolfSSL on the include path. Without it, `SECURITY` other than `MQTT_PLAIN` sets `ERROR`; plain still works |
+| TLS | needs wolfSSL on the include path. Without it, `SECURITY` other than `E_MqttSecurity.Plain` sets `ERROR`; plain still works |
 
 **The fingerprint moves on every restart on a board.** There is nowhere for
 this block to keep a key — no file system it may assume, and a PEM does not fit
@@ -66,7 +66,7 @@ keeps it beside the program, and presents the same one every start after:
 ```
 srv( ENABLE   := always,
      PORT     := 8883,
-     SECURITY := MQTT_TLS_VERIFY,
+     SECURITY := E_MqttSecurity.TlsVerify,
      BROKER_KEY => brokerKey );
 ```
 
@@ -79,8 +79,8 @@ it stays true when the certificate is reissued.
 
 | | how | clients use |
 | --- | --- | --- |
-| nothing on the pins | made here, on the first start | `MQTT_TLS_PINNED` and `BROKER_KEY` |
-| `CERT_FILE` + `KEY_FILE` | files on the Runtime, from the site's own CA | `MQTT_TLS_VERIFY`, the ordinary way |
+| nothing on the pins | made here, on the first start | `E_MqttSecurity.TlsPinned` and `BROKER_KEY` |
+| `CERT_FILE` + `KEY_FILE` | files on the Runtime, from the site's own CA | `E_MqttSecurity.TlsVerify`, the ordinary way |
 
 **Self-signed is the zero-configuration default, not a ceiling.** The obstacle
 was never the engine — it was that a certificate does not fit on an IEC
@@ -108,7 +108,7 @@ connects to itself as a client, like everything else does:
 ```
 srv ( ENABLE := TRUE, PORT := 1883 );          (* be the broker *)
 
-mqtt( TRANSPORT := MQTT_RUNTIME_TCP,           (* and a client of it *)
+mqtt( TRANSPORT := E_MqttTransport.RuntimeTcp,           (* and a client of it *)
       HOST := '127.0.0.1', CLIENT_ID := 'plc-broker' );
 
 pres( CLIENT := mqtt, TOPIC := 'plant/broker/status', RETAINED := TRUE );

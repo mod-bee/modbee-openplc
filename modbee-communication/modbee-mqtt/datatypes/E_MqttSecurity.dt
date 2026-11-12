@@ -1,0 +1,3 @@
+TYPE
+  E_MqttSecurity : (Plain, TlsVerify, TlsPinned, TlsInsecure) := Plain;
+END_TYPE

@@ -29,14 +29,14 @@ your own link before going faster.
 **The connect itself never holds a scan on an ESP32.** Opening the socket - up
 to three seconds over Wi-Fi when the broker cannot be reached, longer over a
 modem - and the TLS handshake run on a short task of their own, below every
-PLC task, and `STATE` says `MQTT_CONNECTING` meanwhile. A board without
+PLC task, and `STATE` says `E_MqttState.Connecting` meanwhile. A board without
 threads opens the socket inside the scan, for as long as the medium takes.
 
 **The rule is enforced.** OpenPLC runs every task on a thread of its own - on
 the Runtime, and on a board in RTOS mode - and the client is single-threaded by
 design. A block given a client from another task would be inside it at the same
 time as the client's own scan. So every block checks it is in its client's task;
-in any other it does nothing, sets `ERROR`, and says `MQTT_WRONG_TASK` on
+in any other it does nothing, sets `ERROR`, and says `E_MqttResult.WrongTask` on
 `STATUS`. It never races and it never waits: a lock that waited was tried, and
 on a Node UIO the machine's 20 ms task sat 199 ms behind the network task's
 scan until OpenPLC stopped the PLC.
@@ -98,7 +98,7 @@ task that so much as names a global `MQTT_CLIENT` waits for the network task to 
 with it - before the block's own task check has run. Measured on a Node UIO with
 the client global and one block of it in the 20 ms task: the broker went away,
 the network task's scans stretched while it reconnected, the machine task sat
-199 ms behind it and OpenPLC stopped the PLC. `MQTT_WRONG_TASK` stops a race; only
+199 ms behind it and OpenPLC stopped the PLC. `E_MqttResult.WrongTask` stops a race; only
 keeping the instance out of the global list stops the wait. Plain values in the
 list are fine - each access is a copy.
 
@@ -115,7 +115,7 @@ END_VAR
 
 ```
 PROGRAM netrun                       (* NET_TASK *)
-  mqtt ( TRANSPORT := MQTT_RUNTIME_TCP, HOST := '10.0.0.20',
+  mqtt ( TRANSPORT := E_MqttTransport.RuntimeTcp, HOST := '10.0.0.20',
          CLIENT_ID := 'plc-intake' );
   level( CLIENT := mqtt, TOPIC := 'plant/intake/level', VALUE := PLANT.rLevel,
          DEADBAND := 0.05, PERIOD := T#1m );

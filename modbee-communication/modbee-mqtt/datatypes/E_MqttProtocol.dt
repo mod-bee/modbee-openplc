@@ -1,0 +1,3 @@
+TYPE
+  E_MqttProtocol : (V5, V311, V5ThenV311) := V5ThenV311;
+END_TYPE

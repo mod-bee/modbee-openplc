@@ -1,0 +1,3 @@
+TYPE
+  E_MqttDirection : (Out, In, Both) := Out;
+END_TYPE

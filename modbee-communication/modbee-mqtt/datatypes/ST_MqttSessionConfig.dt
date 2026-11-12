@@ -1,0 +1,18 @@
+TYPE
+  ST_MqttSessionConfig : STRUCT
+    tKeepAlive               : TIME;               (* how often the client and the broker show they are there; T#0s = 60 s *)
+    bCleanStart              : BOOL := TRUE;       (* start a fresh session on every connection *)
+    tSessionExpiry           : TIME;               (* how long the broker keeps the session after a disconnect (MQTT 5); T#0s = not at all *)
+    sUserName                : STRING(64);         (* the login; empty for none *)
+    sUserPassword            : STRING(64);
+    nMaxPending              : DINT;               (* publishes and subscribes that may wait for the broker; 0 = the library's default *)
+    nMaxMsgIn                : DINT;               (* the largest message accepted, in bytes; 0 = the library's default *)
+    nMaxMsgOut               : DINT;               (* the largest message sent, in bytes; 0 = the library's default *)
+    tReconnect               : TIME;               (* the first wait before reconnecting; T#0s = the library's default *)
+    tReconnectMax            : TIME;               (* the longest wait between attempts; T#0s = the library's default *)
+    tConnectTimeout          : TIME;               (* how long one connection attempt may take; T#0s = the library's default *)
+    tMaxSilence              : TIME;               (* reconnect when nothing arrives for this long; T#0s = never *)
+    bAutoReconnect           : BOOL := TRUE;       (* reconnect by itself after a loss *)
+    bRetryRejectedCredential : BOOL;               (* keep retrying a login the broker refused *)
+  END_STRUCT;
+END_TYPE

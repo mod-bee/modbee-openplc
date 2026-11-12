@@ -85,7 +85,7 @@ string carries, plus a trailing NUL. Anybody who has debugged that once does
 not want to meet it again.
 
 A type the wire cannot carry — a structure, an array, a `TIME` — is refused
-with `MQTT_INVALID_ARGUMENT` rather than guessed at. A wrong number on a SCADA
+with `E_MqttResult.InvalidArgument` rather than guessed at. A wrong number on a SCADA
 screen is worse than no number.
 
 ## Retain, and when not to
@@ -123,7 +123,7 @@ link that is real money. Publish readings at 0 and commands at 2.
 
 ```
 pubAll( CLIENT := mqtt, BASE := 'plant/intake', DATA := stIntake,
-        MODE := MQTT_ON_CHANGE, PERIOD := T#1m, RETAINED := TRUE );
+        MODE := E_MqttTrigger.OnChange, PERIOD := T#1m, RETAINED := TRUE );
 ```
 
 Every member of `stIntake` becomes its own topic under `BASE`, published only
@@ -163,12 +163,12 @@ happily on one client.
 
 | | |
 | --- | --- |
-| `MQTT_ON_CHANGE` | setpoints, commands, states — things that move when somebody moves them. `PERIOD` is then the heartbeat that keeps the far end's `QUALITY` good while nothing happens |
-| `MQTT_ON_INTERVAL` | analogues that never stop moving. A wet well level changes every scan, so on-change would publish at the task rate — send the set on a clock instead |
-| `MQTT_ON_REQUEST` | a recipe download. `REQ` sends the **whole** set, changed or not, so the receiving end gets something complete to act on rather than the three values that happened to differ |
+| `E_MqttTrigger.OnChange` | setpoints, commands, states — things that move when somebody moves them. `PERIOD` is then the heartbeat that keeps the far end's `QUALITY` good while nothing happens |
+| `E_MqttTrigger.OnInterval` | analogues that never stop moving. A wet well level changes every scan, so on-change would publish at the task rate — send the set on a clock instead |
+| `E_MqttTrigger.OnRequest` | a recipe download. `REQ` sends the **whole** set, changed or not, so the receiving end gets something complete to act on rather than the three values that happened to differ |
 
-`MQTT_ON_INTERVAL` with `PERIOD := T#0s` is refused with
-`MQTT_INVALID_ARGUMENT` rather than turned into "every scan" — fifty topics at
+`E_MqttTrigger.OnInterval` with `PERIOD := T#0s` is refused with
+`E_MqttResult.InvalidArgument` rather than turned into "every scan" — fifty topics at
 the task rate is how a broker falls over.
 
 ## One instance, many topics

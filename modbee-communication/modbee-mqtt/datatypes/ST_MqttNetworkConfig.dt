@@ -1,0 +1,10 @@
+TYPE
+  ST_MqttNetworkConfig : STRUCT
+    sSsid         : STRING(48);   (* E_MqttTransport.ArduinoWiFi: the network to join *)
+    sWiFiPassword : STRING(64);
+    sMac          : STRING(32);   (* E_MqttTransport.ArduinoEthernet: the board's MAC, 'DE:AD:BE:EF:FE:ED' *)
+    sIp           : STRING(32);   (* a fixed address; empty = DHCP *)
+    sGateway      : STRING(32);
+    sSubnet       : STRING(32);
+  END_STRUCT;
+END_TYPE

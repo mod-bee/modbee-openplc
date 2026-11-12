@@ -1,0 +1,3 @@
+TYPE
+  E_MqttQuality : (Unknown, Bad, Uncertain, Good) := Unknown;
+END_TYPE
