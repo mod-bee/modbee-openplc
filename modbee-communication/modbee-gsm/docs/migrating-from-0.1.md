@@ -10,7 +10,7 @@ recovery, the same SMS handling and deletes, the same MQTT over cellular.
 
 - **One block per module.** `GSM_MODEM` linked both module drivers into every
   firmware. `FB_GsmModemA7670` links only the A76XX driver and
-  `FB_GsmModemSim7070` only the SIM707x one: about 6 kB of flash saved on a
+  `FB_GsmModemSim7070` only the SIM707x one: about 4 kB of flash saved on a
   Node UIO.
 - **Settings are option structures.** `GSM_ARDUINO`, `GSM_RADIO` and the
   modem's own APN and capacity pins are `stSerialConfig`, `stPowerConfig`,

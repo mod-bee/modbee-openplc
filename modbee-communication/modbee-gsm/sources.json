@@ -2,7 +2,7 @@
   "resources": {
     "modbee-gsm": {
       "repo": "mod-bee/modbee-gsm",
-      "ref": "a3431c09a60ffee0045be44ac858785ce916f089",
+      "ref": "a904dfb1bed9b8cca1c7ae2705724737738d437e",
       "path": "",
       "include": [
         "library.properties",

@@ -32,7 +32,7 @@ you are seeing.
 | `FB_GsmModemSim7070` | SIMCom SIM7070, SIM7080, SIM7090 (LTE-M, NB-IoT) | links the SIM707x driver only |
 
 Pick the block for the module on the board: only its driver goes into the
-firmware (about 6 kB less flash than both), and a module of the other family
+firmware (about 4 kB less flash than both), and a module of the other family
 is refused by name rather than driven wrongly.
 
 Their settings are option structures: `stApnConfig` (APN, user, password),
