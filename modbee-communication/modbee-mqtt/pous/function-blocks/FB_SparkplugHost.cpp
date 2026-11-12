@@ -1,126 +1,119 @@
-(* A SPARKPLUG B HOST APPLICATION: the other end of FB_SparkplugNode.
+(* A SPARKPLUG B HOST APPLICATION on an FB_MqttClient's connection: the other
+end of FB_SparkplugNode. Call it once every scan, in the client's task. It
+keeps the current picture of every edge node it watches; Watch reads a value
+out of that picture and Write sends one back down.
 
-sHostId      this host's Sparkplug Host ID. It is a topic element and MUST be
-             unique in the system. An edge node's sPrimaryHostId carries this
-             same string. Up to 47 characters.
-sGroupId     the group to watch, or empty for every group.
-bPrimary     whether to ask for a rebirth when a node's sequence skips.
-tReorder     how long to let a gap fill before asking. T#0s asks at once.
-bEnable      FALSE publishes the offline STATE and stands the host down; the
-             connection stays up for everything else on it.
-fbClient     the FB_MqttClient whose connection this host rides on. Must be
-             wired; broker, TLS, login and protocol are set there.
+sHostId     this host's Sparkplug Host ID. It is a topic element and MUST be
+           unique in the system. An edge node's sPrimaryHostId carries this
+           same string. Up to 47 characters.
+sGroupId    the group to watch, or empty for every group. Narrow it on a real
+           plant: a host on spBv1.0/# receives every other line's traffic.
+bPrimary    TRUE (default): ask for a rebirth when a node's sequence skips.
+           Nothing in the protocol marks a host primary - the NODES name it -
+           so this only decides whether a gap asks; two hosts both asking
+           double the traffic for one missed message.
+tReorder    how long to let a gap fill before asking. T#5s by default; T#0s
+           asks at once. A link that reorders now and then should not cost a
+           full birth each time.
+bEnable     FALSE publishes the offline STATE and stands the host down; the
+           connection stays up for everything else on it.
+fbClient    the FB_MqttClient this host rides on. Must be assigned; broker,
+           TLS, login and protocol are set there.
 
-bLinkUp      the client's MQTT session is up.
-bBorn        our STATE birth certificate is published, so nodes may rely on us.
-nNodes       edge nodes heard from.
-nOnline      how many of them are online now.
-nGaps        sequence gaps seen across every node.
-nRebirths    rebirths asked for.
-bError       something is wrong; eErrorId and sLastError say what. "out of
-             memory for tracked nodes or metrics" when the host could not
-             follow everything that arrived: it tracks as many nodes, and
-             metrics per node, as memory holds, on a board and the Runtime
-             alike. E_MqttResult.WrongTask: not in its FB_MqttClient's task.
-
-     A host watches a group and keeps the current picture of every edge node in
-     it - which nodes are online, what metrics they declared, what each one is
-     reading now. Watch reads a value out of that picture and Write sends one
-     back down.
-
-     WHAT A HOST DOES THAT A NODE DOES NOT, and it is the reason this is a
-     separate block rather than a mode of FB_SparkplugNode:
-
-       - It publishes its OWN birth and death certificate on
-         spBv1.0/STATE/<sHostId>, at QoS 1 and RETAINED. Retained, unlike a
-         node's death certificate, because an edge node subscribing later has
-         to find it waiting or it will never birth at all.
-       - It reads names out of BIRTH certificates and resolves them against the
-         aliases that data messages carry. A conformant node puts names only in
-         its births; without the dictionary a host receives numbers it cannot
-         name.
-       - It notices gaps in a node's sequence number and, if bPrimary is set,
-         asks for a rebirth.
-
-     sPrimaryHostId on the node and sHostId here are the same string. A node
-     configured with one will not birth until this host says it is online,
-     which is how a plant avoids nodes publishing into a SCADA that is not
-     listening.
-
-     ONE CONNECTION, SHARED. The host is a layer on its FB_MqttClient's session
-     and takes its Will - the offline STATE - and a clean session on every
-     CONNECT, so no presence (stWillConfig) and no FB_SparkplugNode on the same
-     client: a connection carries one Will. Started on a session already up,
-     it reconnects it once so the next CONNECT carries the STATE.
-
-     ONE TASK. This block and its methods run in the client's task, and the
-     rest of the program trades values with them through globals. A method
-     called from another task returns E_MqttResult.WrongTask.
+bLinkUp     the client's session is up.
+bBorn       our STATE birth certificate is published, so nodes may rely on us.
+           A node waiting for this host starts birthing once it sees it.
+nNodes      edge nodes heard from. A node that died stays tracked: knowing it
+           is gone is worth more than forgetting it existed.
+nOnline     how many of them are online now.
+nGaps       sequence gaps seen, every node together.
+nRebirths   rebirths asked for. Both climbing together is a lossy link; gaps
+           climbing alone means tReorder is absorbing them.
+bError, eErrorId  E_MqttResult.Ok when fine; WrongTask: not in its client's
+           task.
+sLastError  what the host waits for, or what failed: "out of memory for
+           tracked nodes or metrics" when it could not follow everything that
+           arrived. It tracks as many nodes, and metrics per node, as memory
+           holds, on a board and the Runtime alike.
 
 METHODS
 
+Both run in the host's task and return E_MqttResult.WrongTask in any other.
+A call is found again by anyValue's declared name and type with sMetricName.
+
   host.Watch(sMetricName, anyValue, sEdgeNodeId, sNodeGroupId, sDeviceId,
              bValid =>, bTypeOk =>, bFresh =>, nAge =>, nReadCnt =>)
-
-     READS ONE METRIC into an IEC variable of the engineer's own type. Standing:
-     call it every scan while the value is wanted; stop calling it and anyValue
-     holds its last value.
-
-     THE NAME IS THE ADDRESS, not a topic and not an alias. The edge node
-     declared "level" in its birth certificate and Watch asks for "level". A
-     conformant node sends data by alias only and the host resolves it back.
-
-     THE DECLARED TYPE IS CHECKED, not coerced. If the birth said "level" is a
-     REAL and anyValue is a DINT, the read is refused (E_MqttResult.
-     InvalidArgument, bTypeOk FALSE) rather than silently truncating a reading
-     a control decision is about to be made on.
-
-     sMetricName   the metric name, exactly as the edge node declared it.
-     anyValue      where to put it. Any IEC type; it must match what was
-                   declared. Also the call's key: its declared name and type.
-     sEdgeNodeId   which edge node. Empty means the first node the host heard
-                   from, which is convenient with one node and wrong with two.
-     sNodeGroupId  which group. Empty means any group the host watches.
-     sDeviceId     for a metric belonging to a device rather than the node.
-
-     bValid        the value was read and written into anyValue by this call.
-     bTypeOk       FALSE means anyValue's type does not match the birth.
+     READS ONE METRIC into a variable of your own type. Standing: call it
+     every scan while the value is wanted; stop and anyValue holds its last
+     value.
+     THE NAME IS THE ADDRESS, not a topic and not an alias: the node declared
+     "level" in its birth and Watch asks for "level"; the host resolves the
+     aliases data messages carry. THE DECLARED TYPE IS CHECKED, NOT COERCED:
+     if the birth said REAL and anyValue is a DINT the read is refused rather
+     than a reading truncated.
+     sMetricName   the metric, exactly as the node declared it.
+     anyValue      where to put it. Any IEC type matching the birth.
+     sEdgeNodeId   which node. Empty: the first node heard from - convenient
+                   with one node, wrong with two.
+     sNodeGroupId  which group. Empty: any group the host watches.
+     sDeviceId     for a metric of a device rather than the node.
+     bValid        this call wrote anyValue.
+     bTypeOk       FALSE: anyValue's type is not the declared one.
      bFresh        the reading changed since the last call.
-     nAge          milliseconds since the node's own timestamp on it. Not since
-                   we received it - on a slow link those differ by more than a
+     nAge          milliseconds since the NODE's timestamp on it - not since
+                   we received it; on a slow link those differ by more than a
                    control decision should ignore.
-     nReadCnt      reads written into anyValue.
-
-     Returns E_MqttResult.Ok when anyValue holds a valid reading;
-     NotInitialised while the host is not built, the node has not been heard
-     or the metric has not been published (a plant starting up spends its
-     first seconds here); NotConnected while the client is down;
-     InvalidArgument for an empty sMetricName or a type mismatch; WrongTask.
+     nReadCnt      readings written into anyValue.
+     Ok when anyValue holds a valid reading; NotInitialised while the host is
+     not built, the node not heard or the metric not published (a plant
+     starting up spends its first seconds here); NotConnected while the
+     client is down; InvalidArgument for an empty sMetricName or a type
+     mismatch.
 
   host.Write(sMetricName, anyValue, sEdgeNodeId, sNodeGroupId, sDeviceId,
              bExecute, nSentCnt =>)
+     WRITES ONE METRIC on an edge node: an NCMD, or a DCMD for a device
+     metric. The node applies it to whatever it reports under that name and
+     reports the new value back under the SAME name, so Watch that name to
+     see it come back. THE NODE DECIDES: a command for a metric it never
+     declared, declared read-only or with another type is refused there and
+     counted - Write reports that it sent one, not that it took effect.
+     A request: the rising edge of bExecute takes every input, anyValue
+     included. Not connected: NotConnected at once, never queued. A node not
+     heard from yet: Queued while bExecute stays TRUE, sent as soon as it
+     appears; bExecute falling first drops it (Cancelled) - a command that
+     arrives a minute after the operator let go is worse than one that never
+     arrived. Then Ok (sent), Refused (the client would not take it) or
+     InvalidArgument (empty sMetricName, or an IEC type with no Sparkplug
+     datatype), held until the next rising edge. nSentCnt: commands this
+     call has sent.
 
-     WRITES ONE METRIC on an edge node: an NCMD, or a DCMD for a device metric.
-     The edge node applies it to whatever it recorded under that name and
-     reports the new value back under the SAME metric name - one name is read
-     and written, so Watch the same sMetricName to see it come back.
+---
 
-     THE NODE DECIDES. A command for a metric the node never declared, or
-     declared read-only, or declared with a different type, is refused there
-     and counted: Write reports that it sent one, not that it took effect.
+WHAT A HOST DOES THAT A NODE DOES NOT, and why this is a separate block:
 
-     A request. The rising edge of bExecute starts it and latches every input,
-     anyValue included. Not connected: E_MqttResult.NotConnected at once. A
-     node not heard from yet: E_MqttResult.Queued while bExecute stays TRUE,
-     sent as soon as it appears; bExecute falling first drops the command
-     (E_MqttResult.Cancelled) - a command that arrives a minute after the
-     operator let go is worse than one that never arrived. Then Ok (sent),
-     Refused (the client would not take it) or InvalidArgument (empty
-     sMetricName, or an IEC type with no Sparkplug datatype), held until the
-     next rising edge. The call's key is anyValue's declared name and type with
-     sMetricName.
+  - It publishes its OWN birth and death certificate on
+    spBv1.0/STATE/<sHostId>, at QoS 1 and RETAINED - retained, unlike a
+    node's death certificate, because a node subscribing later has to find
+    it waiting or it will never birth at all.
+  - It reads names out of BIRTH certificates and resolves them against the
+    aliases data messages carry. A conformant node puts names only in its
+    births; without the dictionary a host receives numbers it cannot name.
+  - It notices gaps in a node's sequence number and, with bPrimary, asks for
+    a rebirth.
 
-     nSentCnt      commands this call has sent. *)
+sPrimaryHostId on the node and sHostId here are the same string. A node
+configured with one will not birth until this host says it is online, which
+is how a plant avoids nodes publishing into a SCADA that is not listening.
+
+ONE CONNECTION, SHARED. The host is a layer on its client's session and
+takes its Will - the offline STATE - and a clean session on every CONNECT, so
+no stWillConfig and no FB_SparkplugNode on the same client: a connection
+carries one Will. Started on a session already up, it reconnects it once so
+the next CONNECT carries the STATE.
+
+ONE TASK. This block, its methods and fbClient run in the network task, and
+the rest of the program trades values with them through globals. *)
 
 FUNCTION_BLOCK FB_SparkplugHost
   VAR_INPUT
@@ -171,6 +164,9 @@ FUNCTION_BLOCK FB_SparkplugHost
     nCalls          : __XWORD;              (* the methods' per-call state *)
   END_VAR
 
+(* Reads one metric of a watched node into anyValue, called every scan. The
+   metric's declared type must match anyValue's. Ok while anyValue holds a
+   valid reading; NotInitialised until the node and the metric are heard. *)
 METHOD PUBLIC Watch : E_MqttResult
   VAR_INPUT
     sMetricName     : STRING(96);           (* the metric, as the node declared it *)
@@ -188,6 +184,10 @@ METHOD PUBLIC Watch : E_MqttResult
   END_VAR
 END_METHOD
 
+(* Sends one command (NCMD, or DCMD for a device) on a rising edge of
+   bExecute. Queued while the node is not heard yet and bExecute stays
+   TRUE; Cancelled if bExecute falls first; then Ok (sent) or the reason.
+   Not connected at the edge: NotConnected, nothing queued. *)
 METHOD PUBLIC Write : E_MqttResult
   VAR_INPUT
     sMetricName     : STRING(96);           (* the metric, as the node declared it *)

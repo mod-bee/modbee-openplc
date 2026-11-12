@@ -20,7 +20,7 @@ different make and nothing downstream notices.
    a flow meter ─publish──►  └────────┘  ──►  an alarm dialler
 ```
 
-The broker is a piece of software — Mosquitto on a plant server, a cloud
+The broker is a piece of software - Mosquitto on a plant server, a cloud
 service, or this PLC itself (page 11). Everything else is a **client**, and
 that includes SCADA: there is no master here, only publishers and subscribers.
 
@@ -32,7 +32,7 @@ A topic is a label, written like a file path:
 plant/line3/tank-01/level
 ```
 
-Nothing enforces the shape — the broker has no list of valid topics and you
+Nothing enforces the shape - the broker has no list of valid topics and you
 invent them. That freedom is the trap, so decide a naming scheme early and
 write it down; the hierarchy is what makes wildcards useful later.
 
@@ -56,7 +56,7 @@ How hard the broker and client work to deliver one message.
 | **QoS 2** | arrives exactly once, at the cost of four packets |
 
 Pick by what a lost or repeated message would cost. A level reading published
-every second is QoS 0 — the next one is along shortly. A command to start a
+every second is QoS 0 - the next one is along shortly. A command to start a
 pump is QoS 2, because "twice" and "not at all" are both wrong. A totaliser
 reading is QoS 1: you would rather have it twice than lose it.
 
@@ -69,7 +69,7 @@ Publish with **retain** and the broker keeps the last one, handing it to every
 new subscriber immediately. A SCADA screen that opens at three in the morning
 shows the current tank level instead of a blank field.
 
-Retain the things that describe a state. Do not retain events — a retained
+Retain the things that describe a state. Do not retain events - a retained
 "pump started" is a message that keeps announcing an event that happened last
 Tuesday.
 
@@ -80,7 +80,7 @@ and hear nothing. Is the device dead, or has it simply nothing new to say?
 
 The **Will** answers it. When a client connects it hands the broker a message
 to publish *on its behalf* if the connection ever dies without a proper
-goodbye — a power cut, a pulled cable, a modem that lost coverage. Pair it
+goodbye - a power cut, a pulled cable, a modem that lost coverage. Pair it
 with a message published on connecting and a subscriber always knows:
 
 ```
@@ -88,17 +88,17 @@ plant/tank-01/status  =  "online"    published by the device
 plant/tank-01/status  =  "offline"   published by the broker, when it vanishes
 ```
 
-`MQTT_PRESENCE` is that pair, and it is one block.
+`stWillConfig` on the client is that pair, set in one structure.
 
 ## What this library adds
 
 The protocol carries bytes. A PLC needs a little more:
 
 - **Data quality.** A number that arrived four seconds ago and a number that
-  arrived four hours ago look identical on a wire. `MQTT_SUBSCRIBE` puts an
+  arrived four hours ago look identical on a wire. `mqtt.Subscribe` puts an
   age and a quality beside every value.
-- **Report by exception.** `MQTT_REPORT` publishes a variable when it moves
-  by more than a deadband, and at worst every so often — so a noisy analogue
+- **Report by exception.** `mqtt.Report` publishes a variable when it moves
+  by more than a deadband, and at worst every so often - so a noisy analogue
   input does not fill the broker, and a value that never moves still proves
   the device is alive.
 - **Nothing blocks.** Not connecting, not publishing, not reconnecting. A
@@ -109,7 +109,7 @@ The protocol carries bytes. A PLC needs a little more:
 **Deterministic control between two PLCs.** MQTT has a broker in the middle
 and no timing guarantee at all. Use Modbus or BeeBus for an interlock.
 
-**Request and response.** MQTT 5.0 can do it and `MQTT_REQUEST` is there, but
+**Request and response.** MQTT 5.0 can do it and `mqtt.Request` is there, but
 if most of your traffic is questions and answers you want Modbus.
 
 MQTT is for telling the plant what you know. It is very good at that, and it

@@ -1,66 +1,90 @@
 (* Carries topics between two brokers. Standalone - it owns both connections and
-takes no FB_MqttClient.
+takes no FB_MqttClient. The OpenPLC Runtime only. Call it every scan, once per
+rule, in the network task.
 
-bEnable             TRUE connects both ends and starts forwarding.
-sLocalHost          the near broker. Usually the site one, often this PLC itself.
+bEnable             TRUE connects both ends and starts forwarding. FALSE
+                    closes both and forgets the rules, which are collected
+                    again on the next start.
+sLocalHost          the near broker. Usually the site one, often this PLC
+                    itself ('127.0.0.1').
 nLocalPort          0 for the standard port.
 eLocalSecurity      plain or TLS on the near side.
 sRemoteHost         the far broker. Usually head office or a cloud service.
 nRemotePort         0 for the standard port.
-eRemoteSecurity     plain or TLS on the far side. These are separate pins
-                    because the two sides are genuinely different: a site
-                    broker on the same switch needs no TLS, and the link out of
-                    the building always does.
-sRemoteUserName     credentials for the far side, which usually wants them.
-sRemoteUserPassword
-sBridgeName         what to call this bridge. It becomes part of both client
-                    identifiers, WHICH MUST DIFFER - a bridge using one
-                    identifier on both ends would take over its own session the
-                    moment both brokers turned out to be the same box.
-sTopic              one rule: what to carry. Wildcards allowed.
-eDirection          E_MqttDirection.Out local to remote, E_MqttDirection.In
-                    remote to local, E_MqttDirection.Both.
-eQos                the most this rule will carry. Never higher than it arrived.
+eRemoteSecurity     plain or TLS on the far side. Separate pins because the
+                    two sides are genuinely different: a site broker on the
+                    same switch needs no TLS, and the link out of the building
+                    always does. E_MqttSecurity.TlsPinned is refused on either
+                    side: this block has nowhere to keep a key.
+sRemoteUserName     the far side's login, which it usually wants.
+sRemoteUserPassword its password.
+sBridgeName         what to call this bridge; empty for 'bridge'. It becomes
+                    part of both client identifiers, WHICH MUST DIFFER - a
+                    bridge using one identifier on both ends would take over
+                    its own session the moment both brokers turned out to be
+                    the same box.
+sTopic              one rule: what to carry, without either prefix. Wildcards
+                    allowed.
+eDirection          E_MqttDirection.Out local to remote (readings going up),
+                    E_MqttDirection.In remote to local (commands coming down),
+                    E_MqttDirection.Both. Prefer an Out and an In rule to one
+                    Both unless you mean it: a tree carried both ways is the
+                    shape that loops.
+eQos                the most this rule carries. Never higher than it arrived.
 sLocalPrefix        what the near side sees in front of the topic.
-sRemotePrefix       and the far side. "site7/" on the remote turns
-                    "plant/a/temp" into "site7/plant/a/temp" upstream, so ten
+sRemotePrefix       and the far side. 'site7/' on the remote turns
+                    'plant/a/temp' into 'site7/plant/a/temp' upstream, so ten
                     sites can share one broker without colliding.
-bForwardRetained    whether a retained message stays retained across. OFF by
-                    default and usually right: a retained value that crosses a
-                    bridge outlives the link that carried it, and a stale
-                    reading on a head-office dashboard is worse than no reading.
+bForwardRetained    whether a retained message stays retained across. FALSE
+                    by default and usually right: a retained value that
+                    crosses a bridge outlives the link that carried it, and a
+                    stale reading on a head-office dashboard is worse than
+                    none.
 
-eBridgeState        where the bridge is up to.
+eBridgeState        Idle, Connecting, Up or Degraded.
 bLocalUp            the near end is connected.
 bRemoteUp           the far end is connected.
 nForwardedOut       running total carried local to remote.
 nForwardedIn        and the other way.
 nRefusedOut         the far side would not take it.
-nRefusedIn
+nRefusedIn          the near side would not take it.
 bError              something failed.
-eErrorId            why. E_MqttResult.Ok when fine.
+eErrorId            why. E_MqttResult.Ok when fine; InvalidArgument for a
+                    configuration refused at start (below).
 
 ---
 
-ONE INSTANCE, MANY RULES. Call the same instance several times in a scan, each
-with a different sTopic, and each call adds a rule - the connection pins are
-read from the first call and the rest add to the mapping. A site carrying
-three topic trees is one block called three times, not three bridges.
+ONE INSTANCE, MANY RULES. Call the same instance several times in a scan,
+each with a different sTopic, and each call adds a rule - the connection pins
+are read from the first call and the rest add to the mapping. A site carrying
+three topic trees is one block called three times, not three bridges. The
+rules are collected on the first scan and the connections built on the
+second, so a rule called later in the program still arrives before either
+end connects. A rule repeated in a scan is one rule. Once started the rules
+are fixed: a changed sTopic takes effect when bEnable goes FALSE and TRUE.
 
-The rules are collected on the first scan and the connections built on the
-second, which is why a rule added later in the program still arrives before
-either end connects.
-
-E_MqttBridgeState.Degraded is the state worth alarming on. It means one end is
+E_MqttBridgeState.Degraded IS THE STATE WORTH ALARMING ON. One end is
 connected and the other is not, so half the traffic is flowing and the other
-half is piling up - which from the site looks like everything working and from
+half piling up - which from the site looks like everything working and from
 head office looks like the site has died.
 
-A MAPPING THAT WOULD LOOP IS REFUSED, not carried. Two rules that would carry
-this bridge's own output back into it are a message storm that takes a broker
-down, and on 5.0 the No Local subscription option prevents it outright. Where
-the version cannot express that, the configuration is rejected at start with
-E_MqttResult.InvalidArgument rather than accepted and regretted. *)
+REFUSED AT START, rather than half applied, each with bError and
+E_MqttResult.InvalidArgument: no rules (two connections carrying nothing and
+looking healthy); TlsPinned on either side; and a mapping that would loop.
+Two rules carrying this bridge's own output back into it are a message storm
+that takes a broker down; at 5.0 the No Local subscription option prevents it
+outright, and where the version cannot express that, the configuration is
+rejected.
+
+THE RUNTIME ONLY. A bridge is two simultaneous connections, two sessions and
+two send queues, usually with TLS on one. On a board that is most of the heap,
+so there it sets bError with InvalidArgument and does nothing. The shape that works on a board is
+FB_MqttBroker on the panel serving the line, and the bridge upstream on a
+Runtime.
+
+A BRIDGE IS NOT A CLIENT. It owns two clients of its own, named from
+sBridgeName, and carries what its rules say. A PLC that bridges and also
+publishes runs an FB_MqttClient of its own beside it. *)
 
 FUNCTION_BLOCK FB_MqttBridge
   VAR_INPUT

@@ -1,2822 +1,2071 @@
 # Block reference
 
-Every block but `MQTT_CLIENT`, `MQTT_BROKER` and `MQTT_BRIDGE` takes its parent
-block on an in-out pin (`CLIENT` for the MQTT blocks, `NODE` for the Sparkplug
-blocks) and returns `ERROR` and `STATUS`. **That pin must be
-assigned at every call — leaving it out is a compile error.**
+Six blocks. `FB_MqttClient`, `FB_MqttBroker`, `FB_MqttBridge` and `FB_MqttClock`
+stand alone; `FB_SparkplugNode` and `FB_SparkplugHost` ride on a client, given
+on their `fbClient` in-out, which **must be assigned at every call** - leaving it
+out is a compile error. Everything per topic, record or account is a **method**
+of its block: `mqtt.Publish(...)`, `sp.Record(...)`, `broker.User(...)`. Call the
+block itself once every scan, in the network task; call its methods after it.
 
-`BUSY` is a level. `DONE`, `ERROR` and `NEW_VALUE` are **one scan wide**, so
-latch them if a slower task has to see one. `-1` on an age means *never*, which
-is not the same as *a long time ago*.
+Every method returns an `E_MqttResult`. A **request** (`Publish`, `Request`,
+`Write`) starts on a rising edge of `bExecute`, returns `Queued` while it runs and
+then holds its outcome until the next edge. A **standing** method is called every
+scan while it is wanted and returns `Ok` while its record is valid. A method's
+outputs are read with `=>`: `ok := mqtt.Subscribe(..., eQuality => q);`. An
+input left out takes its default.
 
-> Generated from each block's own comment; edit the block's comment, not this page.
+> Generated from each block's own comment and declarations by
+> `internal/make-block-reference.py`; edit the block, not this page.
 
-| Block | What it does |
-| --- | --- |
-| [`MQTT_ARDUINO`](#mqtt_arduino) | The things only a board has. |
-| [`MQTT_BRIDGE`](#mqtt_bridge) | Carries topics between two brokers. |
-| [`MQTT_BROKER`](#mqtt_broker) | Makes this PLC the broker other devices connect to. |
-| [`MQTT_BROKER_USER`](#mqtt_broker_user) | ONE ACCOUNT ON THIS PLC'S BROKER. |
-| [`MQTT_CLIENT`](#mqtt_client) | Starts an MQTT client and hands itself to every other block. |
-| [`MQTT_CLOCK`](#mqtt_clock) | SETS THE CONTROLLER'S CLOCK FROM THE NETWORK - NTP over Wi-Fi or Ethernet, the mobile network's own time over cellular - so Sparkplug timestamps and CURRENT_DT are real time. |
-| [`MQTT_CONFIG`](#mqtt_config) | Everything about a connection that is not where it goes. |
-| [`MQTT_MESSAGE`](#mqtt_message) | The raw text of whatever arrives, for anything that is not a single number. |
-| [`MQTT_PRESENCE`](#mqtt_presence) | Says this device is here, and arranges for the broker to say when it is not. |
-| [`MQTT_PROVISION`](#mqtt_provision) | Lets this PLC register itself with a modbee broker, so nobody types a password into it. |
-| [`MQTT_PUBLISH`](#mqtt_publish) | Sends one message when you ask. |
-| [`MQTT_REPORT`](#mqtt_report) | Publishes a variable. |
-| [`MQTT_REQUEST`](#mqtt_request) | Asks a question and waits for the answer. |
-| [`MQTT_STATUS`](#mqtt_status) | How this connection is doing. |
-| [`MQTT_STRUCT_PUBLISH`](#mqtt_struct_publish) | A whole STRUCT, one block. |
-| [`MQTT_STRUCT_SUBSCRIBE`](#mqtt_struct_subscribe) | A whole STRUCT, one block. |
-| [`MQTT_SUBSCRIBE`](#mqtt_subscribe) | Keeps a variable up to date from the broker, with a quality that says how much to believe it. |
-| [`MQTT_TLS`](#mqtt_tls) | What to trust at the other end. |
-| [`SPARKPLUG_COMMAND`](#sparkplug_command) | A SPARKPLUG COMMAND, ARRIVING. |
-| [`SPARKPLUG_DAY_TOTALS`](#sparkplug_day_totals) | A small table of daily totals, kept by the project and sent on every birth as historical values, so SCADA fills in the days the link was down. |
-| [`SPARKPLUG_DEVICE`](#sparkplug_device) | A DEVICE UNDER A SPARKPLUG NODE. |
-| [`SPARKPLUG_HISTORY`](#sparkplug_history) | Keeps events while the link is down and sends them after it comes back, flagged historical, in order, at the time they happened. |
-| [`SPARKPLUG_HOST`](#sparkplug_host) | A SPARKPLUG B HOST APPLICATION: the other end of SPARKPLUG_NODE. |
-| [`SPARKPLUG_METRIC`](#sparkplug_metric) | ONE SPARKPLUG METRIC, for what a STRUCT member cannot express. |
-| [`SPARKPLUG_NODE`](#sparkplug_node) | A SPARKPLUG B EDGE NODE. |
-| [`SPARKPLUG_STRUCT`](#sparkplug_struct) | A WHOLE STRUCT AS A SPARKPLUG METRIC SET. |
-| [`SPARKPLUG_SUBSCRIBE`](#sparkplug_subscribe) | READ ONE METRIC from a node a SPARKPLUG_HOST is watching. |
-| [`SPARKPLUG_WRITE`](#sparkplug_write) | WRITE ONE METRIC on an edge node, from a SPARKPLUG_HOST. |
+| Block | What it does | Methods |
+| --- | --- | --- |
+| [`FB_MqttBridge`](#fb_mqttbridge) | Carries topics between two brokers. |  |
+| [`FB_MqttBroker`](#fb_mqttbroker) | Makes this PLC the broker other devices connect to. | [`User`](#fb_mqttbrokeruser) |
+| [`FB_MqttClient`](#fb_mqttclient) | An MQTT client: one connection to one broker. | [`Publish`](#fb_mqttclientpublish), [`Report`](#fb_mqttclientreport), [`Subscribe`](#fb_mqttclientsubscribe), [`PublishStruct`](#fb_mqttclientpublishstruct), [`SubscribeStruct`](#fb_mqttclientsubscribestruct), [`Request`](#fb_mqttclientrequest), [`Response`](#fb_mqttclientresponse), [`Message`](#fb_mqttclientmessage), [`Provision`](#fb_mqttclientprovision), [`Statistics`](#fb_mqttclientstatistics) |
+| [`FB_MqttClock`](#fb_mqttclock) | SETS THE CONTROLLER'S CLOCK FROM THE NETWORK - NTP over Wi-Fi or Ethernet, the mobile network's own time over cellular - so Sparkplug timestamps and CURRENT_DT are real time. |  |
+| [`FB_SparkplugHost`](#fb_sparkplughost) | A SPARKPLUG B HOST APPLICATION on an FB_MqttClient's connection: the other end of FB_SparkplugNode. | [`Watch`](#fb_sparkplughostwatch), [`Write`](#fb_sparkplughostwrite) |
+| [`FB_SparkplugNode`](#fb_sparkplugnode) | A SPARKPLUG B EDGE NODE on an FB_MqttClient's connection. | [`Record`](#fb_sparkplugnoderecord), [`Metric`](#fb_sparkplugnodemetric), [`Device`](#fb_sparkplugnodedevice), [`Command`](#fb_sparkplugnodecommand), [`History`](#fb_sparkplugnodehistory), [`DayTotals`](#fb_sparkplugnodedaytotals) |
+
+The option structures and enumerations are at the end: [Structures](#structures), [Enumerations](#enumerations).
 
 ---
 
-## MQTT_ARDUINO
-
-```
-The things only a board has. Optional, and ignored on the Runtime.
-
-CLIENT       which client. Must be wired.
-SSID       the WiFi network to join.
-WIFI_PASSWORD   its password. Empty for an open network.
-MAC        this board's MAC address, for Ethernet. "DE:AD:BE:EF:00:01" -
-          colons, hyphens or nothing between the pairs, whichever the label
-          uses. EVERY BOARD ON A SEGMENT NEEDS ITS OWN.
-IP         a fixed address for Ethernet, or "dhcp" to ask for one.
-GATEWAY    the router, when the address is fixed.
-SUBNET     the mask, when the address is fixed.
-
-APPLIED    the settings reached the client.
-ERROR      they did not - this is the Runtime, which has none of this hardware.
-STATUS     why. E_MqttResult.Ok when fine.
-```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
-
-**Inputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `SSID` | `STRING(48)` |  |
-| `WIFI_PASSWORD` | `STRING(64)` |  |
-| `MAC` | `STRING(32)` |  |
-| `IP` | `STRING(32)` |  |
-| `GATEWAY` | `STRING(32)` |  |
-| `SUBNET` | `STRING(32)` |  |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `APPLIED` | `BOOL` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-
-A FIXED ADDRESS IS WHAT YOU WANT, for two reasons. DHCP blocks - up to sixty
-seconds in the Arduino library, which on a 1 ms task is not a delay, it is a
-stopped PLC. The client bounds it to one second an attempt and retries on its
-own timer, so it works and it costs a stall. And a plant network rarely runs
-DHCP at all, so a board that cannot get a lease sits there publishing into
-nothing.
-
-Set IP to "dhcp" only when you know there is a server and you can afford the
-first attempt.
-
-On the Runtime every pin here describes hardware that is not there, so the
-block says so on ERROR rather than quietly doing nothing. A block that
-silently ignores what it was told is how an afternoon goes missing.
-
----
-
-## MQTT_BRIDGE
+## FB_MqttBridge
 
 ```
 Carries topics between two brokers. Standalone - it owns both connections and
-takes no CLIENT.
+takes no FB_MqttClient. The OpenPLC Runtime only. Call it every scan, once per
+rule, in the network task.
 
-ENABLE          TRUE connects both ends and starts forwarding.
-LOCAL_HOST      the near broker. Usually the site one, often this PLC itself.
-LOCAL_PORT      0 for the standard port.
-LOCAL_SECURITY  plain or TLS on the near side.
-REMOTE_HOST     the far broker. Usually head office or a cloud service.
-REMOTE_PORT     0 for the standard port.
-REMOTE_SECURITY plain or TLS on the far side. These are separate pins because
-                the two sides are genuinely different: a site broker on the
-                same switch needs no TLS, and the link out of the building
-                always does.
-REMOTE_USER     credentials for the far side, which usually wants them.
-REMOTE_PASSWORD
-BRIDGE_NAME            what to call this bridge. It becomes part of both client
-                identifiers, WHICH MUST DIFFER - a bridge using one identifier
-                on both ends would take over its own session the moment both
-                brokers turned out to be the same box.
-TOPIC          one rule: what to carry. Wildcards allowed.
-DIRECTION       E_MqttDirection.Out local to remote, E_MqttDirection.In remote to local, E_MqttDirection.Both.
-QOS            the most this rule will carry. Never higher than it arrived.
-LOCAL_PREFIX    what the near side sees in front of the topic.
-REMOTE_PREFIX   and the far side. "site7/" on the remote turns "plant/a/temp"
-                into "site7/plant/a/temp" upstream, so ten sites can share one
-                broker without colliding.
-FORWARD_RETAINED  whether a retained message stays retained across. OFF by
-                default and usually right: a retained value that crosses a
-                bridge outlives the link that carried it, and a stale reading
-                on a head-office dashboard is worse than no reading.
+bEnable             TRUE connects both ends and starts forwarding. FALSE
+                    closes both and forgets the rules, which are collected
+                    again on the next start.
+sLocalHost          the near broker. Usually the site one, often this PLC
+                    itself ('127.0.0.1').
+nLocalPort          0 for the standard port.
+eLocalSecurity      plain or TLS on the near side.
+sRemoteHost         the far broker. Usually head office or a cloud service.
+nRemotePort         0 for the standard port.
+eRemoteSecurity     plain or TLS on the far side. Separate pins because the
+                    two sides are genuinely different: a site broker on the
+                    same switch needs no TLS, and the link out of the building
+                    always does. E_MqttSecurity.TlsPinned is refused on either
+                    side: this block has nowhere to keep a key.
+sRemoteUserName     the far side's login, which it usually wants.
+sRemoteUserPassword its password.
+sBridgeName         what to call this bridge; empty for 'bridge'. It becomes
+                    part of both client identifiers, WHICH MUST DIFFER - a
+                    bridge using one identifier on both ends would take over
+                    its own session the moment both brokers turned out to be
+                    the same box.
+sTopic              one rule: what to carry, without either prefix. Wildcards
+                    allowed.
+eDirection          E_MqttDirection.Out local to remote (readings going up),
+                    E_MqttDirection.In remote to local (commands coming down),
+                    E_MqttDirection.Both. Prefer an Out and an In rule to one
+                    Both unless you mean it: a tree carried both ways is the
+                    shape that loops.
+eQos                the most this rule carries. Never higher than it arrived.
+sLocalPrefix        what the near side sees in front of the topic.
+sRemotePrefix       and the far side. 'site7/' on the remote turns
+                    'plant/a/temp' into 'site7/plant/a/temp' upstream, so ten
+                    sites can share one broker without colliding.
+bForwardRetained    whether a retained message stays retained across. FALSE
+                    by default and usually right: a retained value that
+                    crosses a bridge outlives the link that carried it, and a
+                    stale reading on a head-office dashboard is worse than
+                    none.
 
-STATE           where the bridge is up to.
-LOCAL_UP        the near end is connected.
-REMOTE_UP       the far end is connected.
-FORWARDED_OUT   running total carried local to remote.
-FORWARDED_IN    and the other way.
-REFUSED_OUT     the far side would not take it.
-REFUSED_IN
-ERROR           something failed.
-STATUS          why. E_MqttResult.Ok when fine.
+eBridgeState        Idle, Connecting, Up or Degraded.
+bLocalUp            the near end is connected.
+bRemoteUp           the far end is connected.
+nForwardedOut       running total carried local to remote.
+nForwardedIn        and the other way.
+nRefusedOut         the far side would not take it.
+nRefusedIn          the near side would not take it.
+bError              something failed.
+eErrorId            why. E_MqttResult.Ok when fine; InvalidArgument for a
+                    configuration refused at start (below).
 ```
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `ENABLE` | `BOOL` | `TRUE` |
-| `LOCAL_HOST` | `STRING(64)` |  |
-| `LOCAL_PORT` | `UINT` |  |
-| `LOCAL_SECURITY` | `E_MqttSecurity` |  |
-| `REMOTE_HOST` | `STRING(64)` |  |
-| `REMOTE_PORT` | `UINT` |  |
-| `REMOTE_SECURITY` | `E_MqttSecurity` |  |
-| `REMOTE_USER` | `STRING(64)` |  |
-| `REMOTE_PASSWORD` | `STRING(64)` |  |
-| `BRIDGE_NAME` | `STRING(48)` |  |
-| `TOPIC` | `STRING(128)` |  |
-| `DIRECTION` | `E_MqttDirection` |  |
-| `QOS` | `BYTE` |  |
-| `LOCAL_PREFIX` | `STRING(64)` |  |
-| `REMOTE_PREFIX` | `STRING(64)` |  |
-| `FORWARD_RETAINED` | `BOOL` |  |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bEnable` | `BOOL` | `TRUE` | connects both ends and forwards |
+| `sLocalHost` | `STRING(64)` |  | the near broker |
+| `nLocalPort` | `UINT` |  | 0 for the standard port |
+| `eLocalSecurity` | `E_MqttSecurity` |  | plain or TLS on the near side |
+| `sRemoteHost` | `STRING(64)` |  | the far broker |
+| `nRemotePort` | `UINT` |  | 0 for the standard port |
+| `eRemoteSecurity` | `E_MqttSecurity` |  | plain or TLS on the far side |
+| `sRemoteUserName` | `STRING(64)` |  | the far side's login; empty for none |
+| `sRemoteUserPassword` | `STRING(64)` |  |  |
+| `sBridgeName` | `STRING(48)` |  | part of both client identifiers; empty for 'bridge' |
+| `sTopic` | `STRING(128)` |  | one rule: what to carry, wildcards allowed |
+| `eDirection` | `E_MqttDirection` |  | Out, In or Both |
+| `eQos` | `E_MqttQos` |  | the most this rule carries |
+| `sLocalPrefix` | `STRING(64)` |  | in front of the topic on the near side |
+| `sRemotePrefix` | `STRING(64)` |  | in front of the topic on the far side |
+| `bForwardRetained` | `BOOL` |  | a retained message stays retained across |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `STATE` | `E_MqttBridgeState` |  |
-| `LOCAL_UP` | `BOOL` |  |
-| `REMOTE_UP` | `BOOL` |  |
-| `FORWARDED_OUT` | `DINT` |  |
-| `FORWARDED_IN` | `DINT` |  |
-| `REFUSED_OUT` | `DINT` |  |
-| `REFUSED_IN` | `DINT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `eBridgeState` | `E_MqttBridgeState` |  |  |
+| `bLocalUp` | `BOOL` |  | the near end is connected |
+| `bRemoteUp` | `BOOL` |  | the far end is connected |
+| `nForwardedOut` | `DINT` |  | carried local to remote |
+| `nForwardedIn` | `DINT` |  | carried remote to local |
+| `nRefusedOut` | `DINT` |  | the far side would not take it |
+| `nRefusedIn` | `DINT` |  | the near side would not take it |
+| `bError` | `BOOL` |  |  |
+| `eErrorId` | `E_MqttResult` |  |  |
 
-ONE INSTANCE, MANY RULES. Call the same instance several times in a scan, each
-with a different TOPIC, and each call adds a rule - the connection pins are
-read from the first call and the rest add to the mapping. A site carrying
-three topic trees is one block called three times, not three bridges.
+ONE INSTANCE, MANY RULES. Call the same instance several times in a scan,
+each with a different sTopic, and each call adds a rule - the connection pins
+are read from the first call and the rest add to the mapping. A site carrying
+three topic trees is one block called three times, not three bridges. The
+rules are collected on the first scan and the connections built on the
+second, so a rule called later in the program still arrives before either
+end connects. A rule repeated in a scan is one rule. Once started the rules
+are fixed: a changed sTopic takes effect when bEnable goes FALSE and TRUE.
 
-The rules are collected on the first scan and the connections built on the
-second, which is why a rule added later in the program still arrives before
-either end connects.
-
-E_MqttBridgeState.Degraded is the state worth alarming on. It means one end is
+E_MqttBridgeState.Degraded IS THE STATE WORTH ALARMING ON. One end is
 connected and the other is not, so half the traffic is flowing and the other
-half is piling up - which from the site looks like everything working and from
+half piling up - which from the site looks like everything working and from
 head office looks like the site has died.
 
-A MAPPING THAT WOULD LOOP IS REFUSED, not carried. Two rules that would carry
-this bridge's own output back into it are a message storm that takes a broker
-down, and on 5.0 the No Local subscription option prevents it outright. Where
-the version cannot express that, the configuration is rejected at start with
-E_MqttResult.InvalidArgument rather than accepted and regretted.
+REFUSED AT START, rather than half applied, each with bError and
+E_MqttResult.InvalidArgument: no rules (two connections carrying nothing and
+looking healthy); TlsPinned on either side; and a mapping that would loop.
+Two rules carrying this bridge's own output back into it are a message storm
+that takes a broker down; at 5.0 the No Local subscription option prevents it
+outright, and where the version cannot express that, the configuration is
+rejected.
+
+THE RUNTIME ONLY. A bridge is two simultaneous connections, two sessions and
+two send queues, usually with TLS on one. On a board that is most of the heap,
+so there it sets bError with InvalidArgument and does nothing. The shape that works on a board is
+FB_MqttBroker on the panel serving the line, and the bridge upstream on a
+Runtime.
+
+A BRIDGE IS NOT A CLIENT. It owns two clients of its own, named from
+sBridgeName, and carries what its rules say. A PLC that bridges and also
+publishes runs an FB_MqttClient of its own beside it.
 
 ---
 
-## MQTT_BROKER
+## FB_MqttBroker
 
 ```
 Makes this PLC the broker other devices connect to. Standalone - it owns its
-own listener and takes no CLIENT.
+listener and takes no FB_MqttClient. Call it once every scan, in the network
+task; each device's account is a call of its User method.
 
-ENABLE       TRUE listens. A falling edge stops and releases the port.
-LISTEN_ON      which interface to listen on. Empty for all of them.
-PORT         0 for 1883.
-MAX_CLIENTS  connections served at once. 0 for 32.
-MAX_RETAINED retained messages held. 0 for 256.
-MAX_SUBSCRIPTIONS  subscriptions each client session may hold. 0 for 32
-             (8 on a board).
-MAX_QUEUED   messages held for each client while it is away or slow. 0 for
-             64 (16 on a board).
-MAX_MESSAGE  the largest message, in bytes, a client may send or be sent;
-             also each connection's buffer size. 0 for 8192 (1024 on a
-             board).
-MAX_SESSION_EXPIRY  how long a session is kept after its client goes: a
-             3.1.1 client's persistent session, and the most a 5.0 client
-             may ask for. 0 for 1 h. Read when the broker starts.
-SECURITY   E_MqttSecurity.Plain serves clear text on 1883, the way this block always
-           has. Anything else serves TLS, and then:
-             no CERT_FILE      the broker makes its OWN certificate on first
-                               start, keeps it beside the program and presents
-                               the same one every start after. Zero
-                               configuration; clients pin BROKER_KEY.
-             CERT_FILE + KEY_FILE
-                               a real certificate - from the site's own CA, or
-                               a public one. Clients verify it the ordinary
-                               way, hostname and all, with nothing pinned.
-           Self-signed is the DEFAULT, not a ceiling. The obstacle was never
-           the engine; it was that a certificate does not fit on a pin, and a
-           path does.
-CERT_FILE  a certificate to present, as a path on the Runtime. Empty to make
-           one.
-KEY_FILE   its private key. One without the other is refused rather than half
-           applied.
+bEnable            TRUE listens. A falling edge stops and releases the port.
+sListenOn          which interface to listen on. Empty for all of them.
+                   Ignored on a board, which listens where its core is up.
+nPort              0 for 1883.
+nMaxClients        connections served at once. 0 for 32 (4 on a board).
+nMaxRetained       retained messages held. 0 for 256 (32 on a board).
+eSecurity          E_MqttSecurity.Plain serves clear text. Anything else
+                   serves TLS, and then:
+                     no sCertFile      the broker makes its OWN certificate on
+                                       first start, keeps it beside the
+                                       program and presents the same one every
+                                       start after. Zero configuration;
+                                       clients pin sBrokerKey.
+                     sCertFile + sKeyFile
+                                       a real certificate - from the site's
+                                       own CA, or a public one. Clients verify
+                                       it the ordinary way, host name and all,
+                                       with nothing pinned.
+sCertFile          a certificate to present, as a path on the Runtime. Empty
+                   to make one. Refused on a board, which has no file system
+                   this block may assume.
+sKeyFile           its private key. One without the other is refused rather
+                   than half applied.
+nMaxSubscriptions  subscriptions each client session may hold. 0 for 32
+                   (8 on a board).
+nMaxQueued         messages held for each client while it is away or slow.
+                   0 for 64 (16 on a board).
+nMaxMsgSize        the largest message, in bytes, a client may send or be
+                   sent; also each connection's buffer size. 0 for 8192
+                   (1024 on a board).
+tMaxSessionExpiry  how long a session is kept after its client goes: a 3.1.1
+                   client's persistent session, and the most a 5.0 client may
+                   ask for. T#0s for 1 h. Read when the broker starts.
 
-ACCOUNTS   are not a pin. Draw one MQTT_BROKER_USER rung per device, wired to
-           this block. Declaring any account makes accounts REQUIRED for every
-           connection - including one whose ENABLE is off, so switching off the
-           last account locks the broker rather than quietly opening it. With
-           no MQTT_BROKER_USER at all the broker admits anybody, as it always
-           has; on a network that is not isolated, declare accounts.
+bListening         the port is open.
+nClients           connections attached now. THIS PLC COUNTS AS ONE of them
+                   if it also runs an FB_MqttClient against itself, which is
+                   how a broker PLC publishes anything: a broker holds no
+                   values of its own.
+nSessions          sessions held, including those of clients currently away
+                   whose state has not expired.
+nAccepted          connections accepted at the socket.
+nAdmitted          of those, how many earned a successful CONNACK. A socket
+                   that opens and never becomes a client is a scanner, or bad
+                   credentials.
+nRefused           and how many were turned away - a client with another
+                   login than the one that made an existing session among
+                   them.
+nFromClients       messages accepted from clients.
+nToClients         messages sent to clients.
+nDropped           deliveries a full client queue could not take. Not silent:
+                   at QoS above 0 the publisher is told (0x97) rather than
+                   left believing it arrived.
+nTakeovers         times a client identifier was claimed by a second
+                   connection with the same login, and the first was
+                   disconnected. Climbing usually means two devices share an
+                   identifier.
+bError             something failed.
+eErrorId           why. E_MqttResult.Ok when fine.
+sBrokerKey         the SHA-256 of this broker's public key, 64 hexadecimal
+                   characters: what a client pins against. Empty while
+                   serving plain.
 
-LISTENING    the port is open.
-CLIENTS      connections attached right now. THIS PLC COUNTS AS ONE of them if
-             it also runs MQTT_CLIENT against itself, which is the ordinary way
-             a broker PLC gets onto its own bus - a broker holds no values, so
-             anything that publishes or subscribes is a client.
-SESSIONS     sessions held, including those of clients currently away whose
-             state has not expired.
-ACCEPTED     running total of connections accepted at the socket.
-ADMITTED     of those, how many earned a successful CONNACK. A socket that
-             opens and never becomes a client is a scanner, or bad credentials.
-REFUSED      and how many were turned away - a client with a different login
-             than the one that made an existing session among them.
-FROM_CLIENTS    messages accepted from clients.
-TO_CLIENTS    messages sent to clients.
-DROPPED      deliveries a full client queue could not take. Not silent: at
-             QoS above 0 the publisher is told rather than left believing it
-             arrived.
-TAKEOVERS    times a client identifier was claimed by a second connection
-             with the same login, and the first was disconnected. A number
-             that climbs usually means two devices share an identifier.
-ERROR        something failed.
-STATUS       why. E_MqttResult.Ok when fine.
+METHODS
+
+  broker.User(sUserName, sUserPassword, bAllow, bActive =>, nLoginCnt =>,
+              nRefusedCnt =>)
+
+     ONE ACCOUNT ON THIS PLC'S BROKER. Standing: call it every scan, once per
+     device that connects, in the broker's task. Declaring ANY account makes
+     accounts REQUIRED for every connection - including one whose bAllow is
+     FALSE, so switching off the last account locks the broker rather than
+     quietly opening it. With no User call at all the broker admits anybody;
+     on a network that is not isolated, declare accounts.
+
+     An account whose call stops (renamed while running, or no longer
+     called) is switched off and its password wiped at the broker's next
+     scan, so nothing can still log in under a name nobody can see in the
+     program; it still counts as declared, so the broker stays locked. Call
+     it again and it is back, its counters kept.
+
+     sUserName      the name the device logs in with. Compared exactly, case
+                    included. The call's key.
+     sUserPassword  its password. Up to 64 characters; compared in full,
+                    never stopping at the first difference.
+     bAllow         FALSE refuses this device without forgetting it.
+
+     bActive        the account is declared and allowed.
+     nLoginCnt      times this device has connected successfully.
+     nRefusedCnt    times a connection under this name was turned away - a
+                    wrong password, or the account switched off. Climbing on
+                    one device and not the others is that device's settings.
+
+     Returns E_MqttResult.Ok, InvalidArgument for an empty sUserName,
+     QuotaExceeded when memory for one more account ran out (the table grows
+     with the calls, on a board and the Runtime alike), or WrongTask.
+
+     ONE CALL PER ACCOUNT rather than a list: an account is something an
+     engineer adds, removes and switches off one device at a time, and a call
+     per device makes each one visible, commentable and interlockable. AND
+     EACH DEVICE ITS OWN: a shared password cannot be revoked from one
+     controller without changing all of them, and a log that says
+     "plant-user refused" does not say which panel to go to. Topic
+     permissions are not here: this decides who may CONNECT.
 ```
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `ENABLE` | `BOOL` | `TRUE` |
-| `LISTEN_ON` | `STRING(48)` |  |
-| `PORT` | `UINT` |  |
-| `MAX_CLIENTS` | `INT` |  |
-| `MAX_RETAINED` | `INT` |  |
-| `SECURITY` | `E_MqttSecurity` |  |
-| `CERT_FILE` | `STRING(128)` |  |
-| `KEY_FILE` | `STRING(128)` |  |
-| `MAX_SUBSCRIPTIONS` | `INT` |  |
-| `MAX_QUEUED` | `INT` |  |
-| `MAX_MESSAGE` | `DINT` |  |
-| `MAX_SESSION_EXPIRY` | `TIME` |  |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bEnable` | `BOOL` | `TRUE` | TRUE listens; a falling edge releases the port |
+| `sListenOn` | `STRING(48)` |  | the interface to listen on; empty for all |
+| `nPort` | `UINT` |  | 0 for 1883 |
+| `nMaxClients` | `INT` |  | connections served at once; 0 for the default |
+| `nMaxRetained` | `INT` |  | retained messages held; 0 for the default |
+| `eSecurity` | `E_MqttSecurity` |  | E_MqttSecurity.Plain, or TLS |
+| `sCertFile` | `STRING(128)` |  | a certificate to present (Runtime); empty to make one |
+| `sKeyFile` | `STRING(128)` |  | its private key |
+| `nMaxSubscriptions` | `INT` |  | subscriptions per client session; 0 for the default |
+| `nMaxQueued` | `INT` |  | messages held per client while away; 0 for the default |
+| `nMaxMsgSize` | `DINT` |  | the largest message in bytes; 0 for the default |
+| `tMaxSessionExpiry` | `TIME` |  | how long a session outlives its client; T#0s for 1 h |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `LISTENING` | `BOOL` |  |
-| `CLIENTS` | `INT` |  |
-| `SESSIONS` | `INT` |  |
-| `ACCEPTED` | `DINT` |  |
-| `ADMITTED` | `DINT` |  |
-| `REFUSED` | `DINT` |  |
-| `FROM_CLIENTS` | `LINT` |  |
-| `TO_CLIENTS` | `LINT` |  |
-| `DROPPED` | `LINT` |  |
-| `TAKEOVERS` | `DINT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-| `BROKER_KEY` | `STRING(64)` |  |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bListening` | `BOOL` |  | the port is open |
+| `nClients` | `INT` |  | connections attached now |
+| `nSessions` | `INT` |  | sessions held, away clients included |
+| `nAccepted` | `DINT` |  | connections accepted at the socket |
+| `nAdmitted` | `DINT` |  | of those, given a successful CONNACK |
+| `nRefused` | `DINT` |  | of those, turned away |
+| `nFromClients` | `LINT` |  | messages accepted from clients |
+| `nToClients` | `LINT` |  | messages sent to clients |
+| `nDropped` | `LINT` |  | deliveries a full client queue could not take |
+| `nTakeovers` | `DINT` |  | client identifiers claimed by a second connection |
+| `bError` | `BOOL` |  |  |
+| `eErrorId` | `E_MqttResult` |  |  |
+| `sBrokerKey` | `STRING(64)` |  | The SHA-256 of this broker's own public key, 64 hexadecimal characters. This is the number a client pins against: read it off the panel once at commissioning and it does not change again, because it is a fingerprint of the KEY rather than of the certificate - so it survives the certificate being reissued. Empty while the broker is serving plain TCP. |
+
+### FB_MqttBroker.User
+
+```
+result := broker.User(sUserName := ..., sUserPassword := ..., bAllow := ...,
+                      bActive => ..., nLoginCnt => ..., nRefusedCnt => ...);
+```
+
+Returns `E_MqttResult`.
+One account on this broker, called every scan, once per device. Any account makes accounts required for every connection. Ok; InvalidArgument for an empty sUserName; QuotaExceeded out of memory.
+
+**Inputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sUserName` | `STRING(64)` |  | the name the device logs in with; case-sensitive |
+| `sUserPassword` | `STRING(64)` |  | its password |
+| `bAllow` | `BOOL` | `TRUE` | FALSE refuses this device without forgetting it |
+
+**Outputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bActive` | `BOOL` |  | the account is declared and allowed |
+| `nLoginCnt` | `DINT` |  | times this device has connected |
+| `nRefusedCnt` | `DINT` |  | connections under this name turned away |
 
 WHY PUT A BROKER IN A PLC. A site with twenty sensors and an intermittent
 uplink does not want twenty devices each retrying a connection to head office.
 Point them at the PLC, let it hold the retained values and the sessions, and
-bridge one connection upstream with MQTT_BRIDGE. The site keeps working when
+carry one connection upstream with FB_MqttBridge. The site keeps working when
 the link does not, and comes back in step when it returns.
 
-RUNS ON A BOARD TOO, and for a while it did not. The broker was always
-platform-neutral - the routing, the retained store, the session registry and
-takeover compile anywhere - and what was missing was a listener that could
-accept a connection without a BSD socket. There are two now, so an ESP32
-running this block is a real broker and not a stub.
+A BROKER DOES NOT PUBLISH. It routes what clients send. A PLC that is the
+broker and also publishes runs an FB_MqttClient against itself
+(sHost := '127.0.0.1') beside this block, in the same task.
 
-What differs on a board:
+ON A BOARD TOO. The routing, the retained store, the session registry and
+takeover compile anywhere, and an Arduino listener accepts connections
+without a BSD socket, so an ESP32 running this block is a real broker. What
+differs on a board:
 
-  LISTEN_ON        ignored. An Arduino server listens on whatever interface
-                   the core brought up; there is no second one to choose.
-  CERT_FILE,
-  KEY_FILE         refused rather than ignored. They are paths, and a board
-                   has no file system this block may assume.
-  BROKER_KEY       the fingerprint of a certificate made on THIS run. There is
+  sListenOn        ignored.
+  sCertFile,
+  sKeyFile         refused rather than ignored: they are paths.
+  sBrokerKey       the fingerprint of a certificate made on THIS run. There is
                    nowhere on a board to keep a key, so it moves on every
                    restart - either re-pin after a reflash, or serve plain on
-                   an isolated line and put the TLS on the MQTT_BRIDGE that
-                   leaves it, which is the connection that needs it.
+                   an isolated line and put the TLS on the FB_MqttBridge that
+                   leaves the site, which is the connection that needs it.
   the defaults     sized for a panel: four connections, eight sessions, 1 kB
                    buffers, 32 retained, 8 subscriptions and 16 queued
-                   messages per session. The Runtime's defaults would be tens
-                   of kilobytes. Every one is a pin: raise the ones a site
-                   needs, within the board's memory - each connection holds
-                   two MAX_MESSAGE buffers.
+                   messages per session. Every one is a pin: raise the ones a
+                   site needs, within the board's memory - each connection
+                   holds two nMaxMsgSize buffers.
 
 Serving TLS on a board also needs wolfSSL on the include path; serving plain
 needs nothing at all. WiFi comes with the ESP32 core, and Ethernet is opt-in:
-MQTT_ENABLE_ETHERNET, a define in the board package's compiler flags (an
-OpenPLC project has no build flags of its own).
+MQTT_ENABLE_ETHERNET, a define in the board package's compiler flags.
 
-TAKEOVERS is the pin to watch on a new site. MQTT says a second connection
+SELF-SIGNED IS THE DEFAULT, NOT A CEILING. The obstacle was never the TLS
+library; it was that a certificate does not fit on a pin, and a path does.
+
+nTakeovers IS THE PIN TO WATCH ON A NEW SITE. MQTT says a second connection
 using an existing client identifier displaces the first, so two devices
-flashed with the same identifier will knock each other off for ever, each
-reconnecting and each looking healthy on its own. This counter is how that
-looks from the middle, and it is the only place it is visible. A session
-belongs to the login that made it: a client that uses another login with an
-existing identifier is refused (CONNACK 0x85; 0x02 at 3.1.1) and counts on
-REFUSED, not here. Without logins every client is the same nobody, so
-takeovers work as before.
+flashed with the same identifier knock each other off for ever, each looking
+healthy on its own. This counter is the only place that shows from the
+middle. A session belongs to the login that made it: a client with another
+login and an existing identifier is refused (CONNACK 0x85; 0x02 at 3.1.1) and
+counts on nRefused, not here. Without logins every client is the same
+nobody, so takeovers work as before.
 
-SESSIONS EXPIRE. A persistent session (clean session off) of a 3.1.1 client is
-kept for MAX_SESSION_EXPIRY after it goes (an hour unless set), then dropped -
-before, it was kept until the broker restarted. A 5.0 client says how long
-itself, up to the same limit. Raise it for devices that sleep longer.
+SESSIONS EXPIRE. A persistent session of a 3.1.1 client is kept for
+tMaxSessionExpiry after it goes (an hour unless set), then dropped. A 5.0
+client says how long itself, up to the same limit. Raise it for devices that
+sleep longer; every session held keeps its queue. Sessions and retained
+messages are in RAM: a power cut loses them, which is legal MQTT.
 
 REFUSED AS THE STANDARD SAYS. A Will topic with wildcards (0x90), a Will
 declared UTF-8 that is not (0x99), a PUBLISH from a client carrying a
 Subscription Identifier, two Subscription Identifiers in one SUBSCRIBE, No
 Local on a $share subscription, and a 3.1.1 CONNECT with a password but no
-user name are refused or disconnected. A 3.1.1 QoS 2 message when the client's
-inbound table is full closes the connection rather than being acknowledged
-and lost.
+user name are refused or disconnected. A 3.1.1 QoS 2 message when the
+client's inbound table is full closes the connection rather than being
+acknowledged and lost.
+
+ITS COST SCALES WITH nClients: it services each connection once per call.
+Still bounded, still non-blocking, not free. Put it in the network task.
 
 ---
 
-## MQTT_BROKER_USER
+## FB_MqttClient
 
 ```
-ONE ACCOUNT ON THIS PLC'S BROKER. Draw one rung per device that connects.
+An MQTT client: one connection to one broker. Call it once every scan, in
+the network task. Everything this PLC publishes and subscribes on that broker
+is a method of this block, and the Sparkplug blocks ride on its connection.
 
-USERNAME   the name the device logs in with. Compared exactly, case included -
-           MQTT user names are case-sensitive.
-PASSWORD   its password. Up to 64 characters, which is what a STRING pin
-           carries; compared in full, never stopping at the first difference.
-ENABLE     FALSE refuses this device without forgetting it. The account still
-           counts as declared, so the broker STILL REQUIRES ACCOUNTS: switching
-           off the last one locks the broker, it does not open it.
+eTransport  where the bytes go. The target must have it; one it does not have
+           is reported on bError and sLastError, never built.
+             E_MqttTransport.RuntimeTcp       the OpenPLC Runtime's network
+             E_MqttTransport.ArduinoWiFi      a board's Wi-Fi. stNetworkConfig
+                                              joins it, or node-uio's NETWORK
+             E_MqttTransport.ArduinoEthernet  a board's Ethernet, from
+                                              stNetworkConfig's MAC and address
+             E_MqttTransport.Cellular         the modem a modbee-gsm GSM_MODEM
+                                              runs, on a board. Opening the
+                                              socket takes about 1.5 s, never
+                                              longer than tConnectTimeout
+             E_MqttTransport.External         nExternalLink, and nothing else
+eSecurity   plain or TLS, and which kind of TLS. Separate from eTransport,
+           because they are separate questions: one list of every combination
+           would make the ones that do not exist look legal.
+             E_MqttSecurity.Plain        no encryption. Port 1883
+             E_MqttSecurity.TlsVerify    a broker somebody signed for: chain,
+                                         dates and host name are checked (a
+                                         board checks chain and host name - it
+                                         has no clock to judge a date). For
+                                         anything public - AWS IoT, HiveMQ, a
+                                         platform - whose key rotates every
+                                         ninety days and would break a pin
+             E_MqttSecurity.TlsPinned    a broker nobody signed for: a ModBee
+                                         PLC broker, a site's own Mosquitto.
+                                         Trusts ONE key and skips chain and
+                                         expiry on purpose. See bTrustNew
+             E_MqttSecurity.TlsInsecure  encrypted and NOT checked. For a
+                                         bench, never for a plant
+sHost       the broker: a name or an address. Empty is refused.
+nPort       0 for the standard one: 1883 plain, 8883 TLS.
+sClientId   what the broker calls this device. EVERY DEVICE ON A BROKER NEEDS
+           ITS OWN: two sharing one knock each other off for ever. Empty asks
+           the broker to assign one, shown on sAssignedId. Provision uses it
+           as the PLC's name.
+eProtocol   which MQTT version to speak. E_MqttProtocol.V5ThenV311 (the
+           default) tries 5.0 and drops to 3.1.1 only when the broker says the
+           VERSION is the problem - never on a login or network failure.
+           E_MqttProtocol.V5 and E_MqttProtocol.V311 speak one only.
+nExternalLink  a transport another block made, for
+           eTransport := E_MqttTransport.External. Not something to wire by
+           hand.
+bConnect    TRUE connects and stays connected. FALSE says goodbye properly -
+           the broker publishes no Will - and keeps the client, so every
+           method's record survives the gap.
+bTrustNew   for E_MqttSecurity.TlsPinned only. TRUE lets the FIRST key a broker
+           shows be learned and kept, in this block's own retained memory
+           (trust on first use, as SSH does). Once learned it is ENFORCED,
+           whether bTrustNew stays TRUE or not and across restarts: a broker
+           showing another key is refused and sBrokerKey shows the key it
+           presented. Wiring it TRUE is therefore safe. To accept a broker
+           REPLACED ON PURPOSE, switch it FALSE and TRUE again: the rising
+           edge forgets the stored key and the next connection learns the new
+           one. FALSE with nothing stored refuses to connect. Turn on the
+           project's persistent storage, or the key is learned again on every
+           start.
 
-ACTIVE     the account is declared and enabled.
-LOGINS     times this device has connected successfully.
-REFUSED    times a connection under this name was turned away - a wrong
-           password, or the account switched off. A number that climbs on one
-           device and not the others is that device's configuration.
-ERROR      the account could not be declared; STATUS says why.
-STATUS     E_MqttResult.InvalidArgument for an empty USERNAME, E_MqttResult.QuotaExceeded
-           when the broker cannot hold another account: when memory for one
-           ran out. The table grows with these blocks, on a board and the
-           Runtime alike.
+stSessionConfig  ST_MqttSessionConfig, everything about the session. Every
+           member left at its default is the right answer for most sites.
+             tKeepAlive     how often client and broker show they are there.
+                            T#0s = 60 s. Whole seconds, rounded up
+             bCleanStart    TRUE (default) starts a fresh session each time:
+                            right for a sensor with nothing to catch up on.
+                            FALSE keeps the session for what must not be
+                            lost across a drop, at the broker's memory
+             tSessionExpiry MQTT 5: how long the broker keeps the session
+                            after a disconnect. T#0s = not at all
+             sUserName      the login; empty for none. Leave empty when
+                            Provision gives the login
+             sUserPassword  its password. In the clear unless eSecurity is
+                            TLS. Put it in a variable, not a literal
+             nMaxPending    publishes and subscribes that may wait for the
+                            broker at once (QoS 1 and 2). 0 = 32. Past it a
+                            method gets QueueFull, never a silent drop
+             nMaxMsgIn      the largest message received, bytes. 0 = 4096.
+                            Raise it on the subscribing end for JSON
+             nMaxMsgOut     the largest message sent, bytes. 0 = 4096. A
+                            larger publish is refused with PacketTooLarge
+             tReconnect     the first wait before reconnecting. T#0s = 1 s
+             tReconnectMax  the longest wait between attempts. T#0s = 1 min
+             tConnectTimeout how long a broker that accepts a socket may say
+                            nothing. T#0s = 20 s. Raise it for a slow
+                            cellular or TLS link
+             tMaxSilence    reconnect when nothing at all arrives for this
+                            long, whatever our own sending looks like.
+                            T#0s = never. On cellular, three keep-alives: a
+                            modem takes our bytes and says "sent" whether or
+                            not anything reaches the broker
+             bAutoReconnect TRUE (default) reconnects by itself after a loss.
+                            On cellular the reconnect can stall a scan:
+                            consider FALSE and reconnect from your logic
+             bRetryRejectedCredential  TRUE retries a refused login at the
+                            usual backoff. FALSE (default) tries a refused
+                            login again only every five minutes
+stTlsConfig  ST_MqttTlsConfig, what to trust. Files on the Runtime; a board
+           takes them from the board package's defines (below).
+             sCaFile        the certificate authority. Empty = the system's
+             sCertFile      this client's certificate, for mutual TLS
+             sKeyFile       its private key. One without the other is refused
+stNetworkConfig  ST_MqttNetworkConfig, what only a board has. Refused on the
+           Runtime, which uses its machine's network.
+             sSsid          ArduinoWiFi: the network to join. Empty when
+                            node-uio's NETWORK joins it
+             sWiFiPassword  its password; empty for an open network
+             sMac           ArduinoEthernet: this board's MAC,
+                            'DE:AD:BE:EF:FE:ED'. Each board needs its own
+             sIp            a fixed address; empty or 'dhcp' = DHCP. A fixed
+                            address is what you want: DHCP is bounded to 1 s
+                            an attempt and retried, a stall each time, and a
+                            plant network rarely runs it
+             sGateway       the router, with a fixed address
+             sSubnet        the mask, with a fixed address
+stWillConfig  ST_MqttWillConfig, presence: 'online' on every connection and
+           the Will the broker sends when this device is gone without a
+           goodbye. Not with a Sparkplug node or host on this client: their
+           birth and death certificates are the presence.
+             sTopic         where; empty = no presence
+             sOnline        sent on every connection. Empty = 'online'
+             sOffline       the Will. Empty = 'offline'
+             bRetain        TRUE (default): late subscribers are told too
+             eQos           for both
+             tDelay         MQTT 5: how long the broker waits before sending
+                            the Will. A reconnect inside it sends nothing, so
+                            a marginal radio does not cry wolf. Refused at
+                            3.1.1, which cannot carry it
 
-WHY ONE BLOCK PER ACCOUNT rather than a list on MQTT_BROKER: an account is
-something an engineer adds, removes and switches off one device at a time, and
-a rung per device makes each one visible, commentable and interlockable. A
-list on a pin would be an array, typed by hand, with no way to disable one
-entry.
+bLinkUp     the client exists and its link is open.
+bConnected  the broker has acknowledged us. THE ONE TO INTERLOCK ON. FALSE
+           while Provision is connected only with its key.
+tHeardAgo   how long since anything arrived from the broker on this
+           connection (T#0s while not connected). A healthy broker is heard at
+           least once a keep-alive - it answers our ping - so "bConnected and
+           tHeardAgo under three keep-alives" proves the broker is really
+           there, which a modem that only buffers our bytes cannot fake.
+bSessionPresent  the broker had our session waiting. FALSE after a clean
+           start and on a first connection.
+sAssignedId the client identifier in force, ours or the broker's.
+eConnectionState  where the connection is up to: Idle, Connecting,
+           AwaitingConnAck, Authenticating, Connected, Disconnecting,
+           Reconnecting.
+bError      something failed.
+eErrorId    why. E_MqttResult.Ok when fine; E_MqttResult.NotAuthorized when
+           the broker refused the login.
+sLastError  in words: the operating system's ("Connection refused", "Name or
+           service not known"), the broker's ("the broker refused the
+           connection: Not authorized"), or TLS's, which on a board is a short
+           fixed line with the TLS library's code ("TLS: wrong host name",
+           "TLS: broker refused us -0x7780"; docs/09 lists them). "out of
+           memory for topics or subscriptions" when a method's topic could not
+           be held; "out of memory for MAX_PENDING - the queue holds N" when
+           stSessionConfig.nMaxPending could not be taken.
+sBrokerKey  the SHA-256 of the key the broker presented, 64 hexadecimal
+           characters, pinned or not. Write it down at commissioning. Empty on
+           a plain connection.
 
-WHY EACH DEVICE GETS ITS OWN. A shared password cannot be revoked from one
-controller without changing it on all of them, and a broker log that says
-"plant-user refused" does not say which panel to go to.
+METHODS
 
-WHAT IS NOT HERE: topic permissions. This decides who may CONNECT.
+Each call is found again by what it is about: anyValue's (anyData's)
+declared name and type, and the method. A literal or an expression has no
+name, and is found by its topic. So one variable is one record per method:
+to send one variable to two topics, give each call its own variable. A
+client holds up to 256 records; past that a method returns
+E_MqttResult.QueueFull. Every method runs in this block's task and returns
+E_MqttResult.WrongTask in any other.
+
+A REQUEST (Publish, Request) starts on a rising edge of bExecute and takes
+its inputs at that edge; changing them while it runs has no effect. It
+returns E_MqttResult.Queued while it runs, then its outcome, held until the
+next edge. Not connected at the edge: E_MqttResult.NotConnected at once,
+never queued for later.
+
+A STANDING METHOD (Report, Subscribe, PublishStruct, SubscribeStruct,
+Response, Message, Provision) is called every scan while it is wanted, and
+its inputs may change while it runs. E_MqttResult.Ok means the record is
+valid; E_MqttResult.NotConnected while there is no link, the record kept.
+Subscriptions are made again by themselves after a reconnect where the broker
+kept no session.
+
+  mqtt.Publish(anyValue, sTopic, eQos, bRetain, bExecute)
+     ONE MESSAGE, on a rising edge of bExecute. anyValue goes as the text of
+     its declared type: 23.5, 42, true, a STRING's text. A STRUCT, an array
+     or a TIME is refused. sTopic has no wildcards. bRetain keeps it on the
+     broker for later subscribers: retain a state, never an event.
+     Queued until the broker has it (QoS 1 and 2) or it has left (QoS 0),
+     then Ok - a delivery receipt at QoS 1 and 2, a despatch note at QoS 0.
+     NotConnected (at the edge, or the link lost while it ran),
+     InvalidArgument (a type the wire cannot carry), InvalidTopic,
+     QueueFull, or the broker's refusal.
+
+  mqtt.Report(anyValue, sTopic, eTrigger, fDeadband, tPeriod, eQos, bRetain,
+              bEnable, bExecute, nSent =>, tAge =>)
+     A VARIABLE, published when it is worth publishing. eTrigger:
+       E_MqttTrigger.OnChange    when it moves by fDeadband or more from the
+                                 value last sent, and every tPeriod anyway.
+                                 A STRING (no number) when its text changes
+       E_MqttTrigger.OnInterval  every tPeriod, which must be set
+       E_MqttTrigger.OnRequest   on bExecute's rising edge; nothing else, no
+                                 first value, no heartbeat
+     ALWAYS SET tPeriod WITH OnChange: a value that never moves otherwise
+     publishes nothing, and the far end cannot tell that from a dead device.
+     A BOOL counts as 1.0 or 0.0, so leave fDeadband 0 for anything that is
+     not an analogue. bEnable FALSE stops it, keeping the record; an edge of
+     bExecute raised meanwhile does not fire on enabling. A new sTopic sends
+     its first value at once. nSent counts messages; tAge is the time since
+     the last one (T#0s before the first, which nSent = 0 tells apart).
+     Ok, NotConnected, InvalidArgument (a type the wire cannot carry,
+     OnInterval with no tPeriod, E_MqttTrigger.ChangedEvery, which is
+     Sparkplug's), QueueFull, or the broker's refusal.
+
+  mqtt.Subscribe(anyValue, sTopic, eQos, tExpect, bEnable, bSubscribed =>,
+                 eQuality =>, bSeen =>, tAge =>, nReceived =>, nMalformed =>,
+                 bNewValue =>)
+     A VARIABLE KEPT UP TO DATE from sTopic (wildcards allowed: the variable
+     then holds whichever arrived last). A payload is read as anyValue's
+     declared type and written straight into it; one that does not parse is
+     counted on nMalformed and leaves anyValue alone. eQos is the most the
+     broker may use. eQuality is judged against tExpect, the interval YOU
+     expect a value in:
+       E_MqttQuality.Unknown    nothing has EVER arrived: a desk fault - a
+                                topic typo, a publisher never deployed
+       E_MqttQuality.Bad        the link is down, or more than twice overdue:
+                                a plant fault
+       E_MqttQuality.Uncertain  overdue, but not by twice
+       E_MqttQuality.Good       arrived inside tExpect. tExpect T#0s = no
+                                promise: Good once anything has arrived
+     bSeen is the same distinction as a BOOL, for a ladder rung, which cannot
+     compare an enumeration. tAge is the time since the last accepted value.
+     bNewValue: this call wrote anyValue. A new sTopic is a new subscription,
+     Unknown until it speaks. bEnable FALSE unsubscribes, keeping the record.
+     Ok, NotConnected, QueueFull, or the broker's refusal.
+
+  mqtt.PublishStruct(anyData, sBase, eTrigger, tPeriod, eQos, bRetain,
+                     bEnable, bExecute, nPoints =>, nSkipped =>, nSent =>,
+                     nChanged =>)
+     A WHOLE STRUCT, each member on sBase/<member>: the member name IS the
+     topic, so the STRUCT is the topic scheme. OnChange sends a member when
+     it changes and every tPeriod anyway; OnInterval the whole set every
+     tPeriod; OnRequest the whole set on bExecute's rising edge, changed or
+     not. No deadband, on purpose: one number over mixed types would freeze
+     a BOOL. A member the wire cannot carry - an array, a nested STRUCT, a
+     TIME - is refused, counted on nSkipped, and the call returns
+     InvalidArgument; the other members still go. nPoints: members
+     published. nSent: messages for this record. nChanged: sent by this
+     call. Ok, NotConnected, InvalidArgument (also: not a STRUCT, OnInterval
+     with no tPeriod, ChangedEvery), InvalidTopic, QueueFull.
+
+  mqtt.SubscribeStruct(anyData, sBase, eQos, tExpect, bEnable, nPoints =>,
+                       nSkipped =>, bSubscribed =>, eQuality =>, bSeen =>,
+                       tOldest =>, nReceived =>, nMalformed =>,
+                       nNewValues =>)
+     A WHOLE STRUCT KEPT UP TO DATE, each member from sBase/<member>.
+     eQuality is the WORST member's: a recipe with one stale setpoint is not
+     a recipe to run. bSeen is FALSE, and tOldest T#0s, while any member has
+     never had a value; tOldest is the oldest member's age. nNewValues:
+     members written by this call. Members it cannot carry as for
+     PublishStruct. Link down: eQuality Bad. Ok, NotConnected,
+     InvalidArgument, InvalidTopic, QueueFull.
+
+  mqtt.Request(anyValue, sTopic, sReplyTopic, eQos, tTimeout, bExecute,
+               sReply =>, nReplyLen =>)
+     A QUESTION AND ITS ANSWER, MQTT 5 only. The rising edge of bExecute
+     clears sReply and publishes anyValue on sTopic with sReplyTopic as its
+     Response Topic and a counted Correlation Data; sReplyTopic is
+     subscribed beforehand, so the answer cannot arrive before anyone
+     listens. Give each requester its own sReplyTopic. Queued until the
+     answer (Ok, its text in sReply, up to 254 characters, nReplyLen
+     characters) or tTimeout (T#0s = 5 s: KeepAliveTimeout). NotConnected,
+     InvalidTopic (no sReplyTopic), NotSupportedByProtocol (a 3.1.1
+     connection: refused rather than sent with nowhere to answer),
+     InvalidArgument, QueueFull.
+
+  mqtt.Response(anyRequest, sTopic, anyReply, eQos, bEnable, bExecute,
+                bNewRequest =>, bAwaitingReply =>, sResponseTopic =>,
+                nReceived =>, nMalformed =>)
+     ANSWERS ANOTHER DEVICE'S MQTT 5 REQUEST. Requests arriving on sTopic
+     (wildcards allowed) are written into anyRequest as its declared type;
+     one that does not parse counts on nMalformed. bNewRequest: this call
+     took one. bAwaitingReply: the last request gave a Response Topic
+     (sResponseTopic) and is not answered yet. A rising edge of bExecute
+     sends anyReply there, quoting the request's Correlation Data, once per
+     request. Ok, NotConnected, and at the edge: InvalidTopic (nothing to
+     answer), NotSupportedByProtocol (3.1.1), InvalidArgument (anyReply's
+     type).
+
+  mqtt.Message(anyPayload, sTopic, eQos, bEnable, nLen =>, bTruncated =>,
+               nReceived =>, bNewMessage =>)
+     THE TEXT OF WHATEVER ARRIVES on sTopic (wildcards allowed), written into
+     the STRING variable anyPayload, one message per call. For JSON you
+     parse yourself, a state name, a command word. bNewMessage reports an
+     ARRIVAL, not a change: "open" sent twice is two messages. An EMPTY
+     message is not nothing - with retain it is how MQTT withdraws a value:
+     bNewMessage with nLen 0. bTruncated: longer than anyPayload or the
+     client's buffer - check it before trusting a JSON document. Ok,
+     NotConnected, InvalidArgument (anyPayload is not a STRING variable),
+     QueueFull.
+
+  mqtt.Provision(sKey, bForget, bProvisioned =>, bPending =>, bRefused =>,
+                 sUserName =>, sGroup =>, sPrefix =>, sReason =>)
+     ON A MODBEE BROKER, THE PLC GETS ITS OWN LOGIN by itself. sClientId is
+     its name and must be set; sKey comes from `modbee key create` on the
+     broker. The first start connects with the key, asks for a login and
+     keeps it in this block's retained memory, then reconnects as itself;
+     bConnected stays FALSE until then. Leave stSessionConfig's login empty.
+     Call it every scan, before this block's own call. bProvisioned: this
+     PLC has its own login and is connected with it. bPending: waiting for
+     approval on the broker (asked again every 30 s). bRefused: the broker
+     said no, sReason why (asked again every 5 minutes). sUserName: the
+     login in use. sGroup and sPrefix: what the key hands its devices - the
+     Sparkplug group and a topic prefix - kept with the login and valid from
+     the first scan. A login that stops working is replaced by itself; a
+     rising edge of bForget throws it away and registers again. Ok,
+     InvalidArgument (no sClientId; no sKey and no stored login),
+     NotAuthorized (refused), QueueFull.
+
+  mqtt.Statistics(nVersion =>, nConnects =>, nDisconnects =>,
+                  nReconnects =>, nPublished =>, nReceived =>,
+                  nPublishFailures =>, nProtocolErrors =>, nPending =>,
+                  nReasonCode =>)
+     THE CONNECTION'S COUNTERS, running totals since the program started.
+     nVersion: 5 or 4, the protocol in force. nReconnects climbing at the
+     same time each day is a lease or a job; with the weather, a radio.
+     nPublishFailures in a steady ratio to nPublished: something refuses
+     messages - read the sending method's result. nPending: operations
+     accepted and not yet concluded; climbing and never falling is a broker
+     that stopped acknowledging. nProtocolErrors not 0: one end has a bug.
+     nReasonCode: the broker's last reason code (always 0 at 3.1.1). Ok;
+     NotConnected while there is no link, the figures still written (they count across outages).
 ```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `BROKER` | `MQTT_BROKER` |  |
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `USERNAME` | `STRING(64)` |  |
-| `PASSWORD` | `STRING(64)` |  |
-| `ENABLE` | `BOOL` | `TRUE` |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `eTransport` | `E_MqttTransport` |  | where the bytes go: RuntimeTcp, ArduinoWiFi, ArduinoEthernet, Cellular, External |
+| `eSecurity` | `E_MqttSecurity` |  | Plain, TlsVerify, TlsPinned or TlsInsecure |
+| `sHost` | `STRING(64)` |  | the broker: a name or an address |
+| `nPort` | `UINT` |  | 0 for the standard one: 1883 plain, 8883 TLS |
+| `sClientId` | `STRING(48)` |  | what the broker calls this device; unique on the broker |
+| `eProtocol` | `E_MqttProtocol` |  | V5ThenV311 (default), V5 or V311 |
+| `nExternalLink` | `__XWORD` |  | eTransport External: a transport another block made |
+| `bConnect` | `BOOL` | `TRUE` | TRUE connects and stays connected; FALSE says goodbye |
+| `bTrustNew` | `BOOL` |  | TlsPinned: learn the first key a broker shows; an edge forgets it |
+| `stSessionConfig` | `ST_MqttSessionConfig` |  | keep-alive, session, login, queue and message sizes, reconnecting |
+| `stTlsConfig` | `ST_MqttTlsConfig` |  | certificate authority and client certificate (Runtime) |
+| `stNetworkConfig` | `ST_MqttNetworkConfig` |  | a board's Wi-Fi or Ethernet |
+| `stWillConfig` | `ST_MqttWillConfig` |  | presence: online on connect, the Will when gone |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `ACTIVE` | `BOOL` |  |
-| `LOGINS` | `DINT` |  |
-| `REFUSED` | `DINT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bLinkUp` | `BOOL` |  | the client exists and its link is open |
+| `bConnected` | `BOOL` |  | the broker has acknowledged us: the one to interlock on |
+| `tHeardAgo` | `TIME` |  | since anything last arrived from the broker |
+| `bSessionPresent` | `BOOL` |  | the broker had our session waiting |
+| `sAssignedId` | `STRING(48)` |  | the client identifier in force |
+| `eConnectionState` | `E_MqttState` |  | where the connection is up to |
+| `bError` | `BOOL` |  | something failed |
+| `eErrorId` | `E_MqttResult` |  | why; Ok when fine |
+| `sLastError` | `STRING(64)` |  | why, in words |
+| `sBrokerKey` | `STRING(64)` |  | SHA-256 of the key the broker presented, hexadecimal |
 
----
-
-## MQTT_CLIENT
+### FB_MqttClient.Publish
 
 ```
-Starts an MQTT client and hands itself to every other block. Call it first.
-
-TRANSPORT  where the bytes go. A MQTT_RUNTIME_* link runs on the OpenPLC
-           Runtime, a MQTT_ARDUINO_* link on a board, and E_MqttTransport.Cellular over
-           the modem a modbee-gsm GSM_MODEM runs, on a board. Choosing one the
-           target does not have is reported on the pins, not built.
-SECURITY   plain or TLS, and which kind of TLS. Separate from TRANSPORT,
-           because they are separate questions: one sixteen-value list would
-           make the combinations that do not exist look legal.
-             E_MqttSecurity.TlsVerify   a broker somebody signed for. The ordinary
-                               check: chain, dates and hostname (a board
-                               checks chain and hostname - it has no clock
-                               to judge a date). Use this for anything
-                               public - AWS IoT, HiveMQ, a customer's
-                               platform - where the key rotates every ninety
-                               days and pinning would break in the field.
-             E_MqttSecurity.TlsPinned   a broker nobody signed for: a ModBee PLC broker,
-                               or a site's own Mosquitto. Trusts ONE key, and
-                               skips chain and expiry deliberately - a
-                               controller with no clock cannot judge a date.
-                               The Runtime and an ESP32; see TRUST_NEW.
-HOST       the broker. A name or an address.
-PORT       0 for the standard one: 1883 plain, 8883 TLS.
-CLIENT_ID  what the broker calls this device. Empty asks the broker to assign
-           one, which it reports back on ASSIGNED_ID.
-PROTOCOL   which version to speak. E_MqttProtocol.V5ThenV311 tries 5.0 and drops to
-           3.1.1 only when the broker says the VERSION is the problem - never
-           on an authentication or network failure.
-EXTERNAL_LINK  a transport another block made, for
-           TRANSPORT := E_MqttTransport.External. Ignore it otherwise - it is the
-           escape hatch for a transport somebody else wrote, not something
-           to wire by hand.
-CONNECT    TRUE connects and stays connected. A falling edge stands the client
-           down without destroying it, so subscriptions and bindings survive.
-TRUST_NEW  for E_MqttSecurity.TlsPinned and nothing else. TRUE lets the FIRST key a
-           broker shows be learned and kept (trust on first use, as SSH does).
-           Once learned it is ENFORCED, whether TRUST_NEW stays on or not and
-           across restarts: a broker showing a different key is refused
-           (LAST_ERROR "TLS: not the pinned key" on a board, both fingerprints
-           on the Runtime) and BROKER_KEY shows the key it presented. Wiring
-           it TRUE is therefore safe.
-           To accept a broker REPLACED ON PURPOSE, switch TRUST_NEW off and on
-           again - the rising edge forgets the stored key and the next
-           connection learns the new one. FALSE with nothing stored refuses to
-           connect at all.
-
-LINK_UP      the client exists and its link is open.
-CONNECTED  the broker has acknowledged us. This is the one to interlock on.
-SESSION_PRESENT  the broker had our session waiting. FALSE after a clean start,
-           and FALSE on a first connection - which is how you tell a resumed
-           session from a fresh one.
-ASSIGNED_ID  the identifier in force, ours or the broker's.
-STATE      where the connection is up to, for a diagnostic page.
-ERROR      something failed.
-STATUS     why. E_MqttResult.Ok when fine.
-BROKER_KEY the SHA-256 of the key the broker actually presented, 64 hexadecimal
-           characters, whether or not anything is pinned. Write it down at
-           commissioning; compare it when something looks wrong. Empty on a
-           plain connection.
-LAST_ERROR the operating system's own words - "Connection refused", "Name or
-           service not known". Text, because no status code can say which of
-           forty things went wrong at a socket. TLS on a board says it in a
-           short fixed line with the engine's code, "TLS: wrong host name" or
-           "TLS: broker refused us -0x7780"; page 09 lists them.
-           "out of memory for topics or subscriptions" when a block's topic
-           or subscription could not be held: those tables grow with the
-           program, on a board and the Runtime alike, and only memory ends
-           them. "out of memory for MAX_PENDING" when the queue MQTT_CONFIG
-           asked for could not be taken: the client runs on with the queue
-           it had, and the rest of the sentence says how many that is.
+result := mqtt.Publish(anyValue := ..., sTopic := ..., eQos := ...,
+                       bRetain := ..., bExecute := ...);
 ```
+
+Returns `E_MqttResult`.
+Sends anyValue to sTopic once, on a rising edge of bExecute. Inputs are taken at the edge. Returns E_MqttResult.Queued until the broker has it (QoS 1 and 2) or it has left (QoS 0), then E_MqttResult.Ok or the reason it failed, until the next edge. Not connected at the edge: E_MqttResult.NotConnected, nothing queued.
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `TRANSPORT` | `E_MqttTransport` |  |
-| `SECURITY` | `E_MqttSecurity` |  |
-| `HOST` | `STRING(64)` |  |
-| `PORT` | `UINT` |  |
-| `CLIENT_ID` | `STRING(48)` |  |
-| `PROTOCOL` | `E_MqttProtocol` |  |
-| `EXTERNAL_LINK` | `__XWORD` |  |
-| `CONNECT` | `BOOL` | `TRUE` |
-| `TRUST_NEW` | `BOOL` |  |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `anyValue` | `ANY` |  | what to send, as its declared type: 23.5, 42, true, text |
+| `sTopic` | `STRING(128)` |  | where it goes; no wildcards |
+| `eQos` | `E_MqttQos` |  | AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery |
+| `bRetain` | `BOOL` |  | the broker keeps it for later subscribers |
+| `bExecute` | `BOOL` |  | rising edge sends |
+
+### FB_MqttClient.Report
+
+```
+result := mqtt.Report(anyValue := ..., sTopic := ..., eTrigger := ...,
+                      fDeadband := ..., tPeriod := ..., eQos := ...,
+                      bRetain := ..., bEnable := ..., bExecute := ...,
+                      nSent => ..., tAge => ...);
+```
+
+Returns `E_MqttResult`.
+Publishes anyValue on sTopic, called every scan. eTrigger says when: OnChange (moved by fDeadband, and every tPeriod anyway), OnInterval (every tPeriod, which must be set) or OnRequest (bExecute's rising edge). E_MqttResult.Ok while the record is valid.
+
+**Inputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `anyValue` | `ANY` |  | the variable to report |
+| `sTopic` | `STRING(128)` |  | where it goes; no wildcards |
+| `eTrigger` | `E_MqttTrigger` |  | OnChange (default), OnInterval or OnRequest |
+| `fDeadband` | `LREAL` |  | OnChange: the least change worth a message; 0 = any change |
+| `tPeriod` | `TIME` |  | OnChange: resend unchanged after this, T#0s never; OnInterval: the interval |
+| `eQos` | `E_MqttQos` |  | AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery |
+| `bRetain` | `BOOL` |  | the broker keeps the last one for later subscribers |
+| `bEnable` | `BOOL` | `TRUE` | FALSE stops reporting, keeping the record |
+| `bExecute` | `BOOL` |  | OnRequest: rising edge sends |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `LINK_UP` | `BOOL` |  |
-| `CONNECTED` | `BOOL` |  |
-| `SESSION_PRESENT` | `BOOL` |  |
-| `ASSIGNED_ID` | `STRING(48)` |  |
-| `STATE` | `E_MqttState` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-| `LAST_ERROR` | `STRING(64)` |  |
-| `BROKER_KEY` | `STRING(64)` |  |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `nSent` | `DINT` |  | messages sent for this record |
+| `tAge` | `TIME` |  | since the last one; T#0s before the first |
 
-THESE EIGHT PINS ARE THE WHOLE OF AN ORDINARY CONNECTION. Everything else a
-client can be told lives on optional blocks, so it costs you nothing until you
-want it:
+### FB_MqttClient.Subscribe
 
-  MQTT_CONFIG    keepalive, session, credentials, queue and buffer sizes,
-                 reconnect backoff.
-  MQTT_TLS       the certificate authority, and mutual TLS.
-  MQTT_ARDUINO   the pins and credentials only a board has - SSID, MAC, IP.
-  MQTT_PRESENCE  the online/offline pair: a birth message and the Will that
-                 says when you are gone.
+```
+result := mqtt.Subscribe(anyValue := ..., sTopic := ..., eQos := ...,
+                         tExpect := ..., bEnable := ..., bSubscribed => ...,
+                         eQuality => ..., bSeen => ..., tAge => ...,
+                         nReceived => ..., nMalformed => ...,
+                         bNewValue => ...);
+```
 
-AND THE PROTOCOLS THAT RIDE ON IT, as layers on this one connection - one
-radio, one login, one session for everything the device says:
+Returns `E_MqttResult`.
+Keeps anyValue up to date from sTopic, called every scan. A payload is read as anyValue's declared type; one that does not parse is counted on nMalformed and leaves anyValue alone.
 
-  SPARKPLUG_NODE / SPARKPLUG_HOST   Sparkplug B. Takes the Will (its death
-                 certificate) and a clean session on every CONNECT, so not
-                 with MQTT_PRESENCE.
-  OTA_NODE       firmware updates (modbee-ota), on topics of its own.
+**Inputs**
 
-WITHOUT ANY OF THEM THE DEFAULTS ARE THE ONES YOU WANT: MQTT 5.0 falling back
-to 3.1.1, a sixty second keepalive, a clean session, and automatic reconnect
-with a backoff that spreads so forty PLCs restarting together do not arrive at
-the broker in step: each wait is random, from 0.1 s up to the current backoff,
-which doubles to its cap; it starts small again only once a connection has
-stayed up for 30 s, so a link that drops straight after CONNACK keeps backing
-off.
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `anyValue` | `ANY` |  | the variable kept up to date |
+| `sTopic` | `STRING(128)` |  | wildcards allowed |
+| `eQos` | `E_MqttQos` |  | the most the broker may use |
+| `tExpect` | `TIME` |  | how often a value is expected; drives eQuality. T#0s = no promise |
+| `bEnable` | `BOOL` | `TRUE` | FALSE unsubscribes, keeping the record |
+
+**Outputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bSubscribed` | `BOOL` |  | the subscription is in force |
+| `eQuality` | `E_MqttQuality` |  | Unknown: never arrived; Bad: link down or twice overdue |
+| `bSeen` | `BOOL` |  | a value has arrived for this record |
+| `tAge` | `TIME` |  | since the last accepted value |
+| `nReceived` | `DINT` |  | values accepted |
+| `nMalformed` | `DINT` |  | payloads that did not parse |
+| `bNewValue` | `BOOL` |  | this call wrote anyValue |
+
+### FB_MqttClient.PublishStruct
+
+```
+result := mqtt.PublishStruct(anyData := ..., sBase := ..., eTrigger := ...,
+                             tPeriod := ..., eQos := ..., bRetain := ...,
+                             bEnable := ..., bExecute := ..., nPoints => ...,
+                             nSkipped => ..., nSent => ..., nChanged => ...);
+```
+
+Returns `E_MqttResult`.
+Publishes every member of the STRUCT anyData on sBase/<member>, called every scan. OnChange: a member when it changes, and every tPeriod anyway; OnInterval: the whole set every tPeriod; OnRequest: the whole set on bExecute's rising edge. A member the wire cannot carry is counted on nSkipped and returns E_MqttResult.InvalidArgument.
+
+**Inputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `anyData` | `ANY` |  | a STRUCT |
+| `sBase` | `STRING(128)` |  | the topic the members hang off |
+| `eTrigger` | `E_MqttTrigger` |  | OnChange (default), OnInterval or OnRequest |
+| `tPeriod` | `TIME` |  | OnChange: resend unchanged after this; OnInterval: the interval |
+| `eQos` | `E_MqttQos` |  | AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery |
+| `bRetain` | `BOOL` |  | the broker keeps the last one for later subscribers |
+| `bEnable` | `BOOL` | `TRUE` | FALSE stops it, keeping the record |
+| `bExecute` | `BOOL` |  | OnRequest: rising edge sends the set |
+
+**Outputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `nPoints` | `INT` |  | members published |
+| `nSkipped` | `INT` |  | members refused |
+| `nSent` | `DINT` |  | messages sent for this record |
+| `nChanged` | `INT` |  | messages sent by this call |
+
+### FB_MqttClient.SubscribeStruct
+
+```
+result := mqtt.SubscribeStruct(anyData := ..., sBase := ..., eQos := ...,
+                               tExpect := ..., bEnable := ...,
+                               nPoints => ..., nSkipped => ...,
+                               bSubscribed => ..., eQuality => ...,
+                               bSeen => ..., tOldest => ...,
+                               nReceived => ..., nMalformed => ...,
+                               nNewValues => ...);
+```
+
+Returns `E_MqttResult`.
+Keeps every member of the STRUCT anyData up to date from sBase/<member>, called every scan. eQuality is the worst member's, tOldest the oldest member's age.
+
+**Inputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `anyData` | `ANY` |  | a STRUCT |
+| `sBase` | `STRING(128)` |  | the topic the members hang off |
+| `eQos` | `E_MqttQos` |  | AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery |
+| `tExpect` | `TIME` |  | how often a value is expected; drives eQuality. T#0s = no promise |
+| `bEnable` | `BOOL` | `TRUE` | FALSE stops it, keeping the record |
+
+**Outputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `nPoints` | `INT` |  | members bound |
+| `nSkipped` | `INT` |  | members refused |
+| `bSubscribed` | `BOOL` |  | the subscription is in force |
+| `eQuality` | `E_MqttQuality` |  | the worst member's quality |
+| `bSeen` | `BOOL` |  | every member has had a value |
+| `tOldest` | `TIME` |  | the oldest member's age |
+| `nReceived` | `DINT` |  | values accepted |
+| `nMalformed` | `DINT` |  | payloads that did not parse |
+| `nNewValues` | `INT` |  | members written by this call |
+
+### FB_MqttClient.Request
+
+```
+result := mqtt.Request(anyValue := ..., sTopic := ..., sReplyTopic := ...,
+                       eQos := ..., tTimeout := ..., bExecute := ...,
+                       sReply => ..., nReplyLen => ...);
+```
+
+Returns `E_MqttResult`.
+Asks a question on sTopic and waits for the answer on sReplyTopic, MQTT 5 only. The request carries Response Topic and Correlation Data. Rising edge of bExecute starts it; E_MqttResult.Queued until the answer (E_MqttResult.Ok, in sReply) or tTimeout (E_MqttResult.KeepAliveTimeout).
+
+**Inputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `anyValue` | `ANY` |  | the question |
+| `sTopic` | `STRING(128)` |  | where it goes |
+| `sReplyTopic` | `STRING(128)` |  | where the answer comes back; one per requester |
+| `eQos` | `E_MqttQos` |  | AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery |
+| `tTimeout` | `TIME` |  | T#0s = 5 s |
+| `bExecute` | `BOOL` |  | rising edge starts it |
+
+**Outputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sReply` | `STRING(254)` |  | the answer's text |
+| `nReplyLen` | `INT` |  | characters in sReply |
+
+### FB_MqttClient.Response
+
+```
+result := mqtt.Response(anyRequest := ..., sTopic := ..., anyReply := ...,
+                        eQos := ..., bEnable := ..., bExecute := ...,
+                        bNewRequest => ..., bAwaitingReply => ...,
+                        sResponseTopic => ..., nReceived => ...,
+                        nMalformed => ...);
+```
+
+Returns `E_MqttResult`.
+Answers MQTT 5 requests arriving on sTopic, called every scan. A request's payload is written into anyRequest; a rising edge of bExecute sends anyReply to the last request's Response Topic with its Correlation Data.
+
+**Inputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `anyRequest` | `ANY` |  | the request, read as its declared type |
+| `sTopic` | `STRING(128)` |  | where requests arrive; wildcards allowed |
+| `anyReply` | `ANY` |  | the answer |
+| `eQos` | `E_MqttQos` |  | AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery |
+| `bEnable` | `BOOL` | `TRUE` | FALSE unsubscribes, keeping the record |
+| `bExecute` | `BOOL` |  | rising edge answers |
+
+**Outputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bNewRequest` | `BOOL` |  | this call took a request |
+| `bAwaitingReply` | `BOOL` |  | the last request has a Response Topic and is not answered yet |
+| `sResponseTopic` | `STRING(128)` |  | where the last request asked its answer to go |
+| `nReceived` | `DINT` |  | requests received |
+| `nMalformed` | `DINT` |  | payloads that did not parse |
+
+### FB_MqttClient.Message
+
+```
+result := mqtt.Message(anyPayload := ..., sTopic := ..., eQos := ...,
+                       bEnable := ..., nLen => ..., bTruncated => ...,
+                       nReceived => ..., bNewMessage => ...);
+```
+
+Returns `E_MqttResult`.
+The text of whatever arrives on sTopic, written into the STRING variable anyPayload, one message per call. Called every scan.
+
+**Inputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `anyPayload` | `ANY` |  | a STRING variable |
+| `sTopic` | `STRING(128)` |  | wildcards allowed |
+| `eQos` | `E_MqttQos` |  | AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery |
+| `bEnable` | `BOOL` | `TRUE` | FALSE stops it, keeping the record |
+
+**Outputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `nLen` | `INT` |  | characters written |
+| `bTruncated` | `BOOL` |  | the message was longer than anyPayload or the client's buffer |
+| `nReceived` | `DINT` |  | messages received |
+| `bNewMessage` | `BOOL` |  | this call wrote anyPayload |
+
+### FB_MqttClient.Provision
+
+```
+result := mqtt.Provision(sKey := ..., bForget := ..., bProvisioned => ...,
+                         bPending => ..., bRefused => ..., sUserName => ...,
+                         sGroup => ..., sPrefix => ..., sReason => ...);
+```
+
+Returns `E_MqttResult`.
+Registers this PLC with a modbee broker using a provisioning key, and keeps the login it is given (retained). sClientId is the PLC's name. Called every scan, before the client's own call on the first scan.
+
+**Inputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sKey` | `STRING(127)` |  | from `modbee key create` on the broker |
+| `bForget` | `BOOL` |  | rising edge forgets the stored login |
+
+**Outputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bProvisioned` | `BOOL` |  | connected with this PLC's own login |
+| `bPending` | `BOOL` |  | waiting for approval on the broker |
+| `bRefused` | `BOOL` |  | the broker said no; sReason says why |
+| `sUserName` | `STRING(64)` |  | the login the key handed this PLC |
+| `sGroup` | `STRING(64)` |  | the Sparkplug group the key hands its devices |
+| `sPrefix` | `STRING(127)` |  | the topic prefix the key hands its devices |
+| `sReason` | `STRING(64)` |  | why the broker refused, when bRefused |
+
+### FB_MqttClient.Statistics
+
+```
+result := mqtt.Statistics(nVersion => ..., nConnects => ...,
+                          nDisconnects => ..., nReconnects => ...,
+                          nPublished => ..., nReceived => ...,
+                          nPublishFailures => ..., nProtocolErrors => ...,
+                          nPending => ..., nReasonCode => ...);
+```
+
+Returns `E_MqttResult`.
+The connection's counters.
+
+**Outputs**
+
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `nVersion` | `BYTE` |  | 5 or 4: the protocol in force |
+| `nConnects` | `DINT` |  | connections made |
+| `nDisconnects` | `DINT` |  | connections ended |
+| `nReconnects` | `DINT` |  | reconnections after a loss |
+| `nPublished` | `DINT` |  | messages published |
+| `nReceived` | `DINT` |  | messages received |
+| `nPublishFailures` | `DINT` |  | publishes that failed |
+| `nProtocolErrors` | `DINT` |  | broker packets the standard does not allow |
+| `nPending` | `DINT` |  | operations accepted and not yet concluded |
+| `nReasonCode` | `BYTE` |  | the last reason code from the broker, read with nVersion |
+
+DEFAULTS ARE THE ONES YOU WANT. MQTT 5.0 falling back to 3.1.1, a sixty
+second keep-alive, a clean session, and automatic reconnect with a backoff
+that spreads, so forty PLCs restarting together do not arrive at the broker
+in step: each wait is random, from 0.1 s up to the current backoff, which
+doubles to its cap; it starts small again only once a connection has stayed
+up for 30 s, so a link that drops straight after CONNACK keeps backing off.
+
+A REFUSED LOGIN STOPS, AND SAYS WHY. eErrorId NotAuthorized and sLastError
+the broker's own reason. It is tried again every five minutes, not at the
+usual backoff: a PLC repeating a rejected password every second is how a
+site gets itself banned, and a broker fixed at the other end still gets the
+PLC back by itself. stSessionConfig.bRetryRejectedCredential TRUE retries at
+the backoff, for a broker whose access list loads after it listens.
 
 NOTHING HERE BLOCKS. connect() does not wait for the broker; it starts the
-attempt and CONNECTED says when it arrived. That is what makes this safe in a
-scan cycle, and it is why the library exists. On an ESP32 that includes
+attempt and bConnected says when it arrived. That is what makes MQTT safe in
+a scan cycle, and it is why the library exists. On an ESP32 that includes
 opening the socket and the TLS handshake: both run on a short task of their
-own, below the PLC's tasks, while STATE says CONNECTING. A board without
-threads opens the socket inside the scan, for as long as the medium takes.
+own, below the PLC's tasks, while eConnectionState says Connecting. A board
+without threads opens the socket inside the scan, for as long as the medium
+takes.
 
-Which pins matter depends on TRANSPORT, and the rest are ignored:
-
-  E_MqttTransport.RuntimeTcp        HOST, PORT
-  E_MqttTransport.ArduinoWiFi       HOST, PORT, and MQTT_ARDUINO for the credentials
-  E_MqttTransport.ArduinoEthernet   HOST, PORT, and MQTT_ARDUINO for the MAC and address
-  E_MqttTransport.Cellular           HOST, PORT, and a GSM_MODEM from the modbee-gsm
-                          library in the same project. Opening the socket
-                          takes about 1.5 s, never longer than
-                          CONNECT_TIMEOUT, and on an ESP32 it does not hold
-                          this block's task.
-  E_MqttTransport.External      EXTERNAL_LINK, and nothing else
+ONE SCAN BEFORE OPENING. The link is built on the block's second scan, so
+every method has been called once first, wherever it sits in the program.
 
 TLS ON A BOARD IS THE SAME ON EVERY MEDIUM. On an ESP32, Wi-Fi, Ethernet and
 cellular all open a PLAIN connection and the TLS runs on the controller, with
-the mbedTLS the board already carries for its Wi-Fi - so every SECURITY works
-on every TRANSPORT, BROKER_KEY is filled, TRUST_NEW learns, and the handshake
-runs beside the scan instead of in it. The CA comes from
+the mbedTLS the board already carries for its Wi-Fi - so every eSecurity
+works on every eTransport, sBrokerKey is filled, bTrustNew learns, and the
+handshake runs beside the scan instead of in it. A TLS session holds about
+40 kB while it is up, in PSRAM where the board has it. The CA comes from
 MQTT_CA_CERT_PEM and a certificate of the board's own, for mutual TLS, from
 MQTT_CLIENT_CERT_PEM and MQTT_CLIENT_KEY_PEM - defines in the board package's
-compiler flags, since an OpenPLC project has no build flags of its own. For the
-site's own broker none is needed: E_MqttSecurity.TlsPinned with TRUST_NEW and a login.
-A board WITHOUT mbedTLS keeps what its medium offers: WiFiClientSecure (no
-PINNED), no TLS over Ethernet, and the modem's own TLS (INSECURE only).
+compiler flags, since an OpenPLC project has no build flags of its own; an
+IEC STRING stops at 254 characters and a PEM is about eight times that. For
+the site's own broker none is needed: E_MqttSecurity.TlsPinned with bTrustNew
+and a login. A board WITHOUT mbedTLS keeps what its medium offers:
+WiFiClientSecure (no TlsPinned), no TLS over Ethernet, and the modem's own
+TLS (TlsInsecure only). Ethernet itself needs MQTT_ENABLE_ETHERNET in the
+board package's compiler flags.
 
-SETTINGS MAY CHANGE WHILE IT RUNS. Every pin here and everything MQTT_CONFIG,
-MQTT_TLS, MQTT_ARDUINO and MQTT_PRESENCE set is read every scan. Change the
-broker, the port, SECURITY, TRANSPORT, the login, CLIENT_ID or PROTOCOL - from
-an HMI settings page, say - and the client says goodbye on the old settings and
-connects with the new ones, on the same client: subscriptions and every other
-block carry on, nothing needs a restart. A pinned key stays pinned: a new
-broker address shows a different key and is refused until TRUST_NEW is
-switched off and on, as for a replaced broker.
+SETTINGS MAY CHANGE WHILE IT RUNS. Every pin and every member of the four
+option structures is read every scan. Change the broker, the port, eSecurity,
+eTransport, the login, sClientId or eProtocol - from an HMI settings page,
+say - and the client says goodbye on the old settings and connects with the
+new ones, on the same client: every method's record carries on, nothing
+needs a restart. The medium is rebuilt only when what it is made from
+changed. A pinned key stays pinned: a new broker address shows a different
+key and is refused until bTrustNew is switched off and on, as for a replaced
+broker.
 
-ONE TASK. This block and every block given it - publishing, subscribing,
-Sparkplug, OTA - run in one task, the network task, at a lower priority than
-the machine's: T#50ms on a board, faster on the Runtime. The machine's program
-trades values with them through globals. A block in any other task says
-E_MqttResult.WrongTask and does nothing, rather than race the client from another
-thread. See docs/10-scan-rate.md.
+PROTOCOLS THAT RIDE ON IT, as layers on this one connection - one radio, one
+login, one session for everything the device says:
+
+  FB_SparkplugNode, FB_SparkplugHost  Sparkplug B. Each takes the Will (its
+                 death certificate) and a clean session on every connection,
+                 so not with stWillConfig, and one of them per client.
+  FB_OtaNode     firmware updates (modbee-ota), on topics of its own; its
+                 Sparkplug method reports them as a node's metrics.
+
+ONE TASK. This block, its methods and every block given it - Sparkplug,
+FB_OtaNode - run in one task, the network task, at a lower priority than the
+machine's: T#50ms on a board, faster on the Runtime. The machine's program
+trades values with them through globals. Declare the instance in the network
+task's program, never in a global list: a machine task that names a global
+client waits for the network task's scan. A method called from another task
+returns E_MqttResult.WrongTask and does nothing, rather than race the client
+from another thread. See docs/10-scan-rate.md.
 
 ---
 
-## MQTT_CLOCK
+## FB_MqttClock
 
 ```
 SETS THE CONTROLLER'S CLOCK FROM THE NETWORK - NTP over Wi-Fi or Ethernet,
 the mobile network's own time over cellular - so Sparkplug timestamps and
-CURRENT_DT are real time. One per controller.
+CURRENT_DT are real time. One per controller, called every scan in the
+network task. Standalone: it takes no FB_MqttClient.
 
-TRANSPORT  where the time comes from - the same list as MQTT_CLIENT and
-           SPARKPLUG_NODE, so a site that moves from Wi-Fi to cellular changes
-           one pin on each:
-             E_MqttTransport.RuntimeTcp       the Runtime's own clock, which its operating
-                                    system already keeps. Nothing is set.
-             E_MqttTransport.ArduinoWiFi      NTP from SERVER, through the board's IP
-             E_MqttTransport.ArduinoEthernet  stack (ESP32). NETWORK or MQTT_ARDUINO
-                                    brings the network up; this waits for it.
-             E_MqttTransport.Cellular          the mobile network's time (NITZ) from the
-                                    modem a modbee-gsm GSM_MODEM runs. Costs no
-                                    data. Not every network sends it.
-             E_MqttTransport.External     UTC_IN, when UTC_IN_VALID - an RTC,
-                                    GSM_TIME.UTC, a time SCADA wrote.
-SERVER     the NTP server. Default 'pool.ntp.org'; a site with its own (a
+eTransport  where the time comes from - the same list as FB_MqttClient, so a
+           site that moves from Wi-Fi to cellular changes one pin on each:
+             E_MqttTransport.RuntimeTcp       the Runtime's own clock, which
+                                              its operating system keeps.
+                                              Nothing is set
+             E_MqttTransport.ArduinoWiFi      NTP from sServer, through the
+             E_MqttTransport.ArduinoEthernet  board's IP stack (ESP32).
+                                              node-uio's NETWORK or the
+                                              FB_MqttClient brings the
+                                              network up; this waits for it
+             E_MqttTransport.Cellular         the mobile network's time
+                                              (NITZ) from the modem a
+                                              modbee-gsm GSM_MODEM runs.
+                                              Costs no data. Not every
+                                              network sends it
+             E_MqttTransport.External         dtUtcIn, when bUtcInValid - an
+                                              RTC, GSM_TIME's UTC, a time a
+                                              SCADA wrote
+sServer     the NTP server. 'pool.ntp.org' by default; a site with its own (a
            router, a SCADA server) should use it.
-REFRESH    how often to ask again. Default T#1h - a board's crystal drifts a
-           second or two a day, so hourly is plenty.
-UTC_IN     E_MqttTransport.External: the time to set, in UTC.
-UTC_IN_VALID  E_MqttTransport.External: UTC_IN is good. Its rising edge sets the
-           clock, and again every REFRESH while it stays TRUE.
-ENABLE     FALSE stops asking. The clock keeps the time it has.
+tRefresh    how often to ask again. T#1h by default - a board's crystal
+           drifts a second or two a day, so hourly is plenty.
+dtUtcIn     E_MqttTransport.External: the time to set, in UTC.
+bUtcInValid E_MqttTransport.External: dtUtcIn is good. Its rising edge sets
+           the clock, and again every tRefresh while it stays TRUE.
+bEnable     FALSE stops asking. The clock keeps the time it has.
 
-SYNCED     the clock holds real time - a date after 2024. Exactly what
-           SPARKPLUG_NODE.CLOCK_SET reports.
-UTC        the time now, in UTC. DT#1970-01-01 while not SYNCED.
-AGE        how long since the clock was last set. Grows while the network is
-           away - the clock keeps running on its own crystal meanwhile.
-ERROR      the transport cannot give the time on this target, or NTP has not
-           answered for a minute after starting.
-LAST_ERROR why, in words. Empty when fine.
+bSynced     the clock holds real time - a date after 2024. Exactly what
+           FB_SparkplugNode's bClockSet reports.
+dtUtc       the time now, in UTC. DT#1970-01-01 while not bSynced.
+tAge        how long since the clock was last set. Grows while the network
+           is away - the clock keeps running on its own crystal meanwhile.
+bError      the transport cannot give the time on this target, or NTP has
+           not answered for a minute after starting.
+sLastError  why, in words. Empty when fine.
 ```
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `TRANSPORT` | `E_MqttTransport` |  |
-| `SERVER` | `STRING(64)` | `'pool.ntp.org'` |
-| `REFRESH` | `TIME` | `T#1h` |
-| `UTC_IN` | `DT` |  |
-| `UTC_IN_VALID` | `BOOL` |  |
-| `ENABLE` | `BOOL` | `TRUE` |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `eTransport` | `E_MqttTransport` |  | where the time comes from |
+| `sServer` | `STRING(64)` | `'pool.ntp.org'` | the NTP server |
+| `tRefresh` | `TIME` | `T#1h` | how often to ask again |
+| `dtUtcIn` | `DT` |  | E_MqttTransport.External: the time to set, in UTC |
+| `bUtcInValid` | `BOOL` |  | E_MqttTransport.External: dtUtcIn is good |
+| `bEnable` | `BOOL` | `TRUE` | FALSE stops asking; the clock keeps its time |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `SYNCED` | `BOOL` |  |
-| `UTC` | `DT` |  |
-| `AGE` | `TIME` |  |
-| `ERROR` | `BOOL` |  |
-| `LAST_ERROR` | `STRING(64)` |  |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bSynced` | `BOOL` |  | the clock holds real time |
+| `dtUtc` | `DT` |  | the time now, in UTC |
+| `tAge` | `TIME` |  | since the clock was last set |
+| `bError` | `BOOL` |  |  |
+| `sLastError` | `STRING(64)` |  | why, in words; empty when fine |
 
-wifi( ENABLE := TRUE, SSID := ..., PASSWORD := ... );   NETWORK, node-uio
-  ntp ( TRANSPORT := E_MqttTransport.ArduinoWiFi );
-  sp  ( TRANSPORT := E_MqttTransport.ArduinoWiFi, ... );            stamps with it
+wifi ( ENABLE := TRUE, SSID := ..., PASSWORD := ... );   NETWORK, node-uio
+  ntp  ( eTransport := E_MqttTransport.ArduinoWiFi );
+  mqtt ( eTransport := E_MqttTransport.ArduinoWiFi, sHost := ..., ... );
+  sp   ( fbClient := mqtt, ... );                          stamps with it
 
 ONE CLOCK, AND EVERYTHING USES IT. This sets the board's system clock, so
-SPARKPLUG_NODE's timestamps, CURRENT_DT and anything else that asks for the
+FB_SparkplugNode's timestamps, CURRENT_DT and anything else that asks for the
 date agree, with nothing to wire between them.
 
 UNTIL IT IS SYNCED a board counts from when it started, and the timestamps it
 sends are dates in January 1970 - unmistakably not real. A SCADA historian
 should take a timestamp like that as "not synced" and stamp the value with
-the time it arrived instead. SYNCED and CLOCK_SET say which it is. Once set,
+the time it arrived instead. bSynced and bClockSet say which it is. Once set,
 the clock survives a loss of network and keeps time on its own.
 
 ON THE RUNTIME THIS BLOCK SETS NOTHING. The operating system's time service
 owns the clock there, and a PLC program stepping it under every other program
-on the machine would be a fault, not a feature. SYNCED still reports it.
+on the machine would be a fault, not a feature. bSynced still reports it.
 
 NOTHING HERE BLOCKS. NTP runs in the background on the board's network stack,
-and the modem is asked through GSM_MODEM's queue. Put this in the network task
-beside the MQTT blocks.
+and the modem is asked through GSM_MODEM's queue. Put this in the network
+task beside the MQTT blocks.
 
 ---
 
-## MQTT_CONFIG
+## FB_SparkplugHost
 
 ```
-Everything about a connection that is not where it goes. Optional.
+A SPARKPLUG B HOST APPLICATION on an FB_MqttClient's connection: the other
+end of FB_SparkplugNode. Call it once every scan, in the client's task. It
+keeps the current picture of every edge node it watches; Watch reads a value
+out of that picture and Write sends one back down.
 
-CLIENT             which client. Must be wired.
-KEEP_ALIVE         how long the broker waits in silence before deciding we are
-                   gone. T#0s for sixty seconds. The broker may lower it and
-                   say so. MQTT carries this in WHOLE SECONDS, so anything
-                   finer is rounded up to the next second.
-CLEAN_START        TRUE starts a fresh session every connect. FALSE resumes
-                   the one the broker kept, so QoS 1 and 2 messages survive a
-                   drop.
-KEEP_SESSION       how long the broker keeps that session after we disconnect.
-                   T#0s means only while the connection lasts. Whole seconds
-                   on the wire, as above. 5.0 only.
-USERNAME           user name, if the broker wants one.
-PASSWORD           and its password.
-MAX_PENDING        how many publishes and subscribes may be waiting on the
-                   broker at once. 0 for the library's own figure, 32. Any
-                   number: the queue is taken when the client is made, and
-                   only memory refuses it - then MQTT_CLIENT's LAST_ERROR says
-                   so and how many it holds. Past it the next one is refused
-                   with E_MqttResult.QueueFull rather than dropped.
-MAX_MESSAGE_IN     the biggest message this client can RECEIVE, in bytes. 0
-                   for 4096. A larger one cannot be assembled, and the
-                   connection drops rather than half-reading it.
-MAX_MESSAGE_OUT    the biggest it can SEND. 0 for 4096. A larger publish is
-                   refused with E_MqttResult.PacketTooLarge before it goes near the
-                   wire.
-RECONNECT          first backoff after a drop. T#0s for one second.
-RECONNECT_MAX      ceiling on that backoff. T#0s for a minute.
-CONNECT_TIMEOUT    how long to wait for a broker that accepts a socket and
-                   then says nothing. T#0s for twenty seconds.
-AUTO_RECONNECT     TRUE reconnects by itself. Turn it OFF on a cellular link,
-                   where the reconnect is the one call that can stall a scan.
+sHostId     this host's Sparkplug Host ID. It is a topic element and MUST be
+           unique in the system. An edge node's sPrimaryHostId carries this
+           same string. Up to 47 characters.
+sGroupId    the group to watch, or empty for every group. Narrow it on a real
+           plant: a host on spBv1.0/# receives every other line's traffic.
+bPrimary    TRUE (default): ask for a rebirth when a node's sequence skips.
+           Nothing in the protocol marks a host primary - the NODES name it -
+           so this only decides whether a gap asks; two hosts both asking
+           double the traffic for one missed message.
+tReorder    how long to let a gap fill before asking. T#5s by default; T#0s
+           asks at once. A link that reorders now and then should not cost a
+           full birth each time.
+bEnable     FALSE publishes the offline STATE and stands the host down; the
+           connection stays up for everything else on it.
+fbClient    the FB_MqttClient this host rides on. Must be assigned; broker,
+           TLS, login and protocol are set there.
 
-APPLIED         the settings reached the client.
-ERROR           they did not.
-STATUS          why. E_MqttResult.Ok when fine.
+bLinkUp     the client's session is up.
+bBorn       our STATE birth certificate is published, so nodes may rely on us.
+           A node waiting for this host starts birthing once it sees it.
+nNodes      edge nodes heard from. A node that died stays tracked: knowing it
+           is gone is worth more than forgetting it existed.
+nOnline     how many of them are online now.
+nGaps       sequence gaps seen, every node together.
+nRebirths   rebirths asked for. Both climbing together is a lossy link; gaps
+           climbing alone means tReorder is absorbing them.
+bError, eErrorId  E_MqttResult.Ok when fine; WrongTask: not in its client's
+           task.
+sLastError  what the host waits for, or what failed: "out of memory for
+           tracked nodes or metrics" when it could not follow everything that
+           arrived. It tracks as many nodes, and metrics per node, as memory
+           holds, on a board and the Runtime alike.
+
+METHODS
+
+Both run in the host's task and return E_MqttResult.WrongTask in any other.
+A call is found again by anyValue's declared name and type with sMetricName.
+
+  host.Watch(sMetricName, anyValue, sEdgeNodeId, sNodeGroupId, sDeviceId,
+             bValid =>, bTypeOk =>, bFresh =>, nAge =>, nReadCnt =>)
+     READS ONE METRIC into a variable of your own type. Standing: call it
+     every scan while the value is wanted; stop and anyValue holds its last
+     value.
+     THE NAME IS THE ADDRESS, not a topic and not an alias: the node declared
+     "level" in its birth and Watch asks for "level"; the host resolves the
+     aliases data messages carry. THE DECLARED TYPE IS CHECKED, NOT COERCED:
+     if the birth said REAL and anyValue is a DINT the read is refused rather
+     than a reading truncated.
+     sMetricName   the metric, exactly as the node declared it.
+     anyValue      where to put it. Any IEC type matching the birth.
+     sEdgeNodeId   which node. Empty: the first node heard from - convenient
+                   with one node, wrong with two.
+     sNodeGroupId  which group. Empty: any group the host watches.
+     sDeviceId     for a metric of a device rather than the node.
+     bValid        this call wrote anyValue.
+     bTypeOk       FALSE: anyValue's type is not the declared one.
+     bFresh        the reading changed since the last call.
+     nAge          milliseconds since the NODE's timestamp on it - not since
+                   we received it; on a slow link those differ by more than a
+                   control decision should ignore.
+     nReadCnt      readings written into anyValue.
+     Ok when anyValue holds a valid reading; NotInitialised while the host is
+     not built, the node not heard or the metric not published (a plant
+     starting up spends its first seconds here); NotConnected while the
+     client is down; InvalidArgument for an empty sMetricName or a type
+     mismatch.
+
+  host.Write(sMetricName, anyValue, sEdgeNodeId, sNodeGroupId, sDeviceId,
+             bExecute, nSentCnt =>)
+     WRITES ONE METRIC on an edge node: an NCMD, or a DCMD for a device
+     metric. The node applies it to whatever it reports under that name and
+     reports the new value back under the SAME name, so Watch that name to
+     see it come back. THE NODE DECIDES: a command for a metric it never
+     declared, declared read-only or with another type is refused there and
+     counted - Write reports that it sent one, not that it took effect.
+     A request: the rising edge of bExecute takes every input, anyValue
+     included. Not connected: NotConnected at once, never queued. A node not
+     heard from yet: Queued while bExecute stays TRUE, sent as soon as it
+     appears; bExecute falling first drops it (Cancelled) - a command that
+     arrives a minute after the operator let go is worse than one that never
+     arrived. Then Ok (sent), Refused (the client would not take it) or
+     InvalidArgument (empty sMetricName, or an IEC type with no Sparkplug
+     datatype), held until the next rising edge. nSentCnt: commands this
+     call has sent.
 ```
 
 **In-out**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `fbClient` | `FB_MqttClient` |  | the connection this host rides on |
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `KEEP_ALIVE` | `TIME` |  |
-| `CLEAN_START` | `BOOL` | `TRUE` |
-| `KEEP_SESSION` | `TIME` |  |
-| `USERNAME` | `STRING(64)` |  |
-| `PASSWORD` | `STRING(64)` |  |
-| `MAX_PENDING` | `DINT` |  |
-| `MAX_MESSAGE_IN` | `DINT` |  |
-| `MAX_MESSAGE_OUT` | `DINT` |  |
-| `RECONNECT` | `TIME` |  |
-| `RECONNECT_MAX` | `TIME` |  |
-| `CONNECT_TIMEOUT` | `TIME` |  |
-| `AUTO_RECONNECT` | `BOOL` | `TRUE` |
-| `RETRY_REJECTED_CREDENTIAL` | `BOOL` | `FALSE` |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sHostId` | `STRING(47)` |  | this host's Sparkplug Host ID |
+| `sGroupId` | `STRING(47)` |  | The group to watch, or empty for every group. Narrowing matters on a real plant: a host subscribed to spBv1.0/# in a large estate receives every other line's traffic to discard. |
+| `bPrimary` | `BOOL` | `TRUE` | Whether to act as the PRIMARY host. Nothing in the protocol marks a host as primary - the NODES are configured with its id - so this only decides whether a sequence gap produces a rebirth request. Two hosts both asking would double the traffic for one missed message. |
+| `tReorder` | `TIME` | `T#5s` | How long to wait for a gap to fill before asking for a rebirth. A link that reorders occasionally should not trigger a full birth every time. T#0s disables the window and asks immediately. |
+| `bEnable` | `BOOL` | `TRUE` | FALSE publishes the offline STATE |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `APPLIED` | `BOOL` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bLinkUp` | `BOOL` |  | the client's session is up |
+| `bBorn` | `BOOL` |  | Our own STATE birth certificate is published and the plant may rely on us. An edge node waiting for this host starts birthing once it sees it. |
+| `nNodes` | `INT` |  | How many edge nodes we have heard from, and how many are online now. A node that has died stays tracked - knowing it is gone is worth more than forgetting it existed. |
+| `nOnline` | `INT` |  |  |
+| `nGaps` | `DINT` |  | Sequence gaps seen and rebirths asked for, across every node. Both climbing together is a lossy link; gaps climbing alone means the window is absorbing them, which is what it is for. |
+| `nRebirths` | `DINT` |  |  |
+| `bError` | `BOOL` |  |  |
+| `eErrorId` | `E_MqttResult` |  |  |
+| `sLastError` | `STRING(64)` |  | what the host waits for, or what failed |
 
-EVERY PIN HERE HAS A DEFAULT THAT WORKS. This block exists so that a client
-which wants none of them is eight pins instead of twenty-six, not because a
-client needs it. If you are not changing any of these, do not place it.
-
-Place it anywhere in the rung - above the client or below it. The client waits one
-scan before opening its link precisely so that this block has run first
-whichever side of it you drew.
-
-CLEAN_START is the one worth thinking about. TRUE is right for a sensor that
-publishes the current value and has nothing to catch up on. FALSE is right for
-anything that must not lose a message across a dropped link - a totaliser, a
-command channel, an alarm - and it costs the broker memory per client, which
-is why it is not the default.
-
-AUTO_RECONNECT is the other. On WiFi or wired the reconnect is milliseconds
-and you want it on. On cellular it is SECONDS, because the AT commands
-underneath it are, and a scan cycle has nowhere to put that - so turn it off
-and reconnect from your own logic where you can afford it.
-
-THE TWO SIZE PINS ANSWER ONE SYMPTOM: a message plainly being published that
-plainly never arrives. The default of 4096 bytes suits readings and setpoints
-and is too small for a JSON document of any size. Raise MAX_MESSAGE_IN on the
-subscribing end and MAX_MESSAGE_OUT on the publishing one - and remember they
-cost RAM per client whether or not a big message ever comes.
-
-RETRY_REJECTED_CREDENTIAL is OFF, and leaving it off is almost always right.
-A dropped link is worth retrying because the link may come back; a password
-the broker said no to will not become correct by itself, and sending it again
-every second is how a device gets itself banned - by address, on some brokers,
-which takes the whole site off with it. With this off, a rejected credential
-sets ERROR on MQTT_CLIENT with the broker's own words in LAST_ERROR and stops.
-
-Turn it on only where the credential is expected to become valid without the
-program restarting: a broker whose access list loads after it starts
-listening, or a token something else in the same program refreshes.
-
-MAX_PENDING is a different kind of limit: not how big, but how many at once.
-It only matters at QoS 1 and 2, where a publish stays outstanding until the
-broker acknowledges it. A program firing faster than a slow link can drain
-gets E_MqttResult.QueueFull, which is the honest answer - the alternative is an
-unbounded queue and a device that runs out of memory at three in the morning.
-
----
-
-## MQTT_MESSAGE
+### FB_SparkplugHost.Watch
 
 ```
-The raw text of whatever arrives, for anything that is not a single number.
-Standing - it subscribes once and maintains itself.
-
-CLIENT         which client. Must be wired.
-TOPIC       what to listen to. Wildcards allowed.
-QOS          the most the broker may use to deliver.
-ENABLE       FALSE unsubscribes without losing the topic.
-
-PAYLOAD      the message, as text.
-LENGTH       how many characters of it. 0 for an empty message, which is a
-             real thing in MQTT and usually means "this retained value is
-             cancelled".
-TRUNCATED    the message was longer than PAYLOAD holds. Reported, never hidden,
-             so a partial reading can never be mistaken for a complete one.
-RECEIVED     running total of messages delivered.
-NEW_MESSAGE  one scan, when a message arrived.
-ERROR        something failed.
-STATUS       why. E_MqttResult.Ok when fine.
+result := host.Watch(sMetricName := ..., anyValue := ..., sEdgeNodeId := ...,
+                     sNodeGroupId := ..., sDeviceId := ..., bValid => ...,
+                     bTypeOk => ..., bFresh => ..., nAge => ...,
+                     nReadCnt => ...);
 ```
 
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
+Returns `E_MqttResult`.
+Reads one metric of a watched node into anyValue, called every scan. The metric's declared type must match anyValue's. Ok while anyValue holds a valid reading; NotInitialised until the node and the metric are heard.
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `TOPIC` | `STRING(128)` |  |
-| `QOS` | `BYTE` |  |
-| `ENABLE` | `BOOL` | `TRUE` |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sMetricName` | `STRING(96)` |  | the metric, as the node declared it |
+| `anyValue` | `ANY` |  | where to put it; its type must match the birth |
+| `sEdgeNodeId` | `STRING(47)` |  | empty: the first node heard from |
+| `sNodeGroupId` | `STRING(47)` |  | empty: any watched group |
+| `sDeviceId` | `STRING(47)` |  | for a device metric |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `PAYLOAD` | `STRING(254)` |  |
-| `LENGTH` | `INT` |  |
-| `TRUNCATED` | `BOOL` |  |
-| `RECEIVED` | `DINT` |  |
-| `NEW_MESSAGE` | `BOOL` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bValid` | `BOOL` |  | anyValue was written by this call |
+| `bTypeOk` | `BOOL` |  | FALSE: anyValue's type is not the declared one |
+| `bFresh` | `BOOL` |  | the reading changed since the last call |
+| `nAge` | `DINT` |  | ms since the node's timestamp on it |
+| `nReadCnt` | `DINT` |  | readings written |
 
-USE MQTT_SUBSCRIBE FOR A NUMBER. This block is for the rest: a JSON document
-you parse yourself, a command word, a state name, a message from a device that
-does not know anything about this library.
-
-NEW_MESSAGE is one scan wide, so latch it if a slower task has to see it. Note
-that it is the arrival that is reported, not a change - the same value sent
-twice is two messages, and for a command channel that is exactly right. "Open"
-sent again means open again, and a block that suppressed it would swallow a
-repeated instruction.
-
-An EMPTY message is not nothing. Publishing an empty payload with RETAIN is
-how MQTT deletes a retained value, so a subscriber seeing LENGTH 0 with
-NEW_MESSAGE is being told the old value is withdrawn - which is different from
-having heard nothing at all.
-
-TRUNCATED matters on a JSON payload. A document cut in half parses as garbage
-or, worse, as something plausible. Check the pin before you trust the text.
-
----
-
-## MQTT_PRESENCE
+### FB_SparkplugHost.Write
 
 ```
-Says this device is here, and arranges for the broker to say when it is not.
-Optional, and the most useful optional block there is.
-
-CLIENT        which client. Must be wired.
-TOPIC       where to say it. "plant/tank-01/status" is the shape people use.
-ONLINE      what to publish when connected. Empty for "online".
-OFFLINE     what the broker publishes on our behalf when we vanish. Empty for
-            "offline".
-RETAINED      TRUE keeps both on the broker, so anything subscribing later is
-            told immediately rather than waiting for the next change. This is
-            almost always what you want.
-QOS         0, 1 or 2 for both messages.
-DELAY       how long the broker waits before publishing OFFLINE. T#0s publishes
-            it at once. 5.0 only - at 3.1.1 the client refuses to connect rather
-            than drop it, because a Will delay silently lost turns a flapping
-            link into a stream of false alarms.
-
-SENT   running total of ONLINE messages sent. A number that climbs is a
-            link that keeps dropping and coming back.
-ERROR       something failed.
-STATUS      why. E_MqttResult.Ok when fine.
+result := host.Write(sMetricName := ..., anyValue := ..., sEdgeNodeId := ...,
+                     sNodeGroupId := ..., sDeviceId := ..., bExecute := ...,
+                     nSentCnt => ...);
 ```
 
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
+Returns `E_MqttResult`.
+Sends one command (NCMD, or DCMD for a device) on a rising edge of bExecute. Queued while the node is not heard yet and bExecute stays TRUE; Cancelled if bExecute falls first; then Ok (sent) or the reason. Not connected at the edge: NotConnected, nothing queued.
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `TOPIC` | `STRING(128)` |  |
-| `ONLINE` | `STRING(128)` |  |
-| `OFFLINE` | `STRING(128)` |  |
-| `RETAINED` | `BOOL` | `TRUE` |
-| `QOS` | `BYTE` |  |
-| `DELAY` | `TIME` |  |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sMetricName` | `STRING(96)` |  | the metric, as the node declared it |
+| `anyValue` | `ANY` |  | what to write; its type must match the birth |
+| `sEdgeNodeId` | `STRING(47)` |  | empty: the first node heard from |
+| `sNodeGroupId` | `STRING(47)` |  | empty: any watched group |
+| `sDeviceId` | `STRING(47)` |  | for a device metric |
+| `bExecute` | `BOOL` |  | rising edge sends |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `SENT` | `DINT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `nSentCnt` | `DINT` |  | commands sent |
 
-THIS IS HOW A CONSUMER TELLS "OFFLINE" FROM "HAS NOT SENT YET", and in
-plain MQTT there is no other way. Subscribe to a topic, hear nothing, and you
-cannot tell whether the device is dead or simply has nothing to say. The pair
-of messages here answers it: the Will is registered with the broker at connect
-time and published BY THE BROKER when the connection dies without a goodbye -
-a power cut, a pulled cable, a modem that lost coverage.
+WHAT A HOST DOES THAT A NODE DOES NOT, and why this is a separate block:
 
-The ONLINE message goes out on the session-established hook, which runs before
-anything else queued - so a subscriber sees this device come up before it sees
-the device's first reading, in that order, every time.
+  - It publishes its OWN birth and death certificate on
+    spBv1.0/STATE/<sHostId>, at QoS 1 and RETAINED - retained, unlike a
+    node's death certificate, because a node subscribing later has to find
+    it waiting or it will never birth at all.
+  - It reads names out of BIRTH certificates and resolves them against the
+    aliases data messages carry. A conformant node puts names only in its
+    births; without the dictionary a host receives numbers it cannot name.
+  - It notices gaps in a node's sequence number and, with bPrimary, asks for
+    a rebirth.
 
-DELAY is the pin that stops a marginal link crying wolf. A radio that drops
-for eight seconds and comes back has not gone offline in any sense an operator
-cares about; set DELAY to T#30s and the broker waits before announcing it,
-and a reconnect inside that window cancels the announcement entirely.
+sPrimaryHostId on the node and sHostId here are the same string. A node
+configured with one will not birth until this host says it is online, which
+is how a plant avoids nodes publishing into a SCADA that is not listening.
 
-NOT WITH SPARKPLUG. A connection carries one Will, and a SPARKPLUG_NODE or
-SPARKPLUG_HOST on the same client owns it: its birth and death certificates are
-the presence. This block then says E_MqttResult.Refused and publishes nothing.
+ONE CONNECTION, SHARED. The host is a layer on its client's session and
+takes its Will - the offline STATE - and a clean session on every CONNECT, so
+no stWillConfig and no FB_SparkplugNode on the same client: a connection
+carries one Will. Started on a session already up, it reconnects it once so
+the next CONNECT carries the STATE.
+
+ONE TASK. This block, its methods and fbClient run in the network task, and
+the rest of the program trades values with them through globals.
 
 ---
 
-## MQTT_PROVISION
+## FB_SparkplugNode
 
 ```
-Lets this PLC register itself with a modbee broker, so nobody types a
-password into it. Optional - place it beside MQTT_CLIENT.
+A SPARKPLUG B EDGE NODE on an FB_MqttClient's connection. Call it once every
+scan, in the client's task. What it reports is its methods: a whole STRUCT by
+point list (Record), one value (Metric), a device (Device), a host's write
+(Command), events kept through an outage (History) and daily totals
+(DayTotals).
 
-CLIENT    which client. Must be wired. Its CLIENT_ID is this PLC's NAME on the
-          broker - unique on the site, like "pump-station-3" - and becomes its
-          user name.
-KEY       the provisioning key, made once on the broker with
-          `modbee key create <name>`. The SAME key goes into every PLC of a
-          site; each gets its own login with it.
-FORGET    a rising edge forgets the stored login, and the PLC registers again.
-          Rarely needed: a PLC whose login stops working re-registers by
-          itself.
+sGroupId    the Sparkplug Group ID: a logical grouping of nodes - a site, a
+           pipeline segment, a cell. Descriptive but small: it is in every
+           topic. Up to 47 characters, as every Sparkplug id here; no + / #.
+sEdgeNodeId this node's ID. sGroupId and sEdgeNodeId together are the node's
+           address in the whole system and MUST be unique in it.
+sPrimaryHostId  the Sparkplug Host ID this node answers to, or empty for none.
+           EMPTY BY DEFAULT - see below.
+tRebirthHoldoff  the shortest time between two answers to rebirth requests
+           (Node Control/Rebirth): requests in between are answered together,
+           once, when it is up. T#2s by default. On a metered link (a cellular
+           SIM) set a minute or more: a host that asks again and again then
+           costs one birth a minute at most.
+bEnable     FALSE sends the NDEATH and keeps the node down without losing a
+           metric; the connection stays up for everything else on it.
+stReportConfig  ST_SparkplugReportConfig, how Record's classes report:
+             tLogInterval   how often the log class looks for what moved.
+                            T#15m by default and at most; T#0s is refused
+             tLiveInterval  how often the live class sends what moved, and
+                            the log class while someone views. T#30s by
+                            default. T#0s is refused, never every scan
+             fDeadbandPct   the log class's deadband, in % of the value last
+                            sent, for a REAL or LREAL member whose clause
+                            gives no pct=. 0 = none
+             bRemoteControl TRUE: the host may write the cmd and set classes.
+                            FALSE: a write is dropped at once and the value
+                            reported back unchanged, so the host sees it did
+                            not take. Never kept for later
+anyUnits    optional: a STRUCT of STRINGs whose members a point list names
+           with u=@<member>, so units can come from a settings page. A change
+           shows at the next birth.
+fbClient    the FB_MqttClient this node rides on. Must be assigned.
+           Everything about the connection is set there - broker, TLS, login,
+           keep-alive, protocol - and the device's own topics and its firmware
+           updates share the one session.
 
-PROVISIONED  this PLC has its own login, and the client is using it.
-PENDING      the broker's admin must approve this PLC first:
-             `modbee user approve <name>`. It asks again every thirty seconds.
-REFUSED      the broker said no; REASON says why. It asks again every five
-             minutes, in case somebody fixes it at the other end.
-USERNAME     the login in use: CLIENT_ID, once provisioned.
-GROUP        what the key says this site's Sparkplug group is ("" if it says
-             nothing). Wire it to SPARKPLUG_NODE's GROUP.
-PREFIX       what the key says this site's topic prefix is ("" if it says
-             nothing) - for the topics of this PLC's own, such as its firmware
-             updates: PREFIX/<name>/... .
-REASON       what the broker said, in words.
-ERROR        REFUSED, or a pin that is not set.
-STATUS       why. E_MqttResult.Ok when fine.
+bLinkUp     the client's session is up.
+bBorn       the birth certificate has gone. NOT the same as bLinkUp: a node
+           waiting for its primary host is connected and not born.
+nSeq        the current sequence number, 0-255.
+nBdSeq      the birth/death sequence number of this connection.
+nPoints     metrics declared, node and devices together. No limit but memory:
+           past it the declaration is refused and sLastError says "out of
+           memory for metrics or devices".
+bError, eErrorId  E_MqttResult.Ok when fine. WrongTask: this block is not in
+           its client's task, and does nothing until it is. QueueFull: out of
+           memory. InvalidArgument: a Record call whose point list is wrong.
+           NotConnected (bError FALSE): the client is not connected.
+sLastError  what the node waits for, or what failed:
+             "no STATE from primary host 'scada'"   the host has never
+                                    reached this broker - or the id differs
+             "offline STATE from primary host 'scada'"  the host is down
+             "broker refused STATE/scada subscription (not authorized)"
+             "birth could not be queued - retrying"
+             "out of memory for metrics or devices"
+             "another layer owns the client's Will"  an FB_SparkplugHost or a
+                                    second node on fbClient
+             "Record pump: clause 3"  that record's point list; also "not a
+                                    STRUCT with a STRING point list",
+                                    "tLiveInterval is T#0s", "message not
+                                    queued"
+           Empty once born.
+bClockSet   the timestamps are real time. Always on the Runtime; on a board
+           once FB_MqttClock has set the clock. Until then they count from
+           boot - a date in January 1970 - which a host should take as "not
+           synced" and replace with the time it received the message.
+bViewed     Live Demand: a host says someone is viewing this node now.
+sDemand     Live Demand: the devices demanded now, e.g. 'live,cfg-pump'.
+
+METHODS
+
+Every method is standing: call it every scan while it is wanted, after the
+node's own call. Ok while the node is born; E_MqttResult.NotConnected while it
+is not, the value kept for the next birth. WrongTask in any other task than
+the node's; NotInitialised before the node's first call. A node holds up to
+1024 Metric, Device, Command, History and DayTotals calls; past that,
+QueueFull. A BIRTH CARRIES EVERY METRIC: declare on the first scans and the
+node births with all of them (it waits up to 2 s for the first declaration).
+A metric first declared after the birth makes the node birth again.
+
+  sp.Record(anyData, sSettings, sPrefix, bSend, nMetricCnt =>, nBadClause =>)
+     A WHOLE STRUCT, EACH MEMBER BY ITS CLASS. anyData is the record (nested
+     STRUCTs and arrays included); sSettings its point list, a STRING of any
+     length or a literal; sPrefix goes before every metric name. A record is
+     found by its declared name and type and sPrefix: the same STRUCT with
+     two prefixes is two records. nMetricCnt: metrics it declared.
+     nBadClause: the first clause that cannot be used, counting from 1; 0
+     none; -1 when anyData is not a STRUCT or sSettings not a STRING. The
+     other clauses still apply.
+
+     THE POINT LIST is clauses split by ';':
+         <members> = <class> [, <option>]*
+     <members> is a comma list of paths: 'level', 'pump.hours', 'spare[2]'.
+     A path covers everything below it ('pump' is every value in pump), a
+     name without an index covers every element ('spare' is spare[1] ..
+     spare[n]), and '*' is any one segment ('*' alone is every member,
+     'sts.*' everything in sts). A member no clause covers is not reported.
+     Case does not matter; spaces are ignored.
+
+     <class> says when it goes, where, and whether the host may write it:
+       now         at once, always. Read only. Alarms, states, faults
+       cmd         at once, always; the host writes it while
+                   stReportConfig.bRemoteControl is TRUE
+       view        at once while someone views (bViewed); otherwise held
+       log         what moved past its deadband, every tLogInterval (every
+                   tLiveInterval while someone views). For a metered link:
+                   a value that sits still costs nothing
+       live        on device 'live': what moved, every tLiveInterval, while
+                   a host demands it
+       set:<page>  on device 'cfg-<page>': at once while demanded; the host
+                   writes it while bRemoteControl is TRUE. <page> up to 43
+                   characters, no + / #
+       every:<time>  all of them every <time> (T#1m, 30s, 1h30m), moved or
+                   not; a birth counts as a send
+       onreq       all of them on a rising edge of Record's bSend
+     A value takes the class of the LAST now/cmd/view/log/every/onreq clause
+     covering it, on the node and, separately, on each dev= device; it may
+     also be in live and in any number of set pages, each a metric of its own
+     on that device. Options come from the clause that gave the class.
+
+     <option>:
+       db=<n>      deadband in the member's units: a move this size or less
+                   from the value last sent is not reported
+       pct=<n>     deadband in % of the value last sent. With db=, a move
+                   must clear both. Not given on a log REAL: fDeadbandPct
+       u=<text>    engineering units, in the birth (engUnit). A TIME says
+                   'ms' by itself
+       u=@<member> the units are that STRING member of anyUnits
+       lo=<n>, hi=<n>  the range a gauge or trend should show (engLow,
+                   engHigh); equal = none
+       pulse=<ms>  cmd and set only: the PLC puts the member back to 0,
+                   FALSE or '' this many milliseconds after a host write,
+                   for a command that acts on an edge
+       dev=<name>  now, cmd, view, log, every and onreq: the members go
+                   under the program's own device <name> instead of the
+                   node. The program brings it on and off line with
+                   sp.Device; Live Demand never touches it. Not 'live' or
+                   'cfg-...'
+     A deadband on a BOOL or STRING the clause names itself is an error;
+     covered by a wider path, the BOOL simply reports every change. A value
+     the host writes is always reported back, whatever the deadband.
+
+     METRIC NAMES are sPrefix and the path: 'pump/' and sts.fault give
+     'pump/sts.fault'; array elements count from 1 whatever the bounds. The
+     live class drops a leading 'det.' and a set page a leading 'set.', so
+     det.rate on 'live' is 'pump/rate' and set.onLevel on 'cfg-pump' is
+     'pump/onLevel'. An enumeration goes as its unsigned integer; a TIME as
+     Int64 milliseconds; a DATE or TIME_OF_DAY has no Sparkplug type and is
+     left out.
+
+     WHICH MEMBERS, AND THEIR CLASS, ARE READ AT THE FIRST CALL. Options
+     follow later changes of the text, of anyUnits and of fDeadbandPct (units
+     and ranges show at the next birth); adding or removing a clause later is
+     reported on nBadClause - restart the PLC to change membership.
+     Ok, NotConnected, InvalidArgument (a bad clause, or tLogInterval or
+     tLiveInterval T#0s where it is used), QueueFull (out of memory, or a message
+     asked for could not be queued: it asks again).
+
+     LIVE DEMAND. A record with a view, log, live or set class makes the
+     node offer the metric 'Node Control/Live Demand', a String whose value
+     names what can be demanded:
+         {"devices":["live","cfg-pump"],"required":false}
+     A host viewing the node writes it:
+         {"demand":true,"leaseS":120,"devices":["live","cfg-pump"]}
+     Then bViewed is TRUE for leaseS seconds (120 when missing or outside 1
+     to 86399): the view class sends, the log class goes at tLiveInterval,
+     and each device listed is born (DBIRTH) and sends; a device not listed
+     dies (DDEATH). The host writes again before the lease ends to keep it;
+     {"demand":false} ends it at once; a write without "demand", or longer
+     than 200 characters, is ignored. The offer is put back after every
+     write. sDemand lists the devices demanded now. Devices 'live' and
+     'cfg-...' are the node's: Device and Metric refuse them.
+
+  sp.Metric(anyValue, sMetricName, sDeviceId, sUnits, eQuality, fDeadband,
+            bWritable, bPublish, bUpdate, nAlias =>, nWrittenCnt =>,
+            nLostCnt =>)
+     ONE VALUE THE PROGRAM SETS. anyValue's declared type is the metric's
+     datatype, declared at the first call; sMetricName is the name the host
+     sees (case matters); sDeviceId puts it under a device of this node,
+     which the first such call adds and brings online unless a Device call
+     added it. sUnits goes in the birth. eQuality (Good by default) goes
+     with the value: Uncertain as stale, Bad and Unknown as bad. fDeadband:
+     a move this size or less from the value last sent is not reported
+     (numbers only; InvalidArgument on a BOOL or STRING). bWritable TRUE at
+     the first call declares it writable: a host command is written into
+     anyValue, one a call, oldest first, up to four waiting (nLostCnt counts
+     the dropped); bWritable FALSE later drops a write at once and reports
+     the value back. bUpdate FALSE holds the last value and takes no
+     command. nAlias: the alias the host sees, 0 refused. nWrittenCnt: host
+     commands written. Ok, NotConnected, InvalidArgument (empty name, a type
+     with no Sparkplug datatype, a name taken, a device the node manages),
+     QueueFull.
+
+  sp.Device(sDeviceId, bOnline, bDeviceOnline =>, nBirthCnt =>,
+            nDeathCnt =>)
+     A DEVICE THE PROGRAM BRINGS ONLINE AND OFFLINE: a pump skid, a remote
+     I/O drop - something that can be lost while the node is fine. Acts on a
+     change of bOnline (TRUE: DBIRTH, FALSE: DDEATH), never every scan, and
+     births the device again after every node birth. Its metrics are
+     Metric calls with this sDeviceId. bDeviceOnline: its birth has gone.
+     nBirthCnt, nDeathCnt: births gone, deaths of an online device. Ok,
+     NotConnected, InvalidArgument (empty, or 'live' or 'cfg-...', which
+     Live Demand manages), QueueFull.
+
+  sp.Command(sMetricName, sDeviceId, bAck, bPending =>, fValue =>,
+             bValue =>, sText =>, nCmdCnt =>, nRefusedCnt =>, nLostCnt =>)
+     A HOST'S WRITE FOR THE PROGRAM TO DECIDE ON, on a metric declared
+     writable with Metric; call it BEFORE that Metric call. bPending shows
+     the oldest write waiting, read without taking it, so a rung can look
+     before it decides; a rising edge of bAck takes it, so two rungs cannot
+     both act on one command. fValue: its value as a number (bValue = fValue
+     <> 0), sText a String metric's value cut to 126 characters. nCmdCnt:
+     commands seen on this metric. nRefusedCnt: commands the node refused -
+     undeclared, read only or the wrong type - all metrics together.
+     nLostCnt: writes dropped with four waiting. Ok, NotInitialised (the
+     metric is not declared yet), InvalidArgument (not writable), QueueFull.
+
+  sp.History(nSource, nCode, fValue, sMetricPrefix, nDepth, nBatch, tPeriod,
+             bAdd, nStoredCnt =>, nLostCnt =>, nSentCnt =>, bReplaying =>)
+     EVENTS KEPT THROUGH AN OUTAGE. bAdd TRUE records one event on this call
+     - wire a one-scan pulse - with what it is about (nSource: a pump, an
+     alarm number), what happened (nCode) and a number (fValue). While the
+     node is born it goes at once as live data; recorded while it is not, it
+     waits and goes after the next node birth flagged historical, at its own
+     time, oldest first, nBatch at a time (at most 64) every tPeriod. Each
+     event is the metrics <sMetricPrefix>/source, /code, /value and /seq (a
+     count from 1, so the host sees a gap), plus /lost. Calls with one
+     sMetricPrefix share one buffer of nDepth events (256: about a week of a
+     normal site, 24 bytes each, in PSRAM on a board); nDepth and nBatch are
+     fixed at the first call. A full buffer drops the oldest (nLostCnt).
+     Not retained. Sent at least once: an event is forgotten only after the
+     node stays born on the same birth for half a second; a device's birth
+     does not count. Events recorded before the clock is set are placed on
+     it once set; they wait for the clock up to five minutes after a birth.
+     nStoredCnt waiting, nSentCnt sent, bReplaying catching up. Ok,
+     NotConnected, NotInitialised (no memory for the buffer),
+     InvalidArgument (the metrics could not be declared), QueueFull.
+
+  sp.DayTotals(anyDays, sMetricName, fValue, dtClock, tSaveEvery, nDays =>,
+               nSentCnt =>)
+     DAILY TOTALS, sent on every node birth as historical values, so a host
+     fills in the days the link was down. anyDays is a RETAINED ARRAY OF
+     ST_SparkplugDay, two rows or more: the first is today, the rest closed
+     days, newest first. fValue is today's running total; dtClock the local
+     date and time the totaliser rolls its day on. When dtClock's date
+     changes the day is closed with the total of its last call and becomes
+     the newest closed day; the oldest falls off. A day that ended during a
+     power cut is closed when the PLC returns, from the total last saved:
+     today's total is written into anyDays every tSaveEvery (T#1h; T#0s
+     every call). Each closed day goes as a value of sMetricName stamped
+     00:00 of its date (the date as dtClock has it, written as UTC: read
+     the date, not the hour), on every node birth and every close - not on
+     a device's birth. The live value is the last closed day. Nothing
+     happens while the clock is not set. nDays: closed days held. Ok,
+     NotConnected, InvalidArgument (anyDays is not an ARRAY OF
+     ST_SparkplugDay of two rows or more, or the metric could not be
+     declared), QueueFull.
 ```
 
 **In-out**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `fbClient` | `FB_MqttClient` |  | the connection this node rides on |
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `KEY` | `STRING(127)` |  |
-| `FORGET` | `BOOL` |  |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sGroupId` | `STRING(47)` |  | the Sparkplug Group ID |
+| `sEdgeNodeId` | `STRING(47)` |  | this node's Edge Node ID; with sGroupId unique in the system |
+| `sPrimaryHostId` | `STRING(47)` |  | the Primary Host this node answers to; empty for none |
+| `tRebirthHoldoff` | `TIME` | `T#2s` | the shortest time between two answers to rebirth requests |
+| `bEnable` | `BOOL` | `TRUE` | FALSE keeps the node down without losing its metrics |
+| `stReportConfig` | `ST_SparkplugReportConfig` |  | Record: intervals, log deadband, remote control |
+| `anyUnits` | `ANY` |  | Record: a STRUCT of STRINGs that u=@<member> names; optional |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `PROVISIONED` | `BOOL` |  |
-| `PENDING` | `BOOL` |  |
-| `REFUSED` | `BOOL` |  |
-| `USERNAME` | `STRING(64)` |  |
-| `GROUP` | `STRING(64)` |  |
-| `PREFIX` | `STRING(127)` |  |
-| `REASON` | `STRING(64)` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
+| Pin | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bLinkUp` | `BOOL` |  | the client's session is up |
+| `bBorn` | `BOOL` |  | the birth certificate has gone |
+| `nSeq` | `USINT` |  | the current sequence number |
+| `nBdSeq` | `USINT` |  | the birth/death sequence number of this connection |
+| `nPoints` | `INT` |  | metrics declared |
+| `bError` | `BOOL` |  |  |
+| `eErrorId` | `E_MqttResult` |  |  |
+| `sLastError` | `STRING(64)` |  | what the node waits for, or what failed |
+| `bClockSet` | `BOOL` |  | the timestamps are real time |
+| `bViewed` | `BOOL` |  | Live Demand: someone views this node now |
+| `sDemand` | `STRING(200)` |  | Live Demand: the devices demanded now, e.g. 'live,cfg-pump' |
 
-HOW IT GOES. On its first start the PLC has no login. It connects with the
-key - which lets it do one thing only, ask - and the broker answers with a
-login made for this PLC: its name, and a secret only it holds, and the values
-the key hands its devices (GROUP and PREFIX). They are kept in this block's
-RETAINED memory, and the client reconnects with the login. From then on the
-PLC connects as itself, and nobody ever types, records or looks up its
-password. While it is asking, the client's CONNECTED stays FALSE, so the rest
-of the program waits for the real connection.
-
-EVERY CONNECT IT ASKS AGAIN for GROUP and PREFIX (no new password), so a
-change made for the site on the broker reaches it by itself.
-
-WHEN THINGS CHANGE IT SORTS ITSELF OUT. A PLC replaced by a new one: download
-the same program - same CLIENT_ID, same KEY - and the new PLC registers and
-takes the name over; the old one's login stops working. An admin resets the
-login (`modbee user reset`): the stored one is refused, so the PLC registers
-again with its key, with no visit to the site. The old login is KEPT until the
-broker issues a new one - a registration that is pending or refused never
-leaves the PLC with no login at all - and while it waits the PLC tries the old
-login again every five minutes, so a login put back on the broker works
-again by itself. The site's group changed on
-the broker: the broker refuses a connect whose Will (the Sparkplug NDEATH) is
-on the old group, so the PLC connects once without a Will, asks again, and
-reconnects with the new one. If asking again gives the same group, the
-login's rights no longer cover its Will: REFUSED, REASON says so, and it
-tries again every five minutes. An admin DISABLES the PLC: it stays out -
-registering again does not undo that.
-
-LEAVE USERNAME AND PASSWORD ON MQTT_CONFIG EMPTY. This block's login is used
-instead of them.
-
-WHAT IT MAY PUBLISH AND SUBSCRIBE TO is decided on the broker, by the key: a
-key made with --publish 'plant/${username}/#' lets each PLC publish under its
-own name and nowhere else. docs/logins.md in modbee-mqtt has the whole story.
-
-For a modbee broker: the protocol is modbee's.
-
----
-
-## MQTT_PUBLISH
+### FB_SparkplugNode.Record
 
 ```
-Sends one message when you ask. Acted on the rising edge of REQ.
-
-CLIENT     which client. Must be wired.
-REQ      rising edge sends. Holding it TRUE does not send repeatedly.
-TOPIC    where it goes. No wildcards - those are for subscribing.
-VALUE    what to send. Pass the variable itself and its declared type is what
-         travels: a REAL goes as "23.5", an INT as "42", a BOOL as "true", a
-         STRING as its text.
-QOS      0 fire and forget, 1 at least once, 2 exactly once.
-RETAINED   TRUE and the broker keeps it, so whoever subscribes next is told
-         straight away instead of waiting for the next change.
-
-BUSY     a level: the message is out and not yet concluded.
-DONE     one scan, when the broker has it.
-ERROR    one scan, when it failed.
-STATUS   why. E_MqttResult.Ok when fine.
+result := sp.Record(anyData := ..., sSettings := ..., sPrefix := ...,
+                    bSend := ..., nMetricCnt => ..., nBadClause => ...);
 ```
 
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
+Returns `E_MqttResult`.
+A STRUCT's members as metrics, each by its class, from one point list of clauses '<members> = <class> [, <option>]*' split by ';'. Classes now, cmd, view, log, live, set:<page>; options db=, pct=, u=, u=@<member>, lo=, hi=, pulse=. Called every scan. Ok while the node is born, NotConnected while not (the record goes in the next birth).
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `REQ` | `BOOL` |  |
-| `TOPIC` | `STRING(128)` |  |
-| `VALUE` | `ANY` |  |
-| `QOS` | `BYTE` |  |
-| `RETAINED` | `BOOL` |  |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `anyData` | `ANY` |  | the record: a STRUCT |
+| `sSettings` | `ANY` |  | its point list: a STRING of any length, or a literal |
+| `sPrefix` | `STRING(32)` |  | put before every metric name |
+| `bSend` | `BOOL` |  | onreq: a rising edge sends those members, all of them |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `BUSY` | `BOOL` |  |
-| `DONE` | `BOOL` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `nMetricCnt` | `INT` |  | metrics the record declared |
+| `nBadClause` | `INT` |  | the first clause that cannot be used, from 1; 0 none |
 
-DONE MEANS DIFFERENT THINGS AT DIFFERENT QOS, and the difference is the whole
-point of the pin. At QoS 0 it means the bytes left this device. At QoS 1 it
-means the broker acknowledged them. At QoS 2 it means the broker acknowledged
-them exactly once and the four-packet handshake completed. Interlock on DONE
-at QoS 1 or 2 and you have a real delivery receipt; at QoS 0 you have a
-despatch note.
-
-DONE and ERROR are one scan wide, so latch them if a slower task has to see
-one. BUSY is a level and is the pin to gate a sequence on.
-
-One instance can serve many topics. The block keeps its state against the
-topic it was given, so calling the same instance twice in a scan with two
-different topics is two publishes, each with its own outcome - and a program
-publishing fifty points costs one block rather than fifty. The outputs
-describe the last call.
-
-Nothing is silently dropped. A topic the broker will not take, a payload
-larger than the connection allows, a queue that is full - each comes back on
-STATUS with its own name rather than disappearing.
-
----
-
-## MQTT_REPORT
+### FB_SparkplugNode.Metric
 
 ```
-Publishes a variable. MODE says what makes it go. Standing - one instance
-serves many topics.
-
-CLIENT          which client. Must be wired.
-TOPIC           where it goes.
-VALUE           the variable to watch. Its declared type is what travels.
-MODE            what triggers a message:
-                  E_MqttTrigger.OnChange    when the value moves past DEADBAND, and
-                                    anyway every PERIOD so silence stays
-                                    meaningful.
-                  E_MqttTrigger.OnInterval  every PERIOD, moved or not.
-                  E_MqttTrigger.OnRequest   when REQ goes TRUE, and never otherwise.
-                E_MqttTrigger.ChangedEvery is SPARKPLUG_STRUCT's and is refused
-                here (E_MqttResult.InvalidArgument).
-DEADBAND        how far it must move before that is worth a message. 0 sends
-                on any change at all. E_MqttTrigger.OnChange only.
-PERIOD          E_MqttTrigger.OnChange: send anyway after this long, even unchanged.
-                T#0s never does, which is the mistake worth avoiding - see
-                below. E_MqttTrigger.OnInterval: how often. Required there.
-REQ             E_MqttTrigger.OnRequest: a rising edge sends one. Ignored otherwise.
-QOS             0, 1 or 2.
-RETAINED        TRUE keeps the last value on the broker.
-ENABLE          FALSE stops reporting without losing the topic.
-
-SENT            running total of messages sent.
-AGE             how long since the last one. T#0s until there has been one,
-                which SENT = 0 distinguishes from one sent this scan.
-ERROR           something failed.
-STATUS          why. E_MqttResult.Ok when fine.
+result := sp.Metric(anyValue := ..., sMetricName := ..., sDeviceId := ...,
+                    sUnits := ..., eQuality := ..., fDeadband := ...,
+                    bWritable := ..., bPublish := ..., bUpdate := ...,
+                    nAlias => ..., nWrittenCnt => ..., nLostCnt => ...);
 ```
 
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
+Returns `E_MqttResult`.
+One metric the program sets, called every scan. anyValue's declared type is its datatype, declared at the first call. Ok while the node is born, NotConnected while not (the value goes in the next birth).
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `TOPIC` | `STRING(128)` |  |
-| `VALUE` | `ANY` |  |
-| `MODE` | `E_MqttTrigger` |  |
-| `DEADBAND` | `LREAL` |  |
-| `PERIOD` | `TIME` |  |
-| `REQ` | `BOOL` |  |
-| `QOS` | `BYTE` |  |
-| `RETAINED` | `BOOL` |  |
-| `ENABLE` | `BOOL` | `TRUE` |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `anyValue` | `ANY` |  | the value; a host command is written here when bWritable |
+| `sMetricName` | `STRING(96)` |  | the name the host sees; case matters |
+| `sDeviceId` | `STRING(47)` |  | a device of this node; empty for a node metric |
+| `sUnits` | `STRING(16)` |  | engUnit in the birth |
+| `eQuality` | `E_MqttQuality` | `E_MqttQuality.Good` | Uncertain goes as stale, Unknown as bad |
+| `fDeadband` | `REAL` |  | numbers: a move this size or less from the value last sent is not reported |
+| `bWritable` | `BOOL` |  | a host may command it; declared once, writes dropped while FALSE |
+| `bPublish` | `BOOL` | `TRUE` | asks the node for this scan's data message |
+| `bUpdate` | `BOOL` | `TRUE` | FALSE holds the last value and takes no command |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `SENT` | `DINT` |  |
-| `AGE` | `TIME` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `nAlias` | `UDINT` |  | the alias the host sees after the birth; 0 refused |
+| `nWrittenCnt` | `DINT` |  | host commands written into anyValue |
+| `nLostCnt` | `DINT` |  | writes dropped with four already waiting |
 
-THIS IS THE BLOCK MOST PROGRAMS WANT, in its E_MqttTrigger.OnChange default.
-
-DEADBAND stops a noisy analogue input filling the broker. A level transmitter
-that jitters by 0.02 m is not telling you anything, and publishing it four
-times a second for a year is thirty million messages nobody reads. Set the
-deadband to the smallest change an operator would act on.
-
-PERIOD is the other half, and leaving it at T#0s is the mistake worth
-avoiding. A value that never moves publishes nothing, and a consumer cannot
-tell that from a device that has died - it just sees silence. Set it to a
-minute or two and the silence becomes meaningful: no message inside the
-interval is a fault, not a steady reading. That is what lets the subscribing
-end run a quality on it, and it is what the subscriber's EXPECT is compared
-against.
-
-DEADBAND IS MEASURED ON THE NUMBER, so it has no meaning for a STRING - there
-any change at all is a change, and PERIOD still applies. A BOOL counts as a
-number, 1.0 or 0.0, so a DEADBAND above 1.0 would freeze one. Leave it at 0
-for anything that is not an analogue.
-
-E_MqttTrigger.OnInterval WITH NO PERIOD IS REFUSED, not turned into "every scan".
-STATUS says E_MqttResult.InvalidArgument and nothing is published, because a block
-publishing at the task rate is how a broker falls over.
-
-E_MqttTrigger.OnRequest PUBLISHES NOTHING UNTIL ASKED - no first value, no heartbeat.
-Where an acknowledged send is wanted, with BUSY and DONE to sequence against,
-that is MQTT_PUBLISH rather than this.
-
-One instance serves many topics. Call it twice in a scan with two topics and
-you get two reports, each with its own deadband and its own last value.
-
----
-
-## MQTT_REQUEST
+### FB_SparkplugNode.Device
 
 ```
-Asks a question and waits for the answer. MQTT 5.0 only.
-
-CLIENT           which client. Must be wired.
-REQ            rising edge sends the request.
-TOPIC          where the question goes.
-VALUE          what to ask. Its declared type is what travels.
-REPLY_TOPIC    where the answer comes back. Give each requester its own -
-               "plant/plc-01/reply" - so two of them cannot read each other's
-               post.
-QOS            0, 1 or 2 for the request.
-TIMEOUT        how long to wait for an answer. T#0s for five seconds.
-
-BUSY           a level: the question is out and unanswered.
-DONE           one scan, when the answer arrived.
-REPLY          the answer, as text.
-REPLY_LENGTH   how much of it.
-ERROR          one scan, when it failed or timed out.
-STATUS         why. E_MqttResult.Ok when fine.
+result := sp.Device(sDeviceId := ..., bOnline := ..., bDeviceOnline => ...,
+                    nBirthCnt => ..., nDeathCnt => ...);
 ```
 
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
+Returns `E_MqttResult`.
+A device the program brings online and offline, called every scan. Acts on a change of bOnline; births it again after every node birth. Ok while the node is born. Devices the node manages itself ('live', 'cfg-...') are refused.
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `REQ` | `BOOL` |  |
-| `TOPIC` | `STRING(128)` |  |
-| `VALUE` | `ANY` |  |
-| `REPLY_TOPIC` | `STRING(128)` |  |
-| `QOS` | `BYTE` |  |
-| `TIMEOUT` | `TIME` |  |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sDeviceId` | `STRING(47)` |  | unique among this node's devices |
+| `bOnline` | `BOOL` | `TRUE` | TRUE births the device, FALSE sends its death |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `BUSY` | `BOOL` |  |
-| `DONE` | `BOOL` |  |
-| `REPLY` | `STRING(254)` |  |
-| `REPLY_LENGTH` | `INT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bDeviceOnline` | `BOOL` |  | its birth has gone |
+| `nBirthCnt` | `DINT` |  | births gone; one more after every node birth |
+| `nDeathCnt` | `DINT` |  | deaths of an online device |
 
-REQUEST AND RESPONSE IS A 5.0 FEATURE and this block says so rather than
-pretending. On a 3.1.1 connection it refuses with
-E_MqttResult.NotSupportedByProtocol - because the Response Topic and Correlation
-Data properties do not exist there at all, and sending the request stripped
-would mean the responder has no idea where to reply to. A request nobody can
-answer is worse than a request refused.
-
-The request carries Response Topic, so a compliant responder knows where to
-send the answer without either end agreeing it beforehand, and Correlation
-Data, so it can quote the question back.
-
-MATCHING HERE IS BY REPLY_TOPIC, not by correlation. This block reads the next
-message that arrives on REPLY_TOPIC as the answer, which is right when each
-requester owns its own reply topic and is why the pin documentation says to
-give it one. Two blocks sharing a reply topic will read each other's answers,
-and no amount of correlation would help a program that cannot tell which
-answer it wanted.
-
-TIMEOUT is the pin that keeps a sequence moving. An unanswered request is
-otherwise indistinguishable from a slow one, and a rung waiting on BUSY that
-never clears is a machine that stops with nothing on the screen to say why.
-ERROR with E_MqttResult.KeepAliveTimeout is what a timeout looks like.
-
----
-
-## MQTT_STATUS
+### FB_SparkplugNode.Command
 
 ```
-How this connection is doing. Every number is measured; nothing here is a
-setting.
-
-CLIENT            which client. Must be wired.
-
-CONNECTED       the broker has acknowledged us.
-STATE           where the connection is up to.
-VERSION         5 or 4 - which protocol version is actually in force, which
-                after a fallback is not always the one asked for.
-CONNECTS        times this client has connected. Includes the first.
-DISCONNECTS     times it has come down.
-RECONNECTS      times it went and came back on its own.
-PUBLISHED       messages this client sent that concluded successfully.
-RECEIVED        messages delivered to it.
-PUBLISH_FAILURES  messages that did not make it.
-PROTOCOL_ERRORS the broker said something the standard does not allow. Not
-                zero means one of the two ends has a bug; some brokers
-                are known to.
-PENDING          operations accepted and not yet concluded.
-REASON_CODE     the last reason code the broker sent with any packet - a
-                CONNACK, a SUBACK, a DISCONNECT. Read it WITH VERSION: at 3.1.1
-                it is that version's return code, a different numbering (4
-                there is a bad password; 4 at 5.0 is something else entirely).
-                For why the link will not come up, MQTT_CLIENT's LAST_ERROR
-                says it in words.
-ERROR           no such client.
-STATUS          why. E_MqttResult.Ok when fine.
+result := sp.Command(sMetricName := ..., sDeviceId := ..., bAck := ...,
+                     bPending => ..., fValue => ..., bValue => ...,
+                     sText => ..., nCmdCnt => ..., nRefusedCnt => ...,
+                     nLostCnt => ...);
 ```
 
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CONNECTED` | `BOOL` |  |
-| `STATE` | `E_MqttState` |  |
-| `VERSION` | `BYTE` |  |
-| `CONNECTS` | `DINT` |  |
-| `DISCONNECTS` | `DINT` |  |
-| `RECONNECTS` | `DINT` |  |
-| `PUBLISHED` | `DINT` |  |
-| `RECEIVED` | `DINT` |  |
-| `PUBLISH_FAILURES` | `DINT` |  |
-| `PROTOCOL_ERRORS` | `DINT` |  |
-| `PENDING` | `DINT` |  |
-| `REASON_CODE` | `BYTE` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-
-THIS BLOCK HAS NO INPUTS. It reports and changes nothing, which is why it is
-safe to drop onto a diagnostic page anywhere.
-
-The numbers worth putting on a screen are CONNECTS and RECONNECTS. A link that
-works but reconnects nightly is a completely different problem from one that
-has never worked, and nothing else on this list tells them apart. A RECONNECTS
-that climbs at the same time every day is a lease expiring or a scheduled job
-on the broker; one that climbs with the weather is a radio.
-
-PUBLISH_FAILURES against PUBLISHED is the other pair. A handful of failures
-during a reconnect is ordinary. A ratio that stays steady means something is
-refusing messages rather than losing them - check STATUS on the block that
-sends them, which names the reason.
-
-VERSION is the pin people forget. Ask for E_MqttProtocol.V5ThenV311 and you may be
-speaking either; a 5.0-only feature quietly unavailable on a 3.1.1 connection
-is much easier to understand when this pin says 4.
-
----
-
-## MQTT_STRUCT_PUBLISH
-
-```
-A whole STRUCT, one block. MODE says what makes it go.
-
-CLIENT     which client. Must be wired.
-BASE       the topic every member hangs off. A member called LEVEL under a
-           BASE of 'plant/intake' is published as 'plant/intake/LEVEL'.
-DATA       the STRUCT itself. Every member becomes its own topic.
-MODE       what triggers a message:
-             E_MqttTrigger.OnChange    each member when that member changes, and
-                               anyway every PERIOD so silence stays
-                               meaningful.
-             E_MqttTrigger.OnInterval  all of them together, every PERIOD.
-             E_MqttTrigger.OnRequest   all of them together when REQ goes TRUE, and
-                               never otherwise.
-PERIOD     E_MqttTrigger.OnChange: send a member anyway after this long, unchanged.
-           T#0s never does. E_MqttTrigger.OnInterval: how often. Required there.
-REQ        E_MqttTrigger.OnRequest: a rising edge sends the set. Ignored otherwise.
-           (E_MqttTrigger.ChangedEvery is SPARKPLUG_STRUCT's: refused here.)
-QOS        0, 1 or 2 for all of them.
-RETAINED   TRUE keeps each on the broker.
-ENABLE     FALSE stops publishing without losing the bindings.
-
-POINTS     how many members are being published.
-SKIPPED    how many were not - a type the wire cannot carry. Named on STATUS
-           the first time, and counted here.
-SENT       running total of messages sent across all members.
-CHANGED    how many went out on this scan.
-ERROR      something failed.
-STATUS     why. E_MqttResult.Ok when fine.
-```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
+Returns `E_MqttResult`.
+A host command on a writable metric, for the program to decide on, called every scan. bPending shows the oldest write; a rising edge of bAck takes it. NotInitialised until the metric is declared.
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `BASE` | `STRING(128)` |  |
-| `DATA` | `ANY` |  |
-| `MODE` | `E_MqttTrigger` |  |
-| `PERIOD` | `TIME` |  |
-| `REQ` | `BOOL` |  |
-| `QOS` | `BYTE` |  |
-| `RETAINED` | `BOOL` |  |
-| `ENABLE` | `BOOL` | `TRUE` |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sMetricName` | `STRING(96)` |  | a metric declared writable |
+| `sDeviceId` | `STRING(47)` |  | its device; empty for a node metric |
+| `bAck` | `BOOL` |  | rising edge takes the pending command |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `POINTS` | `INT` |  |
-| `SKIPPED` | `INT` |  |
-| `SENT` | `DINT` |  |
-| `CHANGED` | `INT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `bPending` | `BOOL` |  | a command waits, not taken |
+| `fValue` | `LREAL` |  | its value as a number, from the call it was first seen |
+| `bValue` | `BOOL` |  | fValue <> 0 |
+| `sText` | `STRING(126)` |  | a String metric's value, cut to 126 characters |
+| `nCmdCnt` | `DINT` |  | commands seen on this metric |
+| `nRefusedCnt` | `DINT` |  | commands the node refused, all metrics together |
+| `nLostCnt` | `DINT` |  | writes dropped on this metric with four already waiting |
 
-FIFTY SETPOINTS, ONE BLOCK. That is the whole point, and the alternative is
-fifty MQTT_REPORT instances or - in ladder, which has no FOR loop - fifty
-rungs.
-
-  TYPE S_INTAKE : STRUCT
-    LEVEL    : REAL;
-    FLOW     : REAL;
-    RUNNING  : BOOL;
-    PUMP_ID  : STRING(16);
-  END_STRUCT END_TYPE
-
-  pubAll( CLIENT := mqtt, BASE := 'plant/intake', DATA := stIntake,
-          MODE := E_MqttTrigger.OnChange, PERIOD := T#60s, RETAINED := TRUE );
-
-publishes plant/intake/LEVEL, plant/intake/FLOW, plant/intake/RUNNING and
-plant/intake/PUMP_ID, each only when it moves, and each at least once a
-minute whether it moved or not.
-
-THE MEMBER NAME IS THE TOPIC, so the STRUCT declaration IS the topic scheme.
-Rename a member and you rename a topic - which is a real consequence and worth
-knowing before the third device is commissioned.
-
-THERE IS NO DEADBAND HERE, deliberately. One number covering fifty members of
-mixed types is a trap: a BOOL counts as 1.0, so a deadband above that would
-freeze every bit in the struct - including a FAULT - until the heartbeat
-rescued it, and a counter moving by one would go the same way. Where a member
-needs a deadband it gets an MQTT_REPORT of its own, which is one point, one
-unit and one declared type, all visible on the rung. The two blocks coexist
-happily on one client.
-
-E_MqttTrigger.OnChange COMPARES EACH MEMBER AGAINST WHAT WAS LAST PUBLISHED, not
-against the last scan, so a slow drift accumulates and eventually goes rather
-than creeping past unnoticed.
-
-E_MqttTrigger.OnInterval WITH NO PERIOD IS REFUSED, not turned into "every scan".
-STATUS says E_MqttResult.InvalidArgument and nothing is published: fifty topics at
-the task rate is how a broker falls over.
-
-E_MqttTrigger.OnRequest SENDS THE WHOLE SET, changed or not. That is what a recipe
-download wants - the receiving end gets a complete set it can act on, rather
-than the three values that happened to differ.
-
-A MEMBER THE WIRE CANNOT CARRY IS REFUSED, NOT SKIPPED QUIETLY. An array, a
-nested STRUCT, a TIME: the first one found is named on STATUS as
-E_MqttResult.InvalidArgument and counted on SKIPPED. A member silently missing from a
-payload is the kind of fault that survives commissioning and turns up months
-later in an argument about whose data is wrong.
-
-ANY NUMBER OF MEMBERS. What the block remembers per member (24 bytes) is
-allocated once, when the STRUCT is first bound, sized to that STRUCT; only
-memory limits it. If there is none, ERROR with E_MqttResult.QueueFull and nothing
-is published until there is.
-
----
-
-## MQTT_STRUCT_SUBSCRIBE
+### FB_SparkplugNode.History
 
 ```
-A whole STRUCT, one block. Keeps every member up to date from the broker.
-
-CLIENT           which client. Must be wired.
-BASE             the topic every member hangs off. A member called SETPOINT
-                 under a BASE of 'plant/intake/cmd' is subscribed as
-                 'plant/intake/cmd/SETPOINT'.
-DATA             the STRUCT to keep up to date. Arriving text is read as each
-                 member's declared type and lands in it directly.
-EXPECT           how often a value is expected. Drives QUALITY. T#0s means
-                 nothing was promised. Set it to a little more than the
-                 publisher's own PERIOD.
-QOS              the most the broker may use to deliver.
-ENABLE           FALSE unsubscribes without losing the bindings.
-
-POINTS           how many members are subscribed.
-SKIPPED          how many were not - a type the wire cannot carry.
-SUBSCRIBED       every one of them is established at the broker.
-QUALITY          the WORST quality across all members. One stale value makes
-                 the set no better than that value.
-SEEN             EVERY member has arrived at least once. It is what tells
-                 an OLDEST of T#0s apart, and it is how a LADDER asks what
-                 QUALITY answers - a rung cannot compare an enumeration.
-OLDEST           the age of the least recently updated member. T#0s while any
-                 member has never arrived - QUALITY is UNKNOWN there, which is
-                 what says which of the two zeroes this is.
-RECEIVED         running total of messages accepted across all members.
-MALFORMED        running total that would not parse into their type.
-NEW_VALUES       how many members changed on this scan.
-ERROR            something failed.
-STATUS           why. E_MqttResult.Ok when fine.
+result := sp.History(nSource := ..., nCode := ..., fValue := ...,
+                     sMetricPrefix := ..., nDepth := ..., nBatch := ...,
+                     tPeriod := ..., bAdd := ..., nStoredCnt => ...,
+                     nLostCnt => ..., nSentCnt => ..., bReplaying => ...);
 ```
 
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
+Returns `E_MqttResult`.
+Events kept while the node cannot publish, sent after the next birth flagged historical, in order, at their own time. Called every scan; calls with one sMetricPrefix share one buffer.
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `BASE` | `STRING(128)` |  |
-| `DATA` | `ANY` |  |
-| `EXPECT` | `TIME` |  |
-| `QOS` | `BYTE` |  |
-| `ENABLE` | `BOOL` | `TRUE` |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `nSource` | `UINT` |  | what the event is about: a pump, an alarm number |
+| `nCode` | `UINT` |  | what happened: a status, fault or stop code |
+| `fValue` | `REAL` |  | a number that goes with it |
+| `sMetricPrefix` | `STRING(24)` | `'Event'` | metrics <prefix>/source, /code, /value, /seq, /lost |
+| `nDepth` | `UINT` | `256` | events kept; fixed at the first call |
+| `nBatch` | `UINT` | `20` | events a catch-up message, at most 64; fixed at the first call |
+| `tPeriod` | `TIME` | `T#1s` | between catch-up messages |
+| `bAdd` | `BOOL` |  | TRUE records one event on this call |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `POINTS` | `INT` |  |
-| `SKIPPED` | `INT` |  |
-| `SUBSCRIBED` | `BOOL` |  |
-| `QUALITY` | `E_MqttQuality` |  |
-| `SEEN` | `BOOL` |  |
-| `OLDEST` | `TIME` |  |
-| `RECEIVED` | `DINT` |  |
-| `MALFORMED` | `DINT` |  |
-| `NEW_VALUES` | `INT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `nStoredCnt` | `UINT` |  | events waiting to be sent |
+| `nLostCnt` | `UDINT` |  | events dropped with the buffer full: the oldest go |
+| `nSentCnt` | `UDINT` |  | events sent since the program started |
+| `bReplaying` | `BOOL` |  | sending what was kept during an outage |
 
-FIFTY SETPOINTS, ONE BLOCK, and the same argument as MQTT_STRUCT_PUBLISH: in
-ladder there is no FOR loop, so the alternative is fifty rungs.
-
-  subAll( CLIENT := mqtt, BASE := 'plant/intake/cmd', DATA := stSetpoints,
-          EXPECT := T#0s, QOS := 2 );
-
-QUALITY IS THE WORST ACROSS THE SET, deliberately. A recipe of twelve
-setpoints where one is stale is not eleven-twelfths usable - it is a recipe
-you should not run. Where a member needs to be judged on its own, give it an
-MQTT_SUBSCRIBE of its own; the two blocks coexist happily on one client.
-
-OLDEST READS T#0s WHILE ANY MEMBER HAS NEVER ARRIVED, for the same reason:
-"partly commissioned" is not a state worth reporting as an age. QUALITY is
-UNKNOWN throughout that, so the two zeroes are never confused.
-
-A PAYLOAD THAT WILL NOT PARSE LEAVES ITS MEMBER ALONE and counts on
-MALFORMED. A publisher sending '23,5' to a REAL is a real fault, and a block
-that quietly wrote zero would hide it for a year.
-
-EACH MEMBER COSTS A TOPIC HANDLE AND A SUBSCRIPTION on the client. Both
-tables grow with the program, on a board and the Runtime alike, so the only
-limit is memory. Past it, the block says so with E_MqttResult.QueueFull - and
-MQTT_CLIENT's LAST_ERROR says "out of memory" - rather than silently
-subscribing to some members.
-
-ANY NUMBER OF MEMBERS. What the block remembers per member (8 bytes) is
-allocated once, when the STRUCT is first bound, sized to that STRUCT. If there
-is no memory for it, ERROR with E_MqttResult.QueueFull, tried again next scan.
-
----
-
-## MQTT_SUBSCRIBE
+### FB_SparkplugNode.DayTotals
 
 ```
-Keeps a variable up to date from the broker, with a quality that says how much
-to believe it. Standing - it subscribes once and maintains itself.
-
-CLIENT            which client. Must be wired.
-TOPIC          what to listen to. Wildcards allowed: + for one level, # for
-                the rest. "plant/+/pressure" hears every line.
-VALUE           the variable to keep up to date. Its declared type is what the
-                text is read as; a payload that will not parse is counted on
-                MALFORMED and the variable is left alone.
-QOS             the most the broker may use to deliver. It may use less.
-EXPECT          how often a value is expected. Drives QUALITY. T#0s means nothing
-                was promised, so QUALITY is GOOD as soon as anything arrives.
-ENABLE          FALSE unsubscribes without losing the topic.
-
-SUBSCRIBED        the subscription is established at the broker.
-QUALITY         how much to believe VALUE. See below.
-SEEN            a message has arrived at least ONCE since the program
-                started. It is what tells an AGE of T#0s apart, and it is
-                how a LADDER asks what QUALITY answers - a rung cannot
-                compare an enumeration.
-AGE             since the last accepted message, or T#0s if there has not been
-                one.
-RECEIVED        running total of messages accepted.
-MALFORMED       running total that would not parse into VALUE's type.
-NEW_VALUE       one scan, when VALUE changed.
-ERROR           something failed.
-STATUS          why. E_MqttResult.Ok when fine.
+result := sp.DayTotals(anyDays := ..., sMetricName := ..., fValue := ...,
+                       dtClock := ..., tSaveEvery := ..., nDays => ...,
+                       nSentCnt => ...);
 ```
 
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
+Returns `E_MqttResult`.
+A table of daily totals kept by the program and sent on every birth as historical values, so the host fills in the days the link was down. Called every scan. A change of date on dtClock closes the day. Ok while born.
 
 **Inputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `TOPIC` | `STRING(128)` |  |
-| `VALUE` | `ANY` |  |
-| `QOS` | `BYTE` |  |
-| `EXPECT` | `TIME` |  |
-| `ENABLE` | `BOOL` | `TRUE` |
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `anyDays` | `ANY` |  | ARRAY OF ST_SparkplugDay, retained, 2 rows or more: today, then closed days newest first |
+| `sMetricName` | `STRING(32)` |  | the metric; its live value is the last closed day |
+| `fValue` | `REAL` |  | today's running total |
+| `dtClock` | `DT` |  | local date and time, the clock the total rolls its day on |
+| `tSaveEvery` | `TIME` | `T#1h` | how often today's total is written into anyDays; T#0s every call |
 
 **Outputs**
 
-| Pin | Type | Default |
-| --- | --- | --- |
-| `SUBSCRIBED` | `BOOL` |  |
-| `QUALITY` | `E_MqttQuality` |  |
-| `SEEN` | `BOOL` |  |
-| `AGE` | `TIME` |  |
-| `RECEIVED` | `DINT` |  |
-| `MALFORMED` | `DINT` |  |
-| `NEW_VALUE` | `BOOL` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-
-QUALITY IS THE PIN THAT MAKES A SUBSCRIBED NUMBER SAFE TO ACT ON, and it is
-judged against EXPECT - the interval YOU asked for - rather than some
-constant the library picked:
-
-  E_MqttQuality.Unknown    nothing has ever arrived. A COMMISSIONING fault:
-                          wrong topic, publisher never deployed. Found at a
-                          desk with a drawing.
-  E_MqttQuality.Bad        the link is down, or the value is more than twice
-                          overdue. A RUNNING fault. Found in the plant.
-  E_MqttQuality.Uncertain  overdue, but not by much.
-  E_MqttQuality.Good       arrived inside the interval.
-
-UNKNOWN and BAD are deliberately different. An alarm list that shows both as
-"no comms" throws away the one piece of information that says which end of the
-site to walk to.
-
-ONE HONEST LIMIT, worth knowing before you rely on this. A connected broker
-will happily serve a retained message published by a device that died last
-Tuesday, and nothing in MQTT marks it as old. QUALITY knows whether WE are
-connected and how long since WE last heard; it cannot know the publisher is
-alive. Pair this with MQTT_PRESENCE at the publishing end and the question is
-answered properly.
-
-One instance serves many topics - call it twice in a scan with two filters and
-each call keeps its own subscription, its own value and its own quality.
-
----
-
-## MQTT_TLS
-
-```
-What to trust at the other end. Optional, and only read when the client's
-SECURITY pin asks for TLS.
-
-CLIENT         which client. Must be wired.
-CA_FILE      path to the certificate authority to trust, in PEM. Runtime only -
-             a board has no filesystem to read it from.
-CERT_FILE    this device's own certificate, for mutual TLS. Runtime only.
-KEY_FILE     and its private key. Runtime only.
-
-APPLIED      the settings reached the client.
-ERROR        they did not.
-STATUS       why. E_MqttResult.Ok when fine.
-```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
-
-**Inputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CA_FILE` | `STRING(128)` |  |
-| `CERT_FILE` | `STRING(128)` |  |
-| `KEY_FILE` | `STRING(128)` |  |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `APPLIED` | `BOOL` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-
-Leave every pin empty and TLS still works on the Runtime: it falls back to the
-system certificate store, which is what a plant server with a real certificate
-needs.
-
-THERE IS NO PIN FOR AN INLINE CERTIFICATE, and there cannot be. An IEC STRING
-is limited to 254 characters and the shortest real CA certificate in PEM is
-about eight times that, so a pin holding one would be a pin that never worked.
-A BOARD GETS ITS CA FROM A DEFINE instead, MQTT_CA_CERT_PEM, set in the board
-package's compiler flags - an OpenPLC project has no build flags of its own:
-
-  -DMQTT_CA_CERT_PEM='"-----BEGIN CERTIFICATE-----\n...."'
-
-which is also where a certificate belongs: it is part of the firmware, not
-part of the program somebody edits on a Tuesday.
-
-FOR THE SITE'S OWN BROKER NONE OF THIS IS NEEDED. Use E_MqttSecurity.TlsPinned on the
-client with TRUST_NEW and a login: the broker's key is learned once and
-enforced after, with nothing to install or define. That is the simple default
-for a board; a CA is for a broker somebody signed for. E_MqttSecurity.TlsInsecure is a
-bench setting and not a plant one.
-
-A BOARD'S OWN CERTIFICATE, for mutual TLS, comes the same way, from the board
-package - both or neither, and a build that names one without the other does
-not compile:
-
-  -DMQTT_CLIENT_CERT_PEM='"-----BEGIN CERTIFICATE-----\n...."'
-  -DMQTT_CLIENT_KEY_PEM='"-----BEGIN PRIVATE KEY-----\n...."'
-
-On an ESP32 all of this applies to Wi-Fi, Ethernet and cellular alike: the TLS
-runs on the controller, over a plain connection on each.
-
-THERE IS NO "IGNORE CERTIFICATES" PIN HERE. That decision lives on the client's
-SECURITY pin as E_MqttSecurity.TlsInsecure, where it is visible in the block that makes
-the connection rather than buried in an optional one - and where nobody can
-set it without meaning to.
-
-Mutual TLS wants both CERT_FILE and KEY_FILE; one without the other is
-refused, because a certificate with no key cannot be presented and silently
-connecting without it would be the opposite of what was asked.
-
----
-
-## SPARKPLUG_COMMAND
-
-```
-A SPARKPLUG COMMAND, ARRIVING.
-
-NODE      which node. Must be wired.
-NAME      the metric a command is expected on. It must have been declared
-          writable, by SPARKPLUG_STRUCT with WRITABLE set or by
-          SPARKPLUG_METRIC.
-DEVICE    the device the metric is under, for a DCMD. Empty (the default)
-          for a node metric and an NCMD. A name is only unique within its
-          device, so a metric under a device is only found with it.
-ACK       TRUE takes the pending command, clearing it. Leave it FALSE to watch
-          without consuming. Two writes that arrive together are two
-          commands: the second is PENDING after the first is taken.
-
-PENDING   a command has arrived and has not been taken.
-VALUE     the value it carried, valid on the scan PENDING first goes true.
-TEXT      the same for a String metric: up to 126 characters, the most a
-          board's command holds.
-COUNT     how many commands have arrived on this metric.
-LOST      writes dropped because four were already waiting on this metric:
-          the oldest goes, the newest is kept. 0 in any sane system.
-REFUSED   how many the NODE refused across all metrics - an undeclared name, a
-          read-only metric, a value of the wrong type. A running total from the
-          node, not this metric alone: a host writing to a name nobody declared
-          has no metric to be counted against.
-ERROR     something failed.
-STATUS    E_MqttResult.Ok when fine.
-```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `NODE` | `SPARKPLUG_NODE` |  |
-
-**Inputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `NAME` | `STRING(96)` |  |
-| `ACK` | `BOOL` |  |
-| `DEVICE` | `STRING(47)` |  |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `PENDING` | `BOOL` |  |
-| `VALUE` | `LREAL` |  |
-| `IS_TRUE` | `BOOL` |  |
-| `TEXT` | `STRING(126)` |  |
-| `COUNT` | `DINT` |  |
-| `REFUSED` | `DINT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-| `LOST` | `DINT` |  |
-
-WHY THIS EXISTS WHEN SPARKPLUG_STRUCT ALREADY APPLIES COMMANDS. Because a
-setpoint is usually not just a number to store. A recipe change wants to be
-validated, a pump start wants an interlock checked, a mode change wants to be
-logged. SPARKPLUG_STRUCT with WRITABLE writes the value straight into the
-struct member and reports it back, which is right for a plain setpoint and
-wrong for anything that needs a decision.
-
-So: leave those members out of the writable struct, declare them with
-SPARKPLUG_METRIC, and watch them here. PENDING goes true, the rung decides, and
-the program writes the value where it belongs - or does not.
-
-THE PAIR IS THE POINT. This is the callback-and-pollable pattern the whole
-library follows, and it exists because generated ladder cannot register a
-handler. PENDING and VALUE are the pollable half.
-
-ACK CLEARS IT, so two rungs cannot both act on one command. That is the same
-rule the MQTT_STATUS counters follow, and for the same reason: a command applied
-twice is a pump started twice.
-
-NO REPLY TOPIC. A Sparkplug command is not a request/response - the
-acknowledgement is that the metric's next DATA message carries the new value,
-which is what a host watches for. Publish the value back and the host has its
-answer.
-
----
-
-## SPARKPLUG_DAY_TOTALS
-
-```
-A small table of daily totals, kept by the project and sent on every birth
-as historical values, so SCADA fills in the days the link was down.
-
-NODE    which node. Must be wired.
-TABLE   the days: ARRAY OF SPARKPLUG_DAY (DAY : DATE, TOTAL : REAL). Retain it.
-        The FIRST row is today, saved every SAVE_EVERY; the rows after it
-        are the days closed so far, newest first. 31 rows keep a month.
-NAME    the metric, e.g. 'pumpedDay'. Its live value is the last closed day.
-VALUE   today's running total, from your totaliser.
-CLOCK   local date and time - the same clock your totaliser rolls its day on.
-SAVE_EVERY  how often today's running total is written into TABLE (T#1h).
-        TABLE is retained, and a retained store saves the whole of retained
-        memory whenever any of it changes - every scan would be a save every
-        flush period (flash wear on a board). A day that closes while the PLC
-        runs is closed with its exact total all the same; only a power cut
-        loses up to SAVE_EVERY of today. T#0s writes every scan.
-
-DAYS    closed days held.
-SENT    day values sent since the program started.
-ERROR   the metric could not be declared, or TABLE has fewer than two rows.
-STATUS  why. E_MqttResult.Ok when fine.
-```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `NODE` | `SPARKPLUG_NODE` |  |
-| `TABLE` | `ARRAY [*] OF SPARKPLUG_DAY` |  |
-
-**Inputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `NAME` | `STRING(32)` |  |
-| `VALUE` | `REAL` |  |
-| `CLOCK` | `DT` |  |
-| `SAVE_EVERY` | `TIME` | `T#1h` |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `DAYS` | `INT` |  |
-| `SENT` | `UDINT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-
-VAR_GLOBAL RETAIN
-    PUMPED_DAYS : ARRAY[0..31] OF SPARKPLUG_DAY;
-  END_VAR
-
-  days(NODE := sp, TABLE := PUMPED_DAYS, NAME := 'pumpedDay',
-       VALUE := pumped.today, CLOCK := localNow);
-
-WHEN THE DATE ON CLOCK CHANGES the day just ended is closed: its total - the
-value VALUE had on the scan before - moves into the table as the newest
-closed day, and the table shifts down a row (the oldest falls off). A day
-closed across a power cut is closed when the PLC comes back, from the
-retained table (today's total as last saved), so nothing is counted twice. Nothing happens while the
-clock is not set (before 2020).
-
-ON EVERY BIRTH every closed day is published as a historical value of NAME,
-time-stamped at 00:00 of its date (the date as CLOCK has it, written as UTC -
-read the date, not the hour). A host files them in its history and does not
-overwrite the live value, which is the last closed day. Sending the same day
-twice is harmless: it lands on the same timestamp. A day closed while the
-node is born goes at once the same way.
-
-Use it beside SPARKPLUG_HISTORY: the events say what happened and when, the
-day totals and counters say how much.
-
----
-
-## SPARKPLUG_DEVICE
-
-```
-A DEVICE UNDER A SPARKPLUG NODE.
-
-NODE      which node. Must be wired.
-DEVICE    this device's ID. Must be unique among this node's devices.
-ONLINE    TRUE births the device, FALSE kills it. Edge triggered, so holding it
-          TRUE does not republish.
-ENABLE    FALSE leaves the device alone entirely.
-
-IS_ONLINE whether the device's birth certificate has gone.
-BIRTHS    how many times it has birthed - which rises on every reconnect,
-          because a device's birth is owed again each time its node births.
-          Counted when its birth has gone (IS_ONLINE rising), not when it
-          was asked for: a birth the queue had no room for waits, owed.
-DEATHS    how many death certificates have gone.
-ERROR     something failed.
-STATUS    E_MqttResult.Ok when fine.
-```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `NODE` | `SPARKPLUG_NODE` |  |
-
-**Inputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `DEVICE` | `STRING(47)` |  |
-| `ONLINE` | `BOOL` | `TRUE` |
-| `ENABLE` | `BOOL` | `TRUE` |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `IS_ONLINE` | `BOOL` |  |
-| `BIRTHS` | `DINT` |  |
-| `DEATHS` | `DINT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-
-WHAT A DEVICE IS FOR. A node is the thing with the MQTT connection; a device is
-something the node speaks FOR - a pump, a meter, a drive on a bus behind it.
-The distinction is worth making when the node can be up while the thing it
-reports on is not: a PLC talking to four VFDs over Modbus is one node and four
-devices, and a VFD that stops answering gets a death certificate while the node
-stays connected and keeps reporting the other three.
-
-If everything lives or dies with the PLC, do not use this. Put the metrics on
-the node and save yourself four topics.
-
-YOU DO NOT NEED THIS BLOCK TO USE A DEVICE. SPARKPLUG_STRUCT and
-SPARKPLUG_METRIC add the device themselves when their DEVICE pin is set, and
-bring it online. This block is for when the device's presence is a decision the
-program makes - which is the case that matters, because a device that is
-"online" whenever the PLC is running is not telling anybody anything.
-
-WITH THIS BLOCK, ITS ONLINE PIN DECIDES, whichever block is called first: a
-SPARKPLUG_STRUCT or SPARKPLUG_METRIC under the same DEVICE declares its metrics
-there but leaves the device's presence alone, so ONLINE := FALSE holds it
-offline from the first scan - births included.
-
-A DEATH CERTIFICATE CARRIES A SEQUENCE NUMBER. A node's does not. That is the
-specification's rule, not a choice, and the library handles it - mentioned here
-because it is the single most surprising thing about Sparkplug's two death
-messages.
-
-ORDER IS ENFORCED FOR YOU. A device cannot birth before its node has; asking
-for it early leaves the birth OWED and it goes as soon as the node births. So a
-program does not have to sequence itself against the link coming up.
-
----
-
-## SPARKPLUG_HISTORY
-
-```
-Keeps events while the link is down and sends them after it comes back,
-flagged historical, in order, at the time they happened.
-
-NODE       which node. Must be wired.
-ADD        TRUE records one event on this call. Wire a one-scan pulse (an edge
-           of the alarm, the stop, the deferral) - call the block again with
-           other pins for more than one event in a scan.
-SOURCE     what the event is about: a pump, an alarm number, a zone.
-CODE       what happened: a status, fault or stop code. The HMI and SCADA hold
-           the words for it.
-VALUE      a number that goes with it: a level, a volume, a run time.
-NAME       the metrics' prefix. 'Event' gives Event/source, Event/code,
-           Event/value, Event/seq and Event/lost.
-DEPTH      events kept while the node cannot publish. Fixed at the first
-           call. 256 is about a week of a normal site's events, 6 KB of PSRAM.
-BATCH      events per message when catching up.
-PERIOD     the gap between catch-up messages, so a slow cellular link is not
-           flooded.
-
-STORED     events waiting to be sent.
-LOST       events dropped because the buffer was full: the oldest go, the
-           newest are kept. Also published as <NAME>/lost.
-SENT       events sent since the program started.
-REPLAYING  catching up after an outage.
-ERROR      no memory for the buffer, or the metrics could not be declared.
-STATUS     why. E_MqttResult.Ok when fine.
-```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `NODE` | `SPARKPLUG_NODE` |  |
-
-**Inputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `ADD` | `BOOL` |  |
-| `SOURCE` | `UINT` |  |
-| `CODE` | `UINT` |  |
-| `VALUE` | `REAL` |  |
-| `NAME` | `STRING(24)` | `'Event'` |
-| `DEPTH` | `UINT` | `256` |
-| `BATCH` | `UINT` | `20` |
-| `PERIOD` | `TIME` | `T#1s` |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `STORED` | `UINT` |  |
-| `LOST` | `UDINT` |  |
-| `SENT` | `UDINT` |  |
-| `REPLAYING` | `BOOL` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-
-history(NODE := sp, ADD := pumpStopped, SOURCE := 1, CODE := pump1.StopCode,
-          VALUE := level);
-  history(NODE := sp, ADD := alarmRaised, SOURCE := 100 + alarmNo, CODE := 1,
-          VALUE := 0.0);
-
-SPARKPLUG HAS NO STORE-AND-FORWARD OF ITS OWN. While the node is not born - no
-cellular coverage, the broker away, the primary host offline - nothing is sent,
-and after the next birth the host sees only the values as they are then: why
-the pump stopped at 03:12 is gone. This block keeps those events and sends
-them afterwards with Sparkplug's is_historical flag, which tells the host to
-file each one at its own timestamp and NOT to overwrite the live tag with it
-(Sparkplug B 3.0, the metric's is_historical field: "store and forward, or
-sending local backup data during network communication losses").
-
-EVERY EVENT IS ONE ROW of four metrics with the same timestamp: source, code,
-value and seq (a count from 1 since the program started, so the host can see
-that none is missing). While the node is born an event goes at once, as live
-data; recorded while it is not, it waits and goes historical. A value that
-repeats is still sent - an event is an event, not a change of value.
-
-WHAT IS KEPT: events, not analogs. A level that moves every scan would fill
-any buffer; the reasons, the stops, the alarms and the day totals
-(SPARKPLUG_DAY_TOTALS) are what a host cannot reconstruct afterwards.
-Totals and counters that only go up reconcile the rest by themselves.
-
-NOT RETAINED. A power cut during an outage loses the waiting events; the
-counters still reconcile. The buffer lives in PSRAM where the board has it.
-
-THE CLOCK. An event recorded before MQTT_CLOCK has set the board's clock is
-kept with the board's uptime and put on the clock as soon as it is set. Events
-wait for the clock up to five minutes after the birth, then go with what they
-have.
-
-SENT AT LEAST ONCE. A message is published at QoS 0 like all Sparkplug data,
-so an event is forgotten only after the node has stayed born for a moment
-afterwards; a link that drops in that moment sends the batch again. The host
-may see an event twice, never not at all - the timestamp and seq make the
-duplicate obvious.
-
----
-
-## SPARKPLUG_HOST
-
-```
-A SPARKPLUG B HOST APPLICATION: the other end of SPARKPLUG_NODE.
-
-HOST_ID      this host's Sparkplug Host ID. It is a topic element and MUST be
-             unique in the system. An edge node's PRIMARY_HOST pin carries this
-             same string. Up to 47 characters.
-GROUP        the group to watch, or empty for every group.
-PRIMARY      whether to ask for a rebirth when a node's sequence skips.
-REORDER      how long to let a gap fill before asking. T#0s asks at once.
-ENABLE       FALSE publishes the offline STATE and stands the host down; the
-             connection stays up for everything else on it.
-CLIENT       the MQTT_CLIENT whose connection this host rides on. Must be
-             wired; broker, TLS, login and protocol are set there.
-
-LINK_UP      the client's MQTT session is up.
-BORN         our STATE birth certificate is published, so nodes may rely on us.
-NODES        edge nodes heard from.
-ONLINE       how many of them are online now.
-GAPS         sequence gaps seen across every node.
-REBIRTHS     rebirths asked for.
-ERROR        something is wrong; STATUS and LAST_ERROR say what. "out of
-             memory for tracked nodes or metrics" when the host could not
-             follow everything that arrived: it tracks as many nodes, and
-             metrics per node, as memory holds, on a board and the Runtime
-             alike. E_MqttResult.WrongTask: not in its MQTT_CLIENT's task.
-
-     A host watches a group and keeps the current picture of every edge node in
-     it - which nodes are online, what metrics they declared, what each one is
-     reading now. SPARKPLUG_SUBSCRIBE reads a value out of that picture and
-     SPARKPLUG_WRITE sends one back down.
-
-     WHAT A HOST DOES THAT A NODE DOES NOT, and it is the reason this is a
-     separate block rather than a mode of SPARKPLUG_NODE:
-
-       - It publishes its OWN birth and death certificate on
-         spBv1.0/STATE/<HOST_ID>, at QoS 1 and RETAINED. Retained, unlike a
-         node's death certificate, because an edge node subscribing later has
-         to find it waiting or it will never birth at all.
-       - It reads names out of BIRTH certificates and resolves them against the
-         aliases that data messages carry. A conformant node puts names only in
-         its births; without the dictionary a host receives numbers it cannot
-         name.
-       - It notices gaps in a node's sequence number and, if PRIMARY is set,
-         asks for a rebirth.
-
-     PRIMARY_HOST on the node and HOST_ID here are the same string. A node
-     configured with one will not birth until this host says it is online,
-     which is how a plant avoids nodes publishing into a SCADA that is not
-     listening.
-
-     ONE CONNECTION, SHARED. The host is a layer on its MQTT_CLIENT's session
-     and takes its Will - the offline STATE - and a clean session on every
-     CONNECT, so no MQTT_PRESENCE and no SPARKPLUG_NODE on the same client: a
-     connection carries one Will. Started on a session already up, it
-     reconnects it once so the next CONNECT carries the STATE.
-
-     ONE TASK. This block, SPARKPLUG_SUBSCRIBE and SPARKPLUG_WRITE run in the
-     client's task, and the rest of the program trades values with them
-     through globals.
-```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
-
-**Inputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `HOST_ID` | `STRING(47)` |  |
-| `BROKER` | `STRING(128)` |  |
-| `PORT` | `UINT` |  |
-| `SECURITY` | `E_MqttSecurity` |  |
-| `USER` | `STRING(64)` |  |
-| `PASSWORD` | `STRING(64)` |  |
-| `PROTOCOL` | `E_MqttProtocol` |  |
-| `TRUST_NEW` | `BOOL` |  |
-| `GROUP` | `STRING(47)` |  |
-| `PRIMARY` | `BOOL` | `TRUE` |
-| `REORDER` | `TIME` | `T#5s` |
-| `CA_FILE` | `STRING(128)` |  |
-| `CERT_FILE` | `STRING(128)` |  |
-| `KEY_FILE` | `STRING(128)` |  |
-| `KEEP_ALIVE` | `UINT` | `60` |
-| `LINK` | `__XWORD` |  |
-| `ENABLE` | `BOOL` | `TRUE` |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `LINK_UP` | `BOOL` |  |
-| `BORN` | `BOOL` |  |
-| `NODES` | `INT` |  |
-| `ONLINE` | `INT` |  |
-| `GAPS` | `DINT` |  |
-| `REBIRTHS` | `DINT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-| `LAST_ERROR` | `STRING(64)` |  |
-| `BROKER_KEY` | `STRING(64)` |  |
-
----
-
-## SPARKPLUG_METRIC
-
-```
-ONE SPARKPLUG METRIC, for what a STRUCT member cannot express.
-
-NODE      which node. Must be wired.
-NAME      the metric name, exactly as it will appear at the far end. Case
-          matters: Sparkplug metric names are case sensitive. Up to 96
-          characters, the most a board's metric holds.
-VALUE     the value. Its DECLARED IEC type becomes the metric's datatype.
-DEVICE    a device under the node, or empty for a node metric.
-UNITS     engineering units - 'kPa', 'metres'. Carried in the birth certificate
-          as the engUnit property, which is what makes a number mean something
-          at the far end.
-QUALITY   E_MqttQuality.Good, _UNCERTAIN, _BAD or _UNKNOWN. Carried in the
-          birth as the Quality property, which Sparkplug fixes to one of
-          three codes - so UNCERTAIN becomes stale and UNKNOWN becomes bad.
-WRITABLE  TRUE lets a Host Application command it - an NCMD for a node
-          metric, a DCMD for one under DEVICE.
-          Every write is seen, one a scan, oldest first.
-          Declared writable once; while WRITABLE is FALSE after that, a write
-          is dropped at once and the metric reported back unchanged. It is
-          never kept for later.
-DEADBAND  for a number: a move of this much or less, from the value last SENT,
-          is not reported. In VALUE's own units - 0.01 on a level in metres
-          is 10 mm. 0 (the default) reports every change. A slow drift still
-          adds up and goes, and a birth always carries the value as it is.
-          Refused on a BOOL or a STRING.
-ENABLE    FALSE stops publishing without losing the declaration.
-
-ALIAS     the number the far end will see instead of NAME after the birth. 0
-          means the declaration was refused.
-WRITTEN   how many commands have been applied.
-LOST      writes dropped because four were already waiting on this metric:
-          the oldest goes, the newest is kept. 0 in any sane system.
-ERROR     something failed.
-STATUS    E_MqttResult.Ok when fine.
-```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `NODE` | `SPARKPLUG_NODE` |  |
-
-**Inputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `NAME` | `STRING(96)` |  |
-| `VALUE` | `ANY` |  |
-| `DEVICE` | `STRING(47)` |  |
-| `UNITS` | `STRING(16)` |  |
-| `QUALITY` | `E_MqttQuality` |  |
-| `WRITABLE` | `BOOL` |  |
-| `PUBLISH` | `BOOL` | `TRUE` |
-| `ENABLE` | `BOOL` | `TRUE` |
-| `DEADBAND` | `REAL` |  |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `ALIAS` | `UDINT` |  |
-| `WRITTEN` | `DINT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-| `LOST` | `DINT` |  |
-
-USE SPARKPLUG_STRUCT WHERE YOU CAN. A struct gives you the metric name, the
-datatype and the complete birth set from one declaration, and sends one message
-for the lot. This block is for the cases it cannot cover: a value that is not a
-member of anything, one that needs its own units and quality, or one whose
-publishing is driven by different logic from the rest.
-
-The two coexist happily on one node. Aliases come from a single counter, so a
-metric here and thirty in a struct cannot collide.
-
-NO QOS OR RETAINED PIN. Sparkplug fixes both.
-
-THIS BLOCK DOES NOT PUBLISH ON ITS OWN. It writes the value into the node, and
-the node publishes - one message carrying everything that moved, which is the
-point of Sparkplug and the opposite of one topic per value. With PUBLISH (TRUE
-unless wired otherwise) this block asks for that message, and SPARKPLUG_NODE
-sends it on its next scan, once for every block that asked. Without it, a
-SPARKPLUG_STRUCT or another SPARKPLUG_METRIC on the same node triggers the
-send; if this is the only metric on the node, set MODE on its struct or use
-REQ.
-
----
-
-## SPARKPLUG_NODE
-
-```
-A SPARKPLUG B EDGE NODE. One block, and the other SPARKPLUG_* blocks hang
-off it.
-
-GROUP        the Sparkplug Group ID. A logical grouping of nodes - a pipeline
-             segment, a manufacturing cell. Descriptive but small: it is in
-             every topic. Up to 47 characters, as every Sparkplug id here.
-NODE         this node's ID. GROUP and NODE together are the node's address in
-             the whole system and MUST be unique in it.
-PRIMARY_HOST the Sparkplug Host ID this node answers to, or empty for none.
-             EMPTY BY DEFAULT - see below.
-ENABLE       FALSE keeps the node down without losing its metric declarations.
-CLIENT       the MQTT_CLIENT whose connection this node rides on. Must be
-             wired. Everything about the connection is set there - broker,
-             TLS, login, keep-alive, protocol - and with it the device's own
-             topics and its firmware updates share the one session.
-
-LINK_UP      the client's MQTT session is up.
-BORN         the birth certificate has gone. NOT the same as LINK_UP: a node
-             waiting for its primary host is connected and not born, and until
-             it is born nothing else publishes.
-SEQ          the current sequence number, 0-255.
-BDSEQ        the birth/death sequence number for this connection.
-POINTS       how many metrics are declared. There is no limit but memory,
-             metrics and devices alike, on a board and the Runtime: the tables
-             grow with what is declared and, on a board, live in PSRAM where
-             there is some. Past what memory holds, the declaration is refused
-             on the declaring block's ERROR and LAST_ERROR here says "out of
-             memory for metrics or devices".
-CLOCK_SET    the timestamps are real time. Always on the Runtime; on a board
-             once MQTT_CLOCK (NTP, or the mobile network's time) has set the
-             clock. Until then they count from boot - a date in January 1970 -
-             which a host should take as "not synced" and replace with the time
-             it received the message.
-STATUS       E_MqttResult.Ok when fine. E_MqttResult.WrongTask: this block is not in its
-             MQTT_CLIENT's task, and does nothing until it is.
-LAST_ERROR   with LINK_UP and not BORN, what the node is waiting for, which
-             says where to look (why the link is down is on MQTT_CLIENT):
-               "no STATE from primary host 'scada'"     the host has never
-                                                         reached this broker
-               "offline STATE from primary host 'scada'" the host is down
-               "broker refused STATE/scada subscription (not authorized)"
-               "birth could not be queued - retrying"
-               "out of memory for metrics or devices"
-               "another layer owns the client's Will"   a SPARKPLUG_HOST or a
-                                                         second node on CLIENT
-             Empty once born.
-(The handle the other SPARKPLUG_* blocks take is a local, not a pin - see the
-declaration. Nothing on a rung needs it.)
-```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `CLIENT` | `MQTT_CLIENT` |  |
-
-**Inputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `GROUP` | `STRING(47)` |  |
-| `NODE` | `STRING(47)` |  |
-| `BROKER` | `STRING(128)` |  |
-| `PORT` | `UINT` |  |
-| `SECURITY` | `E_MqttSecurity` |  |
-| `USER` | `STRING(64)` |  |
-| `PASSWORD` | `STRING(64)` |  |
-| `PROTOCOL` | `E_MqttProtocol` |  |
-| `TRUST_NEW` | `BOOL` |  |
-| `PRIMARY_HOST` | `STRING(47)` |  |
-| `CA_FILE` | `STRING(128)` |  |
-| `CERT_FILE` | `STRING(128)` |  |
-| `KEY_FILE` | `STRING(128)` |  |
-| `KEEP_ALIVE` | `UINT` | `60` |
-| `LINK` | `__XWORD` |  |
-| `ENABLE` | `BOOL` | `TRUE` |
-| `TRANSPORT` | `E_MqttTransport` |  |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `LINK_UP` | `BOOL` |  |
-| `BORN` | `BOOL` |  |
-| `SEQ` | `USINT` |  |
-| `BDSEQ` | `USINT` |  |
-| `POINTS` | `INT` |  |
-| `SERVER` | `INT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-| `LAST_ERROR` | `STRING(64)` |  |
-| `BROKER_KEY` | `STRING(64)` |  |
-| `CLOCK_SET` | `BOOL` |  |
-
-WHY SPARKPLUG AND NOT MQTT_CLIENT. Two things, and they are the reasons a SCADA
+| Parameter | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `nDays` | `INT` |  | closed days held |
+| `nSentCnt` | `UDINT` |  | day values sent since the program started |
+
+WHY SPARKPLUG AND NOT PLAIN MQTT. Two things, and they are why a SCADA
 system wants it.
 
-A TOPIC IS A ONE-WAY PIPE, so a writable setpoint under plain MQTT needs two of
-them - one to write and one to read back. That is where the _FB suffix in the
-pump-station project came from. Under Sparkplug the direction is in the MESSAGE
-TYPE rather than the topic: the host writes SETPOINT with a command, the node
-publishes SETPOINT with its data, one name, one struct member. No readback pair.
+A TOPIC IS A ONE-WAY PIPE, so a writable setpoint under plain MQTT needs two
+of them, one to write and one to read back. Under Sparkplug the direction is
+in the MESSAGE TYPE: the host writes SETPOINT with a command, the node
+publishes SETPOINT with its data. One name, one member.
 
 AND THE DATATYPE IS DECLARED. Every metric's type travels in the birth
-certificate, so the far end is told REAL rather than inferring it from the first
-sample it happens to see. A counter that started at zero will not be filed as an
-integer and then refuse a decimal.
+certificate, so the far end is told REAL rather than guessing from the first
+sample. A counter that started at zero is not filed as an integer.
 
-WHAT IT COSTS. The metric set is CLOSED. The birth certificate must carry every
-metric the node will ever publish, so everything is declared before the node
-births and a write to an undeclared name is refused rather than invented. In
-practice that means SPARKPLUG_STRUCT blocks are wired on the first scan and the
-node births on the second, which is what ENABLE and BORN are for.
+WHAT IT COSTS. The metric set is CLOSED. The birth certificate carries every
+metric the node will publish, and a write to an undeclared name is refused
+rather than invented. So the methods are called from the first scan; one
+first called later costs a rebirth.
 
-PRIMARY_HOST IS EMPTY BY DEFAULT, deliberately. Set it and this node will not
-publish ANYTHING until that host announces itself online - which is correct for
-a system with one nominated master, and is what stops a node shouting into a
-broker nobody is reading. Leave it empty and the node births as soon as it
-connects. A node waiting for a host that does not exist looks exactly like a
-node that is broken, so the default is the one that cannot be mistaken.
+sPrimaryHostId IS EMPTY BY DEFAULT, deliberately. Set it and this node
+publishes NOTHING until that host announces itself online - right for a
+system with one nominated master, and what stops a node shouting into a
+broker nobody is reading. Empty, the node births as soon as it connects. A
+node waiting for a host that does not exist looks exactly like a node that is
+broken, so the default is the one that cannot be mistaken.
 
-ONE CONNECTION, SHARED. Sparkplug runs over MQTT, and so does everything
-else a device says: this node is a layer on the MQTT_CLIENT's session, not a
+ONE CONNECTION, SHARED. This node is a layer on fbClient's session, not a
 second connection. What Sparkplug needs of that session it takes on every
-CONNECT: the Will is this node's NDEATH, so no MQTT_PRESENCE on the same client
+CONNECT: the Will is this node's NDEATH, so no stWillConfig on that client
 (the birth and death certificates are the presence); the session is always
-clean, whatever MQTT_CONFIG says; and the transmit buffer grows to hold the
-birth certificate. Started on a session already up, the node reconnects it
-once so the next CONNECT carries the NDEATH - every other block on the client
-sees one reconnect. The same when the primary host goes offline: Sparkplug
-requires a new session, so the client reconnects.
+clean, whatever stSessionConfig says; and the transmit buffer grows to hold
+the birth certificate. Started on a session already up, the node reconnects
+it once so the next CONNECT carries the NDEATH. The same when the primary
+host goes offline: Sparkplug requires a new session. One node per client: a
+connection carries one Will.
 
-ONE MESSAGE A SCAN. The other blocks do not send their values: a
-SPARKPLUG_STRUCT or SPARKPLUG_METRIC with something to say marks it and asks,
+ONE MESSAGE A SCAN. The methods do not send: each marks what moved and asks,
 and this block, on its next scan, sends ONE NDATA - and one DDATA for each
-online device with something to say - carrying everything on the node that
-moved, however many blocks asked. Births, deaths and SPARKPLUG_HISTORY's
-records still go when they happen.
+online device with something to say - carrying everything that moved. Births,
+deaths and History's events go when they happen.
 
-ONE TASK. This block and every block on CLIENT run in the client's task - the
-network task - and the machine's program trades values with them through
-globals. In another task it says E_MqttResult.WrongTask and does nothing.
+ONE TASK. This block, its methods and fbClient run in the network task, and
+the machine's program trades values with them through globals.
 
-GROUP, NODE AND PRIMARY_HOST MAY CHANGE WHILE IT RUNS. A change leaves under
-the old identity (the host sees the NDEATH) and births under the new one with
-the next bdSeq; declarations and devices stay, so nothing else in the program
-notices. ENABLE FALSE sends the NDEATH and leaves the connection to everything
-else on it.
-
-ONE NODE PER CLIENT: a connection carries one Will, so a second node needs a
-second MQTT_CLIENT. Nothing here is process-wide.
+sGroupId, sEdgeNodeId AND sPrimaryHostId MAY CHANGE WHILE IT RUNS. The node
+leaves under the old identity (the host sees the NDEATH) and births under the
+new one with the next bdSeq; declarations and devices stay, so nothing else in
+the program notices.
 
 ---
 
-## SPARKPLUG_STRUCT
+## Structures
 
-```
-A WHOLE STRUCT AS A SPARKPLUG METRIC SET. One block.
+Option structures are inputs of a block, set in the declaration or from an
+HMI and read every scan. A member left at its default is the right answer
+for most sites; `0` and `T#0s` mean the library's default.
 
-NODE       which node. Must be wired.
-DATA       the STRUCT. Every value in it becomes one metric - nested STRUCTs
-           and arrays included, named by path: level, pump.hours, spare[3].
-DEVICE     a device under the node, or empty for the node's own metrics.
-PREFIX     put before every metric name: 'Cmd/' makes systemMode the metric
-           Cmd/systemMode. Empty by default. The same rule as BeeBus topics.
-MODE       what triggers a message:
-             E_MqttTrigger.OnChange    only the members that moved, and all of them
-                               anyway every PERIOD so silence stays
-                               meaningful.
-             E_MqttTrigger.OnInterval  all of them, every PERIOD - and only then.
-             E_MqttTrigger.OnRequest   all of them when REQ goes TRUE, never otherwise.
-             E_MqttTrigger.ChangedEvery  the members that moved past their
-                               deadband since they were last sent, together,
-                               every PERIOD - and nothing when none moved. For
-                               a metered link: a slow log of what changed. The
-                               looks fall on the node's clock (whole PERIODs),
-                               so every set with the same PERIOD goes in ONE
-                               message.
-           "All of them" is this block's members, never the rest of the
-           node. In every mode but E_MqttTrigger.OnChange the members are HELD: they
-           do not ride along in other blocks' reports when they move, so a
-           set of timers that changes every scan really goes every PERIOD.
-PERIOD     E_MqttTrigger.OnChange: send anyway after this long. T#0s never does.
-           E_MqttTrigger.OnInterval: how often. Required there.
-           E_MqttTrigger.ChangedEvery: how often it looks for what moved. Required.
-REQ        E_MqttTrigger.OnRequest: a rising edge sends the set.
-WRITABLE   TRUE lets a Host Application COMMAND these members, each one by
-           itself. Under a DEVICE the commands are DCMDs, and land the same way.
-           Every write is seen, one a scan, oldest first: SCADA writing 1 and
-           then 0 in one go leaves the member 1 for a scan and then 0.
-           Declared writable once; while WRITABLE is FALSE after that, a write
-           is dropped at once and counted on REFUSED, and the next message
-           reports the member unchanged. It is never kept for later.
-DEADBAND   REAL and LREAL members with no SETTINGS entry: a move of this much
-           or less, from the value last SENT, is not reported. In the members'
-           own units.
-DEADBAND_PCT  the same, as a percentage of the value last sent. With both set
-           a move must clear both. 0 (the default) reports every change.
-SETTINGS   optional: an ARRAY OF SPARKPLUG_MEMBER, one entry per member that
-           needs its own - see below.
-ENABLE     FALSE stops publishing without losing the declarations. The set
-           is held while FALSE and keeps its values current in the node, so a
-           birth carries them as they are.
+### ST_MqttNetworkConfig
 
-POINTS     how many values are declared as metrics.
-SKIPPED    how many were not - a type the wire cannot carry, or a name already
-           taken. Counted here, and ERROR is set.
-SENT       running total of the messages that carried these members: one for
-           each scan with something to send, not one per member. Counted when
-           SPARKPLUG_NODE has sent it - on the scan after the one that asked.
-           The members of every block that moved in one scan go in ONE
-           message, and each of those blocks counts it.
-CHANGED    how many members this scan handed to the node to send because they
-           moved - past their deadband - or, when PERIOD or REQ sends them
-           all, how many of them changed. They go on SPARKPLUG_NODE's next
-           scan.
-WRITTEN    how many commands have been applied to these members.
-REFUSED    how many were refused - a value of the wrong type, or a write
-           while WRITABLE is FALSE.
-LOST       writes dropped because four were already waiting on one member:
-           the oldest goes, the newest is kept. 0 in any sane system.
-BAD_SETTING  the first SETTINGS entry that could not be used, counting from 1:
-           a NAME that covers no member, a negative deadband or PULSE, a
-           deadband on a BOOL or STRING. The other entries still apply. -1: SETTINGS is not an ARRAY OF
-           SPARKPLUG_MEMBER, or DEADBAND is negative. 0 when all is well.
-ERROR      something failed - including BAD_SETTING, until it is fixed.
-STATUS     E_MqttResult.Ok when fine.
-```
+| Member | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sSsid` | `STRING(48)` |  | E_MqttTransport.ArduinoWiFi: the network to join |
+| `sWiFiPassword` | `STRING(64)` |  |  |
+| `sMac` | `STRING(32)` |  | E_MqttTransport.ArduinoEthernet: the board's MAC, 'DE:AD:BE:EF:FE:ED' |
+| `sIp` | `STRING(32)` |  | a fixed address; empty = DHCP |
+| `sGateway` | `STRING(32)` |  |  |
+| `sSubnet` | `STRING(32)` |  |  |
 
-**In-out**
+### ST_MqttSessionConfig
 
-| Pin | Type | Default |
+| Member | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `tKeepAlive` | `TIME` |  | how often the client and the broker show they are there; T#0s = 60 s |
+| `bCleanStart` | `BOOL` | `TRUE` | start a fresh session on every connection |
+| `tSessionExpiry` | `TIME` |  | how long the broker keeps the session after a disconnect (MQTT 5); T#0s = not at all |
+| `sUserName` | `STRING(64)` |  | the login; empty for none |
+| `sUserPassword` | `STRING(64)` |  |  |
+| `nMaxPending` | `DINT` |  | publishes and subscribes that may wait for the broker; 0 = the library's default |
+| `nMaxMsgIn` | `DINT` |  | the largest message accepted, in bytes; 0 = the library's default |
+| `nMaxMsgOut` | `DINT` |  | the largest message sent, in bytes; 0 = the library's default |
+| `tReconnect` | `TIME` |  | the first wait before reconnecting; T#0s = the library's default |
+| `tReconnectMax` | `TIME` |  | the longest wait between attempts; T#0s = the library's default |
+| `tConnectTimeout` | `TIME` |  | how long one connection attempt may take; T#0s = the library's default |
+| `tMaxSilence` | `TIME` |  | reconnect when nothing arrives for this long; T#0s = never |
+| `bAutoReconnect` | `BOOL` | `TRUE` | reconnect by itself after a loss |
+| `bRetryRejectedCredential` | `BOOL` |  | keep retrying a login the broker refused |
+
+### ST_MqttTlsConfig
+
+| Member | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sCaFile` | `STRING(128)` |  | the certificate authority (Runtime: a file path); empty = the system's |
+| `sCertFile` | `STRING(128)` |  | this client's certificate, for mutual TLS; empty for none |
+| `sKeyFile` | `STRING(128)` |  | its private key |
+
+### ST_MqttWillConfig
+
+| Member | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `sTopic` | `STRING(128)` |  | where this device says it is online or gone; empty = no presence |
+| `sOnline` | `STRING(128)` |  | sent on every connection |
+| `sOffline` | `STRING(128)` |  | the Will: sent by the broker when this device is gone |
+| `bRetain` | `BOOL` | `TRUE` | the broker keeps the last one for late subscribers |
+| `eQos` | `E_MqttQos` |  |  |
+| `tDelay` | `TIME` |  | MQTT 5: how long the broker waits before sending the Will |
+
+### ST_SparkplugDay
+
+| Member | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `dDay` | `DATE` |  | the day the total belongs to: the local date, from dtClock |
+| `fTotal` | `REAL` |  | that day's total, in the units the total is kept in |
+
+### ST_SparkplugReportConfig
+
+| Member | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `tLogInterval` | `TIME` | `T#15m` | the log class looks for what moved this often; at most T#15m, never T#0s |
+| `tLiveInterval` | `TIME` | `T#30s` | the live class, and the log class while someone views |
+| `fDeadbandPct` | `REAL` |  | the log class's deadband in % where a member gives no pct= |
+| `bRemoteControl` | `BOOL` |  | the cmd and set classes take writes from the host |
+
+## Enumerations
+
+Used qualified: `E_MqttQos.AtLeastOnceDelivery`, `E_MqttResult.Ok`.
+
+| Enumeration | Values, in order | Default |
 | --- | --- | --- |
-| `NODE` | `SPARKPLUG_NODE` |  |
+| `E_MqttBridgeState` | `Idle`, `Connecting`, `Up`, `Degraded` | `Idle` |
+| `E_MqttDirection` | `Out`, `In`, `Both` | `Out` |
+| `E_MqttProtocol` | `V5`, `V311`, `V5ThenV311` | `V5ThenV311` |
+| `E_MqttQos` | `AtMostOnceDelivery`, `AtLeastOnceDelivery`, `ExactlyOnceDelivery` | `AtMostOnceDelivery` |
+| `E_MqttQuality` | `Unknown`, `Bad`, `Uncertain`, `Good` | `Unknown` |
+| `E_MqttResult` | `Queued`, `Ok`, `NotInitialised`, `InvalidArgument`, `InvalidTopic`, `NotConnected`, `QueueFull`, `Duplicate`, `Superseded`, `Cancelled`, `NotSupportedByProtocol`, `NotSupportedByPeer`, `PacketTooLarge`, `QuotaExceeded`, `NoPacketIdentifier`, `Refused`, `NoMatchingSubscribers`, `TopicNameInvalid`, `NotAuthorized`, `PayloadFormatInvalid`, `QuotaExceededByPeer`, `PacketIdentifierInUse`, `ConnectionLost`, `SessionLost`, `ConnectionRefused`, `ProtocolError`, `MalformedPacket`, `KeepAliveTimeout`, `AckTimeout`, `SessionTakenOver`, `WrongTask` | `Ok` |
+| `E_MqttSecurity` | `Plain`, `TlsVerify`, `TlsPinned`, `TlsInsecure` | `Plain` |
+| `E_MqttState` | `Idle`, `Connecting`, `AwaitingConnAck`, `Authenticating`, `Connected`, `Disconnecting`, `Reconnecting` | `Idle` |
+| `E_MqttTransport` | `RuntimeTcp`, `ArduinoWiFi`, `ArduinoEthernet`, `Cellular`, `External` | `RuntimeTcp` |
+| `E_MqttTrigger` | `OnChange`, `OnInterval`, `OnRequest`, `ChangedEvery` | `OnChange` |
 
-**Inputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `DATA` | `ANY` |  |
-| `DEVICE` | `STRING(47)` |  |
-| `MODE` | `E_MqttTrigger` |  |
-| `PERIOD` | `TIME` |  |
-| `REQ` | `BOOL` |  |
-| `WRITABLE` | `BOOL` |  |
-| `ENABLE` | `BOOL` | `TRUE` |
-| `DEADBAND` | `REAL` |  |
-| `DEADBAND_PCT` | `REAL` |  |
-| `PREFIX` | `STRING(32)` |  |
-| `SETTINGS` | `ANY` |  |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `POINTS` | `INT` |  |
-| `SKIPPED` | `INT` |  |
-| `SENT` | `DINT` |  |
-| `CHANGED` | `INT` |  |
-| `WRITTEN` | `DINT` |  |
-| `REFUSED` | `DINT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-| `BAD_SETTING` | `INT` |  |
-| `LOST` | `DINT` |  |
-
-SPARKPLUG_MEMBER, one entry per member that needs its own settings:
-
-  NAME          the member's path: 'levelMm', 'pump.hours', 'spare[3]'.
-                Without PREFIX. Case does not matter. A whole array or nested
-                STRUCT ('spare', 'pump') covers every value in it; entries
-                apply in order, so a later one for spare[2] wins for it.
-  UNITS         engineering units, sent in the birth as engUnit: 'mm', 'bar'.
-  DEADBAND      its own deadband, in its units. 0 = every change.
-  DEADBAND_PCT  its own deadband as a percentage of the value last sent.
-                An entry's deadband replaces the block's for that member.
-  LOW, HIGH     the range a SCADA gauge or trend should show, sent in the
-                birth as engLow and engHigh. LOW = HIGH (both 0) for none.
-  PULSE         a writable command the PLC clears by itself: this long after
-                a write lands, the member goes back to 0 (FALSE, ''). T#0s,
-                the default, keeps what was written.
-  SKIP          TRUE leaves the member out: not a metric at all. FALSE puts
-                back one an earlier entry left out, with this entry's
-                numbers: [(NAME := 'sts', SKIP := TRUE),
-                (NAME := 'sts.mode', SKIP := FALSE)] leaves out all of sts
-                but sts.mode. Read once, when the metrics are declared.
-
-  VAR
-    sp      : SPARKPLUG_NODE;
-    core    : SPARKPLUG_STRUCT;
-    coreSet : ARRAY[1..3] OF SPARKPLUG_MEMBER := [
-                (NAME := 'levelMm', UNITS := 'mm', DEADBAND := 10.0,
-                 LOW := 0.0, HIGH := 3000.0),
-                (NAME := 'pressureBar', UNITS := 'bar', DEADBAND := 0.02),
-                (NAME := 'pumpHours', UNITS := 'h', DEADBAND := 0.1)];
-  END_VAR
-
-  coreSet[1].DEADBAND := CFG.levelDeadband;
-  core(NODE := sp, DATA := CORE, SETTINGS := coreSet);
-
-The settings are read again whenever they change - a deadband may follow a
-setting from CFG every scan. Units and ranges go out in the birth, so a change
-to them shows at the next birth.
-
-A COMMAND STRUCT. Commands from SCADA are members of a WRITABLE struct like
-any setpoint, each its own metric, written one at a time:
-
-  cmds(NODE := sp, DATA := CMD.remote, PREFIX := 'Cmd/', WRITABLE := TRUE,
-       SETTINGS := cmdSet);
-
-A held signal - a run request, a mode - stays as written. A momentary command
-needs the bit to go back to 0 before the next one. Either SCADA writes the
-bit and then 0 - every write is queued and taken in order, so even a 1 and a
-0 sent together are both seen - or the member gets PULSE in SETTINGS
-(T#500ms, longer than the slowest task that reads it) and the PLC clears it,
-so SCADA writes once per command.
-
----
-
-THE STRUCT DECLARATION IS THE METRIC SET, and under Sparkplug that buys three
-things at once rather than one.
-
-  1. THE MEMBER PATH IS THE METRIC NAME, after PREFIX. Rename a member and you
-     rename a metric, which is a real consequence and worth knowing before the
-     third device is commissioned.
-  2. THE DECLARED IEC TYPE IS THE METRIC DATATYPE. REAL becomes Float, UDINT
-     becomes UInt32, and the birth certificate carries it - so the receiving
-     end is TOLD the type rather than guessing it from the first value.
-  3. THE MEMBER SET IS THE BIRTH CERTIFICATE. Sparkplug requires the birth to
-     carry every metric the node will ever publish; a STRUCT is a closed,
-     declared set, so that is satisfied by construction.
-
-ONE MESSAGE, NOT N. The node sends ONE message carrying every metric that
-moved - this block's, and every other block's on the node. That is the whole
-bandwidth argument for Sparkplug, and on a metered link it is most of the
-saving. This block marks what is to go and asks; SPARKPLUG_NODE sends one
-NDATA, and one DDATA for each online device with something to say, on its
-next scan, with that moment's timestamp. A message the node could not queue
-shows here as ERROR with E_MqttResult.QueueFull, on the scan after, and is asked for
-again.
-
-WRITABLE MAKES IT BIDIRECTIONAL ON ONE NAME. The host commands SETPOINT, this
-block publishes SETPOINT, one struct member. A command lands in the STRUCT and
-the next publish reports it back - always, even inside a deadband, because the
-host watches for that echo to know the write took. Put readings and setpoints
-in separate structs: WRITABLE declares every member writable.
-
-THERE IS NO QOS OR RETAINED PIN. Sparkplug fixes both: data at QoS 0 and never
-retained.
-
-THE BLOCK'S DEADBAND IS FOR THE ANALOGS. One number covering members of mixed
-types is a trap - a BOOL counts as 1, so a deadband above that would freeze
-every bit in the struct including a FAULT - so DEADBAND and DEADBAND_PCT apply
-to the REAL and LREAL members without a SETTINGS entry. BOOLs, integers and
-STRINGs report every change unless an entry gives an integer its own. Measured
-from the value last SENT, never the last scan, so a slow drift still adds up
-and goes; the PERIOD heartbeat and a birth always carry every value as it is.
-
-A TIME GOES AS AN Int64 OF MILLISECONDS, both ways, with units ms in the
-birth: T#10s is 10000, and a host writing 90000 sets T#90s. Negative writes are
-refused.
-
-WHEN IT GOES, IN EACH MODE. The birth carries every member, whatever the mode:
-a device that comes online (SPARKPLUG_DEVICE's ONLINE going TRUE) sends the
-whole set in its DBIRTH, and E_MqttTrigger.OnInterval counts PERIOD from that birth.
-ENABLE going TRUE sends an E_MqttTrigger.OnInterval set at once, then every PERIOD;
-an E_MqttTrigger.ChangedEvery set sends what moved at once (not when its device was
-born that scan: the birth carried it), then looks every PERIOD.
-Nothing goes for a device that is offline.
-
-AN ENUMERATION GOES AS THE UNSIGNED INTEGER IT IS STORED AS (UInt8, UInt16 or
-UInt32 by its size), both ways: the value's code, as the library documents it.
-A written code the type does not have is the program's to refuse, as for any
-setting.
-
-A VALUE THE WIRE CANNOT CARRY IS REFUSED, NOT SKIPPED QUIETLY. A DATE,
-TIME_OF_DAY, or an ARRAY OF STRING outside a STRUCT: counted on SKIPPED.
-
-HOW MANY MEMBERS: as many as the node takes - as many as memory holds, on a
-board (in PSRAM where there is some) and the Runtime alike. A member past that
-is refused and counted on SKIPPED, and SPARKPLUG_NODE's LAST_ERROR says "out
-of memory for metrics or devices".
-
----
-
-## SPARKPLUG_SUBSCRIBE
-
-```
-READ ONE METRIC from a node a SPARKPLUG_HOST is watching.
-
-The host keeps the current picture of the plant - every metric every edge node
-declared, and what each one is reading now. This block takes one value out of
-it and writes it into an IEC variable of the engineer's own type.
-
-THE NAME IS THE ADDRESS, not a topic and not an alias. That is the whole point
-of the protocol: the edge node declared "level" in its birth certificate and
-this block asks for "level". A conformant node sends data by alias only and the
-host resolves it back, so nothing here has to know what an alias is.
-
-THE DECLARED TYPE IS CHECKED, not coerced. If the birth said "level" is a REAL
-and VALUE is wired to a DINT, the read is REFUSED and TYPE_OK goes false rather
-than silently truncating a reading a control decision is about to be made on.
-
-NAME         the metric name, exactly as the edge node declared it.
-VALUE        where to put it. Any IEC type; it must match what was declared.
-NODE_ID      which edge node. Empty means the first node the host heard from,
-             which is convenient with one node and wrong with two.
-GROUP        which group. Empty means the host's watched group.
-DEVICE       for a metric belonging to a device rather than the node itself.
-ENABLE       false stops reading and holds VALUE at its last value.
-
-VALID        the value was read and written into VALUE this scan.
-TYPE_OK      false means VALUE's type does not match what the birth declared.
-FRESH        the reading changed since the last scan.
-AGE          milliseconds since the node's own timestamp on it. Not since we
-             received it - on a slow link those differ by more than a control
-             decision should ignore.
-ERROR        something is wrong; STATUS says what.
-
-NOT VALID IS NOT AN ERROR by itself. A node that has not birthed yet, a metric
-that has not been published yet and a node that has died all read as VALID
-false, and all three mean the same thing to a rung: do not act on this.
-```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `HOST` | `SPARKPLUG_HOST` |  |
-
-**Inputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `NAME` | `STRING(96)` |  |
-| `VALUE` | `ANY` |  |
-| `NODE_ID` | `STRING(47)` |  |
-| `GROUP` | `STRING(47)` |  |
-| `DEVICE` | `STRING(47)` |  |
-| `ENABLE` | `BOOL` | `TRUE` |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `VALID` | `BOOL` |  |
-| `TYPE_OK` | `BOOL` |  |
-| `FRESH` | `BOOL` |  |
-| `AGE` | `DINT` |  |
-| `READS` | `DINT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
-
----
-
-## SPARKPLUG_WRITE
-
-```
-WRITE ONE METRIC on an edge node, from a SPARKPLUG_HOST.
-
-This is the other direction: an NCMD, or a DCMD for a device metric. The edge
-node applies it to whatever its SPARKPLUG_METRIC or SPARKPLUG_STRUCT block is
-wired to, and reports the new value back under the SAME metric name.
-
-THAT IS WHY THERE IS NO `_fb` TOPIC HERE. Under plain MQTT a writable setpoint
-needs two topics - one to command and one to read back - and two tags at the
-far end that nothing guarantees are the same number. Under Sparkplug the
-direction lives in the message type, so one name is read and written.
-
-THE NODE DECIDES. A command for a metric the node never declared, or declared
-read-only, or declared with a different type, is REFUSED there and counted -
-this block reports that it sent one, not that it took effect. Wire a
-SPARKPLUG_SUBSCRIBE to the same NAME to see the value come back.
-
-NAME         the metric name, exactly as the edge node declared it.
-VALUE        what to write. Its IEC type must match what the birth declared.
-REQ          rising edge sends. A level would send every scan.
-NODE_ID      which edge node. Empty means the first node the host heard from.
-GROUP        which group. Empty means the host's watched group.
-DEVICE       for a metric belonging to a device rather than the node itself.
-ENABLE       false sends nothing.
-
-SENT         one command left this scan.
-COUNT        how many have been sent.
-ERROR        something is wrong; STATUS says what.
-```
-
-**In-out**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `HOST` | `SPARKPLUG_HOST` |  |
-
-**Inputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `NAME` | `STRING(96)` |  |
-| `VALUE` | `ANY` |  |
-| `REQ` | `BOOL` |  |
-| `NODE_ID` | `STRING(47)` |  |
-| `GROUP` | `STRING(47)` |  |
-| `DEVICE` | `STRING(47)` |  |
-| `ENABLE` | `BOOL` | `TRUE` |
-
-**Outputs**
-
-| Pin | Type | Default |
-| --- | --- | --- |
-| `SENT` | `BOOL` |  |
-| `COUNT` | `DINT` |  |
-| `ERROR` | `BOOL` |  |
-| `STATUS` | `E_MqttResult` |  |
+[06 Diagnostics](06-diagnostics.md) explains every `E_MqttResult` value.
 
 ---
 

@@ -1,116 +1,314 @@
-(* A SPARKPLUG B EDGE sEdgeNodeId. One block, and the other SPARKPLUG_* blocks hang
-off it.
+(* A SPARKPLUG B EDGE NODE on an FB_MqttClient's connection. Call it once every
+scan, in the client's task. What it reports is its methods: a whole STRUCT by
+point list (Record), one value (Metric), a device (Device), a host's write
+(Command), events kept through an outage (History) and daily totals
+(DayTotals).
 
-sGroupId        the Sparkplug Group ID. A logical grouping of nodes - a pipeline
-             segment, a manufacturing cell. Descriptive but small: it is in
-             every topic. Up to 47 characters, as every Sparkplug id here.
-sEdgeNodeId         this node's ID. sGroupId and sEdgeNodeId together are the node's address in
-             the whole system and MUST be unique in it.
-sPrimaryHostId the Sparkplug Host ID this node answers to, or empty for none.
-             EMPTY BY DEFAULT - see below.
+sGroupId    the Sparkplug Group ID: a logical grouping of nodes - a site, a
+           pipeline segment, a cell. Descriptive but small: it is in every
+           topic. Up to 47 characters, as every Sparkplug id here; no + / #.
+sEdgeNodeId this node's ID. sGroupId and sEdgeNodeId together are the node's
+           address in the whole system and MUST be unique in it.
+sPrimaryHostId  the Sparkplug Host ID this node answers to, or empty for none.
+           EMPTY BY DEFAULT - see below.
 tRebirthHoldoff  the shortest time between two answers to rebirth requests
-             (Node Control/Rebirth): requests in between are answered together,
-             once, when it is up. T#2s by default. On a metered link (a cellular
-             SIM) set a minute or more: a host that asks again and again then
-             costs one birth a minute at most, whatever it sends.
-bEnable       FALSE keeps the node down without losing its metric declarations.
-fbClient       the MQTT_CLIENT whose connection this node rides on. Must be
-             wired. Everything about the connection is set there - broker,
-             TLS, login, keep-alive, protocol - and with it the device's own
-             topics and its firmware updates share the one session.
+           (Node Control/Rebirth): requests in between are answered together,
+           once, when it is up. T#2s by default. On a metered link (a cellular
+           SIM) set a minute or more: a host that asks again and again then
+           costs one birth a minute at most.
+bEnable     FALSE sends the NDEATH and keeps the node down without losing a
+           metric; the connection stays up for everything else on it.
+stReportConfig  ST_SparkplugReportConfig, how Record's classes report:
+             tLogInterval   how often the log class looks for what moved.
+                            T#15m by default and at most; T#0s is refused
+             tLiveInterval  how often the live class sends what moved, and
+                            the log class while someone views. T#30s by
+                            default. T#0s is refused, never every scan
+             fDeadbandPct   the log class's deadband, in % of the value last
+                            sent, for a REAL or LREAL member whose clause
+                            gives no pct=. 0 = none
+             bRemoteControl TRUE: the host may write the cmd and set classes.
+                            FALSE: a write is dropped at once and the value
+                            reported back unchanged, so the host sees it did
+                            not take. Never kept for later
+anyUnits    optional: a STRUCT of STRINGs whose members a point list names
+           with u=@<member>, so units can come from a settings page. A change
+           shows at the next birth.
+fbClient    the FB_MqttClient this node rides on. Must be assigned.
+           Everything about the connection is set there - broker, TLS, login,
+           keep-alive, protocol - and the device's own topics and its firmware
+           updates share the one session.
 
-bLinkUp      the client's MQTT session is up.
-bBorn         the birth certificate has gone. NOT the same as bLinkUp: a node
-             waiting for its primary host is connected and not born, and until
-             it is born nothing else publishes.
-nSeq          the current sequence number, 0-255.
-nBdSeq        the birth/death sequence number for this connection.
-nPoints       how many metrics are declared. There is no limit but memory,
-             metrics and devices alike, on a board and the Runtime: the tables
-             grow with what is declared and, on a board, live in PSRAM where
-             there is some. Past what memory holds, the declaration is refused
-             on the declaring block's bError and sLastError here says "out of
-             memory for metrics or devices".
-bClockSet    the timestamps are real time. Always on the Runtime; on a board
-             once MQTT_CLOCK (NTP, or the mobile network's time) has set the
-             clock. Until then they count from boot - a date in January 1970 -
-             which a host should take as "not synced" and replace with the time
-             it received the message.
-eErrorId       E_MqttResult.Ok when fine. E_MqttResult.WrongTask: this block is not in its
-             MQTT_CLIENT's task, and does nothing until it is.
-sLastError   with bLinkUp and not bBorn, what the node is waiting for, which
-             says where to look (why the link is down is on MQTT_CLIENT):
-               "no STATE from primary host 'scada'"     the host has never
-                                                         reached this broker
-               "offline STATE from primary host 'scada'" the host is down
-               "broker refused STATE/scada subscription (not authorized)"
-               "birth could not be queued - retrying"
-               "out of memory for metrics or devices"
-               "another layer owns the client's Will"   a SPARKPLUG_HOST or a
-                                                         second node on fbClient
-             Empty once born.
-(The handle the other SPARKPLUG_* blocks take is a local, not a pin - see the
-declaration. Nothing on a rung needs it.)
+bLinkUp     the client's session is up.
+bBorn       the birth certificate has gone. NOT the same as bLinkUp: a node
+           waiting for its primary host is connected and not born.
+nSeq        the current sequence number, 0-255.
+nBdSeq      the birth/death sequence number of this connection.
+nPoints     metrics declared, node and devices together. No limit but memory:
+           past it the declaration is refused and sLastError says "out of
+           memory for metrics or devices".
+bError, eErrorId  E_MqttResult.Ok when fine. WrongTask: this block is not in
+           its client's task, and does nothing until it is. QueueFull: out of
+           memory. InvalidArgument: a Record call whose point list is wrong.
+           NotConnected (bError FALSE): the client is not connected.
+sLastError  what the node waits for, or what failed:
+             "no STATE from primary host 'scada'"   the host has never
+                                    reached this broker - or the id differs
+             "offline STATE from primary host 'scada'"  the host is down
+             "broker refused STATE/scada subscription (not authorized)"
+             "birth could not be queued - retrying"
+             "out of memory for metrics or devices"
+             "another layer owns the client's Will"  an FB_SparkplugHost or a
+                                    second node on fbClient
+             "Record pump: clause 3"  that record's point list; also "not a
+                                    STRUCT with a STRING point list",
+                                    "tLiveInterval is T#0s", "message not
+                                    queued"
+           Empty once born.
+bClockSet   the timestamps are real time. Always on the Runtime; on a board
+           once FB_MqttClock has set the clock. Until then they count from
+           boot - a date in January 1970 - which a host should take as "not
+           synced" and replace with the time it received the message.
+bViewed     Live Demand: a host says someone is viewing this node now.
+sDemand     Live Demand: the devices demanded now, e.g. 'live,cfg-pump'.
+
+METHODS
+
+Every method is standing: call it every scan while it is wanted, after the
+node's own call. Ok while the node is born; E_MqttResult.NotConnected while it
+is not, the value kept for the next birth. WrongTask in any other task than
+the node's; NotInitialised before the node's first call. A node holds up to
+1024 Metric, Device, Command, History and DayTotals calls; past that,
+QueueFull. A BIRTH CARRIES EVERY METRIC: declare on the first scans and the
+node births with all of them (it waits up to 2 s for the first declaration).
+A metric first declared after the birth makes the node birth again.
+
+  sp.Record(anyData, sSettings, sPrefix, bSend, nMetricCnt =>, nBadClause =>)
+     A WHOLE STRUCT, EACH MEMBER BY ITS CLASS. anyData is the record (nested
+     STRUCTs and arrays included); sSettings its point list, a STRING of any
+     length or a literal; sPrefix goes before every metric name. A record is
+     found by its declared name and type and sPrefix: the same STRUCT with
+     two prefixes is two records. nMetricCnt: metrics it declared.
+     nBadClause: the first clause that cannot be used, counting from 1; 0
+     none; -1 when anyData is not a STRUCT or sSettings not a STRING. The
+     other clauses still apply.
+
+     THE POINT LIST is clauses split by ';':
+         <members> = <class> [, <option>]*
+     <members> is a comma list of paths: 'level', 'pump.hours', 'spare[2]'.
+     A path covers everything below it ('pump' is every value in pump), a
+     name without an index covers every element ('spare' is spare[1] ..
+     spare[n]), and '*' is any one segment ('*' alone is every member,
+     'sts.*' everything in sts). A member no clause covers is not reported.
+     Case does not matter; spaces are ignored.
+
+     <class> says when it goes, where, and whether the host may write it:
+       now         at once, always. Read only. Alarms, states, faults
+       cmd         at once, always; the host writes it while
+                   stReportConfig.bRemoteControl is TRUE
+       view        at once while someone views (bViewed); otherwise held
+       log         what moved past its deadband, every tLogInterval (every
+                   tLiveInterval while someone views). For a metered link:
+                   a value that sits still costs nothing
+       live        on device 'live': what moved, every tLiveInterval, while
+                   a host demands it
+       set:<page>  on device 'cfg-<page>': at once while demanded; the host
+                   writes it while bRemoteControl is TRUE. <page> up to 43
+                   characters, no + / #
+       every:<time>  all of them every <time> (T#1m, 30s, 1h30m), moved or
+                   not; a birth counts as a send
+       onreq       all of them on a rising edge of Record's bSend
+     A value takes the class of the LAST now/cmd/view/log/every/onreq clause
+     covering it, on the node and, separately, on each dev= device; it may
+     also be in live and in any number of set pages, each a metric of its own
+     on that device. Options come from the clause that gave the class.
+
+     <option>:
+       db=<n>      deadband in the member's units: a move this size or less
+                   from the value last sent is not reported
+       pct=<n>     deadband in % of the value last sent. With db=, a move
+                   must clear both. Not given on a log REAL: fDeadbandPct
+       u=<text>    engineering units, in the birth (engUnit). A TIME says
+                   'ms' by itself
+       u=@<member> the units are that STRING member of anyUnits
+       lo=<n>, hi=<n>  the range a gauge or trend should show (engLow,
+                   engHigh); equal = none
+       pulse=<ms>  cmd and set only: the PLC puts the member back to 0,
+                   FALSE or '' this many milliseconds after a host write,
+                   for a command that acts on an edge
+       dev=<name>  now, cmd, view, log, every and onreq: the members go
+                   under the program's own device <name> instead of the
+                   node. The program brings it on and off line with
+                   sp.Device; Live Demand never touches it. Not 'live' or
+                   'cfg-...'
+     A deadband on a BOOL or STRING the clause names itself is an error;
+     covered by a wider path, the BOOL simply reports every change. A value
+     the host writes is always reported back, whatever the deadband.
+
+     METRIC NAMES are sPrefix and the path: 'pump/' and sts.fault give
+     'pump/sts.fault'; array elements count from 1 whatever the bounds. The
+     live class drops a leading 'det.' and a set page a leading 'set.', so
+     det.rate on 'live' is 'pump/rate' and set.onLevel on 'cfg-pump' is
+     'pump/onLevel'. An enumeration goes as its unsigned integer; a TIME as
+     Int64 milliseconds; a DATE or TIME_OF_DAY has no Sparkplug type and is
+     left out.
+
+     WHICH MEMBERS, AND THEIR CLASS, ARE READ AT THE FIRST CALL. Options
+     follow later changes of the text, of anyUnits and of fDeadbandPct (units
+     and ranges show at the next birth); adding or removing a clause later is
+     reported on nBadClause - restart the PLC to change membership.
+     Ok, NotConnected, InvalidArgument (a bad clause, or tLogInterval or
+     tLiveInterval T#0s where it is used), QueueFull (out of memory, or a message
+     asked for could not be queued: it asks again).
+
+     LIVE DEMAND. A record with a view, log, live or set class makes the
+     node offer the metric 'Node Control/Live Demand', a String whose value
+     names what can be demanded:
+         {"devices":["live","cfg-pump"],"required":false}
+     A host viewing the node writes it:
+         {"demand":true,"leaseS":120,"devices":["live","cfg-pump"]}
+     Then bViewed is TRUE for leaseS seconds (120 when missing or outside 1
+     to 86399): the view class sends, the log class goes at tLiveInterval,
+     and each device listed is born (DBIRTH) and sends; a device not listed
+     dies (DDEATH). The host writes again before the lease ends to keep it;
+     {"demand":false} ends it at once; a write without "demand", or longer
+     than 200 characters, is ignored. The offer is put back after every
+     write. sDemand lists the devices demanded now. Devices 'live' and
+     'cfg-...' are the node's: Device and Metric refuse them.
+
+  sp.Metric(anyValue, sMetricName, sDeviceId, sUnits, eQuality, fDeadband,
+            bWritable, bPublish, bUpdate, nAlias =>, nWrittenCnt =>,
+            nLostCnt =>)
+     ONE VALUE THE PROGRAM SETS. anyValue's declared type is the metric's
+     datatype, declared at the first call; sMetricName is the name the host
+     sees (case matters); sDeviceId puts it under a device of this node,
+     which the first such call adds and brings online unless a Device call
+     added it. sUnits goes in the birth. eQuality (Good by default) goes
+     with the value: Uncertain as stale, Bad and Unknown as bad. fDeadband:
+     a move this size or less from the value last sent is not reported
+     (numbers only; InvalidArgument on a BOOL or STRING). bWritable TRUE at
+     the first call declares it writable: a host command is written into
+     anyValue, one a call, oldest first, up to four waiting (nLostCnt counts
+     the dropped); bWritable FALSE later drops a write at once and reports
+     the value back. bUpdate FALSE holds the last value and takes no
+     command. nAlias: the alias the host sees, 0 refused. nWrittenCnt: host
+     commands written. Ok, NotConnected, InvalidArgument (empty name, a type
+     with no Sparkplug datatype, a name taken, a device the node manages),
+     QueueFull.
+
+  sp.Device(sDeviceId, bOnline, bDeviceOnline =>, nBirthCnt =>,
+            nDeathCnt =>)
+     A DEVICE THE PROGRAM BRINGS ONLINE AND OFFLINE: a pump skid, a remote
+     I/O drop - something that can be lost while the node is fine. Acts on a
+     change of bOnline (TRUE: DBIRTH, FALSE: DDEATH), never every scan, and
+     births the device again after every node birth. Its metrics are
+     Metric calls with this sDeviceId. bDeviceOnline: its birth has gone.
+     nBirthCnt, nDeathCnt: births gone, deaths of an online device. Ok,
+     NotConnected, InvalidArgument (empty, or 'live' or 'cfg-...', which
+     Live Demand manages), QueueFull.
+
+  sp.Command(sMetricName, sDeviceId, bAck, bPending =>, fValue =>,
+             bValue =>, sText =>, nCmdCnt =>, nRefusedCnt =>, nLostCnt =>)
+     A HOST'S WRITE FOR THE PROGRAM TO DECIDE ON, on a metric declared
+     writable with Metric; call it BEFORE that Metric call. bPending shows
+     the oldest write waiting, read without taking it, so a rung can look
+     before it decides; a rising edge of bAck takes it, so two rungs cannot
+     both act on one command. fValue: its value as a number (bValue = fValue
+     <> 0), sText a String metric's value cut to 126 characters. nCmdCnt:
+     commands seen on this metric. nRefusedCnt: commands the node refused -
+     undeclared, read only or the wrong type - all metrics together.
+     nLostCnt: writes dropped with four waiting. Ok, NotInitialised (the
+     metric is not declared yet), InvalidArgument (not writable), QueueFull.
+
+  sp.History(nSource, nCode, fValue, sMetricPrefix, nDepth, nBatch, tPeriod,
+             bAdd, nStoredCnt =>, nLostCnt =>, nSentCnt =>, bReplaying =>)
+     EVENTS KEPT THROUGH AN OUTAGE. bAdd TRUE records one event on this call
+     - wire a one-scan pulse - with what it is about (nSource: a pump, an
+     alarm number), what happened (nCode) and a number (fValue). While the
+     node is born it goes at once as live data; recorded while it is not, it
+     waits and goes after the next node birth flagged historical, at its own
+     time, oldest first, nBatch at a time (at most 64) every tPeriod. Each
+     event is the metrics <sMetricPrefix>/source, /code, /value and /seq (a
+     count from 1, so the host sees a gap), plus /lost. Calls with one
+     sMetricPrefix share one buffer of nDepth events (256: about a week of a
+     normal site, 24 bytes each, in PSRAM on a board); nDepth and nBatch are
+     fixed at the first call. A full buffer drops the oldest (nLostCnt).
+     Not retained. Sent at least once: an event is forgotten only after the
+     node stays born on the same birth for half a second; a device's birth
+     does not count. Events recorded before the clock is set are placed on
+     it once set; they wait for the clock up to five minutes after a birth.
+     nStoredCnt waiting, nSentCnt sent, bReplaying catching up. Ok,
+     NotConnected, NotInitialised (no memory for the buffer),
+     InvalidArgument (the metrics could not be declared), QueueFull.
+
+  sp.DayTotals(anyDays, sMetricName, fValue, dtClock, tSaveEvery, nDays =>,
+               nSentCnt =>)
+     DAILY TOTALS, sent on every node birth as historical values, so a host
+     fills in the days the link was down. anyDays is a RETAINED ARRAY OF
+     ST_SparkplugDay, two rows or more: the first is today, the rest closed
+     days, newest first. fValue is today's running total; dtClock the local
+     date and time the totaliser rolls its day on. When dtClock's date
+     changes the day is closed with the total of its last call and becomes
+     the newest closed day; the oldest falls off. A day that ended during a
+     power cut is closed when the PLC returns, from the total last saved:
+     today's total is written into anyDays every tSaveEvery (T#1h; T#0s
+     every call). Each closed day goes as a value of sMetricName stamped
+     00:00 of its date (the date as dtClock has it, written as UTC: read
+     the date, not the hour), on every node birth and every close - not on
+     a device's birth. The live value is the last closed day. Nothing
+     happens while the clock is not set. nDays: closed days held. Ok,
+     NotConnected, InvalidArgument (anyDays is not an ARRAY OF
+     ST_SparkplugDay of two rows or more, or the metric could not be
+     declared), QueueFull.
 
 ---
 
-WHY SPARKPLUG AND NOT MQTT_CLIENT. Two things, and they are the reasons a SCADA
+WHY SPARKPLUG AND NOT PLAIN MQTT. Two things, and they are why a SCADA
 system wants it.
 
-A TOPIC IS A ONE-WAY PIPE, so a writable setpoint under plain MQTT needs two of
-them - one to write and one to read back. That is where the _FB suffix in the
-pump-station project came from. Under Sparkplug the direction is in the MESSAGE
-TYPE rather than the topic: the host writes SETPOINT with a command, the node
-publishes SETPOINT with its data, one name, one struct member. No readback pair.
+A TOPIC IS A ONE-WAY PIPE, so a writable setpoint under plain MQTT needs two
+of them, one to write and one to read back. Under Sparkplug the direction is
+in the MESSAGE TYPE: the host writes SETPOINT with a command, the node
+publishes SETPOINT with its data. One name, one member.
 
 AND THE DATATYPE IS DECLARED. Every metric's type travels in the birth
-certificate, so the far end is told REAL rather than inferring it from the first
-sample it happens to see. A counter that started at zero will not be filed as an
-integer and then refuse a decimal.
+certificate, so the far end is told REAL rather than guessing from the first
+sample. A counter that started at zero is not filed as an integer.
 
-WHAT IT COSTS. The metric set is CLOSED. The birth certificate must carry every
-metric the node will ever publish, so everything is declared before the node
-births and a write to an undeclared name is refused rather than invented. In
-practice that means SPARKPLUG_STRUCT blocks are wired on the first scan and the
-node births on the second, which is what bEnable and bBorn are for.
+WHAT IT COSTS. The metric set is CLOSED. The birth certificate carries every
+metric the node will publish, and a write to an undeclared name is refused
+rather than invented. So the methods are called from the first scan; one
+first called later costs a rebirth.
 
-sPrimaryHostId IS EMPTY BY DEFAULT, deliberately. Set it and this node will not
-publish ANYTHING until that host announces itself online - which is correct for
-a system with one nominated master, and is what stops a node shouting into a
-broker nobody is reading. Leave it empty and the node births as soon as it
-connects. A node waiting for a host that does not exist looks exactly like a
-node that is broken, so the default is the one that cannot be mistaken.
+sPrimaryHostId IS EMPTY BY DEFAULT, deliberately. Set it and this node
+publishes NOTHING until that host announces itself online - right for a
+system with one nominated master, and what stops a node shouting into a
+broker nobody is reading. Empty, the node births as soon as it connects. A
+node waiting for a host that does not exist looks exactly like a node that is
+broken, so the default is the one that cannot be mistaken.
 
-ONE CONNECTION, SHARED. Sparkplug runs over MQTT, and so does everything
-else a device says: this node is a layer on the MQTT_CLIENT's session, not a
+ONE CONNECTION, SHARED. This node is a layer on fbClient's session, not a
 second connection. What Sparkplug needs of that session it takes on every
-CONNECT: the Will is this node's NDEATH, so no MQTT_PRESENCE on the same client
+CONNECT: the Will is this node's NDEATH, so no stWillConfig on that client
 (the birth and death certificates are the presence); the session is always
-clean, whatever MQTT_CONFIG says; and the transmit buffer grows to hold the
-birth certificate. Started on a session already up, the node reconnects it
-once so the next CONNECT carries the NDEATH - every other block on the client
-sees one reconnect. The same when the primary host goes offline: Sparkplug
-requires a new session, so the client reconnects.
+clean, whatever stSessionConfig says; and the transmit buffer grows to hold
+the birth certificate. Started on a session already up, the node reconnects
+it once so the next CONNECT carries the NDEATH. The same when the primary
+host goes offline: Sparkplug requires a new session. One node per client: a
+connection carries one Will.
 
-ONE MESSAGE A SCAN. The other blocks do not send their values: a
-SPARKPLUG_STRUCT or SPARKPLUG_METRIC with something to say marks it and asks,
+ONE MESSAGE A SCAN. The methods do not send: each marks what moved and asks,
 and this block, on its next scan, sends ONE NDATA - and one DDATA for each
-online device with something to say - carrying everything on the node that
-moved, however many blocks asked. Births, deaths and SPARKPLUG_HISTORY's
-records still go when they happen.
+online device with something to say - carrying everything that moved. Births,
+deaths and History's events go when they happen.
 
-ONE TASK. This block and every block on fbClient run in the client's task - the
-network task - and the machine's program trades values with them through
-globals. In another task it says E_MqttResult.WrongTask and does nothing.
+ONE TASK. This block, its methods and fbClient run in the network task, and
+the machine's program trades values with them through globals.
 
-sGroupId, sEdgeNodeId AND sPrimaryHostId MAY CHANGE WHILE IT RUNS. A change leaves under
-the old identity (the host sees the NDEATH) and births under the new one with
-the next bdSeq; declarations and devices stay, so nothing else in the program
-notices. bEnable FALSE sends the NDEATH and leaves the connection to everything
-else on it.
-
-ONE sEdgeNodeId PER fbClient: a connection carries one Will, so a second node needs a
-second MQTT_CLIENT. Nothing here is process-wide. *)
+sGroupId, sEdgeNodeId AND sPrimaryHostId MAY CHANGE WHILE IT RUNS. The node
+leaves under the old identity (the host sees the NDEATH) and births under the
+new one with the next bdSeq; declarations and devices stay, so nothing else in
+the program notices. *)
 
 FUNCTION_BLOCK FB_SparkplugNode
   VAR_INPUT
@@ -151,11 +349,17 @@ FUNCTION_BLOCK FB_SparkplugNode
     nMethodCalls    : __XWORD;              (* the per-call table of Metric, Device, Command, History, DayTotals *)
   END_VAR
 
+(* A STRUCT's members as metrics, each by its class, from one point list of
+   clauses '<members> = <class> [, <option>]*' split by ';'. Classes now,
+   cmd, view, log, live, set:<page>; options db=, pct=, u=, u=@<member>,
+   lo=, hi=, pulse=. Called every scan. Ok while the node is born,
+   NotConnected while not (the record goes in the next birth). *)
 METHOD PUBLIC Record : E_MqttResult
   VAR_INPUT
     anyData    : ANY;                       (* the record: a STRUCT *)
     sSettings  : ANY;                       (* its point list: a STRING of any length, or a literal *)
     sPrefix    : STRING(32);                (* put before every metric name *)
+    bSend      : BOOL;                      (* onreq: a rising edge sends those members, all of them *)
   END_VAR
   VAR_OUTPUT
     nMetricCnt : INT;                       (* metrics the record declared *)
@@ -292,7 +496,7 @@ MqSpNodesOwned& mqSpNodesOwned() {
 }
 }  // namespace
 // Declared here because every C++ POU in a project lands in ONE translation
-// unit, in filename order - and SPARKPLUG_NODE sorts after MQTT_CLIENT, which
+// unit, in filename order - and FB_SparkplugNode sorts after FB_MqttClient, which
 // is where these are defined.
 MqttClient* mq_clientOf(strucpp::XWORD_t handle);
 uint32_t mq_fingerprint(uint32_t hash, const void* data, size_t length);
@@ -307,7 +511,7 @@ bool mq_memberAsAny(const strucpp::MemberDesc& member, uint8_t* base,
                     strucpp::IEC_ANY* out);
 bool mq_memberIsPublishable(const strucpp::MemberDesc& member);
 
-// --- What the other SPARKPLUG_* blocks reach through their sEdgeNodeId pin ---
+// --- What the methods reach through nApi ---
 //
 // Null until the node has been built, which is what bLinkUp says. A handle
 // rather than a pointer on the pin because that is what an IEC XWORD is.
@@ -322,8 +526,8 @@ MqttSparkplugNode* mq_spNodeOf(strucpp::XWORD_t handle) {
 // is the mapping in MqttSparkplugValue.h, applied to strucpp's type classes.
 //
 // All seventeen IEC types the MQTT blocks can publish have a Sparkplug
-// datatype, so a STRUCT that MQTT_STRUCT_PUBLISH would accept is one
-// SPARKPLUG_STRUCT accepts too.
+// datatype, so a STRUCT that FB_MqttClient.PublishStruct would accept
+// is one Record accepts too.
 //
 // AND TIME, which Sparkplug alone carries: an Int64 of MILLISECONDS. Sparkplug
 // has no duration type, and a setpoint struct is full of TIMEs - a run time, a
@@ -331,7 +535,7 @@ MqttSparkplugNode* mq_spNodeOf(strucpp::XWORD_t handle) {
 // from SCADA while the panel next to it could write all of it. Milliseconds
 // because that is what CODESYS and every SCADA tag editor mean by a TIME, and
 // Int64 because the IEC range does not fit in 32 bits of them. (The text
-// payloads of MQTT_STRUCT_PUBLISH still refuse a TIME: there is no one way to
+// payloads of FB_MqttClient.PublishStruct still refuse a TIME: there is no one way to
 // write it as text that every subscriber would read the same.)
 bool mq_spTypeOfClass(int typeClass, MqttSparkplugDataType* out) {
     switch (typeClass) {
@@ -518,7 +722,9 @@ enum MqSpKind : uint8_t {
     MQ_SP_VIEW,       // at once, while someone views
     MQ_SP_LOG,        // what moved past its deadband, every log interval
     MQ_SP_LIVE,       // device 'live': what moved, every live interval, while demanded
-    MQ_SP_SET         // device 'cfg-<page>': at once, while demanded; written while remote control is on
+    MQ_SP_SET,        // device 'cfg-<page>': at once, while demanded; written while remote control is on
+    MQ_SP_EVERY,      // every:<time>: all members every period, whether they moved or not
+    MQ_SP_ONREQ       // onreq: all members on a rising edge of Record's bSend
 };
 
 // A member of a group: 16 bytes.
@@ -539,7 +745,11 @@ struct MqSpPulse {
 
 struct MqSpGroup {
     uint8_t kind = MQ_SP_NOW;
-    int16_t device = -1;               // MqSpReport::devices, -1 the node
+    int16_t device = -1;               // MqSpReport::devices (Live Demand's), -1 none
+    int16_t ownDevice = -1;            // MqSpReport::ownDevices (dev=), -1 none; neither: the node
+    int32_t periodMs = 0;              // every:<time>
+    mq_time_t sentAt = 0;              // every:<time>: when the whole set last went
+    uint32_t births = 0;               // the node's births seen: a birth sends the whole set
     std::vector<MqSpLeaf> leaves;
     std::vector<MqSpPulse> pulses;     // empty until a member has pulse=
     int pulsing = 0;
@@ -568,6 +778,7 @@ struct MqSpRecord {
     int16_t points = 0;
     int16_t bad = 0;                   // the first clause that could not be used
     int16_t declareBad = 0;            // the same, found when the members were declared
+    bool lastSend = false;             // bSend at the last call, for onreq's edge
     bool applied = false;
     bool usesUnits = false;
 };
@@ -575,6 +786,7 @@ struct MqSpRecord {
 struct MqSpReport {
     std::vector<MqSpRecord*> records;
     std::vector<std::string> devices;  // 'live', 'cfg-<page>', as first used
+    std::vector<std::string> ownDevices;  // dev=<name>: the program's devices
     std::vector<uint8_t> demanded;
     std::vector<uint8_t> online;
     std::string offer;
@@ -610,6 +822,8 @@ MqSpReportsOwned& mqSpReportsOwned() {
 struct MqSpClause {
     std::vector<std::string> members;
     std::string page;                  // set:<page>
+    std::string dev;                   // dev=<name>: a device of the program's own
+    int32_t periodMs = 0;              // every:<time>
     std::string units;                 // u=<text>, or the member of anyUnits for u=@<member>
     float band = 0.0f, pct = 0.0f, low = 0.0f, high = 0.0f;
     int64_t pulseNs = 0;
@@ -645,6 +859,35 @@ static bool mq_spIsWritableKind(uint8_t kind) {
 static bool mq_spIsViewedKind(uint8_t kind) {
     return kind == MQ_SP_VIEW || kind == MQ_SP_LOG || kind == MQ_SP_LIVE ||
            kind == MQ_SP_SET;
+}
+
+// A duration in milliseconds, as IEC writes one (T#1m30s, TIME#500ms) or
+// without the prefix (1m30s); -1 when it is not one.
+static int64_t mq_spDurationMs(const std::string& text) {
+    const char* p = text.c_str();
+    if (strncasecmp(p, "TIME#", 5) == 0) p += 5;
+    else if (strncasecmp(p, "T#", 2) == 0) p += 2;
+    if (*p == '\0') return -1;
+    double total = 0.0;
+    while (*p != '\0') {
+        if (*p == '_') {
+            p++;
+            continue;
+        }
+        char* stop = nullptr;
+        const double n = strtod(p, &stop);
+        if (stop == p || n < 0) return -1;
+        p = stop;
+        double unit;
+        if (strncasecmp(p, "ms", 2) == 0) { unit = 1.0; p += 2; }
+        else if (*p == 'd' || *p == 'D') { unit = 86400000.0; p++; }
+        else if (*p == 'h' || *p == 'H') { unit = 3600000.0; p++; }
+        else if (*p == 'm' || *p == 'M') { unit = 60000.0; p++; }
+        else if (*p == 's' || *p == 'S') { unit = 1000.0; p++; }
+        else return -1;
+        total += n * unit;
+    }
+    return (int64_t)total;
 }
 
 // The point list, clause by clause, bounded by the STRING's size. A clause that
@@ -703,6 +946,13 @@ static void mq_spParseClauses(const char* text, int32_t bound,
                                 c.page.find_first_of("+/#") != std::string::npos) {
                                 c.fault = true;
                             }
+                        } else if (strncasecmp(k, "every:", 6) == 0) {
+                            c.kind = MQ_SP_EVERY;
+                            const int64_t ms = mq_spDurationMs(mq_spTrim(part.substr(6)));
+                            if (ms <= 0 || ms > INT32_MAX) c.fault = true;
+                            else c.periodMs = (int32_t)ms;
+                        } else if (strcasecmp(k, "onreq") == 0) {
+                            c.kind = MQ_SP_ONREQ;
                         } else {
                             c.fault = true;
                         }
@@ -715,6 +965,16 @@ static void mq_spParseClauses(const char* text, int32_t bound,
                     }
                     const std::string key = mq_spTrim(part.substr(0, q));
                     const std::string val = mq_spTrim(part.substr(q + 1));
+                    if (strcasecmp(key.c_str(), "dev") == 0) {
+                        // A device id; 'live' and 'cfg-*' are Live Demand's.
+                        c.dev = val;
+                        if (val.empty() || val.size() > 47 ||
+                            val.find_first_of("+/#") != std::string::npos ||
+                            strcmp(val.c_str(), "live") == 0 || strncmp(val.c_str(), "cfg-", 4) == 0) {
+                            c.fault = true;
+                        }
+                        continue;
+                    }
                     if (strcasecmp(key.c_str(), "u") == 0) {
                         c.unitsRef = !val.empty() && val[0] == '@';
                         c.units = c.unitsRef ? mq_spTrim(val.substr(1)) : val;
@@ -740,6 +1000,8 @@ static void mq_spParseClauses(const char* text, int32_t bound,
                 if (!(c.band >= 0.0f) || !(c.pct >= 0.0f) || c.pulseNs < 0) c.fault = true;
                 // A pulse takes back a write: only a class the host writes has one.
                 if (c.pulseNs > 0 && !mq_spIsWritableKind(c.kind)) c.fault = true;
+                // live and set:<page> are devices of their own already.
+                if (!c.dev.empty() && (c.kind == MQ_SP_LIVE || c.kind == MQ_SP_SET)) c.fault = true;
             }
             out.push_back(c);
         }
@@ -1045,9 +1307,12 @@ static void mq_spMetricName(const std::string& prefix, const std::string& path,
     }
 }
 
-static MqSpGroup& mq_spGroupFor(MqSpRecord& record, uint8_t kind, int device) {
+static MqSpGroup& mq_spGroupFor(MqSpRecord& record, uint8_t kind, int device, int ownDevice,
+                                int32_t periodMs) {
     for (size_t i = 0; i < record.groups.size(); i++) {
-        if (record.groups[i].kind == kind && record.groups[i].device == device) {
+        const MqSpGroup& g = record.groups[i];
+        if (g.kind == kind && g.device == device && g.ownDevice == ownDevice &&
+            g.periodMs == periodMs) {
             return record.groups[i];
         }
     }
@@ -1055,12 +1320,34 @@ static MqSpGroup& mq_spGroupFor(MqSpRecord& record, uint8_t kind, int device) {
     MqSpGroup& g = record.groups.back();
     g.kind = kind;
     g.device = (int16_t)device;
+    g.ownDevice = (int16_t)ownDevice;
+    g.periodMs = periodMs;
     return g;
 }
 
-// Declares a record's members, once: each value takes its node class (the
-// last now/cmd/view/log clause naming it), its live class and each set page,
-// as metrics of the node or of that device. Returns the first bad clause, from 1.
+// The index of a device of the program's own (dev=), added to the node the
+// first time. Never brought on or off line here: that is the program's, with
+// sp.Device, and Live Demand never touches it.
+static int mq_spOwnDevice(MqttSparkplugNode* node, MqSpReport& report, const std::string& name) {
+    for (size_t i = 0; i < report.ownDevices.size(); i++) {
+        if (report.ownDevices[i] == name) return (int)i;
+    }
+    if (!node->addDevice(name.c_str()) && node->deviceIndexOf(name.c_str()) < 0) return -1;
+    report.ownDevices.push_back(name);
+    return (int)report.ownDevices.size() - 1;
+}
+
+// The device a group's metrics are on, or nullptr for the node.
+static const char* mq_spGroupDevice(const MqSpReport& report, const MqSpGroup& group) {
+    if (group.device >= 0) return report.devices[(size_t)group.device].c_str();
+    if (group.ownDevice >= 0) return report.ownDevices[(size_t)group.ownDevice].c_str();
+    return nullptr;
+}
+
+// Declares a record's members, once: each value takes one class on the node
+// (the last now/cmd/view/log/every/onreq clause naming it without dev=), one on
+// each dev= device the same way, its live class and each set page, as metrics
+// of the node or of that device. Returns the first bad clause, from 1.
 static int mq_spRecordDeclare(MqttSparkplugNode* node, MqSpReport& report,
                               MqSpRecord& record,
                               const std::vector<MqSpClause>& clauses,
@@ -1084,7 +1371,7 @@ static int mq_spRecordDeclare(MqttSparkplugNode* node, MqSpReport& report,
     }
     std::vector<int> pageClause(pageNames.size(), -1);
     std::string name;
-    auto declareIn = [&](uint8_t kind, int device, size_t k,
+    auto declareIn = [&](uint8_t kind, int device, int ownDevice, int32_t periodMs, size_t k,
                          const std::string& path, uint32_t offset,
                          strucpp::TYPE_CLASS cls, uint32_t size) {
         bool named = false;
@@ -1095,7 +1382,9 @@ static int mq_spRecordDeclare(MqttSparkplugNode* node, MqSpReport& report,
         MqttSparkplugDataType type = MqttSparkplugDataType::Unknown;
         mq_spTypeOfClass((int)cls, &type);
         mq_spMetricName(prefix, path, kind, name);
-        const char* dev = device >= 0 ? report.devices[(size_t)device].c_str() : nullptr;
+        const char* dev = device >= 0      ? report.devices[(size_t)device].c_str()
+                          : ownDevice >= 0 ? report.ownDevices[(size_t)ownDevice].c_str()
+                                           : nullptr;
         const bool writable = mq_spIsWritableKind(kind);
         uint64_t alias;
         if (dev != nullptr) {
@@ -1118,12 +1407,15 @@ static int mq_spRecordDeclare(MqttSparkplugNode* node, MqSpReport& report,
         leaf.cls = (uint8_t)cls;
         leaf.clause = (uint16_t)k;
         leaf.named = named ? 1 : 0;
-        mq_spGroupFor(record, kind, device).leaves.push_back(leaf);
+        mq_spGroupFor(record, kind, device, ownDevice, periodMs).leaves.push_back(leaf);
         record.points++;
     };
+    // Per value: the clause each scope (the node '', each dev=) takes it from.
+    std::vector<std::pair<std::string, int>> scopes;
     auto visit = [&](const std::string& path, uint32_t offset,
                      strucpp::TYPE_CLASS cls, uint32_t size) {
-        int nodeClause = -1, liveClause = -1;
+        int liveClause = -1;
+        scopes.clear();
         for (size_t p = 0; p < pageClause.size(); p++) pageClause[p] = -1;
         for (size_t k = 0; k < clauses.size(); k++) {
             const MqSpClause& c = clauses[k];
@@ -1134,24 +1426,43 @@ static int mq_spRecordDeclare(MqttSparkplugNode* node, MqSpReport& report,
             }
             if (!covered) continue;
             matched[k] = 1;
-            if (c.kind == MQ_SP_LIVE) liveClause = (int)k;
-            else if (c.kind == MQ_SP_SET) pageClause[(size_t)pages[k]] = (int)k;
-            else nodeClause = (int)k;
+            if (c.kind == MQ_SP_LIVE) {
+                liveClause = (int)k;
+            } else if (c.kind == MQ_SP_SET) {
+                pageClause[(size_t)pages[k]] = (int)k;
+            } else {
+                bool seen = false;
+                for (size_t sc = 0; sc < scopes.size(); sc++) {
+                    if (scopes[sc].first == c.dev) {
+                        scopes[sc].second = (int)k;
+                        seen = true;
+                    }
+                }
+                if (!seen) scopes.push_back(std::make_pair(c.dev, (int)k));
+            }
         }
-        if (nodeClause >= 0) {
-            declareIn(clauses[(size_t)nodeClause].kind, -1, (size_t)nodeClause,
-                      path, offset, cls, size);
+        for (size_t sc = 0; sc < scopes.size(); sc++) {
+            const size_t k = (size_t)scopes[sc].second;
+            int own = -1;
+            if (!scopes[sc].first.empty()) {
+                own = mq_spOwnDevice(node, report, scopes[sc].first);
+                if (own < 0) {
+                    refused[k] = 1;
+                    continue;
+                }
+            }
+            declareIn(clauses[k].kind, -1, own, clauses[k].periodMs, k, path, offset, cls, size);
         }
         if (liveClause >= 0) {
             const int device = mq_spRecordDevice(node, report, "live");
             if (device < 0) refused[(size_t)liveClause] = 1;
-            else declareIn(MQ_SP_LIVE, device, (size_t)liveClause, path, offset, cls, size);
+            else declareIn(MQ_SP_LIVE, device, -1, 0, (size_t)liveClause, path, offset, cls, size);
         }
         for (size_t p = 0; p < pageClause.size(); p++) {
             if (pageClause[p] < 0) continue;
             const int device = mq_spRecordDevice(node, report, "cfg-" + pageNames[p]);
             if (device < 0) refused[(size_t)pageClause[p]] = 1;
-            else declareIn(MQ_SP_SET, device, (size_t)pageClause[p], path, offset, cls, size);
+            else declareIn(MQ_SP_SET, device, -1, 0, (size_t)pageClause[p], path, offset, cls, size);
         }
     };
     std::string path;
@@ -1221,30 +1532,40 @@ static int mq_spRecordApply(MqttSparkplugNode* node, MqSpRecord& record,
 // One group's scan: writes in (or refused while the host may not write),
 // pulses, values into the node, and what is to go. Ported from the 0.1
 // SPARKPLUG_STRUCT, with its mode fixed by the class. Returns QueueFull when a
-// message asked for could not be queued, else Ok.
+// message asked for could not be queued, else Ok. `request`: Record's bSend
+// rose this scan (onreq).
 static uint8_t mq_spGroupScan(MqttSparkplugNode* node, MqSpReport& report,
                               MqSpGroup& group, uint8_t* base, bool remote,
-                              int32_t intervalMs) {
+                              int32_t intervalMs, bool request) {
     MqSpLeaf* const leaves = group.leaves.data();
     const size_t count = group.leaves.size();
-    const char* device = group.device >= 0 ? report.devices[(size_t)group.device].c_str() : nullptr;
+    const char* device = mq_spGroupDevice(report, group);
     const bool born = node->isBorn();
     const bool online = born && (device == nullptr || node->deviceIsOnline(device));
     const bool changedEvery = group.kind == MQ_SP_LOG || group.kind == MQ_SP_LIVE;
+    // every:<time> and onreq send the whole set, on their own clock or edge.
+    const bool wholeSet = group.kind == MQ_SP_EVERY || group.kind == MQ_SP_ONREQ;
     const bool enabled =
         group.kind == MQ_SP_VIEW ? report.viewed
-        : group.device >= 0      ? online
+        : device != nullptr      ? online
                                  : true;
     const mq_time_t now = mq_millis();
 
     // Held: an interval class goes on its clock, and a class switched off
     // keeps its values current without riding along in other reports.
-    const bool hold = changedEvery || !enabled;
+    const bool hold = changedEvery || wholeSet || !enabled;
     if (hold != group.held) {
         group.held = hold;
         for (size_t i = 0; i < count; i++) node->holdAt(leaves[i].point, hold);
     }
     const bool bornNow = online && !group.wasOnline;
+    // A birth carried every member, so an every:<time> set counts its period from it.
+    const uint32_t births = node->birthCount();
+    if (online && (!group.wasOnline || births != group.births) && group.kind == MQ_SP_EVERY) {
+        group.everSent = true;
+        group.sentAt = now;
+    }
+    group.births = births;
     group.wasOnline = online;
 
     // What became of the message asked for last.
@@ -1286,8 +1607,8 @@ static uint8_t mq_spGroupScan(MqttSparkplugNode* node, MqSpReport& report,
     if (!group.wasEnabled) {
         group.wasEnabled = true;
         // Switched on: an interval class sends what moved at once, unless its
-        // birth this scan carried every member.
-        if (changedEvery && !bornNow) group.everSent = false;
+        // birth this scan carried every member; an every:<time> set goes at once.
+        if ((changedEvery || group.kind == MQ_SP_EVERY) && !bornNow) group.everSent = false;
     }
 
     // Commands before values, so a write is reported back in the same message.
@@ -1297,7 +1618,7 @@ static uint8_t mq_spGroupScan(MqttSparkplugNode* node, MqSpReport& report,
         group.writesSeen = applied;
         group.writesLeft = false;
     }
-    const bool watch = online && !changedEvery;
+    const bool watch = online && !changedEvery && !wholeSet;
     int going = 0;
     for (size_t i = 0; i < count; i++) {
         MqSpLeaf& leaf = leaves[i];
@@ -1337,7 +1658,22 @@ static uint8_t mq_spGroupScan(MqttSparkplugNode* node, MqSpReport& report,
     }
 
     bool ask = false;
-    if (!changedEvery) {
+    if (wholeSet) {
+        // The whole set: every period, or on bSend's edge; one the node could
+        // not queue is asked for again at once.
+        const bool due = group.kind == MQ_SP_ONREQ
+                             ? request
+                             : !group.everSent ||
+                                   (int32_t)mq_elapsed(group.sentAt, now) >= group.periodMs;
+        if (due || askFailed) {
+            for (size_t i = 0; i < count; i++) node->reportAt(leaves[i].point);
+            ask = true;
+            if (group.kind == MQ_SP_EVERY && due) {
+                group.everSent = true;
+                group.sentAt = now;
+            }
+        }
+    } else if (!changedEvery) {
         ask = going > 0;
     } else {
         // Every interval, what moved past its deadband since it was last sent.
@@ -1400,6 +1736,8 @@ static E_MQTTRESULT mq_spRecordFail(MqSpReport& report, const strucpp::IEC_ANY& 
         report.failText += std::to_string(bad);
     } else if (bad == -2) {
         report.failText += ": tLiveInterval is T#0s";
+    } else if (bad == -3) {
+        report.failText += ": tLogInterval is T#0s";
     } else if (bad < 0) {
         report.failText += ": not a STRUCT with a STRING point list";
     } else {
@@ -1446,21 +1784,21 @@ void setup()
 
 void loop()
 {
-    nTask = mq_currentTask();   // every block on this one shares it: see MQTT_ARDUINO
+    nTask = mq_currentTask();   // every method of this block shares it
 
-    // --- THE CONNECTION IS MQTT_CLIENT'S ---
+    // --- THE CONNECTION IS FB_MqttClient'S ---
     //
     // Where, how, as whom and whether to be connected at all: its pins, its
-    // MQTT_CONFIG, MQTT_TLS and MQTT_ARDUINO. This node rides on that session,
+    // stSessionConfig, stTlsConfig and stNetworkConfig. This node rides on that session,
     // with the device's own topics and its firmware updates beside it, and
     // takes what Sparkplug needs of it on every CONNECT: the Will (its NDEATH),
     // Clean Start, and a transmit buffer that holds the birth certificate.
-    if (!mq_inTask((strucpp::XWORD_t)fbClient.NTASK)) {   // one task per client: see MQTT_ARDUINO
+    if (!mq_inTask((strucpp::XWORD_t)fbClient.NTASK)) {   // one task per client: see FB_MqttClient
         bLinkUp = false;
         bBorn = false;
         bError = true;
         eErrorId = E_MQTTRESULT::WRONGTASK;
-        sLastError = "put SPARKPLUG_NODE in its MQTT_CLIENT's task";
+        sLastError = "put FB_SparkplugNode in its FB_MqttClient's task";
         return;
     }
     MqttClient* client = mq_clientOf((strucpp::XWORD_t)fbClient.NAPI);
@@ -1471,7 +1809,7 @@ void loop()
         bBorn = false;
         bError = false;
         eErrorId = E_MQTTRESULT::NOTINITIALISED;
-        sLastError = "waiting for its MQTT_CLIENT";
+        sLastError = "waiting for its FB_MqttClient";
         return;
     }
 
@@ -1547,7 +1885,7 @@ void loop()
         nApi = (strucpp::XWORD_t)(uintptr_t)node;
         nClient = (strucpp::XWORD_t)(uintptr_t)client;
         nSessionKey = identityKey();
-        // The other SPARKPLUG_* blocks declare on this scan, wherever they
+        // The methods declare on this scan, wherever they
         // sit in the program; the node connects on a later one.
         nDeclaredAt = (int32_t)mq_millis();
         bLinkUp = client->isConnected();
@@ -1593,7 +1931,7 @@ void loop()
             return;
         }
         // Refused only when another layer owns the client's Will - a
-        // SPARKPLUG_HOST, or a second node on the same client - and then it is
+        // FB_SparkplugHost, or a second node on the same client - and then it is
         // asked again every scan, so removing that one is enough.
         bConnectAsked = node->connect();
     }
@@ -1657,10 +1995,10 @@ void loop()
         return;
     }
     if (!bLinkUp) {
-        // Why the link is down is MQTT_CLIENT's to say, on its own pins.
+        // Why the link is down is FB_MqttClient's to say, on its own pins.
         bError = false;
         eErrorId = E_MQTTRESULT::NOTCONNECTED;
-        sLastError = "MQTT_CLIENT is not connected";
+        sLastError = "FB_MqttClient is not connected";
         return;
     }
     bError = false;
@@ -1756,10 +2094,12 @@ E_MQTTRESULT Record()
 
     // --- Each class on its own clock ---
     int32_t logMs = mq_millisOf(stReportConfig.TLOGINTERVAL);
-    if (logMs <= 0 || logMs > MQ_SP_LOG_MAX_MS) logMs = MQ_SP_LOG_MAX_MS;
+    if (logMs > MQ_SP_LOG_MAX_MS) logMs = MQ_SP_LOG_MAX_MS;
     const int32_t liveMs = mq_millisOf(stReportConfig.TLIVEINTERVAL);
+    const bool request = (bool)bSend && !record->lastSend;
+    record->lastSend = (bool)bSend;
     bool queueFull = false;
-    bool noInterval = false;
+    int noInterval = 0;                // -2 tLiveInterval, -3 tLogInterval
     for (size_t g = 0; g < record->groups.size(); g++) {
         MqSpGroup& group = record->groups[g];
         int32_t interval = 0;
@@ -1767,11 +2107,11 @@ E_MQTTRESULT Record()
         else if (group.kind == MQ_SP_LIVE) interval = liveMs;
         if ((group.kind == MQ_SP_LOG || group.kind == MQ_SP_LIVE) && interval <= 0) {
             // Never "every scan": a whole record at the task rate floods the link.
-            noInterval = true;
+            noInterval = group.kind == MQ_SP_LOG && !report->viewed ? -3 : -2;
             continue;
         }
         if (mq_spGroupScan(node, *report, group, anyData.PVALUE,
-                           (bool)stReportConfig.BREMOTECONTROL, interval) ==
+                           (bool)stReportConfig.BREMOTECONTROL, interval, request) ==
             (uint8_t)E_MQTTRESULT::QUEUEFULL) {
             queueFull = true;
         }
@@ -1781,8 +2121,8 @@ E_MQTTRESULT Record()
         return mq_spRecordFail(*report, anyData, prefix, E_MQTTRESULT::INVALIDARGUMENT,
                                record->bad);
     }
-    if (noInterval) {
-        return mq_spRecordFail(*report, anyData, prefix, E_MQTTRESULT::INVALIDARGUMENT, -2);
+    if (noInterval != 0) {
+        return mq_spRecordFail(*report, anyData, prefix, E_MQTTRESULT::INVALIDARGUMENT, noInterval);
     }
     if (queueFull) {
         return mq_spRecordFail(*report, anyData, prefix, E_MQTTRESULT::QUEUEFULL, 0);

@@ -1,11 +1,30 @@
 (* Makes this PLC the broker other devices connect to. Standalone - it owns its
-own listener and takes no FB_MqttClient.
+listener and takes no FB_MqttClient. Call it once every scan, in the network
+task; each device's account is a call of its User method.
 
 bEnable            TRUE listens. A falling edge stops and releases the port.
 sListenOn          which interface to listen on. Empty for all of them.
+                   Ignored on a board, which listens where its core is up.
 nPort              0 for 1883.
 nMaxClients        connections served at once. 0 for 32 (4 on a board).
 nMaxRetained       retained messages held. 0 for 256 (32 on a board).
+eSecurity          E_MqttSecurity.Plain serves clear text. Anything else
+                   serves TLS, and then:
+                     no sCertFile      the broker makes its OWN certificate on
+                                       first start, keeps it beside the
+                                       program and presents the same one every
+                                       start after. Zero configuration;
+                                       clients pin sBrokerKey.
+                     sCertFile + sKeyFile
+                                       a real certificate - from the site's
+                                       own CA, or a public one. Clients verify
+                                       it the ordinary way, host name and all,
+                                       with nothing pinned.
+sCertFile          a certificate to present, as a path on the Runtime. Empty
+                   to make one. Refused on a board, which has no file system
+                   this block may assume.
+sKeyFile           its private key. One without the other is refused rather
+                   than half applied.
 nMaxSubscriptions  subscriptions each client session may hold. 0 for 32
                    (8 on a board).
 nMaxQueued         messages held for each client while it is away or slow.
@@ -15,60 +34,36 @@ nMaxMsgSize        the largest message, in bytes, a client may send or be
                    (1024 on a board).
 tMaxSessionExpiry  how long a session is kept after its client goes: a 3.1.1
                    client's persistent session, and the most a 5.0 client may
-                   ask for. 0 for 1 h. Read when the broker starts.
-eSecurity          E_MqttSecurity.Plain serves clear text on 1883, the way this
-                   block always has. Anything else serves TLS, and then:
-                     no sCertFile      the broker makes its OWN certificate on
-                                       first start, keeps it beside the program
-                                       and presents the same one every start
-                                       after. Zero configuration; clients pin
-                                       sBrokerKey.
-                     sCertFile + sKeyFile
-                                       a real certificate - from the site's own
-                                       CA, or a public one. Clients verify it
-                                       the ordinary way, hostname and all, with
-                                       nothing pinned.
-                   Self-signed is the DEFAULT, not a ceiling. The obstacle was
-                   never the engine; it was that a certificate does not fit on
-                   a pin, and a path does.
-sCertFile          a certificate to present, as a path on the Runtime. Empty to
-                   make one.
-sKeyFile           its private key. One without the other is refused rather
-                   than half applied.
-
-ACCOUNTS           are not a pin. Call User once per device, every scan.
-                   Declaring any account makes accounts REQUIRED for every
-                   connection - including one whose bAllow is off, so switching
-                   off the last account locks the broker rather than quietly
-                   opening it. With no User call at all the broker admits
-                   anybody, as it always has; on a network that is not
-                   isolated, declare accounts.
+                   ask for. T#0s for 1 h. Read when the broker starts.
 
 bListening         the port is open.
-nClients           connections attached right now. THIS PLC COUNTS AS ONE of
-                   them if it also runs FB_MqttClient against itself, which is
-                   the ordinary way a broker PLC gets onto its own bus - a
-                   broker holds no values, so anything that publishes or
-                   subscribes is a client.
+nClients           connections attached now. THIS PLC COUNTS AS ONE of them
+                   if it also runs an FB_MqttClient against itself, which is
+                   how a broker PLC publishes anything: a broker holds no
+                   values of its own.
 nSessions          sessions held, including those of clients currently away
                    whose state has not expired.
-nAccepted          running total of connections accepted at the socket.
+nAccepted          connections accepted at the socket.
 nAdmitted          of those, how many earned a successful CONNACK. A socket
                    that opens and never becomes a client is a scanner, or bad
                    credentials.
-nRefused           and how many were turned away - a client with a different
-                   login than the one that made an existing session among them.
+nRefused           and how many were turned away - a client with another
+                   login than the one that made an existing session among
+                   them.
 nFromClients       messages accepted from clients.
 nToClients         messages sent to clients.
 nDropped           deliveries a full client queue could not take. Not silent:
-                   at QoS above 0 the publisher is told rather than left
-                   believing it arrived.
+                   at QoS above 0 the publisher is told (0x97) rather than
+                   left believing it arrived.
 nTakeovers         times a client identifier was claimed by a second
                    connection with the same login, and the first was
-                   disconnected. A number that climbs usually means two
-                   devices share an identifier.
+                   disconnected. Climbing usually means two devices share an
+                   identifier.
 bError             something failed.
 eErrorId           why. E_MqttResult.Ok when fine.
+sBrokerKey         the SHA-256 of this broker's public key, 64 hexadecimal
+                   characters: what a client pins against. Empty while
+                   serving plain.
 
 METHODS
 
@@ -76,101 +71,105 @@ METHODS
               nRefusedCnt =>)
 
      ONE ACCOUNT ON THIS PLC'S BROKER. Standing: call it every scan, once per
-     device that connects, in the broker's task. An account whose call stops
-     (renamed while running, or no longer called) is switched off and its
-     password wiped at the broker's next scan, so nothing can still log in
-     under a name nobody can see in the program any more; it still counts as
-     declared, so the broker stays locked. Call it again and it is back, its
-     counters kept.
+     device that connects, in the broker's task. Declaring ANY account makes
+     accounts REQUIRED for every connection - including one whose bAllow is
+     FALSE, so switching off the last account locks the broker rather than
+     quietly opening it. With no User call at all the broker admits anybody;
+     on a network that is not isolated, declare accounts.
+
+     An account whose call stops (renamed while running, or no longer
+     called) is switched off and its password wiped at the broker's next
+     scan, so nothing can still log in under a name nobody can see in the
+     program; it still counts as declared, so the broker stays locked. Call
+     it again and it is back, its counters kept.
 
      sUserName      the name the device logs in with. Compared exactly, case
-                    included - MQTT user names are case-sensitive. The call's
-                    key.
-     sUserPassword  its password. Up to 64 characters; compared in full, never
-                    stopping at the first difference.
+                    included. The call's key.
+     sUserPassword  its password. Up to 64 characters; compared in full,
+                    never stopping at the first difference.
      bAllow         FALSE refuses this device without forgetting it.
 
      bActive        the account is declared and allowed.
      nLoginCnt      times this device has connected successfully.
      nRefusedCnt    times a connection under this name was turned away - a
-                    wrong password, or the account switched off. A number that
-                    climbs on one device and not the others is that device's
-                    configuration.
+                    wrong password, or the account switched off. Climbing on
+                    one device and not the others is that device's settings.
 
      Returns E_MqttResult.Ok, InvalidArgument for an empty sUserName,
      QuotaExceeded when memory for one more account ran out (the table grows
      with the calls, on a board and the Runtime alike), or WrongTask.
 
-     WHY ONE CALL PER ACCOUNT rather than a list: an account is something an
+     ONE CALL PER ACCOUNT rather than a list: an account is something an
      engineer adds, removes and switches off one device at a time, and a call
-     per device makes each one visible, commentable and interlockable.
-
-     WHY EACH DEVICE GETS ITS OWN. A shared password cannot be revoked from one
-     controller without changing it on all of them, and a broker log that says
-     "plant-user refused" does not say which panel to go to.
-
-     WHAT IS NOT HERE: topic permissions. This decides who may CONNECT.
+     per device makes each one visible, commentable and interlockable. AND
+     EACH DEVICE ITS OWN: a shared password cannot be revoked from one
+     controller without changing all of them, and a log that says
+     "plant-user refused" does not say which panel to go to. Topic
+     permissions are not here: this decides who may CONNECT.
 
 ---
 
 WHY PUT A BROKER IN A PLC. A site with twenty sensors and an intermittent
 uplink does not want twenty devices each retrying a connection to head office.
 Point them at the PLC, let it hold the retained values and the sessions, and
-bridge one connection upstream with FB_MqttBridge. The site keeps working when
+carry one connection upstream with FB_MqttBridge. The site keeps working when
 the link does not, and comes back in step when it returns.
 
-RUNS ON A BOARD TOO, and for a while it did not. The broker was always
-platform-neutral - the routing, the retained store, the session registry and
-takeover compile anywhere - and what was missing was a listener that could
-accept a connection without a BSD socket. There are two now, so an ESP32
-running this block is a real broker and not a stub.
+A BROKER DOES NOT PUBLISH. It routes what clients send. A PLC that is the
+broker and also publishes runs an FB_MqttClient against itself
+(sHost := '127.0.0.1') beside this block, in the same task.
 
-What differs on a board:
+ON A BOARD TOO. The routing, the retained store, the session registry and
+takeover compile anywhere, and an Arduino listener accepts connections
+without a BSD socket, so an ESP32 running this block is a real broker. What
+differs on a board:
 
-  sListenOn        ignored. An Arduino server listens on whatever interface
-                   the core brought up; there is no second one to choose.
+  sListenOn        ignored.
   sCertFile,
-  sKeyFile         refused rather than ignored. They are paths, and a board
-                   has no file system this block may assume.
+  sKeyFile         refused rather than ignored: they are paths.
   sBrokerKey       the fingerprint of a certificate made on THIS run. There is
                    nowhere on a board to keep a key, so it moves on every
                    restart - either re-pin after a reflash, or serve plain on
                    an isolated line and put the TLS on the FB_MqttBridge that
-                   leaves it, which is the connection that needs it.
+                   leaves the site, which is the connection that needs it.
   the defaults     sized for a panel: four connections, eight sessions, 1 kB
                    buffers, 32 retained, 8 subscriptions and 16 queued
-                   messages per session. The Runtime's defaults would be tens
-                   of kilobytes. Every one is a pin: raise the ones a site
-                   needs, within the board's memory - each connection holds
-                   two nMaxMsgSize buffers.
+                   messages per session. Every one is a pin: raise the ones a
+                   site needs, within the board's memory - each connection
+                   holds two nMaxMsgSize buffers.
 
 Serving TLS on a board also needs wolfSSL on the include path; serving plain
 needs nothing at all. WiFi comes with the ESP32 core, and Ethernet is opt-in:
-MQTT_ENABLE_ETHERNET, a define in the board package's compiler flags (an
-OpenPLC project has no build flags of its own).
+MQTT_ENABLE_ETHERNET, a define in the board package's compiler flags.
 
-nTakeovers is the pin to watch on a new site. MQTT says a second connection
+SELF-SIGNED IS THE DEFAULT, NOT A CEILING. The obstacle was never the TLS
+library; it was that a certificate does not fit on a pin, and a path does.
+
+nTakeovers IS THE PIN TO WATCH ON A NEW SITE. MQTT says a second connection
 using an existing client identifier displaces the first, so two devices
-flashed with the same identifier will knock each other off for ever, each
-reconnecting and each looking healthy on its own. This counter is how that
-looks from the middle, and it is the only place it is visible. A session
-belongs to the login that made it: a client that uses another login with an
-existing identifier is refused (CONNACK 0x85; 0x02 at 3.1.1) and counts on
-nRefused, not here. Without logins every client is the same nobody, so
-takeovers work as before.
+flashed with the same identifier knock each other off for ever, each looking
+healthy on its own. This counter is the only place that shows from the
+middle. A session belongs to the login that made it: a client with another
+login and an existing identifier is refused (CONNACK 0x85; 0x02 at 3.1.1) and
+counts on nRefused, not here. Without logins every client is the same
+nobody, so takeovers work as before.
 
-SESSIONS EXPIRE. A persistent session (clean session off) of a 3.1.1 client is
-kept for tMaxSessionExpiry after it goes (an hour unless set), then dropped -
-before, it was kept until the broker restarted. A 5.0 client says how long
-itself, up to the same limit. Raise it for devices that sleep longer.
+SESSIONS EXPIRE. A persistent session of a 3.1.1 client is kept for
+tMaxSessionExpiry after it goes (an hour unless set), then dropped. A 5.0
+client says how long itself, up to the same limit. Raise it for devices that
+sleep longer; every session held keeps its queue. Sessions and retained
+messages are in RAM: a power cut loses them, which is legal MQTT.
 
 REFUSED AS THE STANDARD SAYS. A Will topic with wildcards (0x90), a Will
 declared UTF-8 that is not (0x99), a PUBLISH from a client carrying a
 Subscription Identifier, two Subscription Identifiers in one SUBSCRIBE, No
 Local on a $share subscription, and a 3.1.1 CONNECT with a password but no
-user name are refused or disconnected. A 3.1.1 QoS 2 message when the client's
-inbound table is full closes the connection rather than being acknowledged
-and lost. *)
+user name are refused or disconnected. A 3.1.1 QoS 2 message when the
+client's inbound table is full closes the connection rather than being
+acknowledged and lost.
+
+ITS COST SCALES WITH nClients: it services each connection once per call.
+Still bounded, still non-blocking, not free. Put it in the network task. *)
 
 FUNCTION_BLOCK FB_MqttBroker
   VAR_INPUT
@@ -232,6 +231,9 @@ FUNCTION_BLOCK FB_MqttBroker
     nTask             : __XWORD;            (* the task this block runs in *)
   END_VAR
 
+(* One account on this broker, called every scan, once per device. Any
+   account makes accounts required for every connection. Ok;
+   InvalidArgument for an empty sUserName; QuotaExceeded out of memory. *)
 METHOD PUBLIC User : E_MqttResult
   VAR_INPUT
     sUserName         : STRING(64);         (* the name the device logs in with; case-sensitive *)

@@ -2,129 +2,160 @@
 
 Sparkplug B is MQTT with rules, and it is what SCADA systems and IoT platforms
 (Ignition, a historian, a cloud SCADA) expect a remote site to speak. This page
-is the Sparkplug blocks on a site: what to wire, what each pin does, and what to
-check when it does not report.
+is the Sparkplug node on a site: what to wire, what each method does, and what
+to check when it does not report. The point list of `Record` is page 15.
 
-| Block | What it is |
+| | What it is |
 | --- | --- |
-| `MQTT_CLIENT` | the connection - broker, TLS, login, Wi-Fi, Ethernet or cellular |
-| `SPARKPLUG_NODE` | the Sparkplug node, a layer on that connection. One per client |
-| `SPARKPLUG_STRUCT` | a whole STRUCT as metrics - one per group of values |
-| `SPARKPLUG_METRIC` | one value that is not in a struct |
-| `SPARKPLUG_COMMAND` | a write from SCADA that the program decides about |
-| `SPARKPLUG_DEVICE` | a device under the node that can go offline by itself |
-| `MQTT_CLOCK` | the controller's clock, so the timestamps are real |
+| `FB_MqttClient` | the connection - broker, TLS, login, Wi-Fi, Ethernet or cellular |
+| `FB_SparkplugNode` | the Sparkplug node, a layer on that connection. One per client |
+| `sp.Record` | a whole STRUCT as metrics, each member by its class - one call per record |
+| `sp.Metric` | one value that is not in a record, or one under a device of your own |
+| `sp.Command` | a write from SCADA that the program decides about |
+| `sp.Device` | a device under the node that can go offline by itself |
+| `sp.History` | events kept through an outage, sent afterwards flagged historical |
+| `sp.DayTotals` | daily totals sent on every birth, so SCADA fills the gaps |
+| `FB_MqttClock` | the controller's clock, so the timestamps are real |
 
 ## The pins that matter
 
-**`SPARKPLUG_NODE`**
+**`FB_SparkplugNode`**
 
 | Pin | Set it to |
 | --- | --- |
-| `GROUP` | the site or customer, e.g. `'Plant1'` |
-| `NODE` | this controller, e.g. `'pumps1'`. GROUP + NODE must be unique |
-| `CLIENT` | the `MQTT_CLIENT` it rides on |
-| `PRIMARY_HOST` | the SCADA system's host ID. The node then sends nothing while SCADA is offline, and sends everything again when it comes back |
-| `BORN` | TRUE when SCADA has the full metric list and data is flowing |
-| `CLOCK_SET` | TRUE when the timestamps are real time |
-| `LAST_ERROR` | what it is waiting for, in words |
+| `sGroupId` | the site or customer, e.g. `'Plant1'` |
+| `sEdgeNodeId` | this controller, e.g. `'pumps1'`. Group and node together must be unique |
+| `fbClient` | the `FB_MqttClient` it rides on |
+| `sPrimaryHostId` | the SCADA system's host ID. The node then sends nothing while SCADA is offline, and sends everything again when it comes back. Empty by default: births as soon as it connects |
+| `stReportConfig` | how `Record`'s classes report: intervals, the log deadband, and `bRemoteControl` - whether SCADA may write |
+| `bBorn` | TRUE when SCADA has the full metric list and data is flowing |
+| `bClockSet` | TRUE when the timestamps are real time |
+| `sLastError` | what it is waiting for, in words |
+| `bViewed`, `sDemand` | Live Demand: someone views this node, and which devices they asked for |
 
-**Everything about the connection is `MQTT_CLIENT`'s** - `TRANSPORT`, `HOST`,
-`SECURITY`, the login on `MQTT_CONFIG`, the Wi-Fi on `MQTT_ARDUINO` or
-`NETWORK`:
+**Everything about the connection is the client's** - `eTransport`, `sHost`,
+`eSecurity`, the login in `stSessionConfig`, the Wi-Fi in `stNetworkConfig`
+or node-uio's `NETWORK`:
 
-| `TRANSPORT` | Where | Who brings the network up |
+| `eTransport` | Where | Who brings the network up |
 | --- | --- | --- |
 | `E_MqttTransport.RuntimeTcp` | the OpenPLC Runtime. The default | the computer |
-| `E_MqttTransport.ArduinoWiFi` | a board's Wi-Fi | `NETWORK` (node-uio), or `MQTT_ARDUINO` |
-| `E_MqttTransport.ArduinoEthernet` | a board's Ethernet | `MQTT_CLIENT` with `MQTT_ARDUINO` |
+| `E_MqttTransport.ArduinoWiFi` | a board's Wi-Fi | `NETWORK` (node-uio), or `stNetworkConfig` |
+| `E_MqttTransport.ArduinoEthernet` | a board's Ethernet | the client, from `stNetworkConfig` |
 | `E_MqttTransport.Cellular` | the modem on the GSM HAT | `GSM_MODEM` (modbee-gsm) |
-| `E_MqttTransport.External` | a transport wired to `EXTERNAL_LINK` | whoever made it |
+| `E_MqttTransport.External` | a transport wired to `nExternalLink` | whoever made it |
 
-Moving a site from Wi-Fi to cellular is one pin on `MQTT_CLIENT` and one on
-the clock. `SECURITY` does not change with it: on the Node every TLS setting
-works on Wi-Fi, Ethernet and cellular alike, because the TLS runs on the
-controller rather than in the modem (page 03, "TLS on a board").
+Moving a site from Wi-Fi to cellular is one pin on the client and one on the
+clock. `eSecurity` does not change with it: on the Node every TLS setting works
+on Wi-Fi, Ethernet and cellular alike, because the TLS runs on the controller
+rather than in the modem (page 03, "TLS on a board").
 
-**For a secure link to the site's own broker** use `SECURITY := E_MqttSecurity.TlsPinned`
-with `TRUST_NEW := TRUE` on `MQTT_CLIENT`, and a login on `MQTT_CONFIG`.
-Nothing to install or define: the client learns the broker's key on its first
-connection, keeps it over power cuts (turn on persistent storage), and refuses
-any other key after that. `E_MqttSecurity.TlsVerify` is for a broker somebody signed
-for, such as a cloud platform, and needs that CA in the board package.
+**For a secure link to the site's own broker** use
+`eSecurity := E_MqttSecurity.TlsPinned` with `bTrustNew := TRUE` on the
+client, and a login in `stSessionConfig`. Nothing to install or define: the
+client learns the broker's key on its first connection, keeps it over power
+cuts (turn on persistent storage), and refuses any other key after that.
+`TlsVerify` is for a broker somebody signed for, such as a cloud platform, and
+needs that CA in the board package.
 
 ## One connection for everything
 
 Sparkplug runs over MQTT, and so does everything else a site says. The node is
 a layer on the client's session, not a second connection: one radio, one
 login, one session for Sparkplug, your own MQTT topics and firmware updates
-(`OTA_NODE`, modbee-ota) alike.
+(`FB_OtaNode`, modbee-ota) alike.
 
 What Sparkplug needs of that session the node takes on every CONNECT:
 
 - **the Will is its NDEATH.** A connection carries one Will, so there is no
-  `MQTT_PRESENCE` on a client with a Sparkplug node (it says `E_MqttResult.Refused`):
-  the birth and death certificates are the presence. And one node per client -
-  a second node needs a second `MQTT_CLIENT`.
-- **the session is always clean**, whatever `MQTT_CONFIG` says.
+  `stWillConfig` on a client with a Sparkplug node (the client says
+  `E_MqttResult.Refused`): the birth and death certificates are the presence.
+  And one node per client - a second node needs a second `FB_MqttClient`.
+- **the session is always clean**, whatever `stSessionConfig` says.
 - **the transmit buffer holds the birth certificate.**
 
 A node started on a session that is already up reconnects it once, so the next
-CONNECT carries the NDEATH - every other block on the client sees one reconnect.
-The same happens when the primary host goes offline, which Sparkplug requires.
-A deliberate goodbye from `MQTT_CLIENT` - `CONNECT := FALSE`, or a new broker
-address - publishes the NDEATH too. `ENABLE := FALSE` on the node sends the
-NDEATH and leaves the connection to everything else on it.
+CONNECT carries the NDEATH - every other call on the client sees one
+reconnect. The same happens when the primary host goes offline, which
+Sparkplug requires. A deliberate goodbye from the client - `bConnect := FALSE`,
+or a new broker address - publishes the NDEATH too. `bEnable := FALSE` on the
+node sends the NDEATH and leaves the connection to everything else on it.
 
-**One task.** The client, the node and every `SPARKPLUG_*` block run in the
-network task (page 10). In any other task a block says `E_MqttResult.WrongTask` and
-does nothing.
+**One task.** The client, the node and their methods run in the network task
+(page 10). In any other task a method returns `E_MqttResult.WrongTask` and does
+nothing.
 
 ## A ModBee Node, Wi-Fi now
 
+```st
+VAR
+  clock : FB_MqttClock;
+  mqtt  : FB_MqttClient;
+  sp    : FB_SparkplugNode;
+  stReport : ST_SparkplugReportConfig;
+END_VAR
+
+clock(eTransport := E_MqttTransport.ArduinoWiFi);
+mqtt(eTransport := E_MqttTransport.ArduinoWiFi, sHost := CFG.sScadaBroker,
+     sClientId := 'plant1-pumps');
+stReport.bRemoteControl := CFG.bRemote;
+sp(fbClient := mqtt, sGroupId := 'Plant1', sEdgeNodeId := 'pumps1',
+   sPrimaryHostId := 'scada', stReportConfig := stReport);
+sp.Record(anyData := STS, sSettings := '* = now, db = 0.01');
+sp.Record(anyData := CMD, sSettings := '* = cmd', sPrefix := 'Cmd/');
 ```
-wifi ( ENABLE := TRUE, SSID := CFG.wifiSsid, PASSWORD := CFG.wifiKey );
-clock( TRANSPORT := E_MqttTransport#E_MqttTransport.ArduinoWiFi );
-mqtt ( TRANSPORT := E_MqttTransport#E_MqttTransport.ArduinoWiFi, HOST := CFG.scadaBroker,
-       CLIENT_ID := 'plant1-pumps' );
-sp   ( CLIENT := mqtt, GROUP := 'Plant1', NODE := 'pumps1',
-       PRIMARY_HOST := 'scada' );
-core ( NODE := sp, DATA := STS, DEADBAND := 0.01 );
-sets ( NODE := sp, DATA := CMD, WRITABLE := TRUE );
-```
+
+The Wi-Fi itself is node-uio's `NETWORK` block, joined from the site's
+settings; the client waits for it.
 
 ## The same Node, cellular later
 
-```
-modem( CONNECT := TRUE, APN := CFG.gsmApn );
-clock( TRANSPORT := E_MqttTransport#E_MqttTransport.Cellular );
-mqtt ( TRANSPORT := E_MqttTransport#E_MqttTransport.Cellular, HOST := CFG.scadaBroker,
-       CLIENT_ID := 'plant1-pumps' );
+```st
+clock(eTransport := E_MqttTransport.Cellular);
+mqtt(eTransport := E_MqttTransport.Cellular, sHost := CFG.sScadaBroker,
+     sClientId := 'plant1-pumps');
 ```
 
-Nothing else changes - `sp` and every struct block stay as they were. The
-modbee-gsm library being in the project is what switches cellular on; there is
-no build setting.
+Nothing else changes - `sp` and every `Record` stay as they were, beside a
+`GSM_MODEM` from modbee-gsm. The library being in the project is what switches
+cellular on; there is no build setting.
 
 ## Firmware updates, from SCADA
 
-`OTA_SPARKPLUG` (modbee-ota) puts an `OTA_NODE`'s updates on this node as
-metrics - `Firmware/Version`, `Firmware/State`, `Firmware/Progress`,
-`Firmware/Offered`, `Firmware/Status` - and takes `Node Control/Firmware Accept`,
-`Apply`, `Confirm` and the rest as commands, so an update can be run from the
-SCADA screens. The image itself travels on the OTA node's own topics, over the
-same connection.
+`FB_OtaNode` (modbee-ota) runs firmware updates on the same client, and its
+`Sparkplug` method puts them on this node as metrics - `Firmware/Version`,
+`Firmware/State`, `Firmware/Progress` and the rest - and takes
+`Node Control/Firmware Accept`, `Apply`, `Confirm` and the others as commands,
+so an update can be run from the SCADA screens. The image itself travels on
+the OTA node's own topics, over the same connection.
 
-```
-ota  ( CLIENT := mqtt, BASE := 'plant1/pumps1/ota', VERSION := '1.4.0',
-       AUTO_APPLY := FALSE );
-otasp( NODE := ota, SPARKPLUG := sp );
+```st
+VAR
+  ota : FB_OtaNode;
+END_VAR
+
+ota(fbClient := mqtt, sBaseTopic := 'plant1/pumps1/ota', sVersion := '1.4.0',
+    bAutoApply := FALSE);
+ota.Sparkplug(fbNode := sp);
 ```
 
-Put every MQTT and Sparkplug block in the network task, not the logic task
+Put every MQTT and Sparkplug call in the network task, not the logic task
 (page 10). On an ESP32 opening the socket and the TLS handshake run on a task
 of their own and hold neither; on a board without threads opening the socket
 holds the block's task, over cellular for a second or two.
+
+## A birth carries every metric
+
+The metric set is **closed**: the birth certificate carries every metric the
+node will publish, and a write to an undeclared name is refused rather than
+invented. So call every `Record`, `Metric`, `History` and `DayTotals` from the
+first scan. The node waits up to two seconds for the first declaration before
+it births, and births with everything declared by then.
+
+A metric declared **after** the birth - a `Record` first called later, a
+`Metric` behind an `IF` - makes the node **birth again**, so the host never
+receives data for a name it has no birth for. It costs one NBIRTH; on a
+metered link keep the calls unconditional.
 
 ## How many metrics
 
@@ -133,82 +164,45 @@ holds the block's task, over cellular for a second or two.
 | a board (ModBee Node UIO, any ESP32) | as many as memory holds | as many as memory holds |
 | OpenPLC Runtime | as many as memory holds | as many as memory holds |
 
-Nothing is reserved up front. The node's tables grow with what the blocks
-declare, and its buffers are sized to its own birth certificate when it first
-connects - in PSRAM on a board that has it, so a hundred metrics cost the
-internal RAM nothing. On a board a metric takes 320 bytes there (32 of them
-what each scan reads: one cache line), a STRING 280 more, and a writable one
-80 for the writes waiting on it (624 for a STRING). A `SPARKPLUG_STRUCT` keeps
-12 bytes per declared member
-in internal RAM - what each scan walks - and nothing for a member `SKIP` leaves
-out or the node refuses. A metric memory cannot hold is refused: the declaring
-block's `ERROR` (or `SKIPPED` on a STRUCT) says so, and `SPARKPLUG_NODE`'s
-`LAST_ERROR` reads "out of memory for metrics or devices".
+Nothing is reserved up front. The node's tables grow with what is declared,
+and its buffers are sized to its own birth certificate when it first connects -
+in PSRAM on a board that has it, so a hundred metrics cost the internal RAM
+nothing. On a board a metric takes 320 bytes there (32 of them what each scan
+reads: one cache line), a STRING 280 more, and a writable one 80 for the
+writes waiting on it (624 for a STRING). A `Record` keeps 16 bytes per
+declared member in internal RAM - what each scan walks - and nothing for a
+member no clause covers. A metric memory cannot hold is refused, and the
+node's `sLastError` reads "out of memory for metrics or devices". A node holds
+up to 1024 `Metric`, `Device`, `Command`, `History` and `DayTotals` calls.
 
-A `SPARKPLUG_HOST` likewise tracks as many nodes, and metrics per node, as
-memory holds, on a board and the Runtime alike, and its LAST_ERROR says when
-memory ran out.
+An `FB_SparkplugHost` likewise tracks as many nodes, and metrics per node, as
+memory holds, and its `sLastError` says when memory ran out.
 
-A `SPARKPLUG_STRUCT` takes every value in its STRUCT - nested STRUCTs and
-arrays included.
+## A record, not a block per value
 
-## One struct block, not a block per value
-
-Every value in a `SPARKPLUG_STRUCT` is its own metric, named by its **path** -
-the same names BeeBus uses:
-
-| In the STRUCT | Metric name |
-| --- | --- |
-| `levelMm : REAL` | `levelMm` |
-| `pump : S_PUMP` with `hours : REAL` | `pump.hours` |
-| `spare : ARRAY[1..3] OF REAL` | `spare[1]`, `spare[2]`, `spare[3]` (from 1, whatever the bounds) |
-
-`PREFIX` goes in front of every name: `PREFIX := 'Cmd/'` turns `systemMode`
-into the metric `Cmd/systemMode`. Use it to keep two structs' names apart, or to
-put a group in its own folder at the SCADA end.
-
-**Per-member settings.** A member that needs its own units, deadband or display
-range gets an entry in `SETTINGS`, an `ARRAY OF SPARKPLUG_MEMBER`:
-
-| `SPARKPLUG_MEMBER` | |
-| --- | --- |
-| `NAME` | the member's path, without PREFIX. Case does not matter. An array or nested STRUCT by name (`spare`, `pump`) covers every value in it |
-| `UNITS` | engineering units, sent in the birth (`engUnit`) |
-| `DEADBAND` | its own deadband, in its units. 0 = every change |
-| `DEADBAND_PCT` | its own deadband as a % of the value last sent |
-| `LOW`, `HIGH` | the range a SCADA gauge or trend should show (`engLow`, `engHigh`). Equal = none |
-| `PULSE` | for a command: the PLC puts the member back to 0 this long after a write. `T#0s` = keep it |
-| `SKIP` | TRUE leaves the member out - not a metric at all (an internal counter, the spares). FALSE puts back one an earlier entry left out, with this entry's numbers. Read once, when the metrics are declared |
-
-```
-VAR
-  sp      : SPARKPLUG_NODE;
-  core    : SPARKPLUG_STRUCT;
-  coreSet : ARRAY[1..3] OF SPARKPLUG_MEMBER := [
-              (NAME := 'levelMm', UNITS := 'mm', DEADBAND := 10.0,
-               LOW := 0.0, HIGH := 3000.0),
-              (NAME := 'pressureBar', UNITS := 'bar', DEADBAND := 0.02),
-              (NAME := 'pumpHours', UNITS := 'h', DEADBAND := 0.1)];
-END_VAR
-
-coreSet[1].DEADBAND := CFG.levelDeadband;   // a setting may follow CFG
-core(NODE := sp, DATA := CORE, SETTINGS := coreSet);
+```st
+sp.Record(anyData := PUMP1, sPrefix := 'pump1/',
+          sSettings := 'sts = now; tot = log, db = 0.1, u = h; cmd = cmd, pulse = 500',
+          nMetricCnt => nPump1Metrics, nBadClause => nPump1Bad);
 ```
 
-- A member with an entry takes **its** deadband; one without takes the block's
-  `DEADBAND`/`DEADBAND_PCT` (REAL and LREAL members only).
-- Entries apply in order: one for `spare` and then one for `spare[2]` gives
-  `spare[2]` the second's settings and the rest of the array the first's.
-  `SKIP` too: `[(NAME := 'sts', SKIP := TRUE), (NAME := 'sts.value',
-  SKIP := FALSE, DEADBAND := 10.0)]` leaves out all of `sts` but `sts.value`,
-  which takes the second entry's deadband.
-- The settings are read again whenever they change, so they may be written from
-  CFG on every scan. Units and ranges go out in the birth, so a change to them
-  shows at the next birth.
-- `BAD_SETTING` names the first entry that could not be used, counting from 1 -
-  a `NAME` that is no member, a negative number, a deadband on a BOOL or STRING -
-  and `ERROR` stays on until it is fixed. The other entries still apply.
-- A TIME member says `ms` by itself.
+Every value in the STRUCT that a clause covers is its own metric, named by its
+**path** after `sPrefix` - `pump1/sts.running`, `pump1/tot.runHours`,
+`pump1/cmd.start`. Each clause gives its members a **class**: when they go,
+whether on a device, whether SCADA may write them:
+
+| Class | Sends | Writable |
+| --- | --- | --- |
+| `now` | at once, always | no |
+| `cmd` | at once, always | while `stReportConfig.bRemoteControl` |
+| `view` | at once while someone views the node (Live Demand) | no |
+| `log` | what moved past its deadband, every `tLogInterval` (`T#15m`); every `tLiveInterval` while viewed | no |
+| `live` | on device `live`: what moved, every `tLiveInterval` (`T#30s`), while demanded | no |
+| `set:<page>` | on device `cfg-<page>`: at once while demanded | while `bRemoteControl` |
+
+and options - `db=` and `pct=` deadbands, `u=` units, `lo=`/`hi=` ranges,
+`pulse=` for a momentary command. [15 Record](15-sparkplug-record.md) is the
+whole grammar.
 
 ## Report by exception, and deadbands
 
@@ -217,93 +211,123 @@ by a few millimetres would still send every scan - over a metered cellular link
 that is most of the bill. A deadband says how much a value must move before it
 is worth a message:
 
-| Block | Pins | Applies to |
+| Where | How | Applies to |
 | --- | --- | --- |
-| `SPARKPLUG_STRUCT` | `DEADBAND` (in the members' units), `DEADBAND_PCT` (% of the value) | REAL and LREAL members only |
-| `SPARKPLUG_METRIC` | `DEADBAND` (in VALUE's units) | a numeric VALUE |
+| a `Record` clause | `db=` (in the member's units), `pct=` (% of the value) | numbers |
+| `stReportConfig.fDeadbandPct` | the log class's % where a clause gives no `pct=` | REAL and LREAL members of the log class |
+| `sp.Metric` | `fDeadband` (in `anyValue`'s units) | a numeric value |
 
 - The move is measured from the value **last sent**, not the last scan, so a
   slow drift still adds up and is reported.
-- The block's `DEADBAND` covers REAL and LREAL members only. BOOLs and STRINGs
-  always report every change - a deadband would freeze a bit, a FAULT
-  included. An integer, or an analog that needs its own number, gets a
-  `SETTINGS` entry.
-- A value SCADA **wrote** is always reported back, whatever the deadband - SCADA
-  watches for that echo to know the write took.
-- With both `DEADBAND` and `DEADBAND_PCT` set, a move must clear both.
-- A birth, and a STRUCT's `PERIOD` heartbeat, always carry every value as it
-  is.
+- BOOLs and STRINGs always report every change - a deadband would freeze a
+  bit, a FAULT included. A clause that names a BOOL itself with `db=` is an
+  error (`nBadClause`); a wider path simply reports its BOOLs on change.
+- A value SCADA **wrote** is always reported back, whatever the deadband -
+  SCADA watches for that echo to know the write took.
+- With both `db=` and `pct=` set, a move must clear both.
+- A birth always carries every value as it is.
 
-## When a STRUCT sends
+## One message a scan
 
-| `MODE` | Sends | Its members otherwise |
-| --- | --- | --- |
-| `E_MqttTrigger.OnChange` | what moved, past its deadband; all of them every `PERIOD` (if set) | go with any report |
-| `E_MqttTrigger.OnInterval` | all of them, every `PERIOD` | **held**: never with other blocks' reports |
-| `E_MqttTrigger.OnRequest` | all of them on `REQ`'s rising edge | **held** |
-| `E_MqttTrigger.ChangedEvery` | what moved past its deadband since it was last sent, together, every `PERIOD` on the node's clock (every set with the same `PERIOD` in one message); nothing when none moved | **held** |
-
-- "All of them" is the block's own members, never the rest of the node.
-- **One message a scan, for every block.** A STRUCT (or a `SPARKPLUG_METRIC`)
-  does not send: it marks what is to go and asks, and `SPARKPLUG_NODE` sends
-  ONE NDATA - and one DDATA for each online device with something to say - on
-  its next scan, carrying everything on the node that moved. The values are
-  the ones the blocks set; the message's timestamp is when the node sends it.
-  A STRUCT's `SENT` counts the message on the scan after it asked, and its
-  `ERROR`/`E_MqttResult.QueueFull` then says one could not be queued (it asks again).
-- The **birth** carries every member: a device coming online sends the whole
-  set in its DBIRTH, and `PERIOD` counts from that birth. `ENABLE` going TRUE
-  sends an `E_MqttTrigger.OnInterval` set at once, and an `E_MqttTrigger.ChangedEvery` set's
-  changes at once. Nothing is sent for a device that is offline.
-- **A held set switched off** (`ENABLE` FALSE) still keeps its values current
-  in the node, so a birth carries them as they are; nothing is sent for it.
-- **`E_MqttTrigger.ChangedEvery` is for a metered link.** A logged value checked every
-  15 minutes goes only when it has moved past its deadband; one that sits still
-  costs nothing. The same mode with a short `PERIOD` (10 s) and `ENABLE` wired
-  to "someone is viewing" streams a screen's values without sending the ones
-  that did not move. Alarms that must reach SCADA at once stay `E_MqttTrigger.OnChange`.
+A method does not send: it marks what is to go and asks, and the node sends
+**one** NDATA - and one DDATA for each online device with something to say -
+on its next scan, carrying everything that moved, however many calls asked.
+The values are the ones the calls set; the message's timestamp is when the
+node sends it. The interval classes (`log`, `live`) look on the node's clock,
+so every record with the same interval goes in the same message. Births,
+deaths and `History`'s events go when they happen.
 
 ## Writes from SCADA
 
-- `WRITABLE := TRUE` on a STRUCT lets SCADA write its members. The value lands
-  in the STRUCT, and the next message reports it back - that is how SCADA sees
-  the write took.
-- Under a `DEVICE` the writes are DCMDs instead of NCMDs, and they land the
-  same way.
-- **No write is lost.** Every write to a metric waits its turn: the block
-  takes one a scan, oldest first, so SCADA writing 1 and then 0 in one go
-  leaves the member 1 for a scan and then 0, and the program sees both. Up to
-  four writes wait per metric. A fifth that arrives before the program has
-  taken any drops the oldest - the newest is always kept - and is counted on
-  the block's `LOST` output. `LOST` above 0 means SCADA is writing that metric
-  faster than the program scans.
-- **Commands are a writable struct too**, each member its own metric, written
-  one at a time:
-
-  ```
-  cmds(NODE := sp, DATA := CMD.remote, PREFIX := 'Cmd/', WRITABLE := TRUE,
-       SETTINGS := cmdSet);
-  ```
-
-  - A **held** signal (a run request) and a **mode** stay as written. With
-    `UT_CMD` a mode acts when it changes; to ask for the same mode again, write
-    -1 first.
-  - A **momentary** command - a bit that acts on its rising edge, as `UT_CMD`'s
-    command bits do - must go back to 0 before the next one. Either SCADA
-    writes the bit and then 0 (both are seen, however close together), or the
-    member gets `PULSE` in `SETTINGS` (`T#500ms`, longer than the slowest task
-    that reads it): SCADA writes the bits once, the PLC clears them, and
-    writing the same command again acts again.
-- For a write the program must decide about by itself, declare it with
-  `SPARKPLUG_METRIC` (`WRITABLE := TRUE`) and watch it with
-  `SPARKPLUG_COMMAND`, called **before** the metric block. Set
-  `SPARKPLUG_COMMAND.DEVICE` when the metric is under a device.
+- A `cmd` or `set:<page>` member is written by SCADA while
+  `stReportConfig.bRemoteControl` is TRUE. The value lands in the STRUCT, and
+  the next message reports it back - that is how SCADA sees the write took.
+- **Remote control off**: a write is dropped at once and the member reported
+  back unchanged, so SCADA sees the write did not take. It is never kept:
+  `bRemoteControl` coming back on does not apply an old command.
+- **No write is lost.** Every write to a metric waits its turn: one is taken a
+  scan, oldest first, so SCADA writing 1 and then 0 in one go leaves the
+  member 1 for a scan and then 0, and the program sees both. Up to four writes
+  wait per metric; a fifth that arrives before the program has taken any drops
+  the oldest - the newest is always kept.
+- A **held** signal (a run request) and a **mode** stay as written. A
+  **momentary** command - a bit that acts on its rising edge - must go back to
+  0 before the next one: SCADA writes the bit and then 0, or the clause gives
+  `pulse=500` (milliseconds, longer than the slowest task that reads it) and
+  the PLC clears it. Then writing the same command again acts again.
 - A write to a metric that is not writable, does not exist, or is the wrong
-  type is refused and counted (`REFUSED`), never applied.
-- `WRITABLE` may go FALSE while running - remote control switched off. A write
-  that arrives then is dropped at once (counted on a STRUCT's `REFUSED`) and
-  the member is reported back unchanged, so SCADA sees the write did not take.
-  It is never kept: `WRITABLE` coming back on does not apply an old command.
+  type is refused by the node, never applied.
+
+### A write the program decides about
+
+```st
+sp.Command(sMetricName := 'Cmd/reset', bAck := bResetTaken,
+           bPending => bResetPending, bValue => bResetValue);
+bResetTaken := bResetPending AND bResetAllowed;
+sp.Metric(anyValue := bResetCmd, sMetricName := 'Cmd/reset', bWritable := TRUE);
+```
+
+`Metric` with `bWritable` declares a writable metric and writes the host's
+value into `anyValue`. `Command`, called **before** it, shows the oldest write
+waiting (`bPending`, with `fValue`, `bValue` and `sText`) without taking it, so
+a rung can look before it decides; a rising edge of `bAck` takes it, so two
+rungs cannot both act on one command. Give `sDeviceId` on both when the metric
+is under a device.
+
+## Devices of your own
+
+```st
+sp.Device(sDeviceId := 'skid2', bOnline := bSkid2Healthy, bDeviceOnline => bSkid2Born);
+sp.Metric(anyValue := rSkid2Flow, sMetricName := 'flow', sDeviceId := 'skid2',
+          sUnits := 'm3/h', fDeadband := 0.5);
+```
+
+A device is something that can be lost while the node is fine - a pump skid, a
+remote I/O drop. `Device` acts on a **change** of `bOnline` (a DBIRTH, or a
+DDEATH), never every scan, and births the device again after every node birth.
+Its metrics are `Metric` calls with its `sDeviceId`; a `Metric` naming a device
+no `Device` call made adds it and brings it online itself.
+
+`live` and every `cfg-...` name are the node's own, brought on and off line by
+Live Demand: `Device` and `Metric` refuse them.
+
+## Live Demand
+
+A screen that shows a node's detail wants it fast while somebody is looking,
+and not at all otherwise - on a metered link the difference is most of the
+bill. Live Demand is that contract between the node and the host.
+
+**The offer.** A record with a `view`, `log`, `live` or `set:` class makes the
+node declare one more metric, `Node Control/Live Demand`, a String whose value
+says what can be demanded:
+
+```
+{"devices":["live","cfg-pump"],"required":false}
+```
+
+**The demand.** A host that opens the node's screen writes it:
+
+```
+{"demand":true,"leaseS":120,"devices":["live","cfg-pump"]}
+```
+
+For `leaseS` seconds (120 when missing, or outside 1 to 86399) the node is
+**viewed**: `bViewed` is TRUE, the `view` class sends its changes, the `log`
+class goes every `tLiveInterval` instead of every `tLogInterval`, and every
+device listed is born (DBIRTH) and sends; a device not listed dies (DDEATH).
+`sDemand` lists the devices demanded now, `'live,cfg-pump'`.
+
+**The lease.** The host writes again before the lease ends to keep it - each
+write replaces the demand and starts the lease again. `{"demand":false}` ends
+it at once. When the lease runs out with no write, the node stops by itself:
+a host that crashed with the screen open costs two minutes, not a month.
+
+- A write without `"demand"`, or longer than 200 characters, is ignored.
+- After every write the node puts the offer back, so the metric always says
+  what can be demanded.
+- A device in the demand that the offer does not name is ignored.
+- `bViewed` and `sDemand` are outputs the program may use too - a panel lamp
+  "SCADA is watching", or a faster scan of a sensor while someone looks.
 
 ## Types on the wire
 
@@ -312,139 +336,146 @@ Int16, DINT is Int32, REAL is Float, STRING is String, and so on.
 
 A **TIME** goes as an **Int64 of milliseconds**, both ways. Sparkplug has no
 duration type. `T#10s` is reported as 10000, and SCADA writing 90000 sets
-`T#90s`. A negative write is refused. A STRUCT member that is a TIME says
-`ms` in the birth by itself.
+`T#90s`. A negative write is refused. A TIME member says `ms` in the birth by
+itself.
 
-An array or a nested STRUCT inside a `SPARKPLUG_STRUCT` is not one value: each
-of its values is a metric of its own (see "One struct block"). An enumeration
-goes as the unsigned integer it is stored as (UInt8 / UInt16 / UInt32 by its
-size), both ways: the value's code, so modes and a protection's response are
-visible and writable from the host. DATE and TIME_OF_DAY have no Sparkplug
-type: a STRUCT member of one of those is refused and counted (`SKIPPED`), never
-left out quietly.
+An array or a nested STRUCT in a record is not one value: each of its values
+is a metric of its own (page 15). An enumeration goes as the unsigned integer
+it is stored as (UInt8 / UInt16 / UInt32 by its size), both ways: the value's
+code, so modes are visible and writable from the host. DATE and TIME_OF_DAY
+have no Sparkplug type: a record leaves such a member out, and a clause that
+covers nothing else is reported on `nBadClause`.
 
 ## Time
 
-`MQTT_CLOCK` sets the controller's clock from the network: NTP over Wi-Fi or
+`FB_MqttClock` sets the controller's clock from the network: NTP over Wi-Fi or
 Ethernet, the mobile network's own time over cellular, or a time wired to
-`UTC_IN` (an RTC, `GSM_TIME`). Once it is set, Sparkplug's timestamps and
-`CURRENT_DT` are real time, and `SYNCED` and the node's `CLOCK_SET` are TRUE.
+`dtUtcIn` (an RTC, `GSM_TIME`). Once it is set, Sparkplug's timestamps and
+`CURRENT_DT` are real time, and the clock's `bSynced` and the node's
+`bClockSet` are TRUE.
 
 Until then a board counts from when it started, so its timestamps are dates in
 January 1970 - plainly not real. Set the SCADA historian to stamp a value with
 the time it arrived when its timestamp is that old. The data is still good;
 only the time is missing.
 
-On the Runtime the computer keeps the time, and `MQTT_CLOCK` only reports it.
+On the Runtime the computer keeps the time, and `FB_MqttClock` only reports it.
 
 ## Changing settings while it runs
 
-`BROKER`, `PORT`, `SECURITY`, `TRANSPORT`, `USER`, `PASSWORD`, `GROUP`, `NODE`,
-`PRIMARY_HOST`, `PROTOCOL` and `KEEP_ALIVE` are read every scan. A change from
-an HMI settings page needs no restart: the node leaves on the old settings (the
-host sees its NDEATH), and births again on the new ones with the next bdSeq.
-Every metric declaration, alias and device stays, so nothing else in the
-program notices. The medium is rebuilt only when what it is made from changed.
+The client's `sHost`, `nPort`, `eSecurity`, `eTransport`, `eProtocol`, login and
+keep-alive, and the node's `sGroupId`, `sEdgeNodeId` and `sPrimaryHostId`, are
+read every scan. A change from an HMI settings page needs no restart: the node
+leaves on the old settings (the host sees its NDEATH), and births again on the
+new ones with the next bdSeq. Every declaration, alias and device stays, so
+nothing else in the program notices. The medium is rebuilt only when what it is
+made from changed.
 
-A pinned key stays pinned: a different broker is refused until `TRUST_NEW` is
+A pinned key stays pinned: a different broker is refused until `bTrustNew` is
 switched off and on, as for a replaced one.
 
-## Outages: `SPARKPLUG_HISTORY`
+## Outages: `sp.History`
 
 Sparkplug has no store-and-forward of its own. While the node is not born - no
 coverage, the broker away, the host offline - nothing is sent, and after the
 next birth the host sees only the values as they are then. What happened in
 between, and when, is gone.
 
-`SPARKPLUG_HISTORY` keeps **events** while the node cannot publish and sends
-them after it births again, with Sparkplug's `is_historical` flag: the host
-files each at its own time and does not overwrite the live tag with it.
+`History` keeps **events** while the node cannot publish and sends them after
+it births again, with Sparkplug's `is_historical` flag: the host files each at
+its own time and does not overwrite the live tag with it.
 
-| Pin | | |
+```st
+sp.History(bAdd := bPumpStopped, nSource := 1, nCode := nPump1StopCode, fValue := rLevel);
+sp.History(bAdd := bAlarmRaised, nSource := 100 + nAlarmNo, nCode := 1, fValue := 0.0);
+```
+
+| Parameter | | |
 | --- | --- | --- |
-| `NODE` | in-out | the node |
-| `ADD` | in, BOOL | TRUE records one event on this call - wire a one-scan pulse |
-| `SOURCE` | in, UINT | what it is about: a pump, an alarm number, a zone |
-| `CODE` | in, UINT | what happened: a status, fault or stop code |
-| `VALUE` | in, REAL | a number that goes with it |
-| `NAME` | in, STRING(24) | the metrics' prefix, `'Event'` |
-| `DEPTH` | in, UINT | events kept while away, `256`. Fixed at the first call |
-| `BATCH` | in, UINT | events per message when catching up, `20` |
-| `PERIOD` | in, TIME | between catch-up messages, `T#1s` |
-| `STORED` | out, UINT | events waiting |
-| `LOST` | out, UDINT | dropped because the buffer was full (the oldest go) |
-| `SENT` | out, UDINT | sent since the program started |
-| `REPLAYING` | out, BOOL | catching up |
-| `ERROR`, `STATUS` | out | no memory, or the metrics could not be declared |
-
-```
-history(NODE := sp, ADD := pumpStopped, SOURCE := 1, CODE := pump1.StopCode, VALUE := level);
-history(NODE := sp, ADD := alarmRaised, SOURCE := 100 + alarmNo, CODE := 1, VALUE := 0.0);
-```
+| `bAdd` | BOOL | TRUE records one event on this call - wire a one-scan pulse |
+| `nSource` | UINT | what it is about: a pump, an alarm number, a zone |
+| `nCode` | UINT | what happened: a status, fault or stop code |
+| `fValue` | REAL | a number that goes with it |
+| `sMetricPrefix` | STRING(24) | the metrics' prefix, `'Event'`. Calls with one prefix share one buffer |
+| `nDepth` | UINT | events kept while away, `256`. Fixed at the first call |
+| `nBatch` | UINT | events per message when catching up, `20`, at most 64. Fixed at the first call |
+| `tPeriod` | TIME | between catch-up messages, `T#1s` |
+| `nStoredCnt` | out | events waiting |
+| `nLostCnt` | out | dropped because the buffer was full (the oldest go) |
+| `nSentCnt` | out | sent since the program started |
+| `bReplaying` | out | catching up |
 
 Each event is one row of four metrics with the same timestamp:
 `Event/source`, `Event/code`, `Event/value` and `Event/seq` (a count from 1
 since the program started, so the host sees any gap), plus `Event/lost`. While
 the node is born an event goes at once as live data; recorded while it is not,
-it waits and goes historical, oldest first, `BATCH` at a time every `PERIOD`.
+it waits and goes historical, oldest first, `nBatch` at a time every `tPeriod`.
 
 - **Events, not analogs.** A level that moves every scan would fill any
   buffer. Keep the reasons, stops, alarms and day totals; counters that only go
   up reconcile the rest by themselves.
 - **256 events** is about a week of a normal site, 6 KB of PSRAM (24 bytes an
-  event), allocated on the first scan. Nothing of the internal heap but the
-  block's own few bytes.
+  event), allocated on the first call.
 - **Not retained.** A power cut during an outage loses the waiting events; the
   counters and the day totals still reconcile.
 - **Sent at least once.** Data messages are QoS 0 by the specification, so an
   event is forgotten only after the node has stayed born for half a second on
-  the same birth; a link that drops in that moment sends the batch again. The
-  host may see an event twice (same timestamp, same seq), never not at all.
-- **The clock.** An event recorded before `MQTT_CLOCK` has set the clock is
+  the same **node** birth; a device's birth - Live Demand's, often - does not
+  count. A link that drops in that moment sends the batch again. The host may
+  see an event twice (same timestamp, same seq), never not at all.
+- **The clock.** An event recorded before `FB_MqttClock` has set the clock is
   kept against the board's uptime and placed on the clock once it is set.
   Events wait for the clock up to five minutes after a birth, then go with
   what they have.
 
-## Daily totals: `SPARKPLUG_DAY_TOTALS`
+## Daily totals: `sp.DayTotals`
 
-| Pin | | |
+```st
+VAR RETAIN
+  PUMPED_DAYS : ARRAY[0..31] OF ST_SparkplugDay;
+END_VAR
+
+sp.DayTotals(anyDays := PUMPED_DAYS, sMetricName := 'pumpedDay',
+             fValue := rPumpedToday, dtClock := dtLocalNow);
+```
+
+| Parameter | | |
 | --- | --- | --- |
-| `NODE` | in-out | the node |
-| `TABLE` | in-out, ARRAY OF SPARKPLUG_DAY | `DAY : DATE`, `TOTAL : REAL`. Retain it. Row 0 is today; the rest are closed days, newest first |
-| `NAME` | in, STRING(32) | the metric, `'pumpedDay'` |
-| `VALUE` | in, REAL | today's running total, from your totaliser |
-| `CLOCK` | in, DT | local date and time - the clock your totaliser rolls its day on |
-| `DAYS` | out, INT | closed days held |
-| `SENT` | out, UDINT | day values sent |
-| `ERROR`, `STATUS` | out | the metric could not be declared, or `TABLE` has fewer than two rows |
+| `anyDays` | ARRAY OF ST_SparkplugDay | `dDay : DATE`, `fTotal : REAL`, two rows or more. **Retain it.** The first row is today; the rest are closed days, newest first |
+| `sMetricName` | STRING(32) | the metric |
+| `fValue` | REAL | today's running total, from your totaliser |
+| `dtClock` | DT | local date and time - the clock your totaliser rolls its day on |
+| `tSaveEvery` | TIME | how often today's total is written into the table, `T#1h`; `T#0s` every call |
+| `nDays` | out | closed days held |
+| `nSentCnt` | out | day values sent |
 
-```
-VAR_GLOBAL RETAIN  PUMPED_DAYS : ARRAY[0..31] OF SPARKPLUG_DAY;  END_VAR
-days(NODE := sp, TABLE := PUMPED_DAYS, NAME := 'pumpedDay', VALUE := pumped.today, CLOCK := localNow);
-```
-
-When the date on `CLOCK` changes the day just ended is closed - its total is
-the value `VALUE` had on the scan before - and moves into the table as the
+When the date on `dtClock` changes the day just ended is closed - its total is
+the value `fValue` had on the call before - and moves into the table as the
 newest closed day; the oldest falls off. A day that ends during a power cut is
-closed when the PLC comes back, from the retained table. Nothing happens while
-the clock is not set.
+closed when the PLC comes back, from the total last saved. Nothing happens
+while the clock is not set.
 
-**On every birth every closed day goes as a historical value** of `NAME`,
-stamped 00:00 of its date (the date as `CLOCK` has it, written as UTC: read
-the date, not the hour). So a host that missed days while the link was down
-fills them in, and sending a day twice lands on the same timestamp. The live
-value of `NAME` is the last closed day.
+**On every node birth every closed day goes as a historical value** of
+`sMetricName`, stamped 00:00 of its date (the date as `dtClock` has it, written
+as UTC: read the date, not the hour). So a host that missed days while the link
+was down fills them in, and sending a day twice lands on the same timestamp. A
+device's birth does not send them. The live value of `sMetricName` is the last
+closed day.
 
 ## When it does not report
 
-| `LAST_ERROR` | What it means |
+| `sLastError` | What it means |
 | --- | --- |
-| `waiting for Wi-Fi - is NETWORK enabled?` | the radio is not joined yet |
-| `no STATE from primary host 'scada'` | SCADA has never connected to this broker - or `PRIMARY_HOST` is spelt differently from SCADA's host ID |
+| `joining the WiFi network` (on the client) | the radio is not joined yet |
+| `set SSID on MQTT_ARDUINO` (on the client) | no `stNetworkConfig.sSsid` and no node-uio `NETWORK` has joined the radio (the message still names the 0.1 block) |
+| `no STATE from primary host 'scada'` | SCADA has never connected to this broker - or `sPrimaryHostId` is spelt differently from SCADA's host ID |
 | `offline STATE from primary host 'scada'` | SCADA is down. The node waits, as it should |
-| `E_MqttTransport.Cellular needs the modbee-gsm library and a GSM_MODEM` | add the GSM library and a `GSM_MODEM` |
-| `a board needs the CA in MQTT_CA_CERT_PEM` | `E_MqttSecurity.TlsVerify` with no CA defined: use `E_MqttSecurity.TlsPinned` with `TRUST_NEW` for the site's own broker, or add the CA to the board package |
-| `no pinned key yet - set TRUST_NEW once to learn it` | `E_MqttSecurity.TlsPinned` on a node that has never connected |
-| `on a board, set TRANSPORT - E_MqttTransport.ArduinoWiFi, ...` | `TRANSPORT` was left at the Runtime's default |
+| `Record PUMP1: clause 3` | that record's point list: clause 3 cannot be used. `nBadClause` on the call says the same (page 15) |
+| `Record PUMP1: tLiveInterval is T#0s` | a `log` or `live` class with no interval to go on |
+| `another layer owns the client's Will` | an `FB_SparkplugHost` or a second node on the same client |
+| `out of memory for metrics or devices` | memory ran out for a declaration |
+| `E_MQTTTRANSPORT::CELLULAR needs the modbee-gsm library and a GSM_MODEM` (on the client) | add the GSM library and a `GSM_MODEM` |
+| `a board needs the CA in MQTT_CA_CERT_PEM` (on the client) | `TlsVerify` with no CA defined: use `TlsPinned` with `bTrustNew` for the site's own broker, or add the CA to the board package |
+| `no pinned key yet - set bTrustNew once to learn it` (on the client) | `TlsPinned` on a client that has never connected |
 
-**Next:** [07 Block reference](07-block-reference.md) for every pin.
+**Next:** [15 Record](15-sparkplug-record.md), the point list in full.

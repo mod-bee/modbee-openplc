@@ -1,44 +1,50 @@
 (* SETS THE CONTROLLER'S CLOCK FROM THE NETWORK - NTP over Wi-Fi or Ethernet,
 the mobile network's own time over cellular - so Sparkplug timestamps and
-CURRENT_DT are real time. One per controller.
+CURRENT_DT are real time. One per controller, called every scan in the
+network task. Standalone: it takes no FB_MqttClient.
 
-eTransport  where the time comes from - the same list as FB_MqttClient and
-           FB_SparkplugNode, so a site that moves from Wi-Fi to cellular changes
-           one pin on each:
-             E_MqttTransport.RuntimeTcp       the Runtime's own clock, which its operating
-                                    system already keeps. Nothing is set.
-             E_MqttTransport.ArduinoWiFi      NTP from sServer, through the board's IP
-             E_MqttTransport.ArduinoEthernet  stack (ESP32). NETWORK or FB_MqttClient
-                                    brings the network up; this waits for it.
-             E_MqttTransport.Cellular          the mobile network's time (NITZ) from the
-                                    modem a modbee-gsm GSM_MODEM runs. Costs no
-                                    data. Not every network sends it.
-             E_MqttTransport.External     dtUtcIn, when bUtcInValid - an RTC,
-                                    GSM_TIME.UTC, a time SCADA wrote.
-sServer     the NTP server. Default 'pool.ntp.org'; a site with its own (a
+eTransport  where the time comes from - the same list as FB_MqttClient, so a
+           site that moves from Wi-Fi to cellular changes one pin on each:
+             E_MqttTransport.RuntimeTcp       the Runtime's own clock, which
+                                              its operating system keeps.
+                                              Nothing is set
+             E_MqttTransport.ArduinoWiFi      NTP from sServer, through the
+             E_MqttTransport.ArduinoEthernet  board's IP stack (ESP32).
+                                              node-uio's NETWORK or the
+                                              FB_MqttClient brings the
+                                              network up; this waits for it
+             E_MqttTransport.Cellular         the mobile network's time
+                                              (NITZ) from the modem a
+                                              modbee-gsm GSM_MODEM runs.
+                                              Costs no data. Not every
+                                              network sends it
+             E_MqttTransport.External         dtUtcIn, when bUtcInValid - an
+                                              RTC, GSM_TIME's UTC, a time a
+                                              SCADA wrote
+sServer     the NTP server. 'pool.ntp.org' by default; a site with its own (a
            router, a SCADA server) should use it.
-tRefresh    how often to ask again. Default T#1h - a board's crystal drifts a
-           second or two a day, so hourly is plenty.
+tRefresh    how often to ask again. T#1h by default - a board's crystal
+           drifts a second or two a day, so hourly is plenty.
 dtUtcIn     E_MqttTransport.External: the time to set, in UTC.
-bUtcInValid E_MqttTransport.External: dtUtcIn is good. Its rising edge sets the
-           clock, and again every tRefresh while it stays TRUE.
+bUtcInValid E_MqttTransport.External: dtUtcIn is good. Its rising edge sets
+           the clock, and again every tRefresh while it stays TRUE.
 bEnable     FALSE stops asking. The clock keeps the time it has.
 
 bSynced     the clock holds real time - a date after 2024. Exactly what
-           FB_SparkplugNode.bClockSet reports.
+           FB_SparkplugNode's bClockSet reports.
 dtUtc       the time now, in UTC. DT#1970-01-01 while not bSynced.
-tAge        how long since the clock was last set. Grows while the network is
-           away - the clock keeps running on its own crystal meanwhile.
-bError      the transport cannot give the time on this target, or NTP has not
-           answered for a minute after starting.
+tAge        how long since the clock was last set. Grows while the network
+           is away - the clock keeps running on its own crystal meanwhile.
+bError      the transport cannot give the time on this target, or NTP has
+           not answered for a minute after starting.
 sLastError  why, in words. Empty when fine.
 
 ---
 
-  wifi( ENABLE := TRUE, SSID := ..., PASSWORD := ... );    NETWORK, node-uio
-  ntp ( eTransport := E_MqttTransport.ArduinoWiFi );
-  mqtt( eTransport := E_MqttTransport.ArduinoWiFi, ... );
-  sp  ( fbClient := mqtt, ... );                            stamps with it
+  wifi ( ENABLE := TRUE, SSID := ..., PASSWORD := ... );   NETWORK, node-uio
+  ntp  ( eTransport := E_MqttTransport.ArduinoWiFi );
+  mqtt ( eTransport := E_MqttTransport.ArduinoWiFi, sHost := ..., ... );
+  sp   ( fbClient := mqtt, ... );                          stamps with it
 
 ONE CLOCK, AND EVERYTHING USES IT. This sets the board's system clock, so
 FB_SparkplugNode's timestamps, CURRENT_DT and anything else that asks for the
@@ -55,8 +61,8 @@ owns the clock there, and a PLC program stepping it under every other program
 on the machine would be a fault, not a feature. bSynced still reports it.
 
 NOTHING HERE BLOCKS. NTP runs in the background on the board's network stack,
-and the modem is asked through GSM_MODEM's queue. Put this in the network task
-beside the MQTT blocks. *)
+and the modem is asked through GSM_MODEM's queue. Put this in the network
+task beside the MQTT blocks. *)
 
 FUNCTION_BLOCK FB_MqttClock
   VAR_INPUT
@@ -211,7 +217,7 @@ void loop()
             gsmplc::TryHold hold;
             if (hold.owned()) {
                 if (!gsmplc::isOpen()) {
-                    sLastError = "waiting for GSM_MODEM";
+                    sLastError = "waiting for the modem block";
                 } else {
                     GsmDevice& gsm = gsmplc::device();
                     if (gsm.isRegistered()) {
@@ -256,7 +262,7 @@ void loop()
             bError = false;
 #else
             bError = true;
-            sLastError = "E_MQTTTRANSPORT::CELLULAR needs the modbee-gsm library and a GSM_MODEM";
+            sLastError = "E_MqttTransport.Cellular needs a modbee-gsm modem block";
 #endif
         } else if (link == E_MQTTTRANSPORT::EXTERNAL) {
             // --- FROM THE PINS: an RTC, GSM_TIME, a value SCADA wrote ---
