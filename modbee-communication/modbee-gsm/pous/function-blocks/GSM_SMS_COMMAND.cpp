@@ -1,0 +1,366 @@
+(* Text-message commands: a message from an allowed number that says one of
+COMMAND's words sets Q, and CMD says which - for whatever the program wires it
+to: a pump start, an irrigation stop, a modem restart, a controller reboot.
+One block for a whole list (or a list of one), beside the one GSM_SMS_RECEIVE
+that reads the SIM.
+
+INBOX         the GSM_SMS_RECEIVE. Call it first in the scan, then every
+              GSM_SMS_COMMAND: they all look at the message it took this scan.
+ENABLE        FALSE ignores every message (and counts nothing).
+COMMAND       the commands, separated by commas: 'REBOOT, START PUMP, STOP'.
+              Upper or lower case, extra spaces: all the same. The first one a
+              message starts with is the one taken.
+ALLOWED       who may send it: phone numbers separated by commas or
+              semicolons, e.g. '+64 21 123 4567, 021 987 6543' (spaces inside a
+              number are fine). Matched on their
+              last 8 digits, so +64 21 ... and 021 ... are the same number.
+              A sender that is a NAME or a short code (a provider's portal,
+              e.g. 'PTT NZ' or '2001') is written as it arrives and matched
+              whole, upper or lower case. Not sure what a portal sends as?
+              Send a command: LAST_REFUSED shows it.
+              A name is never answered (it cannot be texted back).
+              Empty: nobody (the safe default). '*': anybody - only with a PIN.
+PIN           0 or less: no PIN. Above 0: the message must start with it,
+              e.g. '4821 REBOOT'.
+PULSE         how long Q stays TRUE. T#0s: one scan.
+REPLY         0 never answer; 1 answer an accepted command (the default:
+              'OK REBOOT'); 2 also say why a message was refused. A refusal
+              never answers a number that is not on ALLOWED. Use 0 with a SIM
+              that cannot send texts (IoT plans that take them only from the
+              provider's portal), or every answer shows as ERROR.
+REPLY_TEXT    the answer instead of 'OK <command>', e.g. a status line the
+              program builds. Empty: 'OK <command> <argument>'.
+MAX_PER_HOUR  the most it acts in an hour; past it a message is refused. 0: no
+              limit. A command that reboots or starts a pump wants a small one.
+
+Q             TRUE for PULSE when an allowed message said one of COMMAND.
+CMD           which one, from 1 in COMMAND's order (held until the next).
+MATCHED       its words, as the block reads them: upper case, single spaces (held).
+ARG           what followed the command, e.g. '1500' in 'SETLEVEL 1500'.
+VALUE         ARG as a number; VALUE_OK when it was one.
+SENT_BY       who sent the last accepted command.
+COUNT         commands accepted since the PLC started.
+REFUSED       messages that said one of COMMAND and were refused: not on ALLOWED, a
+              wrong or missing PIN, or MAX_PER_HOUR reached.
+LAST_REFUSED  why, and from whom.
+ERROR         INBOX is not running (no modem), or a reply could not be sent.
+STATUS        why. GSM_OK when fine.
+
+---
+
+  inbox( MODEM := modem );
+  sms( INBOX := inbox, COMMAND := 'REBOOT, START, STOP', ALLOWED := numbers,
+       PIN := pin, MAX_PER_HOUR := 5 );
+  restart( REQ := sms.Q AND sms.CMD = 1 );
+  run.cmdStart := sms.Q AND sms.CMD = 2;
+
+ONLY ONE MESSAGE IS LOOKED AT EACH SCAN, the one GSM_SMS_RECEIVE took - so
+call the receive block first and this one after it, in the same task. A
+message that matches no command is ignored (and deleted from the SIM by
+GSM_SMS_RECEIVE, as always). Several GSM_SMS_COMMANDs may share one
+GSM_SMS_RECEIVE - for different numbers or PINs, say.
+
+A REPLY IS ONE SMS AND COSTS ONE. The block keeps its reply until the modem
+takes it; a command arriving meanwhile replaces it. A reply
+waits for the network to accept the SIM (REGISTERED), not for data. *)
+
+FUNCTION_BLOCK GSM_SMS_COMMAND
+  VAR_INPUT
+    ENABLE : BOOL := TRUE;
+    COMMAND : STRING(160);
+    ALLOWED : STRING(200);
+    PIN : DINT;
+    PULSE : TIME;
+    REPLY : USINT := 1;
+    REPLY_TEXT : STRING(140);
+    MAX_PER_HOUR : UINT := 10;
+  END_VAR
+  VAR_OUTPUT
+    Q : BOOL;
+    CMD : INT;
+    MATCHED : STRING(32);
+    ARG : STRING(64);
+    VALUE : REAL;
+    VALUE_OK : BOOL;
+    SENT_BY : STRING(23);
+    COUNT : UDINT;
+    REFUSED : UDINT;
+    LAST_REFUSED : STRING(64);
+    ERROR : BOOL;
+    STATUS : GSM_RESULT;
+  END_VAR
+  VAR_IN_OUT
+    INBOX : GSM_SMS_RECEIVE;
+  END_VAR
+  VAR
+    fbJob : __XWORD;
+    fbQAt : UDINT;
+    fbHourAt : UDINT;
+    fbHourCount : UINT;
+    fbStarted : BOOL;
+    fbReplyTo : STRING(23);
+    fbReplyText : STRING(160);
+    fbReplyWanted : BOOL;
+  END_VAR
+
+#include <ModBeeGsmPlc.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+namespace {
+
+// Upper case, one space between words, none at either end.
+void smsNormalise(const char* in, char* out, size_t cap)
+{
+    size_t n = 0;
+    bool space = false;
+    for (; *in != '\0' && n + 1 < cap; ++in) {
+        char c = *in;
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+            space = n > 0;
+            continue;
+        }
+        if (space && n + 2 < cap) out[n++] = ' ';
+        space = false;
+        if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
+        out[n++] = c;
+    }
+    out[n] = '\0';
+}
+
+// The last 8 digits of a number ('' when it has fewer than 6): +64 21 123 4567
+// and 021 123 4567 are one number.
+void smsTail(const char* number, char* out)
+{
+    char digits[32];
+    size_t n = 0;
+    for (; *number != '\0' && n + 1 < sizeof digits; ++number) {
+        if (*number >= '0' && *number <= '9') digits[n++] = *number;
+    }
+    digits[n] = '\0';
+    if (n < 6) {
+        out[0] = '\0';
+        return;
+    }
+    strcpy(out, n > 8 ? digits + (n - 8) : digits);
+}
+
+// Whether `sender` is on the list ('*' = anybody, empty = nobody). Entries are
+// separated by commas or semicolons; spaces inside a number are part of it. A
+// phone number matches on its last 8 digits; a name or short code (fewer than 6
+// digits: 'PTT NZ', '2001') matches whole, upper or lower case.
+bool smsAllowed(const char* list, const char* sender)
+{
+    char want[16];
+    smsTail(sender, want);
+    char wantWhole[32];
+    smsNormalise(sender, wantWhole, sizeof wantWhole);
+    if (want[0] == '\0' && wantWhole[0] == '\0') return false;
+    char entry[32];
+    size_t n = 0;
+    for (const char* p = list;; ++p) {
+        const char c = *p;
+        if (c == ',' || c == ';' || c == '\n' || c == '\0') {
+            entry[n] = '\0';
+            char trimmed[32];
+            smsNormalise(entry, trimmed, sizeof trimmed);
+            if (strcmp(trimmed, "*") == 0) return true;
+            if (n > 0) {
+                char have[16];
+                smsTail(entry, have);
+                if (want[0] != '\0') {
+                    if (have[0] != '\0' && strcmp(have, want) == 0) return true;
+                } else if (have[0] == '\0' && strcmp(trimmed, wantWhole) == 0) {
+                    return true;
+                }
+            }
+            n = 0;
+            if (c == '\0') return false;
+            continue;
+        }
+        if (n + 1 < sizeof entry) entry[n++] = c;
+    }
+}
+
+// Whether a sender can be texted back: a number, not a name ('PTT NZ' cannot).
+bool smsCanAnswer(const char* sender)
+{
+    bool digit = false;
+    for (; *sender != '\0'; ++sender) {
+        const char c = *sender;
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) return false;
+        if (c >= '0' && c <= '9') digit = true;
+    }
+    return digit;
+}
+
+} // namespace
+
+void setup()
+{
+    Q = false;
+    CMD = 0;
+    VALUE_OK = false;
+    COUNT = 0;
+    REFUSED = 0;
+    ERROR = false;
+    STATUS = GSM_RESULT::GSM_OK;
+    fbJob = 0;
+    fbReplyWanted = false;
+    fbStarted = false;
+}
+
+void loop()
+{
+    const uint32_t now = (uint32_t)gsm_millis();
+    if (!(bool)fbStarted) {
+        fbStarted = true;
+        fbHourAt = now;
+        fbHourCount = 0;
+    }
+    if (now - (uint32_t)fbHourAt >= 3600000u) {
+        fbHourAt = now;
+        fbHourCount = 0;
+    }
+    // Q: one scan, or PULSE long.
+    if ((bool)Q && now - (uint32_t)fbQAt >= gsmplc::millisOf(PULSE.get())) Q = false;
+
+    gsmplc::TryHold hold;
+    if (!hold.owned()) return;
+
+    if (!gsmplc::isOpen()) {
+        ERROR = (bool)ENABLE;
+        STATUS = GSM_RESULT::GSM_NOT_INITIALISED;
+        return;
+    }
+    if ((GSM_RESULT)STATUS == GSM_RESULT::GSM_NOT_INITIALISED) {   // the modem is up now
+        ERROR = false;
+        STATUS = GSM_RESULT::GSM_OK;
+    }
+
+    // --- a reply still owed --------------------------------------------------
+    gsmplc::Job* job = (gsmplc::Job*)(uintptr_t)(strucpp::XWORD_t)fbJob;
+    if (job != nullptr && job->done) {
+        job->done = false;
+        ERROR = !job->result.isOk();
+        STATUS = ERROR ? (GSM_RESULT)(int)job->result.status() : GSM_RESULT::GSM_OK;
+    }
+    if ((bool)fbReplyWanted && (job == nullptr || !job->busy)) {
+        if (job == nullptr) {
+            job = gsmplc::newJob();
+            fbJob = (strucpp::XWORD_t)(uintptr_t)job;
+        }
+        if (job == nullptr) {
+            fbReplyWanted = false;
+            ERROR = true;
+            STATUS = GSM_RESULT::GSM_NOT_INITIALISED;
+        } else {
+            const GsmResult sent = gsmplc::sendSms(*job, fbReplyTo.c_str(), fbReplyText.c_str());
+            // Not taken yet (the SIM not accepted, the modem busy): asked again next scan.
+            if (sent.status() == GsmStatus::Queued) fbReplyWanted = false;
+        }
+    }
+
+    // --- this scan's message ---------------------------------------------------
+    if (!(bool)ENABLE || !(bool)INBOX.RECEIVED || COMMAND.length() == 0) return;
+
+    char text[200];
+    smsNormalise(INBOX.TEXT.c_str(), text, sizeof text);
+
+    // The PIN, then the command.
+    const char* rest = text;
+    bool pinOk = true;
+    if ((int32_t)PIN > 0) {
+        char pin[16];
+        snprintf(pin, sizeof pin, "%ld", (long)(int32_t)PIN);
+        const size_t pl = strlen(pin);
+        pinOk = strncmp(text, pin, pl) == 0 && (text[pl] == ' ' || text[pl] == '\0');
+        rest = pinOk ? text + pl + (text[pl] == ' ' ? 1 : 0) : text;
+        if (!pinOk) {
+            // A wrong PIN still names the command after its first word.
+            const char* sp = strchr(text, ' ');
+            rest = sp ? sp + 1 : text;
+        }
+    }
+    // Which of COMMAND's words the message starts with: the first in the list.
+    char command[40] = "";
+    int which = 0;
+    {
+        const char* list = COMMAND.c_str();
+        char item[48];
+        size_t n = 0;
+        int index = 0;
+        for (const char* q = list;; ++q) {
+            if (*q == ',' || *q == ';' || *q == '\0') {
+                item[n] = '\0';
+                char word[40];
+                smsNormalise(item, word, sizeof word);
+                if (word[0] != '\0') {
+                    ++index;
+                    const size_t wl = strlen(word);
+                    if (strncmp(rest, word, wl) == 0 && (rest[wl] == ' ' || rest[wl] == '\0')) {
+                        strcpy(command, word);
+                        which = index;
+                        break;
+                    }
+                }
+                n = 0;
+                if (*q == '\0') break;
+                continue;
+            }
+            if (n + 1 < sizeof item) item[n++] = *q;
+        }
+    }
+    if (which == 0) return;   // none of ours
+    const size_t cl = strlen(command);
+    const char* arg = rest + cl + (rest[cl] == ' ' ? 1 : 0);
+
+    const char* sender = INBOX.SENDER.c_str();
+    const bool numberOk = smsAllowed(ALLOWED.c_str(), sender);
+    const bool rateOk = (uint16_t)MAX_PER_HOUR == 0 || (uint16_t)fbHourCount < (uint16_t)MAX_PER_HOUR;
+
+    if (!numberOk || !pinOk || !rateOk) {
+        REFUSED = (uint32_t)REFUSED + 1u;
+        const char* why = !numberOk ? "not an allowed number" : !pinOk ? "wrong PIN" : "too many this hour";
+        char line[64];
+        snprintf(line, sizeof line, "%s: %s", why, sender);
+        LAST_REFUSED = line;
+        // Say why only to a number on the list: a stranger learns nothing.
+        if ((uint8_t)REPLY >= 2 && numberOk && smsCanAnswer(sender)) {
+            char reply[160];
+            snprintf(reply, sizeof reply, "REFUSED %s: %s", command, why);
+            fbReplyTo = sender;
+            fbReplyText = reply;
+            fbReplyWanted = true;
+        }
+        return;
+    }
+
+    fbHourCount = (uint16_t)fbHourCount + 1u;
+    COUNT = (uint32_t)COUNT + 1u;
+    SENT_BY = sender;
+    CMD = (int16_t)which;
+    MATCHED = command;
+    ARG = arg;
+    char* end = nullptr;
+    const double value = strtod(arg, &end);
+    VALUE_OK = *arg != '\0' && end != nullptr && *end == '\0';
+    VALUE = VALUE_OK ? (float)value : 0.0f;
+    Q = true;
+    fbQAt = now;
+    if ((uint8_t)REPLY >= 1 && smsCanAnswer(sender)) {   // a name cannot be answered
+        char reply[160];
+        if (REPLY_TEXT.length() > 0) snprintf(reply, sizeof reply, "%s", REPLY_TEXT.c_str());
+        else if (*arg != '\0') snprintf(reply, sizeof reply, "OK %s %s", command, arg);
+        else snprintf(reply, sizeof reply, "OK %s", command);
+        fbReplyTo = sender;
+        fbReplyText = reply;
+        fbReplyWanted = true;
+    }
+    ERROR = false;
+    STATUS = GSM_RESULT::GSM_OK;
+}
+
+
+END_FUNCTION_BLOCK
