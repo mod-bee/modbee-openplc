@@ -3,7 +3,7 @@
   "displayName": "BeeBus",
   "version": "0.2.0",
   "namespace": "modbee_beebus",
-  "description": "Function blocks that put a BeeBus node inside an OpenPLC program. One node block starts the node — serial, WiFi or Ethernet on Arduino, serial or UDP on the Runtime — and hands out a handle the other blocks take, so a program can hold two segments at once. Registers for Modbus compatibility, and a native topic layer with typed values, publish and subscribe, data quality and store-and-forward. Nothing here configures timing: every protocol timeout is measured from the network.",
+  "description": "One function block, FB_BeeBusNode, that puts a BeeBus node inside an OpenPLC program, the work as its methods. One node per segment: serial, Wi-Fi or Ethernet on a board, serial or UDP on the Runtime, its link settings in the option structures ST_BeeBusSerialConfig and ST_BeeBusNetworkConfig, read every scan. Topics with typed values: Topic, Publish and Subscribe for one value, PublishStruct and SubscribeStruct for a whole STRUCT, Serve and Bind for settings a panel changes and the PLC decides, Write with the owner's answer, Buffer for store-and-forward, and a data quality on everything received. Registers for Modbus compatibility: ModbusMap, ModbusRead and ModbusWrite, a value to a whole STRUCT. Statistics and PeerStatus measure the ring. Nothing here configures timing: every protocol timeout is measured from the network. 0.2.0 replaces the 16 blocks of 0.1.x; a project on 0.1.x stays on it, and the wire is the same.",
   "build": {
     "verify": "arduino",
     "core": "esp32:esp32"

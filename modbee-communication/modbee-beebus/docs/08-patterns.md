@@ -4,52 +4,45 @@ Worked examples, and the habits that make a program readable a year later.
 
 ## Habits worth keeping
 
-**One block per thing.** Sixteen subscriptions is sixteen named blocks, not one
-instance called sixteen times. The library supports either — a slot is keyed by
-the topic, not by the block — but a named block per subscription means each line
-says what it brings in and where the value lands, and you can find any one of
-them by name.
+**One call per thing, one variable per call.** Each call is found again by its
+variable, so sixteen subscriptions are sixteen calls on sixteen variables, and
+each line says what it brings in and where the value lands.
 
 ```
-subOutsideTemp( NODE := node, PEER := 4, NAME := 'outside_temp', ... );
-subWindSpeed  ( NODE := node, PEER := 4, NAME := 'wind_speed',   ... );
-subRainfall   ( NODE := node, PEER := 4, NAME := 'rainfall_mm',  ... );
+node.Subscribe(anyValue := rOutsideTemp, nPeer := 4, sName := 'outside_temp', nTopicId := 1, ...);
+node.Subscribe(anyValue := rWindSpeed,   nPeer := 4, sName := 'wind_speed',   nTopicId := 2, ...);
+node.Subscribe(anyValue := rRainfall,    nPeer := 4, sName := 'rainfall_mm',  nTopicId := 3, ...);
 ```
 
-**The node block first.** Always, at the top. And once the ring is more than a
-few nodes, in its own fast task with the blocks given it — it is the only block
-that services the protocol, and how often it runs is what decides how fast the
-ring is. See [10 - Scan rate](10-scan-rate.md).
+**The node first.** Always, at the top, with its methods after it. Once the
+ring is more than a few nodes, the node's program goes in its own fast task -
+it is the only thing that services the protocol, and how often it runs decides
+how fast the ring is. See [10 - Scan rate](10-scan-rate.md).
 
-**Bind unconditionally; act conditionally.** `BEEBUS_TP_TOPIC`, `BEEBUS_TP_SUBSCRIBE` and
-`BEEBUS_MB_MAP` are declarations of what this node shares. Call them every scan with no
-`IF` around them. Put the logic on what you do with the values.
+**Call standing methods unconditionally; act conditionally.** `Topic`,
+`Subscribe`, `PublishStruct`, `Serve`, `Bind` and `ModbusMap` are declarations
+of what this node shares. Call them every scan with no `IF` around them. Put the
+logic on what you do with the values.
 
 **Subscribe once and forget it.** A subscription is a standing intent: it is
 held until the peer arrives and re-established if the peer restarts. Do not
-write code to watch for the peer and re-subscribe — that job is already done.
+write code to watch for the peer and re-subscribe.
 
-**Reads and writes on an edge, never every scan.** `REQ` is edge-triggered.
-Firing one every scan fills the queue and gets you `BEEBUS_QUEUE_FULL`.
+**Requests on an edge, never a level.** `bExecute` starts a request on its
+rising edge. Raising a new one every scan fills the queue and gets you
+`QueueFull`.
 
-**Name the simulation.** Where a value stands in for a real measurement, put it
-in a named `FUNCTION` — `SIM_TANK_LEVEL`, `SIM_FLOW` — rather than an inline
-expression. A reader can then see what the program is supposed to be doing
-without reading arithmetic.
+**Read a request's result from the scan after its edge.** The result holds
+until the next edge, so in the scan you raise `bExecute` it still shows the last
+run's outcome.
 
-## Round-robin: many operations, one at a time
+## Round-robin: many requests, one at a time
 
-Reads and writes go out on a turn of the ring. Firing ten at once fills the
-queue; firing one every so often does not. A small step counter is the usual
+Reads and writes go out on a turn of the ring. Raising ten at once fills the
+queue; raising one every so often does not. A small step counter is the usual
 shape:
 
 ```
-VAR
-    iStep     : INT;
-    stepTicks : DINT;
-    bFire     : BOOL;
-END_VAR
-
 stepTicks := stepTicks + 1;
 bFire := FALSE;
 IF stepTicks >= 25 THEN          (* every half second at a 20 ms scan *)
@@ -59,13 +52,14 @@ IF stepTicks >= 25 THEN          (* every half second at a 20 ms scan *)
     IF iStep > 3 THEN iStep := 0; END_IF;
 END_IF;
 
-readCoil   ( REQ := bFire AND (iStep = 0), NODE := node, PEER := 20, ... );
-readHolding( REQ := bFire AND (iStep = 1), NODE := node, PEER := 20, ... );
-readText   ( REQ := bFire AND (iStep = 2), NODE := node, PEER := 20, ... );
-readRange  ( REQ := bFire AND (iStep = 3), NODE := node, PEER := 20, ... );
+node.ModbusRead(anyData := aCoils, nPeer := 20, eTable := E_BeeBusModbusTable.Coil,
+                nAddress := 0, bExecute := bFire AND iStep = 0);
+node.ModbusRead(anyData := aHolding, nPeer := 20, nAddress := 0, bExecute := bFire AND iStep = 1);
+node.ModbusRead(anyData := sText, nPeer := 20, nAddress := 100, bExecute := bFire AND iStep = 2);
+node.ModbusRead(anyData := aRange, nPeer := 20, nAddress := 200, bExecute := bFire AND iStep = 3);
 ```
 
-One operation per turn, in order, forever. It reads well and it never floods.
+One request per turn, in order, forever. It reads well and it never floods.
 
 ## The sleeping sensor
 
@@ -74,50 +68,40 @@ turn on the bus per wake**.
 
 ```
 VAR
-    node       : BEEBUS_NODE;
-    report     : BEEBUS_TP_PUBLISH;
-    buffer     : BEEBUS_TP_BUFFER;
+    node       : FB_BeeBusNode;
     rSoilTemp  : REAL;
     bAwake     : BOOL;
-    bJustWoke  : BOOL;
-    bWasAwake  : BOOL;
     cycleTicks : DINT;
-    settleTicks : DINT;
 END_VAR
 
 (* awake ten seconds in every twenty *)
 cycleTicks := cycleTicks + 1;
 IF cycleTicks >= 1000 THEN cycleTicks := 0; END_IF;
-bAwake := (cycleTicks < 500);
+bAwake := cycleTicks < 500;
 
-node( NODE_ID := 88, TRANSPORT := BEEBUS_NODE_RUNTIME_UDP, CONNECT := bAwake );
+node(nNodeId := 88, bConnect := bAwake);
 
 (* hold the readings taken while asleep *)
-buffer( NODE := node, NAME := 'soil_temp', DEPTH := 8 );
+node.Buffer(sName := 'soil_temp', nDepth := 8);
 
-(* give the ring a moment to readmit us before reporting *)
-IF bAwake AND NOT bWasAwake THEN settleTicks := 0; END_IF;
-bWasAwake := bAwake;
-IF bAwake AND settleTicks < 100 THEN settleTicks := settleTicks + 1; END_IF;
-bJustWoke := bAwake AND (settleTicks = 100);
-
-report( REQ := bJustWoke, NODE := node,
-        NAME := 'soil_temp', TOPIC_ID := 1,
-        MODE := BEEBUS_TP_PUBLISH_ALL, VALUE := rSoilTemp );
+(* report once the ring has taken us back *)
+node.Publish(anyValue := rSoilTemp, sName := 'soil_temp', nTopicId := 1,
+             bExecute := bAwake AND node.bConnected);
 ```
 
 Three things make this work:
 
-**`CONNECT := bAwake`** leaves the ring properly rather than going silent, so
+**`bConnect := bAwake`** leaves the ring properly rather than going silent, so
 peers are told instead of timing it out.
 
-**`BEEBUS_TP_PUBLISH_ALL`** is one frame for every listener. A SCADA and a controller
-both subscribed cost the same one turn as either alone.
+**`E_BeeBusPublishMode.All`** (the default) is one frame for every listener. A
+SCADA and a controller both subscribed cost the same one turn as either alone.
 
-**The settle delay.** Rejoining takes a few turns. Reporting the instant
-`CONNECT` goes high publishes into a ring you have not joined yet.
+**Waiting for `bConnected`.** Rejoining takes a few turns, and how many is not
+fixed. Publishing the instant `bConnect` goes high publishes into a ring you
+have not joined yet.
 
-`BEEBUS_TP_BUFFER` is optional but usually right here: if the wake window is too short
+`Buffer` is optional but usually right here: if the wake window is too short
 one cycle, the reading is held and goes out on the next.
 
 ## Settings and commands from a panel
@@ -128,22 +112,22 @@ side. The full chapter is [11 - Settings both ways](11-bidirectional-binding.md)
 On the PLC:
 
 ```
-set( NODE := node, VALUE := SET, TOPIC_ID := 300, WRITABLE := TRUE );
-cmd( NODE := node, VALUE := CMD, TOPIC_ID := 400, WRITABLE := TRUE,
-     COMMAND := TRUE, PULSE := T#500ms );
+node.Serve(anyData := SET, nTopicId := 300, bWritable := TRUE);
+node.Serve(anyData := CMD, nTopicId := 400, bWritable := TRUE, bCommand := TRUE,
+           tPulse := T#500ms);
 ```
 
 On the panel:
 
 ```
-set( NODE := node, VALUE := SET, PEER := 1, TOPIC_ID := 300, RELIABLE := TRUE );
-cmd( NODE := node, VALUE := CMD, PEER := 1, TOPIC_ID := 400, RELIABLE := TRUE );
+node.Bind(anyData := SET, nPeer := 1, nTopicId := 300, bReliable := TRUE);
+node.Bind(anyData := CMD, nPeer := 1, nTopicId := 400, bReliable := TRUE);
 ```
 
 The block that uses a setting decides it, as it always did: one that refuses a
-value and puts its own back is reported to the panel as `CHANGED`, with the
-value kept, which the panel member already shows. `RELIABLE` for settings and
-commands; live values stay LIVE.
+value and puts its own back is reported to the panel as `Changed`, with the
+value kept, which the panel member already shows. `bReliable` for settings and
+commands; live values stay Live.
 
 ## Commanding a device, and knowing it arrived
 
@@ -153,43 +137,39 @@ subscribes to it.**
 On the commander:
 
 ```
-cmdSpeed( REQ := bSendCmd, NODE := node,
-          NAME := 'pump_speed_cmd', TOPIC_ID := 20,
-          MODE := BEEBUS_TP_PUBLISH_TO, PEER := 31, CONFIRMED := TRUE,
-          VALUE := rDemand );
-
-IF cmdSpeed.DONE  THEN udCmdSent := udCmdSent + 1; END_IF;
-IF cmdSpeed.ERROR THEN
-    udCmdFailed := udCmdFailed + 1;
-    eCmdStatus  := cmdSpeed.STATUS;
+eCmd := node.Publish(anyValue := rDemand, sName := 'pump_speed_cmd', nTopicId := 20,
+                     ePublishMode := E_BeeBusPublishMode.ToPeer, nPeer := 31,
+                     bConfirmed := TRUE, bExecute := bSendCmd);
+IF bSendCmd AND eCmd <> E_BeeBusResult.Queued THEN
+    IF eCmd = E_BeeBusResult.Ok THEN udCmdSent := udCmdSent + 1;
+    ELSE udCmdFailed := udCmdFailed + 1; eCmdStatus := eCmd;
+    END_IF;
+    bSendCmd := FALSE;
 END_IF;
 ```
 
 On the pump:
 
 ```
-subCmd( NODE := node, PEER := 200,
-        NAME := 'pump_speed_cmd', TOPIC_ID := 20,
-        DEADBAND := 0.0, PERIOD := T#5s,
-        VALUE := rSpeedSetpoint );
+node.Subscribe(anyValue := rSpeedSetpoint, nPeer := 200, sName := 'pump_speed_cmd',
+               nTopicId := 20, tPeriod := T#5s, eQuality => eCmdQuality);
 
 (* the setpoint is only as good as the link that delivered it *)
-IF subCmd.QUALITY = BEEBUS_TP_BAD THEN
+IF eCmdQuality = E_BeeBusQuality.Bad THEN
     rSpeedSetpoint := 0.0;
     bCommandLost := TRUE;
 END_IF;
 ```
 
-`BEEBUS_TP_PUBLISH_TO` with `CONFIRMED := TRUE` means `DONE` is *the pump has it*, not
-*it was sent*. And the pump gets staleness detection for free.
+`ToPeer` with `bConfirmed` means `Ok` is *the pump has it*, not *it was sent*.
+And the pump gets staleness detection for free.
 
 A register write does the same job if the far end is a Modbus address rather
 than a topic:
 
 ```
-writeRunMinutes( REQ := bSend, NODE := node, PEER := 60,
-                 TABLE := BEEBUS_MB_HOLDING_REG, ADDRESS := 300, CONFIRMED := TRUE,
-                 VALUE := iRunMinutes );
+node.ModbusWrite(anyData := iRunMinutes, nPeer := 60, nAddress := 300,
+                 bConfirmed := TRUE, bExecute := bSend);
 ```
 
 ## Failsafe on a setpoint
@@ -198,45 +178,37 @@ The device that receives a command should decide what happens if the commander
 goes quiet. That belongs on the receiving node, at the address:
 
 ```
-node( NODE_ID := 60, TRANSPORT := BEEBUS_NODE_RUNTIME_UDP, FAILSAFE := TRUE );
-
-mapRunMinutes( NODE := node, TABLE := BEEBUS_MB_HOLDING_REG, ADDRESS := 300,
-               ON_LOSS := BEEBUS_MB_RESET_TO_VALUE, SAFE_VALUE := 5,
-               VALUE := iRunMinutes );
-
-IF mapRunMinutes.SAFE_APPLIED THEN
+node(nNodeId := 60, bFailsafe := TRUE);
+node.ModbusMap(anyData := iRunMinutes, nAddress := 300,
+               eOnLoss := E_BeeBusModbusFailsafe.ResetToValue, nSafeValue := 5,
+               bSafeApplied => bSafeNow);
+IF bSafeNow THEN
     bWentToSafeState := TRUE;      (* worth logging *)
 END_IF;
 ```
 
 The commander disappears, the setpoint falls back to 5 by itself, and the
-program is told it happened.
-
-Note `FAILSAFE := TRUE` on the node block. Without it `ON_LOSS` does nothing.
+program is told it happened. Note `bFailsafe := TRUE` on the node. Without it
+`eOnLoss` does nothing.
 
 ## A SCADA node
 
 One that watches everything and commands a little.
 
 ```
-(* --- the node --- *)
-node  ( NODE_ID := 200, TRANSPORT := BEEBUS_NODE_RUNTIME_UDP, FAILSAFE := TRUE );
-status( NODE := node );
+node(nNodeId := 200, bFailsafe := TRUE);
 
-(* --- one block per value, so each line says what it brings in --- *)
-subOutsideTemp( NODE := node, PEER := 4,  NAME := 'outside_temp',
-                TOPIC_ID := 1, DEADBAND := 0.2, PERIOD := T#5s,
-                VALUE := rOutsideTempC );
-subTankLevel  ( NODE := node, PEER := 17, NAME := 'tank_a_level',
-                TOPIC_ID := 1, DEADBAND := 0.5, PERIOD := T#2s,
-                VALUE := rTankALevelPct );
-subFlow       ( NODE := node, PEER := 31, NAME := 'flow_lps',
-                TOPIC_ID := 3, DEADBAND := 0.1, PERIOD := T#2s,
-                VALUE := rFlowLps );
+(* one call per value, so each line says what it brings in *)
+node.Subscribe(anyValue := rOutsideTempC, nPeer := 4, sName := 'outside_temp',
+               nTopicId := 1, fDeadband := 0.2, tPeriod := T#5s);
+node.Subscribe(anyValue := rTankALevelPct, nPeer := 17, sName := 'tank_a_level',
+               nTopicId := 1, fDeadband := 0.5, tPeriod := T#2s, eQuality => eTankQuality);
+node.Subscribe(anyValue := rFlowLps, nPeer := 31, sName := 'flow_lps',
+               nTopicId := 3, fDeadband := 0.1, tPeriod := T#2s);
 
-(* --- alarms come from quality, not from the numbers --- *)
-bTankCommsLost := (subTankLevel.QUALITY = BEEBUS_TP_BAD);
-bAlarmTankLow  := (subTankLevel.QUALITY = BEEBUS_TP_GOOD) AND (rTankALevelPct < 10.0);
+(* alarms come from quality, not from the numbers *)
+bTankCommsLost := eTankQuality = E_BeeBusQuality.Bad;
+bAlarmTankLow  := eTankQuality = E_BeeBusQuality.Good AND rTankALevelPct < 10.0;
 ```
 
 **The alarm is gated on quality.** Without that, a communications failure that
@@ -245,73 +217,71 @@ at 0 raises a low-level alarm that is not real.
 
 ## A gateway
 
-Two nodes in one program, moving values between segments. Both `NODE` inputs
-must be wired — with two nodes there is no "the only one".
+Two nodes in one program, one per segment, moving values between them.
 
 ```
 VAR
-    serialNode : BEEBUS_NODE;
-    udpNode    : BEEBUS_NODE;
-    subFromField : BEEBUS_TP_SUBSCRIBE;
-    tpToPlant    : BEEBUS_TP_TOPIC;
-    rFieldValue  : REAL;
+    serialNode  : FB_BeeBusNode;
+    udpNode     : FB_BeeBusNode;
+    serial      : ST_BeeBusSerialConfig;
+    rFieldValue : REAL;
 END_VAR
 
-serialNode( NODE_ID := 1, TRANSPORT := BEEBUS_NODE_RUNTIME_SERIAL,
-            DEVICE := '/dev/ttyUSB0', BAUD := 115200 );
-udpNode   ( NODE_ID := 1, TRANSPORT := BEEBUS_NODE_RUNTIME_UDP );
+serial.sDevice := '/dev/ttyUSB0';
+serialNode(nNodeId := 1, eTransport := E_BeeBusTransport.RuntimeSerial, stSerialConfig := serial);
+udpNode(nNodeId := 1, eTransport := E_BeeBusTransport.RuntimeUdp);
 
 (* in on the serial segment *)
-subFromField( NODE := serialNode.NODE, PEER := 5, NAME := 'well_level',
-              TOPIC_ID := 1, DEADBAND := 0.1, PERIOD := T#2s,
-              VALUE := rFieldValue );
-
+serialNode.Subscribe(anyValue := rFieldValue, nPeer := 5, sName := 'well_level',
+                     nTopicId := 1, fDeadband := 0.1, tPeriod := T#2s);
 (* out on the plant segment *)
-tpToPlant( NODE := udpNode.NODE, NAME := 'well_level', TOPIC_ID := 1,
-           VALUE := rFieldValue );
+udpNode.Topic(anyValue := rFieldValue, sName := 'well_level', nTopicId := 1);
 ```
 
 The same variable is a subscriber's landing spot on one segment and an owned
-topic on the other. Node IDs only have to be unique **within** a segment, so
-both may be 1.
+topic on the other - two records, on two nodes. Node ids only have to be unique
+**within** a segment, so both may be 1.
 
-## Choosing deadband and interval
+## Choosing deadband and period
 
-| the value | deadband | interval |
+| the value | `fDeadband` | `tPeriod` |
 | --- | --- | --- |
-| a temperature | 0.2–0.5 °C | 5000 ms |
-| a tank level | 0.5 % | 2000 ms |
-| a flow that matters | 0.1 | 1000 ms |
-| a setpoint or command | 0.0 (every change) | 5000 ms |
-| an on/off state | 0.0 | 5000 ms |
+| a temperature | 0.2-0.5 °C | `T#5s` |
+| a tank level | 0.5 % | `T#2s` |
+| a flow that matters | 0.1 | `T#1s` |
+| a setpoint or command | 0.0 (every change), or `bReliable` | `T#5s` |
+| an on/off state | 0.0 | `T#5s` |
 
-The deadband keeps noise off the network. The interval is what proves the link
-is alive, so **never leave it at 0** on anything you will raise an alarm from —
+The deadband keeps noise off the network. The period is what proves the link is
+alive, so **never leave it at `T#0s`** on anything you will raise an alarm from -
 without it, a value that simply stops changing looks identical to a link that
-died.
-
-Set the interval to about twice the slowest update you are willing to accept.
+died. Set it to about twice the slowest update you are willing to accept.
 
 ## What bites people
 
-**Firing `REQ` every scan.** It is an edge. Every scan fills the queue.
+**Raising `bExecute` from a level that stays up.** It is an edge: one request.
+A sequence that never lowers it never sends a second one.
 
-**Forgetting `FAILSAFE := TRUE`** and wondering why `ON_LOSS` does nothing.
+**Reading a request's result in the scan that raised it.** That is the last
+run's result, held.
 
-**`CONFIRMED := TRUE` with `BEEBUS_TP_PUBLISH_ALL`.** Nothing acknowledges a broadcast,
-so it is refused with `BEEBUS_INVALID_ARGUMENT`. Confirmation needs a named
+**One variable for two records.** `node.Write(anyValue := bOne ...)` called for
+forty topics in a loop is one record: give each its own variable.
+
+**Forgetting `bFailsafe := TRUE`** and wondering why `eOnLoss` does nothing.
+
+**`bConfirmed := TRUE` with `E_BeeBusPublishMode.All`.** Nothing acknowledges a
+broadcast, so it is refused with `InvalidArgument`. Confirmation needs a named
 peer.
 
-**Two nodes on one `NODE_ID`.** The second stands down and reports
-`BEEBUS_DUPLICATE_NODE_ID`. Look for the code before you look at the wiring.
+**Two nodes on one `nNodeId`.** The second stands down and reports
+`DuplicateNodeId`. Look for the code before you look at the wiring.
 
 **Alarming on a number without checking its quality.** The frozen value is the
 one that fools you.
 
 **A topic name over 255 characters.** Refused rather than truncated, deliberately
-— two long names cut to the same 255 would silently become one topic. While a
-node with an older BeeBus is on the network, keep names to 31 characters: it
-refuses longer ones.
+- two long names cut to the same 255 would silently become one topic.
 
-**Blocks above the node block.** One scan of `BEEBUS_UNKNOWN_NODE`, then it
-corrects itself. Harmless, but confusing when you are watching.
+**A method in another task.** It returns `WrongTask` and does nothing. Keep the
+node's program and its method calls in one task.

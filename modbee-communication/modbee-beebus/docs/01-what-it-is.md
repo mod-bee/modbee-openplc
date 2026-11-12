@@ -12,7 +12,7 @@ master**.
 With Modbus, one device asks and the others answer. That works, and it has two
 costs you have probably paid.
 
-The master is a single point of failure — stop it and the network stops. And
+The master is a single point of failure - stop it and the network stops. And
 every value arrives because somebody asked for it, so a change is only as fresh
 as the next poll, and most polls carry a number that has not moved.
 
@@ -30,46 +30,45 @@ unplugged the rest close the gap and carry on. If it comes back it rejoins.
 
 Two things are worth knowing because you will see them on a pin:
 
-**Every node needs a different ID.** 1 to 254. Two nodes on one ID is the most
-common commissioning mistake there is, and the protocol detects it — the second
-node stands down and says `BEEBUS_DUPLICATE_NODE_ID` rather than fighting for
-the address. Unplug the wrong one and the other rejoins on its own.
+**Every node needs a different id.** 1 to 254. Two nodes on one id is the most
+common commissioning mistake there is, and the protocol detects it - the second
+node stands down and says `E_BeeBusResult.DuplicateNodeId` rather than fighting
+for the address. Unplug the wrong one and the other rejoins on its own.
 
 **Timing measures itself.** How long a turn takes, how long to wait for a peer
-— all of it is taken from the network as it runs, so a slow radio link and a
+- all of it is taken from the network as it runs, so a slow radio link and a
 fast wired one need no different settings. There is nothing to tune.
 
 ## Two ways to share a value
 
 This is the one real choice you make, so it is worth getting right.
 
-### Registers — `BEEBUS_MB_*`
+### Registers - `ModbusMap`, `ModbusRead`, `ModbusWrite`
 
 Your variable sits at a numbered Modbus address. A peer reads address 40 and
 gets it; writes address 40 and changes it.
 
 ```
-BEEBUS_MB_MAP( NODE := node, TABLE := BEEBUS_MB_HOLDING_REG, ADDRESS := 40,
-        VALUE := rTankLevel );
+node.ModbusMap(anyData := rTankLevel, eTable := E_BeeBusModbusTable.HoldingRegister,
+               nAddress := 40);
 ```
 
 Use registers when:
 
 - something else on the network already speaks Modbus and needs to reach it
 - you are replacing an existing Modbus layout and want to keep the addresses
-- you want a peer to be able to **write** into your PLC
+- you want a peer to be able to **write** into your PLC by address
 
 The cost is that addresses are numbers. Nothing on the wire says address 40 is
 a tank level, so the meaning lives in a spreadsheet somewhere.
 
-### Topics — `BEEBUS_TP_*`
+### Topics - `Topic`, `Subscribe`, `PublishStruct` and the rest
 
-Your variable has a **name** and a type. Peers subscribe to it by name, and the
-value arrives on its own when it changes.
+Your variable has a **name** and a type. Peers subscribe to it, and the value
+arrives on its own when it changes.
 
 ```
-BEEBUS_TP_TOPIC( NODE := node, NAME := 'tank_level', TOPIC_ID := 1,
-          VALUE := rTankLevel );
+node.Topic(anyValue := rTankLevel, sName := 'tank_level', nTopicId := 1);
 ```
 
 Use topics when:
@@ -82,13 +81,13 @@ Use topics when:
 Topics carry their type, so a `REAL` arrives as a `REAL` rather than as two
 registers you have to reassemble. They also carry **quality** and **age**, so a
 subscriber can tell a value that stopped updating from one that simply is not
-changing — which is the failure Modbus hides, because a stale register looks
+changing - which is the failure Modbus hides, because a stale register looks
 exactly like a healthy one.
 
 ### Which one
 
 If in doubt, **topics**. Registers exist for compatibility; topics are what the
-protocol is actually built around.
+protocol is built around.
 
 Use both in one program if it suits. They are independent and a node can do
 either or both.
@@ -100,37 +99,30 @@ Every program follows the same shape:
 ```
 PROGRAM main
 VAR
-    node       : BEEBUS_NODE;
-    tankLevel  : BEEBUS_TP_TOPIC;
+    node       : FB_BeeBusNode;
     rTankLevel : REAL;
 END_VAR
 
-(* 1. Start the node. This first, always. *)
-node( NODE_ID := 10, TRANSPORT := BEEBUS_NODE_RUNTIME_UDP );
+(* 1. The node, first, every scan. *)
+node(nNodeId := 10, eTransport := E_BeeBusTransport.RuntimeUdp);
 
-(* 2. Say what this node shares. *)
-tankLevel( NODE := node, NAME := 'tank_level', TOPIC_ID := 1,
-           VALUE := rTankLevel );
+(* 2. What this node shares: method calls on it, every scan. *)
+node.Topic(anyValue := rTankLevel, sName := 'tank_level', nTopicId := 1);
 
 (* 3. Your program, as normal. *)
 rTankLevel := rTankLevel + 0.1;
-
 END_PROGRAM
 ```
 
-`node` is the node itself, and every other block takes it on its `NODE` in-out
-pin. That is the only wiring between them, and it has to be there — a block
-called without it is a compile error.
+`node` is the node itself. Everything it does on the segment is a method of
+it, so there is no second block to declare and nothing to wire between blocks:
+the method's instance **is** the node. A method call copies nothing into an
+instance of its own, and the node keeps what each call needs between scans in
+a record of its own, found again each scan by the variable the call is about
+(its declared name and type).
 
-The node and the blocks that use it need not share a program. Put the node in a
-Global Variable List and it can run on a task of its own while your logic runs
-on another, which is what
-[10 - Scan rate](10-scan-rate.md) is about.
-
-You write the block names plainly in ST, as above. The library's name reaches
-the generated C++ as `modbee_protocol__NODE` — an underscore, because the
-library is *named* `modbee-beebus` with a hyphen and ST has no hyphen in an
-identifier.
+A segment is one node. Two segments - a serial line and a UDP network, say -
+are two instances, each with its own methods.
 
 ## When not to use it
 
