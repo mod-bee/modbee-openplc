@@ -78,14 +78,28 @@ data connection goes, it is brought back without the program doing anything.
 ## 5. A text message
 
 ```
-result := modem.SendSms(anyText := 'Tank 3 high level', sNumber := oncall,
-                        bExecute := highLevel);
+IF highLevel AND NOT highLevelWas THEN
+  result := modem.SendSms(sTo := '+64 21 000 001, +64 21 000 002',
+                          sText := modem.Format(sTemplate := 'Tank 3 high: {level:1} m',
+                                                anyData := tank));
+END_IF;
+highLevelWas := highLevel;
 ```
 
-On the rising edge of `bExecute` the message goes; `result` is
-`E_GsmResult.Queued` until the network has it, then `Ok` (or the reason it
-failed) until the next edge. Every message costs money on most plans, so put
-`bExecute` behind an edge and a timer if what drives it can flicker.
+`SendSms` queues one message to each number and returns at once: `Ok`, or
+`InvalidArgument`, `QueueFull` or `RateLimited` with nothing queued. Call it
+once per message, on the scan the program decides to send. The block sends
+them one at a time once the network has the SIM, tries a failed one again,
+and counts them on `nSmsSent`, `nSmsFailed`, `nSmsDropped` and `nSmsQueued`.
+`stSmsConfig` sets the queue's depth, the most an hour (10 by default, every
+number counted) and the retries. Every message costs money on most plans.
+
+`Format` fills `{member}` placeholders from a STRUCT - `{level:1}` with one
+decimal, `{run:hm}` as `2h00m`, `{mode|OFF|MANUAL|AUTO}` as a word - into at
+most 160 characters.
+
+To follow one message to the network instead, `SendSmsRequest(anyText,
+sNumber, bExecute)` returns `Queued` until the network has it, then `Ok`.
 
 ## 6. Changing the wiring
 

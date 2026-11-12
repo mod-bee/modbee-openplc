@@ -81,6 +81,16 @@ stCapacityConfig  ST_GsmCapacityConfig, what the modem holds. Taken when the
                nAtQueueLen        modem commands that may wait at once. 12 by
                                   default; raise it only if sLastError shows
                                   the queue full
+stSmsConfig  ST_GsmSmsConfig, SendSms's queue. Not retained: the hour
+             restarts at boot.
+               nQueueDepth  messages (a number and its text) waiting, 1 to 64.
+                            8 by default
+               nMaxPerHour  messages queued an hour, every number counted; past
+                            it SendSms returns RateLimited. 10 by default; 0
+                            no limit
+               nRetries     a failed send is tried again this many times,
+                            then dropped. 1 by default
+               tRetry       how long before it is. T#60s by default
 
 bConnected   the modem has a data connection. Sockets and MQTT wait for it.
 bRegistered  the network has accepted the SIM. SMS needs this, not
@@ -92,8 +102,13 @@ bError       something failed: the modem is not connected and there is a
              reason, a setting was refused, or a method call failed.
 eErrorId     why. E_GsmResult.Ok when fine.
 sLastError   in words - the module's own where it gave one. A failing method
-             call is named by its method and record: "SendSms sAlarm:
-             NotReady".
+             call is named by its method and record: "AtCommand sCmd:
+             Timeout".
+nSmsSent, nSmsFailed, nSmsDropped, nSmsQueued, sSmsLastError
+             SendSms's queue: messages the network took, sends that failed
+             (each try), messages dropped (queue full, the hour's limit,
+             retries spent), messages waiting, and why the last send failed
+             with its number: 'send +6421000001: <why>'.
 
 ---
 
@@ -123,31 +138,75 @@ E_MqttTransport.Cellular reaches this modem by itself.
 
 METHODS
 
-Each returns an E_GsmResult. A method runs in this block's task and returns
-E_GsmResult.WrongTask in any other. A call is found again by what it is
-about: its ANY's declared name and type, or for a literal its text (SendSms:
-the number). So one variable is one record per method. Up to 64 records.
+Each returns an E_GsmResult, but Format, which returns its text. A method
+runs in this block's task and returns E_GsmResult.WrongTask in any other. A
+call is found again by what it is about: its ANY's declared name and type, or
+for a literal its text (SendSmsRequest: the number). So one variable is one
+record per method. Up to 64 records.
 
-A REQUEST (SendSms, AtCommand, Power) starts on a rising edge of bExecute and takes
-its inputs at that edge; changing them while it runs has no effect. It
+SendSms QUEUES: every call is one message to each number, accepted or refused
+at once. Call it on the scan the program decides to send, not every scan.
+
+A REQUEST (SendSmsRequest, AtCommand, Power) starts on a rising edge of
+bExecute and takes its inputs at that edge; changing them while it runs has
+no effect. It
 returns E_GsmResult.Queued while it runs, then its outcome, held until the
 next edge. A modem that cannot take it at the edge refuses at once (NotReady)
 rather than queueing it for later.
 
-A STANDING METHOD (Inbox, SmsCommand, Socket, Status, NetworkTime,
-Gnss) is called
-every scan while it is wanted, and its inputs may change while it runs.
+A STANDING METHOD (Inbox, SmsCommand, Socket, Status, NetworkTime, Gnss) is
+called every scan while it is wanted, and its inputs may change while it runs.
 E_GsmResult.Ok means its outputs are valid; NotReady while the modem cannot
 give them yet.
 
-  modem.SendSms(anyText, sNumber, bExecute)
-     ONE TEXT MESSAGE, up to 160 characters, on a rising edge. anyText is a
-     STRING or a literal; sNumber international, '+6421...'. SMS needs
-     bRegistered, not bConnected: it works on a SIM with no data plan.
-     Queued until the network has accepted it, then Ok. NotReady (the network
-     has not accepted the SIM), InvalidArgument (no number or text), TooLarge,
-     or the network's refusal (ModuleError, with its words on sLastError).
-     Every message costs money on most plans: put bExecute behind an edge.
+  modem.SendSms(sTo, sText)
+     TEXT MESSAGES, QUEUED: sText to every number of sTo ('+6421000001,
+     +6421000002'; ',' or ';' between them, spaces ignored), one message to
+     each, all queued or none. Call it ONCE per message, on the scan the
+     program decides to send: every call queues. Both are a STRING of any
+     length or a literal. Returns at once:
+       Ok               all queued
+       InvalidArgument  an empty list, a number with letters or other
+                        characters ('PTT NZ' cannot be texted), a text that
+                        is empty, over 160 GSM characters (an escaped one,
+                        such as { } [ ] ~ ^ | or the euro sign, counts two)
+                        or has a character the GSM alphabet lacks. Never
+                        cut, never split into parts. sLastError says which
+       QueueFull        stSmsConfig.nQueueDepth would be passed: none queued
+       RateLimited      stSmsConfig.nMaxPerHour would be passed (every number
+                        counts; the hour restarts at boot): none queued
+     The block sends them one at a time, once the network has the SIM - SMS
+     needs bRegistered, not bConnected, so a SIM with no data plan sends -
+     and a send that fails is tried again after tRetry, nRetries times, then
+     dropped. nSmsSent, nSmsFailed (each try), nSmsDropped (queue full, the
+     limit, retries spent), nSmsQueued and sSmsLastError ('send +6421000001:
+     ...') follow them. A call is never lost to another task holding the
+     modem: the queue is the block's, and only sending needs the modem.
+
+  modem.SendSmsRequest(anyText, sNumber, bExecute)
+     ONE TEXT MESSAGE, FOLLOWED, on a rising edge, for a program that has to
+     know it went: Queued until the network has accepted it, then Ok, held
+     until the next edge. NotReady (the network has not accepted the SIM),
+     InvalidArgument (no number or text), TooLarge, or the network's refusal
+     (ModuleError, with its words on sLastError). Not queued, not limited by
+     stSmsConfig, never retried.
+
+  modem.Format(sTemplate, anyData, bTruncated =>)
+     A TEXT FROM A TEMPLATE, for SendSms: {path} placeholders filled from the
+     STRUCT anyData, members by name ({irr.left}, {pump[2].hours}, arrays
+     from 1):
+       {x}            its natural form: 12.4, 42, TRUE, the text, 1h30m,
+                      2026-11-12 10:00:00; an enumeration as its number
+       {x:1} {x:0}    a REAL or LREAL with that many decimals
+       {x:hm}         a TIME as hours and minutes: '2h00m', '48m'
+       {x:16}         a STRING cut to 16 characters
+       {x|OFF|MANUAL|AUTO}  the word an integer, BOOL or enumeration
+                      indexes, from 0 - how an enumeration reads as its
+                      value's name (the runtime keeps no names for them)
+     A placeholder that names nothing stays as written, so the mistake shows
+     in the message; everything else passes through, $N line breaks
+     included. At most 160 characters: cut there, bTruncated TRUE. Needs no
+     modem and no lock; it can be called anywhere.
 
   modem.Inbox(bEnable, bReceived =>, sSender =>, sText =>, nIndex =>,
               dtSentAt =>, nReceivedCnt =>)
@@ -262,6 +321,7 @@ FUNCTION_BLOCK FB_GsmModemA7670
     stPowerConfig : ST_GsmPowerConfig;        (* a board's power key and supply rail *)
     stRadioConfig : ST_GsmRadioConfig;        (* radio mode, operator and bands *)
     stCapacityConfig : ST_GsmCapacityConfig;  (* sockets, socket buffers and the command queue *)
+    stSmsConfig : ST_GsmSmsConfig;            (* SendSms's queue, hourly limit and retries *)
   END_VAR
   VAR_OUTPUT
     bConnected : BOOL;                (* the modem has a data connection *)
@@ -270,6 +330,11 @@ FUNCTION_BLOCK FB_GsmModemA7670
     bError : BOOL;                    (* something failed *)
     eErrorId : E_GsmResult;           (* why; Ok when fine *)
     sLastError : STRING(64);          (* why, in words *)
+    nSmsSent : UDINT;                 (* SendSms messages the network took *)
+    nSmsFailed : UDINT;               (* SendSms sends that failed, each try *)
+    nSmsDropped : UDINT;              (* SendSms messages dropped: queue full, the hour's limit, retries spent *)
+    nSmsQueued : INT;                 (* SendSms messages waiting *)
+    sSmsLastError : STRING(64);       (* why the last send failed, with its number *)
   END_VAR
   VAR
     nId : UDINT;                      (* this instance's number; the modem's owner is one *)
@@ -277,14 +342,41 @@ FUNCTION_BLOCK FB_GsmModemA7670
     bRunning : BOOL;                  (* the modem was started *)
   END_VAR
 
-(* Sends anyText to sNumber once, on a rising edge of bExecute. Returns
-   E_GsmResult.Queued until the network has accepted it, then Ok or the
-   reason, until the next edge. *)
+(* Queues sText for every number of sTo, all or none, called once per
+   message: Ok (queued), InvalidArgument, QueueFull or RateLimited. The block
+   sends them one at a time once the network has the SIM, retrying a failed
+   one; nSmsSent, nSmsFailed, nSmsDropped, nSmsQueued and sSmsLastError count
+   them. Never waits. *)
 METHOD PUBLIC SendSms : E_GsmResult
+  VAR_INPUT
+    sTo : ANY;                  (* a STRING or a literal: numbers separated by ',' or ';', spaces ignored *)
+    sText : ANY;                (* a STRING or a literal: one message, 160 GSM characters at most *)
+  END_VAR
+END_METHOD
+
+(* Sends anyText to sNumber once, on a rising edge of bExecute, and follows
+   it: E_GsmResult.Queued until the network has accepted it, then Ok or the
+   reason, until the next edge. *)
+METHOD PUBLIC SendSmsRequest : E_GsmResult
   VAR_INPUT
     anyText : ANY;              (* the message: a STRING or a literal, up to 160 characters *)
     sNumber : STRING(20);       (* who to, international: '+6421...' *)
     bExecute : BOOL;            (* rising edge sends *)
+  END_VAR
+END_METHOD
+
+(* A text from sTemplate with {member} placeholders filled from the STRUCT
+   anyData: {x} its natural form, {x:1} decimals, {x:hm} a TIME as '2h00m',
+   {x:16} a STRING cut, {x|OFF|ON} the word an integer or enumeration indexes.
+   At most 160 characters; bTruncated when more would have followed. Needs no
+   modem. *)
+METHOD PUBLIC Format : STRING(160)
+  VAR_INPUT
+    sTemplate : STRING(254);    (* the text, with {member.path} placeholders *)
+    anyData : ANY;              (* the STRUCT the placeholders name *)
+  END_VAR
+  VAR_OUTPUT
+    bTruncated : BOOL;          (* the text was cut at 160 characters *)
   END_VAR
 END_METHOD
 
@@ -444,6 +536,7 @@ END_METHOD
 
 #include <ModBeeGsmPlc.h>
 #include <GsmPlcMethods.h>
+#include <GsmPlcFormat.h>
 
 void setup()
 {
@@ -456,6 +549,11 @@ void setup()
     nId = gsmplc::nextId();
     nTask = (strucpp::XWORD_t)0;
     bRunning = false;
+    nSmsSent = 0;
+    nSmsFailed = 0;
+    nSmsDropped = 0;
+    nSmsQueued = 0;
+    sSmsLastError = "";
 }
 
 void loop()
@@ -528,6 +626,12 @@ void loop()
         changed = true;
     }
 
+    gsmplc::SmsConfig smsConfig;
+    smsConfig.queueDepth = (int16_t)stSmsConfig.NQUEUEDEPTH;
+    smsConfig.maxPerHour = (int16_t)stSmsConfig.NMAXPERHOUR;
+    smsConfig.retries = (int16_t)stSmsConfig.NRETRIES;
+    smsConfig.retryMs = gsmplc::millisOf(stSmsConfig.TRETRY.get());
+
     const bool want = (bool)bConnect && !gsmplc::heldOff();
     GsmDevice& gsm = gsmplc::device();
     // Switched off, the modem gives its serial link and the RAM behind it
@@ -561,7 +665,7 @@ void loop()
                 eErrorId = E_GSMRESULT::NOTREADY;
                 sLastError = why != nullptr ? why : "the modem's serial link would not open";
                 gsmplc::service();
-                gsmplc::tickCalls((uint32_t)nId);
+                gsmplc::tickCalls((uint32_t)nId, smsConfig);
                 return;
             }
             gsm.start();
@@ -577,7 +681,14 @@ void loop()
     }
 
     gsmplc::service();
-    gsmplc::tickCalls((uint32_t)nId);
+    gsmplc::tickCalls((uint32_t)nId, smsConfig);
+    if (const gsmplc::OutboxView* outbox = gsmplc::outboxView()) {
+        nSmsSent = outbox->sent;
+        nSmsFailed = outbox->failed;
+        nSmsDropped = outbox->dropped;
+        nSmsQueued = outbox->queued;
+        sSmsLastError = outbox->lastError;
+    }
 
     // --- what it is doing ----------------------------------------------------
     bConnected = gsm.isReady();
@@ -635,6 +746,38 @@ void loop()
 // =============================================================================
 
 E_GSMRESULT SendSms()
+{
+    gsmplc::Call call;
+    call.block = (uint32_t)nId;
+    call.task = (uintptr_t)(strucpp::XWORD_t)nTask;
+    // Both a STRING of any length or a literal: read up to their declared length.
+    const char* to = nullptr;
+    size_t toLength = 0;
+    if (sTo.wired() && sTo.TYPECLASS == strucpp::TYPE_STRING) {
+        to = (const char*)sTo.PVALUE;
+        while (toLength < (size_t)sTo.DISIZE && to[toLength] != '\0') toLength++;
+    }
+    const char* text = nullptr;
+    size_t textLength = 0;
+    if (sText.wired() && sText.TYPECLASS == strucpp::TYPE_STRING) {
+        text = (const char*)sText.PVALUE;
+        while (textLength < (size_t)sText.DISIZE && text[textLength] != '\0') textLength++;
+    }
+    return (E_GSMRESULT)gsmplc::queueSmsCall(call, to, toLength, text, textLength);
+}
+
+strucpp::IECStringVar<160> Format()
+{
+    char text[161];
+    bool cut = false;
+    gsmplc::format::fill(sTemplate.c_str(), anyData, text, 160, &cut);
+    bTruncated = cut;
+    strucpp::IECStringVar<160> out;
+    out = text;
+    return out;
+}
+
+E_GSMRESULT SendSmsRequest()
 {
     gsmplc::Call call;
     call.block = (uint32_t)nId;

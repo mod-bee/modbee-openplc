@@ -130,11 +130,35 @@ number` (check `sAllowed`; a portal's name is matched whole), `wrong PIN`,
 `needs the admin PIN`, `too many this hour` (`nMaxPerHour`). A message that
 names none of the commands is ignored, and not counted.
 
-## SendSms returns ModuleError
+## SendSms returns InvalidArgument, QueueFull or RateLimited
 
-`sLastError` carries the network's reason. The usual ones: the number is not in
-international form (`+64...`), the SIM has no SMS on its plan, or the text has
-characters outside the plain GSM set.
+Nothing was queued; `sLastError` says why.
+
+- `InvalidArgument`: `'PTT NZ' is not a number` (a name cannot be texted),
+  `no number in sTo`, `sText is 172 GSM characters; one message is 160` (an
+  escaped character - `{ } [ ] ~ ^ |`, the euro sign - counts two),
+  `character 12 of sText is not in the GSM alphabet`. Nothing is ever cut or
+  split into parts.
+- `QueueFull`: the messages waiting and these would pass
+  `stSmsConfig.nQueueDepth`. The modem is probably not registered: messages
+  wait for it.
+- `RateLimited`: `stSmsConfig.nMaxPerHour` would be passed, every number
+  counted. The hour restarts at boot.
+
+Each counts on `nSmsDropped`, beside the messages dropped after their retries.
+
+## SendSms's messages fail: nSmsFailed climbs
+
+`sSmsLastError` names the number and the network's reason:
+`send +6421000001: +CMS ERROR: 38, ...`. The usual ones: the number is not in
+international form (`+64...`), the SIM has no SMS on its plan (an IoT SIM
+taking texts only from its portal), or the network will not deliver to that
+number. Each message is tried `nRetries` more times, `tRetry` apart, then
+dropped.
+
+## SendSmsRequest returns ModuleError
+
+`sLastError` carries the network's reason, as above.
 
 ## Gnss returns NotSupportedByModule
 
@@ -160,11 +184,11 @@ opened.
 | `Queued` | a request is under way |
 | `Ok` | done, or the outputs are valid |
 | `NotInitialised` | the block is not the one running the modem, or there was no memory for the call |
-| `InvalidArgument` | a setting or parameter that cannot be used; `sLastError` names it |
+| `InvalidArgument` | a setting or parameter that cannot be used - for `SendSms` a name, an empty list, a text over one message; `sLastError` names it |
 | `NotReady` | the modem cannot do it yet: not registered (SMS), not connected (Socket), the module not answered yet (AtCommand, Status) |
 | `NoBearer` | registered, but no data connection |
 | `NoSocketAvailable` | every socket is in use; raise `nSocketCnt` |
-| `QueueFull` | too many commands waiting, or more than 64 records |
+| `QueueFull` | too many commands waiting, `SendSms`'s queue full, or more than 64 records |
 | `Superseded`, `Cancelled` | a command replaced or abandoned, usually by a stop |
 | `TooLarge` | a text over its limit: 160 characters for SMS, 127 for an AT command |
 | `NotSupportedByModule` | the module cannot: no receiver, no TLS, or the other family |
@@ -176,6 +200,7 @@ opened.
 | `PoweredOff` | switched off by `Power` |
 | `RegistrationDenied` | the network refused the SIM |
 | `WrongTask` | a method called from another task than the block's |
+| `RateLimited` | `SendSms` would pass `stSmsConfig.nMaxPerHour`; nothing queued |
 
 ---
 

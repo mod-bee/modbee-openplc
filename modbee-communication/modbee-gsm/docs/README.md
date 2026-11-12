@@ -38,13 +38,16 @@ is refused by name rather than driven wrongly.
 Their settings are option structures: `stApnConfig` (APN, user, password),
 `stSerialConfig` (the serial device, or a board's UART and pins),
 `stPowerConfig` (the power key and supply pins), `stRadioConfig` (radio mode,
-operator, bands) and `stCapacityConfig` (sockets, buffers, command queue).
+operator, bands), `stCapacityConfig` (sockets, buffers, command queue) and
+`stSmsConfig` (`SendSms`'s queue, hourly limit and retries).
 
 ## The methods
 
 | Method | | Replaces (0.1.x) |
 | --- | --- | --- |
-| `SendSms` | sends a text message, on a rising edge | `GSM_SMS_SEND` |
+| `SendSms` | queues a text message to a list of numbers; the block sends them, with an hourly limit and retries | `GSM_SMS_SEND` |
+| `SendSmsRequest` | one text message on a rising edge, followed until the network has it | `GSM_SMS_SEND` |
+| `Format` | a message from a template, `{member}` placeholders filled from a STRUCT | |
 | `Inbox` | text messages arriving, one a call | `GSM_SMS_RECEIVE` |
 | `SmsCommand` | text-message commands from allowed numbers, with PINs, replies and a rate limit | `GSM_SMS_COMMAND` |
 | `AtCommand` | any AT command, and its reply | `GSM_AT` |

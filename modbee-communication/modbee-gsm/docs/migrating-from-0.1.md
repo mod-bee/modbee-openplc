@@ -29,7 +29,8 @@ recovery, the same SMS handling and deletes, the same MQTT over cellular.
 | `GSM_MODEM` | `FB_GsmModemA7670` or `FB_GsmModemSim7070`, by the module |
 | `GSM_ARDUINO` | `stSerialConfig` (`nUart`, `nRxPin`, `nTxPin`, `nRxBufferSize`) and `stPowerConfig` (`nPowerKeyPin`, `nRailPin`) |
 | `GSM_RADIO` | `stRadioConfig` (`eMode`, `sOperator`, `sCatMBands`, `sNbIotBands`); a setting it cannot read is the block's `bError` |
-| `GSM_SMS_SEND` | `modem.SendSms(anyText, sNumber, bExecute)` |
+| `GSM_SMS_SEND` | `modem.SendSms(sTo, sText)`, queued to a list of numbers; or `modem.SendSmsRequest(anyText, sNumber, bExecute)`, one message followed to the network |
+| (new) | `modem.Format(sTemplate, anyData, bTruncated =>)`: a message from a template and a STRUCT |
 | `GSM_SMS_RECEIVE` | `modem.Inbox(bEnable, bReceived =>, sSender =>, sText =>, nIndex =>, dtSentAt =>, nReceivedCnt =>)` |
 | `GSM_SMS_COMMAND` | `modem.SmsCommand(...)`; needs no `Inbox` call |
 | `GSM_AT` | `modem.AtCommand(anyCommand, tTimeout, bExecute, sReply =>)` |
@@ -56,7 +57,8 @@ recovery, the same SMS handling and deletes, the same MQTT over cellular.
 | `GSM_ARDUINO.PORT`, `RX_PIN`, `TX_PIN`, `RX_BUFFER` | `stSerialConfig.nUart`, `.nRxPin`, `.nTxPin`, `.nRxBufferSize` |
 | `GSM_ARDUINO.POWER_KEY_PIN`, `RAIL_PIN` | `stPowerConfig.nPowerKeyPin`, `.nRailPin` |
 | `GSM_RADIO.MODE`, `OPERATOR`, `CAT_M_BANDS`, `NB_IOT_BANDS` | `stRadioConfig.eMode`, `.sOperator`, `.sCatMBands`, `.sNbIotBands` |
-| `GSM_SMS_SEND.REQ`, `NUMBER`, `TEXT` | `SendSms`'s `bExecute`, `sNumber`, `anyText` |
+| `GSM_SMS_SEND.REQ`, `NUMBER`, `TEXT` | `SendSmsRequest`'s `bExecute`, `sNumber`, `anyText`; or a `SendSms(sTo, sText)` call on the edge |
+| `GSM_SMS_SEND.BUSY`, `DONE`, `ERROR` | `SendSmsRequest`'s result (`Queued`, then `Ok` or the reason); for `SendSms` the block's `nSmsQueued`, `nSmsSent`, `nSmsFailed`, `nSmsDropped`, `sSmsLastError` |
 | `GSM_SMS_RECEIVE.ENABLE`, `RECEIVED`, `SENDER`, `TEXT`, `INDEX`, `SENT_AT`, `COUNT` | `Inbox`'s `bEnable`, `bReceived`, `sSender`, `sText`, `nIndex`, `dtSentAt`, `nReceivedCnt` |
 | `GSM_SMS_COMMAND.COMMAND`, `ALLOWED`, `PIN`, `ADMIN_COMMAND`, `ADMIN_PIN`, `PULSE`, `REPLY`, `REPLY_TEXT`, `MAX_PER_HOUR`, `ENABLE` | `SmsCommand`'s `sCommands`, `sAllowed`, `nPin`, `sAdminCommands`, `nAdminPin`, `tPulse`, `nReply`, `sReplyText`, `nMaxPerHour`, `bEnable` |
 | `GSM_SMS_COMMAND.Q`, `CMD`, `MATCHED`, `ARG`, `VALUE`, `VALUE_OK`, `DURATION`, `DURATION_OK`, `ADMIN`, `SENT_BY`, `COUNT`, `REFUSED`, `LAST_REFUSED` | `bCmd`, `nCmd`, `sMatched`, `sArg`, `fValue`, `bValueOk`, `tDuration`, `bDurationOk`, `bAdmin`, `sSentBy`, `nCmdCnt`, `nRefusedCnt`, `sLastRefused` |
@@ -77,7 +79,9 @@ recovery, the same SMS handling and deletes, the same MQTT over cellular.
   while it runs, then `Ok` or the reason, held until the next rising edge of
   `bExecute`. Gate a sequence on `result = E_GsmResult.Ok`, no latch needed.
 - **A request the modem cannot take is refused at once**, not queued: a
-  `SendSms` before the network has the SIM returns `NotReady` at the edge.
+  `SendSmsRequest` before the network has the SIM returns `NotReady` at the
+  edge. `SendSms` is the queued form: its messages wait for the network,
+  within `stSmsConfig`'s depth and hourly limit, and are retried.
 - **One task.** Methods run in the task the block's own call runs in, and
   return `WrongTask` elsewhere. 0.1 blocks could sit in any task.
 - **Records.** A method call is found again by its ANY's declared name, or a
@@ -96,12 +100,14 @@ recovery, the same SMS handling and deletes, the same MQTT over cellular.
   succeeds, where the modem itself has nothing to report.
 - **GSM_ARDUINO's own APPLIED and ERROR** are gone: a board setting that
   cannot be used is the block's `bError`, and the modem is not opened on it.
+- **E_GsmResult gains WrongTask and RateLimited** at its end; every other
+  value keeps its ordinal.
 - **Enumeration values** are PascalCase and qualified: `GSM_OK` is
   `E_GsmResult.Ok`, `GSM_READY` is `E_GsmState.Ready`, `GSM_RADIO_CAT_M` is
   `E_GsmRadioMode.CatM`, `GSM_TLS` is `E_GsmSecurity.Tls`, `GSM_REG_HOME` is
   `E_GsmRegistration.Home`, `GSM_TECH_LTE` is `E_GsmTechnology.Lte`,
   `GSM_QUALITY_GOOD` is `E_GsmQuality.Good`. The order of every enumeration
-  is unchanged, with `E_GsmResult.WrongTask` added at the end.
+  is unchanged, with `E_GsmResult.WrongTask` and `RateLimited` added at the end.
 
 ## modbee-mqtt
 
@@ -127,7 +133,10 @@ radio.eMode := E_GsmRadioMode.CatM;
 radio.sCatMBands := '3, 28';
 modem(bConnect := TRUE, stApnConfig := apn, stRadioConfig := radio);
 r := modem.Status(tRefresh := T#30s, nRssi => rssi);
-r := modem.SendSms(anyText := 'Tank high', sNumber := oncall, bExecute := high);
+IF high AND NOT highWas THEN
+  r := modem.SendSms(sTo := oncall, sText := 'Tank high');
+END_IF;
+highWas := high;
 r := modem.SmsCommand(sCommands := 'START, STOP', sAllowed := numbers, nPin := pin,
                       bCmd => started, nCmd => which);
 ```

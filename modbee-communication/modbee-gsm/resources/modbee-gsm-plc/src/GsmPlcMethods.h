@@ -46,8 +46,9 @@
 
 namespace gsmplc {
 
-// E_GsmResult is GsmStatus's values in order, then this one of the PLC's own.
+// E_GsmResult is GsmStatus's values in order, then these of the PLC's own.
 const int kWrongTask = (int)GsmStatus::RegistrationDenied + 1;
+const int kRateLimited = kWrongTask + 1;
 
 // The task calling, as the block keeps it in its nTask.
 uintptr_t currentTask();
@@ -63,13 +64,40 @@ struct Call {
 
 // --- The block's own call ------------------------------------------------------
 
+// stSmsConfig: the outbox SendSms queues into.
+struct SmsConfig {
+    int32_t queueDepth = 8;       // number x text entries, 1 to 64
+    int32_t maxPerHour = 10;      // messages queued an hour, every number counted; 0 no limit
+    int32_t retries = 1;          // a failed send is tried again this many times, then dropped
+    uint32_t retryMs = 60000;
+};
+
 // Every scan, holding the lock, after service(): takes this scan's SMS for
-// Inbox and SmsCommand, and moves a Power operation along.
-void tickCalls(uint32_t block);
+// Inbox and SmsCommand, sends the outbox's next message, and moves a Power
+// operation along.
+void tickCalls(uint32_t block, const SmsConfig& sms);
+
+// The outbox's counters, for the block's outputs; null before the first SendSms.
+struct OutboxView {
+    uint32_t sent = 0;            // messages the network took
+    uint32_t failed = 0;          // sends that failed (each try)
+    uint32_t dropped = 0;         // queue full, the hour's limit, or retries spent
+    int16_t queued = 0;           // messages waiting, the one being sent included
+    const char* lastError = "";   // 'send +6421000001: <why>'
+};
+const OutboxView* outboxView();
 
 // The last method call that failed, in words ("SendSms sAlarm: NotReady"),
 // with its result; null when none is failing.
 const char* callError(int* result);
+
+// --- The outbox: every call queues -------------------------------------------
+
+// One message to each number of `to` (',' or ';' between them, spaces
+// ignored), all queued or none. Ok, InvalidArgument (`why` says what),
+// QueueFull, kRateLimited. Needs no lock: the block's own call sends them.
+int queueSmsCall(const Call& call, const char* to, size_t toLength,
+                 const char* text, size_t textLength);
 
 // --- Request methods: a rising edge starts one --------------------------------
 

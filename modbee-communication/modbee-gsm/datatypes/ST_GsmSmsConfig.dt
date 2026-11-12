@@ -1,0 +1,8 @@
+TYPE
+  ST_GsmSmsConfig : STRUCT
+    nQueueDepth : INT := 8;      (* SendSms's queue: messages (a number and its text) waiting, 1 to 64 *)
+    nMaxPerHour : INT := 10;     (* messages SendSms queues an hour, every number counted; 0 = no limit *)
+    nRetries : INT := 1;         (* a failed send is tried again this many times, then dropped *)
+    tRetry : TIME := T#60s;      (* how long before it is tried again *)
+  END_STRUCT;
+END_TYPE

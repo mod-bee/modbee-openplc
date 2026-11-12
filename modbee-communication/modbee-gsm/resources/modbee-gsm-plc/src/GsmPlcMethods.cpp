@@ -59,8 +59,9 @@ const char* resultName(int result) {
         "Queued", "Ok", "NotInitialised", "InvalidArgument", "NotReady", "NoBearer",
         "NoSocketAvailable", "QueueFull", "Superseded", "Cancelled", "TooLarge",
         "NotSupportedByModule", "Error", "ModuleError", "Timeout", "SocketClosed",
-        "BearerLost", "Unresponsive", "PoweredOff", "RegistrationDenied", "WrongTask"};
-    return result >= 0 && result <= kWrongTask ? names[result] : "?";
+        "BearerLost", "Unresponsive", "PoweredOff", "RegistrationDenied", "WrongTask",
+        "RateLimited"};
+    return result >= 0 && result <= kRateLimited ? names[result] : "?";
 }
 
 int statusOf(const GsmResult& result) { return (int)result.status(); }
@@ -81,8 +82,8 @@ enum Kind : uint8_t {
     kindSms, kindAt, kindInbox, kindCommand, kindSocket, kindStatus, kindTime, kindGnss, kindPower
 };
 
-const char* const kindNames[] = {"SendSms", "At", "Inbox", "SmsCommand", "Socket",
-                                 "Status", "Time", "Gnss", "Power"};
+const char* const kindNames[] = {"SendSmsRequest", "AtCommand", "Inbox", "SmsCommand", "Socket",
+                                 "Status", "NetworkTime", "Gnss", "Power"};
 
 // One call's record. Each kind adds what it keeps.
 struct Record {
@@ -92,6 +93,7 @@ struct Record {
     char id[64] = {0};            // name and type, or the key: what the record is found by
     char label[48] = {0};         // what a failure is named by: the name, or the key
     int result = kOk;
+    int noted = kOk;              // the result last noted on the block
     GsmResult why = GsmStatus::Ok;
     virtual ~Record() {}
 };
@@ -185,6 +187,30 @@ struct PowerRecord : RequestRecord {
     uint32_t until = 0;
 };
 
+// SendSms's queue: number x text entries, sent one at a time by the block's
+// own call.
+struct OutboxEntry {
+    char number[21];
+    char text[161];
+};
+
+struct Outbox {
+    OutboxEntry* ring = nullptr;
+    uint16_t capacity = 0;
+    uint16_t head = 0;
+    uint16_t count = 0;
+    Job* job = nullptr;
+    bool sending = false;         // the head is with the modem
+    uint8_t attempts = 0;         // failed tries of the head
+    bool waiting = false;         // the head waits for its retry
+    uint32_t retryAt = 0;
+    bool started = false;
+    uint32_t hourAt = 0;
+    uint32_t hourCount = 0;
+    OutboxView view;
+    char lastError[65] = {0};
+};
+
 struct Calls;
 typedef void (*TickFn)(Calls&);
 
@@ -214,7 +240,14 @@ struct Calls {
     PowerRecord* power = nullptr;
     TickFn powerTick = nullptr;   // set by the first Power
 
+    Outbox* outbox = nullptr;
+    TickFn outboxTick = nullptr;  // set by the first SendSms
+
     ~Calls() {
+        if (outbox != nullptr) {
+            release(outbox->ring);
+            delete outbox;
+        }
         while (records != nullptr) {
             Record* next = records->next;
             if (records->kind == kindSocket && hasDevice()) {
@@ -230,6 +263,9 @@ struct Calls {
 // Read by the block's call every scan; made by the first method call, so a
 // program that calls none links none of this.
 Calls* g_calls = nullptr;
+
+// stSmsConfig as the block's last call gave it.
+SmsConfig g_smsConfig;
 
 struct CallsOwned {
     ~CallsOwned() {
@@ -249,7 +285,7 @@ Calls* calls() {
 
 // A call's result, noted: a failing call is named on the block until the same
 // call succeeds. Queued, not ready and not yet running are states, not failures.
-int noteCall(Calls* c, const Record* r, int result, const char* method) {
+int noteCall(Calls* c, const Record* r, int result, const char* method, bool fresh = true) {
     if (c == nullptr) { return result; }
     char key[64];
     if (r != nullptr && r->label[0] != '\0') {
@@ -259,6 +295,11 @@ int noteCall(Calls* c, const Record* r, int result, const char* method) {
     }
     const bool failed = result != kOk && result != kQueued && result != kNotReady &&
                         result != kNotInitialised;
+    if (failed && !fresh && c->failing && strcmp(c->failKey, key) != 0) {
+        // An outcome held since an earlier call does not take the block's
+        // sLastError back from a newer failure.
+        return result;
+    }
     if (failed) {
         c->failing = true;
         c->failResult = result;
@@ -276,6 +317,24 @@ int noteCall(Calls* c, const Record* r, int result, const char* method) {
         c->failKey[0] = '\0';
         c->failText[0] = '\0';
     }
+    return result;
+}
+
+// A failure with its own words: "SendSms: '+64 21 abc' is not a number".
+int noteReason(Calls* c, const char* key, int result, const char* reason) {
+    if (c == nullptr) { return result; }
+    if (result == kOk) {
+        if (c->failing && strcmp(c->failKey, key) == 0) {
+            c->failing = false;
+            c->failKey[0] = '\0';
+            c->failText[0] = '\0';
+        }
+        return result;
+    }
+    c->failing = true;
+    c->failResult = result;
+    copyText(c->failKey, sizeof c->failKey, key);
+    snprintf(c->failText, sizeof c->failText, "%s: %s", key, reason);
     return result;
 }
 
@@ -340,8 +399,12 @@ RecordType* enter(const Call& call, uint8_t kind, Calls** cOut, int* refused) {
 }
 
 int done(Calls* c, Record* r, int result) {
-    if (r != nullptr) { r->result = result; }
-    return noteCall(c, r, result, kindNames[r != nullptr ? r->kind : 0]);
+    const bool fresh = r == nullptr || r->noted != result;
+    if (r != nullptr) {
+        r->result = result;
+        r->noted = result;
+    }
+    return noteCall(c, r, result, kindNames[r != nullptr ? r->kind : 0], fresh);
 }
 
 int refusedCall(Calls* c, uint8_t kind, const Call& call, int result) {
@@ -407,7 +470,8 @@ void powerTickFn(Calls& c);
 
 } // namespace
 
-void tickCalls(uint32_t block) {
+void tickCalls(uint32_t block, const SmsConfig& sms) {
+    g_smsConfig = sms;
     Calls* c = g_calls;
     if (c == nullptr || !isOwner(block)) { return; }
     c->open = isOpen();
@@ -415,6 +479,13 @@ void tickCalls(uint32_t block) {
     c->powered = !heldOff();
     if (c->smsTick != nullptr) { c->smsTick(*c); }
     if (c->powerTick != nullptr) { c->powerTick(*c); }
+    if (c->outboxTick != nullptr) { c->outboxTick(*c); }
+}
+
+const OutboxView* outboxView() {
+    const Calls* c = g_calls;
+    if (c == nullptr || c->outbox == nullptr) { return nullptr; }
+    return &c->outbox->view;
 }
 
 const char* callError(int* result) {
@@ -422,6 +493,210 @@ const char* callError(int* result) {
     if (c == nullptr || !c->failing) { return nullptr; }
     if (result != nullptr) { *result = c->failResult; }
     return c->failText;
+}
+
+// =============================================================================
+// SendSms: the outbox
+// =============================================================================
+
+namespace {
+
+void outboxPop(Outbox& o) {
+    o.head = (uint16_t)((o.head + 1) % o.capacity);
+    o.count--;
+    o.attempts = 0;
+    o.waiting = false;
+    o.view.queued = (int16_t)o.count;
+}
+
+// A failed try of the head: tried again after the retry time, until the
+// retries are spent, then dropped. A message the module cannot take at all
+// (InvalidArgument) is not tried again.
+void outboxFailed(Outbox& o, const GsmResult& why, uint32_t now) {
+    o.view.failed++;
+    snprintf(o.lastError, sizeof o.lastError, "send %s: %s", o.ring[o.head].number, describe(why));
+    o.view.lastError = o.lastError;
+    const int32_t retries = g_smsConfig.retries < 0 ? 0 : g_smsConfig.retries;
+    if (why.status() != GsmStatus::InvalidArgument && (int32_t)o.attempts < retries) {
+        o.attempts++;
+        o.waiting = true;
+        o.retryAt = now + g_smsConfig.retryMs;
+        return;
+    }
+    o.view.dropped++;
+    outboxPop(o);
+}
+
+// Every scan, holding the lock: the head to the modem, one at a time, once the
+// network has the SIM. Until then the messages wait, however long.
+void outboxTickFn(Calls& c) {
+    Outbox* o = c.outbox;
+    if (o == nullptr) { return; }
+    const uint32_t now = gsm_millis();
+    if (o->sending) {
+        Job* job = o->job;
+        if (job == nullptr || job->busy || !job->done) { return; }
+        job->done = false;
+        o->sending = false;
+        if (job->result.isOk()) {
+            o->view.sent++;
+            outboxPop(*o);
+        } else {
+            outboxFailed(*o, job->result, now);
+        }
+        return;
+    }
+    if (o->count == 0) { return; }
+    if (o->waiting && gsm_isFuture(now, o->retryAt)) { return; }
+    if (!isOpen() || !wanted() || !device().isRegistered()) { return; }
+    Job* job = jobOf(o->job);
+    if (job == nullptr) { return; }
+    const OutboxEntry& e = o->ring[o->head];
+    const GsmResult accepted = sendSms(*job, e.number, e.text);
+    if (accepted.status() == GsmStatus::Queued) {
+        o->sending = true;
+        o->waiting = false;
+    } else if (accepted.status() != GsmStatus::QueueFull &&
+               accepted.status() != GsmStatus::NotReady) {
+        outboxFailed(*o, accepted, now);
+    }
+    // QueueFull: the modem's one message is another's (SendSmsRequest, a
+    // SmsCommand reply); NotReady: not registered yet. Next scan.
+}
+
+// The next number of a list: its digits and a leading '+', spaces out. Returns
+// where the list goes on; `out` empty for an empty entry; *bad for a character
+// a number does not have.
+const char* nextNumber(const char* p, const char* end, char* out, size_t capacity, bool* bad,
+                       bool* tooLong) {
+    size_t n = 0;
+    *bad = false;
+    *tooLong = false;
+    for (; p < end && *p != ',' && *p != ';'; ++p) {
+        const char ch = *p;
+        if (ch == ' ' || ch == '\t') { continue; }
+        const bool ok = (ch >= '0' && ch <= '9') || (ch == '+' && n == 0);
+        if (!ok) { *bad = true; }
+        if (n + 1 < capacity) {
+            out[n++] = ch;
+        } else {
+            *tooLong = true;
+        }
+    }
+    out[n] = '\0';
+    return p < end ? p + 1 : p;
+}
+
+} // namespace
+
+int queueSmsCall(const Call& call, const char* to, size_t toLength,
+                 const char* text, size_t textLength) {
+    static const char kKey[] = "SendSms";
+    if (call.task != 0 && call.task != currentTask()) { return kWrongTask; }
+    Calls* c = calls();
+    if (c == nullptr) { return kNotInitialised; }
+    if (!isOwner(call.block)) { return kNotInitialised; }
+    if (c->outbox == nullptr) {
+        c->outbox = new (std::nothrow) Outbox();
+        if (c->outbox == nullptr) { return kNotInitialised; }
+        c->outboxTick = &outboxTickFn;
+    }
+    Outbox& o = *c->outbox;
+    char why[64];
+
+    // --- the list and the text, checked whole before anything is queued ---
+    if (to == nullptr || text == nullptr) {
+        return noteReason(c, kKey, kInvalidArgument, "sTo and sText must be STRINGs");
+    }
+    const char* end = to + toLength;
+    uint16_t numbers = 0;
+    for (const char* p = to; p < end;) {
+        char number[24];
+        bool bad = false, tooLong = false;
+        const char* next = nextNumber(p, end, number, sizeof number, &bad, &tooLong);
+        if (bad || tooLong || (number[0] != '\0' && strlen(number) < 3) ||
+            (number[0] != '\0' && strlen(number) > 20)) {
+            char entry[24];
+            size_t n = 0;
+            for (const char* q = p; q < next && *q != ',' && *q != ';' && n + 1 < sizeof entry; ++q) {
+                entry[n++] = *q;
+            }
+            entry[n] = '\0';
+            snprintf(why, sizeof why, "'%s' is not a number", entry);
+            return noteReason(c, kKey, kInvalidArgument, why);
+        }
+        if (number[0] != '\0') { numbers++; }
+        p = next;
+    }
+    if (numbers == 0) { return noteReason(c, kKey, kInvalidArgument, "no number in sTo"); }
+
+    // One message of the default alphabet: 160 septets, an escaped character
+    // counting two. Never cut, never split into parts.
+    size_t septets = 0;
+    for (size_t i = 0; i < textLength; i++) {
+        uint8_t out[2];
+        size_t produced = 0;
+        if (!GsmSmsPdu::asciiToGsm7(text + i, 1, out, sizeof out, produced)) {
+            snprintf(why, sizeof why, "character %u of sText is not in the GSM alphabet",
+                     (unsigned)(i + 1));
+            return noteReason(c, kKey, kInvalidArgument, why);
+        }
+        septets += produced;
+    }
+    if (textLength == 0) { return noteReason(c, kKey, kInvalidArgument, "sText is empty"); }
+    if (septets > 160) {
+        snprintf(why, sizeof why, "sText is %u GSM characters; one message is 160",
+                 (unsigned)septets);
+        return noteReason(c, kKey, kInvalidArgument, why);
+    }
+
+    // --- the hour's limit, every number counted ---
+    const uint32_t now = gsm_millis();
+    if (!o.started) {
+        o.started = true;
+        o.hourAt = now;
+    }
+    if (now - o.hourAt >= 3600000u) {
+        o.hourAt = now;
+        o.hourCount = 0;
+    }
+    const int32_t limit = g_smsConfig.maxPerHour;
+    if (limit > 0 && o.hourCount + numbers > (uint32_t)limit) {
+        o.view.dropped += numbers;
+        snprintf(why, sizeof why, "%u message(s) over the limit of %ld an hour", (unsigned)numbers,
+                 (long)limit);
+        return noteReason(c, kKey, kRateLimited, why);
+    }
+
+    // --- the queue: all of them or none ---
+    int32_t depth = g_smsConfig.queueDepth;
+    depth = depth < 1 ? 1 : (depth > 64 ? 64 : depth);
+    if (o.count == 0 && (o.ring == nullptr || o.capacity != (uint16_t)depth)) {
+        release(o.ring);
+        o.ring = (OutboxEntry*)allocate(sizeof(OutboxEntry) * (size_t)depth, alignof(OutboxEntry));
+        o.capacity = o.ring != nullptr ? (uint16_t)depth : 0;
+        o.head = 0;
+        if (o.ring == nullptr) { return noteReason(c, kKey, kNotInitialised, "out of memory for the queue"); }
+    }
+    if (o.count + numbers > o.capacity) {
+        o.view.dropped += numbers;
+        snprintf(why, sizeof why, "%u message(s), %u free in the queue", (unsigned)numbers,
+                 (unsigned)(o.capacity - o.count));
+        return noteReason(c, kKey, kQueueFull, why);
+    }
+    for (const char* p = to; p < end;) {
+        char number[24];
+        bool bad = false, tooLong = false;
+        p = nextNumber(p, end, number, sizeof number, &bad, &tooLong);
+        if (number[0] == '\0') { continue; }
+        OutboxEntry& e = o.ring[(o.head + o.count) % o.capacity];
+        copyText(e.number, sizeof e.number, number);
+        copyText(e.text, sizeof e.text, text, textLength);
+        o.count++;
+    }
+    o.hourCount += numbers;
+    o.view.queued = (int16_t)o.count;
+    return noteReason(c, kKey, kOk, "");
 }
 
 // =============================================================================
