@@ -51,6 +51,12 @@ core ( NODE := sp, DATA := STS );
 - **Enumerations are qualified**: `E_MqttResult.Ok`, not `MQTT_OK`. Each type is
   `{attribute 'qualified_only'}`, so a bare `Ok` does not compile.
 
+## With cellular
+
+A project on `E_MqttTransport.Cellular` moves to modbee-gsm 0.2.0 at the same
+time: its modem block is `FB_GsmModemA7670` or `FB_GsmModemSim7070` (0.1.x's
+`GSM_MODEM` is gone). See modbee-gsm's own migration guide.
+
 ## Blocks
 
 | 0.1.x | 0.2.0 |

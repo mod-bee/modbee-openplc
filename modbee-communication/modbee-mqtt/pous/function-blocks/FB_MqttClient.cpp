@@ -9,7 +9,7 @@ eTransport  where the bytes go. The target must have it; one it does not have
                                               joins it, or node-uio's NETWORK
              E_MqttTransport.ArduinoEthernet  a board's Ethernet, from
                                               stNetworkConfig's MAC and address
-             E_MqttTransport.Cellular         the modem a modbee-gsm GSM_MODEM
+             E_MqttTransport.Cellular         the modem a modbee-gsm modem block
                                               runs, on a board. Opening the
                                               socket takes about 1.5 s, never
                                               longer than tConnectTimeout
@@ -827,7 +827,7 @@ bool mq_inTask(strucpp::XWORD_t owner) {
   // modbee-gsm block, no modem - and E_MQTTTRANSPORT::CELLULAR says so on its pins.
   //
   // GsmPlcClient IS a GsmClient, an Arduino Client like WiFiClient. It only
-  // takes modbee-gsm's lock around each call, because GSM_MODEM may be
+  // takes modbee-gsm's lock around each call, because the modem block may be
   // polling the same modem from another task.
   #if __has_include(<ModBeeGsmPlc.h>)
     #include <ModBeeGsmPlc.h>
@@ -1019,7 +1019,7 @@ struct MqEthernetLink : MqLink {
 #endif
 
 #if defined(MQ_HAS_CELLULAR)
-// The modem GSM_MODEM runs. Plain, or - on a board without the core's mbedTLS
+// The modem a modbee-gsm modem block runs. Plain, or - on a board without the core's mbedTLS
 // - the module's own TLS, so the channel is told which it is rather than being
 // a second type.
 struct MqCellularLink : MqLink {
@@ -1151,7 +1151,7 @@ struct MqNode {
 //
 // It builds the link and nothing else. Bringing the medium up is not its job:
 // the Wi-Fi radio is joined by NETWORK (node-uio) or stNetworkConfig, Ethernet is
-// begun by FB_MqttClient from stNetworkConfig's MAC, and the modem is GSM_MODEM's.
+// begun by FB_MqttClient from stNetworkConfig's MAC, and the modem is the modem block's.
 //
 // Null with *status and *why set when it refuses, or when the heap is
 // exhausted - an Arduino core builds without exceptions, so that has to be an

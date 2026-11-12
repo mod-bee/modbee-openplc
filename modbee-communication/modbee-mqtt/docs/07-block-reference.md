@@ -409,7 +409,7 @@ eTransport  where the bytes go. The target must have it; one it does not have
                                               joins it, or node-uio's NETWORK
              E_MqttTransport.ArduinoEthernet  a board's Ethernet, from
                                               stNetworkConfig's MAC and address
-             E_MqttTransport.Cellular         the modem a modbee-gsm GSM_MODEM
+             E_MqttTransport.Cellular         the modem a modbee-gsm modem block
                                               runs, on a board. Opening the
                                               socket takes about 1.5 s, never
                                               longer than tConnectTimeout
@@ -1166,11 +1166,11 @@ eTransport  where the time comes from - the same list as FB_MqttClient, so a
                                               network up; this waits for it
              E_MqttTransport.Cellular         the mobile network's time
                                               (NITZ) from the modem a
-                                              modbee-gsm GSM_MODEM runs.
+                                              modbee-gsm modem block runs.
                                               Costs no data. Not every
                                               network sends it
              E_MqttTransport.External         dtUtcIn, when bUtcInValid - an
-                                              RTC, GSM_TIME's UTC, a time a
+                                              RTC, the modem's NetworkTime UTC, a time a
                                               SCADA wrote
 sServer     the NTP server. 'pool.ntp.org' by default; a site with its own (a
            router, a SCADA server) should use it.
@@ -1232,7 +1232,7 @@ owns the clock there, and a PLC program stepping it under every other program
 on the machine would be a fault, not a feature. bSynced still reports it.
 
 NOTHING HERE BLOCKS. NTP runs in the background on the board's network stack,
-and the modem is asked through GSM_MODEM's queue. Put this in the network
+and the modem is asked through the modem block's queue. Put this in the network
 task beside the MQTT blocks.
 
 ---

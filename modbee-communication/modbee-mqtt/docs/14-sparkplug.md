@@ -42,7 +42,7 @@ or node-uio's `NETWORK`:
 | `E_MqttTransport.RuntimeTcp` | the OpenPLC Runtime. The default | the computer |
 | `E_MqttTransport.ArduinoWiFi` | a board's Wi-Fi | `NETWORK` (node-uio), or `stNetworkConfig` |
 | `E_MqttTransport.ArduinoEthernet` | a board's Ethernet | the client, from `stNetworkConfig` |
-| `E_MqttTransport.Cellular` | the modem on the GSM HAT | `GSM_MODEM` (modbee-gsm) |
+| `E_MqttTransport.Cellular` | the modem on the GSM HAT | `FB_GsmModemA7670` or `FB_GsmModemSim7070` (modbee-gsm) |
 | `E_MqttTransport.External` | a transport wired to `nExternalLink` | whoever made it |
 
 Moving a site from Wi-Fi to cellular is one pin on the client and one on the
@@ -117,7 +117,7 @@ mqtt(eTransport := E_MqttTransport.Cellular, sHost := CFG.sScadaBroker,
 ```
 
 Nothing else changes - `sp` and every `Record` stay as they were, beside a
-`GSM_MODEM` from modbee-gsm. The library being in the project is what switches
+`FB_GsmModemA7670` or `FB_GsmModemSim7070` from modbee-gsm. The library being in the project is what switches
 cellular on; there is no build setting.
 
 ## Firmware updates, from SCADA
@@ -350,7 +350,7 @@ covers nothing else is reported on `nBadClause`.
 
 `FB_MqttClock` sets the controller's clock from the network: NTP over Wi-Fi or
 Ethernet, the mobile network's own time over cellular, or a time wired to
-`dtUtcIn` (an RTC, `GSM_TIME`). Once it is set, Sparkplug's timestamps and
+`dtUtcIn` (an RTC, the modem's `NetworkTime`). Once it is set, Sparkplug's timestamps and
 `CURRENT_DT` are real time, and the clock's `bSynced` and the node's
 `bClockSet` are TRUE.
 
@@ -474,7 +474,7 @@ closed day.
 | `Record PUMP1: tLiveInterval is T#0s` | a `log` or `live` class with no interval to go on |
 | `another layer owns the client's Will` | an `FB_SparkplugHost` or a second node on the same client |
 | `out of memory for metrics or devices` | memory ran out for a declaration |
-| `E_MQTTTRANSPORT::CELLULAR needs the modbee-gsm library and a GSM_MODEM` (on the client) | add the GSM library and a `GSM_MODEM` |
+| `E_MqttTransport.Cellular needs a modbee-gsm modem block` (on the client) | add the modbee-gsm library and a `FB_GsmModemA7670` or `FB_GsmModemSim7070` |
 | `a board needs the CA in MQTT_CA_CERT_PEM` (on the client) | `TlsVerify` with no CA defined: use `TlsPinned` with `bTrustNew` for the site's own broker, or add the CA to the board package |
 | `no pinned key yet - set bTrustNew once to learn it` (on the client) | `TlsPinned` on a client that has never connected |
 
