@@ -83,25 +83,32 @@ private:
 // MADE BY THE MODEM BLOCK THAT RUNS IT, holding only that module's driver.
 // FB_GsmModemA7670 makes a GsmDeviceWith<GsmDriverA76XX>, FB_GsmModemSim7070 a
 // GsmDeviceWith<GsmDriverSIM707x>, so a program links the one driver its
-// block names (GsmDevice, which holds both, is never made here). Made once,
-// by the block that claims the modem, at its first scan; never replaced.
+// block names. Each IS a GsmDevice, so device() is a GsmDevice& as it always
+// was, and code in other libraries (modbee-mqtt's FB_MqttClock) that holds it
+// as one is unchanged. Made once, by the block that claims the modem, at its
+// first scan; never replaced.
 
 bool hasDevice();
 
 // Only once hasDevice(): every caller checks it (isOpen() implies it).
-GsmDeviceBase& device();
+GsmDevice& device();
 
 // The module family of the block that made it: "A76XX" or "SIM707x".
 const char* family();
 
 // Memory for the device: PSRAM first on an ESP32, the heap otherwise.
 void* allocate(size_t size, size_t alignment);
+void release(void* memory);
 // Hands the made device to the layer. `destroy` ends it at unload.
-void attach(GsmDeviceBase* made, void (*destroy)(GsmDeviceBase*), const char* familyName);
+void attach(GsmDevice* made, void (*destroy)(GsmDevice*), const char* familyName);
 
+// Ends the device and frees its memory - from the derived object's own
+// address: the GsmDevice inside it does not start where the memory does.
 template <typename DeviceType>
-void destroyDevice(GsmDeviceBase* made) {
-    static_cast<DeviceType*>(made)->~DeviceType();
+void destroyDevice(GsmDevice* made) {
+    DeviceType* whole = static_cast<DeviceType*>(made);
+    whole->~DeviceType();
+    release(whole);
 }
 
 // The device, made if none is: false when there is no memory for it.

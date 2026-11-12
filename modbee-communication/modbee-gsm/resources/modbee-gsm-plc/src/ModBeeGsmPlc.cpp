@@ -151,8 +151,8 @@ struct State {
 
     // Made by the modem block (makeDevice()), holding only its module's
     // driver; ended by `destroy` before the jobs it may still point at.
-    GsmDeviceBase* device = nullptr;
-    void (*destroy)(GsmDeviceBase*) = nullptr;
+    GsmDevice* device = nullptr;
+    void (*destroy)(GsmDevice*) = nullptr;
     const char* family = "";
     PlcPower  power;
 
@@ -201,10 +201,7 @@ struct State {
     SmsPipeline sms;
 
     ~State() {
-        if (device != nullptr && destroy != nullptr) {
-            destroy(device);
-            freeMemory(device);
-        }
+        if (device != nullptr && destroy != nullptr) { destroy(device); }
         device = nullptr;
         while (jobs != nullptr) {
             Job* next = jobs->next;
@@ -448,12 +445,13 @@ bool tryLock() {
 }
 
 bool hasDevice() { return state().device != nullptr; }
-GsmDeviceBase& device() { return *state().device; }
+GsmDevice& device() { return *state().device; }
 const char* family() { return state().family; }
 
 void* allocate(size_t size, size_t alignment) { return allocMemory(size, alignment); }
+void release(void* memory) { freeMemory(memory); }
 
-void attach(GsmDeviceBase* made, void (*destroy)(GsmDeviceBase*), const char* familyName) {
+void attach(GsmDevice* made, void (*destroy)(GsmDevice*), const char* familyName) {
     State& s = state();
     if (s.device != nullptr || made == nullptr) { return; }
     s.device = made;
@@ -723,7 +721,7 @@ bool jobsBusy() {
 // Gives the serial link back - the interrupt, the rings, the service task -
 // and with them all the internal RAM the modem holds. True once nothing is
 // held. Called holding the lock.
-bool releaseLink() {
+[[maybe_unused]] bool releaseLink() {
 #if defined(ARDUINO_ARCH_ESP32)
     IramUart& uart = iramUart();
     if (!uart.holdsAnything()) { return true; }
@@ -959,7 +957,9 @@ GsmResult sendAt(Job& job, const char* command, uint32_t timeoutMs) {
 GsmResult sendSms(Job& job, const char* number, const char* text) {
     State& s = state();
     if (!s.open) { return GsmStatus::NotInitialised; }
-    if (!s.device->isRegistered()) { return GsmStatus::NotReady; }
+    // Stood down (bConnect FALSE, or switched off by Power): the module may
+    // still say it is registered, and is not to be used.
+    if (!s.wanted || !s.device->isRegistered()) { return GsmStatus::NotReady; }
     job.done = false;
     job.result = GsmStatus::Queued;
     const GsmResult accepted = s.device->sendSms(number, text, &onJobDone, &job);
@@ -1027,7 +1027,7 @@ int GsmPlcClient::connect(const char* host, uint16_t port) {
         snprintf(_why, sizeof _why, "no modem block has opened the modem");
         return 0;
     }
-    GsmDeviceBase& gsm = gsmplc::device();
+    GsmDevice& gsm = gsmplc::device();
     if (!gsm.isReady()) {
         snprintf(_why, sizeof _why, "the modem has no data connection (%s)",
                  gsm.stateName());

@@ -529,7 +529,7 @@ void loop()
     }
 
     const bool want = (bool)bConnect && !gsmplc::heldOff();
-    GsmDeviceBase& gsm = gsmplc::device();
+    GsmDevice& gsm = gsmplc::device();
     // Switched off, the modem gives its serial link and the RAM behind it
     // back once it is quiet (gsmplc::service()); switched on, it takes it again.
     gsmplc::want(want);
@@ -619,10 +619,11 @@ void loop()
     }
 
     // A method call that failed, by method and record, where the modem itself
-    // has nothing to report.
+    // has nothing to report. Stood down, eErrorId says why (PoweredOff,
+    // NotReady) and stays so.
     int failed = 0;
     const char* callFailed = gsmplc::callError(&failed);
-    if (callFailed != nullptr && !(bool)bError) {
+    if (callFailed != nullptr && !(bool)bError && want) {
         bError = true;
         eErrorId = (E_GSMRESULT)failed;
         sLastError = callFailed;

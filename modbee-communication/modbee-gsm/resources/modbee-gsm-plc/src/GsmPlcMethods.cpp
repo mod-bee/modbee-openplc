@@ -195,7 +195,7 @@ struct Calls {
 
     bool failing = false;
     char failKey[64] = {0};
-    char failText[64] = {0};
+    char failText[128] = {0};    // cut to sLastError's 64 by the block
     int failResult = kOk;
 
     // What the block's own call saw this scan, holding the lock.
@@ -530,7 +530,7 @@ namespace {
 // A new operation, holding the lock.
 void startPower(Calls& c, PowerRecord* r) {
     r->asked = false;
-    GsmDeviceBase& gsm = device();
+    GsmDevice& gsm = device();
     const uint32_t now = gsm_millis();
     r->why = GsmStatus::Ok;
 
@@ -606,7 +606,7 @@ void powerTickFn(Calls& c) {
     if (r->asked && r->op == 0) { startPower(c, r); }
     const int8_t op = r->op;
     if (op == 0) { return; }
-    GsmDeviceBase& gsm = device();
+    GsmDevice& gsm = device();
     const uint32_t now = gsm_millis();
     Job* job = r->job;
 
@@ -1127,7 +1127,7 @@ int socketCall(const Call& call, const SocketSpec& spec, SocketView& out) {
         r->sendAsked = false;
         return done(c, r, spec.open ? kNotReady : kOk);
     }
-    GsmDeviceBase& gsm = device();
+    GsmDevice& gsm = device();
 
     if (!spec.open) {
         closeIt();
@@ -1264,7 +1264,7 @@ int statusCall(const Call& call, uint32_t refreshMs, const StatusView** out) {
     TryHold hold;
     if (!hold.owned()) { return done(c, r, r->result); }
     if (!isOpen()) { return done(c, r, kNotReady); }
-    GsmDeviceBase& gsm = device();
+    GsmDevice& gsm = device();
 
     const uint32_t now = gsm_millis();
     if (refreshMs > 0 && gsm.isRegistered() &&
@@ -1314,7 +1314,7 @@ int timeCall(const Call& call, uint32_t refreshMs, TimeView& out) {
         out = r->view;
         return done(c, r, kNotReady);
     }
-    GsmDeviceBase& gsm = device();
+    GsmDevice& gsm = device();
     const uint32_t now = gsm_millis();
     int result = r->result == kNotSupported ? kNotSupported : kNotReady;
 
@@ -1377,7 +1377,7 @@ int gnssCall(const Call& call, bool enable, uint32_t refreshMs, GnssView& out) {
         out = v;
         return done(c, r, enable ? kNotReady : kOk);
     }
-    GsmDeviceBase& gsm = device();
+    GsmDevice& gsm = device();
     const uint32_t now = gsm_millis();
     // Not until the module has said what it is: whether it has a receiver is
     // learned from its answers, not assumed.
