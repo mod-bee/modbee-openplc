@@ -25,72 +25,95 @@ Add **node-uio** and **modbee-gsm** to the project in the Library Manager, and
 
 ## 3. The program
 
-The modem in a fast task of its own, beside the board:
+The modem in a fast task of its own, beside the board. The GSM HAT carries an
+A7670, so the block is `FB_GsmModemA7670`; a SIM7070 module takes
+`FB_GsmModemSim7070`, which is the same in every pin and method.
 
 ```
 PROGRAM modem_prg
   VAR
     board  : UIO;
     hat    : HAT_POWER;
-    modem  : GSM_MODEM;
-    status : GSM_STATUS;
+    modem  : FB_GsmModemA7670;
+    result : E_GsmResult;
+    rssi   : INT;
+    quality: E_GsmQuality;
   END_VAR
   VAR RETAIN
-    apn    : STRING(100) := 'internet';
+    apn    : ST_GsmApnConfig := (sApn := 'internet');
   END_VAR
 
   board();
   hat(ENABLE := TRUE);
-  modem(CONNECT := TRUE, APN := apn);
-  status(MODEM := modem, REFRESH := T#30s);
+  modem(bConnect := TRUE, stApnConfig := apn);
+  result := modem.Status(tRefresh := T#30s, nRssi => rssi, eQuality => quality);
 END_PROGRAM
 ```
 
 Run it in a task of **20 ms or faster**. The modem is read a little at a time
-on every scan, so a slow task is a slow modem.
+on every scan, so a slow task is a slow modem. Call the block before its
+methods, every scan, and call the methods in the same task: a method called
+from another task returns `E_GsmResult.WrongTask`.
 
-`APN` is the access point name your SIM's provider gives: `internet` is common,
-an IoT SIM often has its own. A SIM with a PIN also needs `SIM_PIN`. Because
-these are inputs, a `RETAIN` variable can carry them, and changing one takes
-effect without a download.
+`sApn` is the access point name your SIM's provider gives: `internet` is
+common, an IoT SIM often has its own. A SIM with a PIN also needs `sSimPin`.
+Because these are inputs, a `RETAIN` variable can carry them, and changing one
+takes effect without a download.
 
 ## 4. What to watch
 
-| Pin | What it means |
+| Output | What it means |
 | --- | --- |
-| `modem.STATE` | where the bring-up has got to: `GSM_SYNCING` (talking to the module), `GSM_SIM_WAIT`, `GSM_REGISTERING` (waiting for the network), `GSM_BEARER_UP` (opening data), `GSM_READY` |
-| `modem.REGISTERED` | the network has accepted the SIM. Text messages work from here |
-| `modem.READY` | the data connection is up. Sockets and MQTT work from here |
-| `modem.LAST_ERROR` | why it is not up, in words |
-| `status.RSSI` | signal strength in dBm. Better than -95 is good, below -105 is poor |
-| `status.QUALITY` | the same, judged |
+| `modem.eConnectionState` | where the bring-up has got to: `Syncing` (talking to the module), `SimWait`, `Registering` (waiting for the network), `BearerUp` (opening data), `Ready` |
+| `modem.bRegistered` | the network has accepted the SIM. Text messages work from here |
+| `modem.bConnected` | the data connection is up. Sockets and MQTT work from here |
+| `modem.sLastError` | why it is not up, in words; or which method call failed |
+| `Status`'s `nRssi` | signal strength in dBm. Better than -95 is good, below -105 is poor |
+| `Status`'s `eQuality` | the same, judged |
 
 A first start takes from about twenty seconds to a few minutes, depending on
 the network. After that the modem looks after itself: if the network or the
 data connection goes, it is brought back without the program doing anything.
 
-## 5. Changing the wiring
-
-On another board, or a HAT wired differently, add `GSM_ARDUINO` beside the
-modem:
+## 5. A text message
 
 ```
-board(MODEM := modem, PORT := 0, RX_PIN := 44, TX_PIN := 43, POWER_KEY_PIN := 10);
+result := modem.SendSms(anyText := 'Tank 3 high level', sNumber := oncall,
+                        bExecute := highLevel);
 ```
 
-The link is opened once, so a change applies at the next PLC start.
+On the rising edge of `bExecute` the message goes; `result` is
+`E_GsmResult.Queued` until the network has it, then `Ok` (or the reason it
+failed) until the next edge. Every message costs money on most plans, so put
+`bExecute` behind an edge and a timer if what drives it can flicker.
 
-## 6. On the Runtime
+## 6. Changing the wiring
 
-A USB modem on the OpenPLC Runtime needs only `GSM_MODEM`, with `DEVICE` set
-to its serial port, usually `/dev/ttyUSB2` or `/dev/ttyACM0`:
+On another board, or a HAT wired differently, set `stSerialConfig` and
+`stPowerConfig`:
 
 ```
-modem(CONNECT := TRUE, APN := apn, DEVICE := '/dev/ttyUSB2');
+serial.nUart := 0; serial.nRxPin := 44; serial.nTxPin := 43;
+power.nPowerKeyPin := 10; power.nRailPin := -1;
+modem(bConnect := TRUE, stApnConfig := apn, stSerialConfig := serial,
+      stPowerConfig := power);
 ```
 
-A USB modem is powered by the USB port, so there is no power key; `GSM_ARDUINO`
-says plainly that it has nothing to do there.
+The link is opened once, so a change applies at the next PLC start, and the
+block says so on `bError`.
+
+## 7. On the Runtime
+
+A USB modem on the OpenPLC Runtime needs only `stSerialConfig.sDevice`, its
+serial port, usually `/dev/ttyUSB2` or `/dev/ttyACM0`:
+
+```
+serial.sDevice := '/dev/ttyUSB2';
+modem(bConnect := TRUE, stApnConfig := apn, stSerialConfig := serial);
+```
+
+A USB modem is powered by the USB port, so there is no power key, and the
+board's pins are not used.
 
 ---
 

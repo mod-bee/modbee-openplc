@@ -760,6 +760,7 @@ bool takeLink(const char** why) {
 }
 
 void want(bool on) { state().wanted = on; }
+bool wanted() { return state().wanted; }
 
 bool isOpen() { return state().open; }
 const Link& openedWith() { return state().link; }

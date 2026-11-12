@@ -2,54 +2,70 @@
 
 Function blocks that put a cellular modem inside an OpenPLC program: the
 ModBee GSM HAT on a ModBee Node UIO, or a USB modem on the Runtime. One block
-brings the modem up and keeps it up; the others send and receive text
-messages, open a connection to a server, read the signal, the network time and
-a GPS position, and send any AT command. `MQTT_CLIENT` from `modbee-mqtt` uses
-the same modem with `TRANSPORT := MQTT_CELLULAR`.
+per modem module brings the modem up and keeps it up; everything else is a
+method of that block: text messages out and in, text-message commands, a
+connection to a server, the signal, the network time, a satellite position,
+any AT command, and the module's power. `FB_MqttClient` from `modbee-mqtt`
+uses the same modem with `eTransport := E_MqttTransport.Cellular`.
 
 These pages are for the person writing the ST or drawing the ladder. They
-assume you know a PLC, not a modem.
+assume you know a PLC, not a modem. Coming from 0.1.x? See
+[migrating from 0.1](migrating-from-0.1.md).
 
 ## Where to start
 
-**Want something working** — [01 Getting started](01-getting-started.md):
+**Want something working** - [01 Getting started](01-getting-started.md):
 the HAT, the SIM, and a program that comes online.
 
-**Sending to a broker** — [03 MQTT over cellular](03-mqtt-over-cellular.md).
+**Looking for a pin or a method** - [02 Block reference](02-block-reference.md).
 
-**Looking for a pin** — [02 Block reference](02-block-reference.md).
+**Sending to a broker** - [03 MQTT over cellular](03-mqtt-over-cellular.md).
 
-**It will not connect** — [04 Troubleshooting](04-troubleshooting.md), by what
+**It will not connect** - [04 Troubleshooting](04-troubleshooting.md), by what
 you are seeing.
 
 ## The blocks
 
-| Block | |
-| --- | --- |
-| `GSM_MODEM` | the modem: power, SIM, network, data. Call it first; a PLC has one |
-| `GSM_ARDUINO` | which UART and which pins, on a board. Optional: the defaults are the Node UIO's |
-| `GSM_RADIO` | which technology, bands and network to search. Optional |
-| `GSM_STATUS` | signal, network, addresses, serial numbers and counters, for a screen |
-| `GSM_SOCKET` | a TCP connection to a server, plain or TLS |
-| `GSM_SMS_SEND` | sends a text message |
-| `GSM_SMS_RECEIVE` | text messages arriving |
-| `GSM_GNSS` | the module's satellite position, where it has a receiver |
-| `GSM_TIME` | the time, from the network |
-| `GSM_AT` | any AT command, and its reply |
-| `GSM_POWER` | powers the module off, on, or restarts it |
+| Block | Module | |
+| --- | --- | --- |
+| `FB_GsmModemA7670` | SIMCom A7670, A7672, A7678, A7608 (LTE Cat-1) - the ModBee GSM HAT | links the A76XX driver only |
+| `FB_GsmModemSim7070` | SIMCom SIM7070, SIM7080, SIM7090 (LTE-M, NB-IoT) | links the SIM707x driver only |
+
+Pick the block for the module on the board: only its driver goes into the
+firmware (about 6 kB less flash than both), and a module of the other family
+is refused by name rather than driven wrongly.
+
+Their settings are option structures: `stApnConfig` (APN, user, password),
+`stSerialConfig` (the serial device, or a board's UART and pins),
+`stPowerConfig` (the power key and supply pins), `stRadioConfig` (radio mode,
+operator, bands) and `stCapacityConfig` (sockets, buffers, command queue).
+
+## The methods
+
+| Method | | Replaces (0.1.x) |
+| --- | --- | --- |
+| `SendSms` | sends a text message, on a rising edge | `GSM_SMS_SEND` |
+| `Inbox` | text messages arriving, one a call | `GSM_SMS_RECEIVE` |
+| `SmsCommand` | text-message commands from allowed numbers, with PINs, replies and a rate limit | `GSM_SMS_COMMAND` |
+| `AtCommand` | any AT command, and its reply | `GSM_AT` |
+| `Power` | switches the module off, on, or restarts it | `GSM_POWER` |
+| `Socket` | a TCP connection to a server, plain or TLS | `GSM_SOCKET` |
+| `Status` | signal, network, addresses, serial numbers and counters | `GSM_STATUS` |
+| `NetworkTime` | the time, from the network | `GSM_TIME` |
+| `Gnss` | the module's satellite position, where it has a receiver | `GSM_GNSS` |
 
 ## Three things worth knowing first
 
-**Nothing waits.** No block holds up a scan waiting for the modem: every
-operation starts, and a pin says when it has finished. The one exception is
-outside this library - `MQTT_CLIENT` opening its connection - and
-[page 03](03-mqtt-over-cellular.md) says how to keep it out of your machine's
-way.
+**Nothing waits.** No block or method holds up a scan waiting for the modem:
+a request starts on an edge and returns `E_GsmResult.Queued` until it is done.
+The one exception is outside this library - `FB_MqttClient` opening its
+connection - and [page 03](03-mqtt-over-cellular.md) says how it stays out of
+your machine's way.
 
 **It recovers by itself.** A lost network, a lost data connection or a module
 that stops answering is recovered without the program doing anything, and
-`GSM_STATUS` counts each time it happened.
+`Status` counts each time it happened.
 
-**Every setting is a pin.** The APN, its user and password, and the SIM PIN
+**Every setting is an input.** The APN, its user and password, and the SIM PIN
 are ordinary inputs, so they can come from `RETAIN` variables and change
 without a new download.

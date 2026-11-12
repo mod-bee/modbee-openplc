@@ -1,105 +1,94 @@
 # MQTT over cellular
 
-`MQTT_CLIENT` from `modbee-mqtt` sends over the modem with one setting:
+`FB_MqttClient` from `modbee-mqtt` sends over the modem with one setting:
 
 ```
-mqtt(TRANSPORT := MQTT_CELLULAR, HOST := 'broker.example.com', PORT := 1883,
-     CLIENT_ID := 'pump-station-4');
+mqtt(eTransport := E_MqttTransport.Cellular, sHost := 'broker.example.com',
+     nPort := 1883, sClientId := 'pump-station-4');
 ```
 
-Everything else about MQTT - publishing, subscribing, the will, the
-configuration blocks - is exactly as it is over WiFi. The modem is the one
-`GSM_MODEM` runs; the MQTT block finds it by itself, so there is no pin to
-wire between them.
+Everything else about MQTT - publishing, subscribing, the Will, Sparkplug - is
+exactly as it is over Wi-Fi. The modem is the one the modem block runs; the
+client finds it by itself, so there is nothing to wire between them and no
+method of the modem block to call.
 
 ## What it needs
 
 | | |
 | --- | --- |
-| the modbee-gsm library in the project | `MQTT_CELLULAR` switches on when it is there. Without it the client says `MQTT_CELLULAR needs the modbee-gsm library and a GSM_MODEM` |
-| a `GSM_MODEM` in the program | the client connects once `GSM_MODEM.READY` is TRUE; until then it says why on `LAST_ERROR` and keeps trying |
-| a board | `MQTT_CELLULAR` runs on a board. On the Runtime the client says `that transport needs a board, not the Runtime` |
+| the modbee-gsm library in the project | `E_MqttTransport.Cellular` switches on when it is there. Without it the client says `E_MqttTransport.Cellular needs a modbee-gsm modem block` |
+| a modem block in the program | `FB_GsmModemA7670` or `FB_GsmModemSim7070`. The client connects once the block's `bConnected` is TRUE; until then it says why on `sLastError` (`no modem block has opened the modem`, `the modem has no data connection (Registering)`) and keeps trying |
+| a board | `Cellular` runs on a board. On the Runtime the client says `that transport needs a board, not the Runtime` |
+
+The client may be called before the modem block in a scan, or in another
+task: it binds to the modem at its first connection, whenever that is.
 
 ## Security
 
-| `SECURITY` | over cellular |
-| --- | --- |
-| `MQTT_PLAIN` | no encryption. Port 1883 |
-| `MQTT_TLS_INSECURE` | encrypted by the modem itself, port 8883. The modem does **not** check the broker's certificate |
-| `MQTT_TLS_VERIFY` | refused: the modem cannot check a certificate, and the client will not pretend it did |
-| `MQTT_TLS_PINNED` | refused, for the same reason |
+On an ESP32 - the Node and every other ESP32 board - the modem opens a plain
+connection and the TLS runs on the controller, so **every `eSecurity` works over
+cellular** exactly as over Wi-Fi: `TlsVerify` checks the broker's chain and
+name, `TlsPinned` trusts one key. modbee-mqtt's page 03 has the detail.
 
-`MQTT_TLS_INSECURE` keeps the traffic private on the way but does not prove
-who answered. Use a broker login (`MQTT_CONFIG`) as well, and keep anything
-that can operate the plant behind more than the connection itself.
+A board without mbedTLS falls back to the modem's own TLS, which encrypts and
+checks no certificate: only `E_MqttSecurity.TlsInsecure` is accepted there,
+and `TlsVerify` and `TlsPinned` are refused rather than quietly downgraded.
 
-## Opening the connection holds the client's task
+## Opening the connection
 
-Everything the MQTT block does is non-blocking except opening the connection,
-which waits for the modem to say yes or no: about 1.5 s for a plain connection
-and 5 s for TLS, and never longer than `CONNECT_TIMEOUT` on `MQTT_CONFIG`
-(20 s when it is not set). It happens when the client connects and each time
-it reconnects - not every scan.
+Opening a connection waits for the modem to say yes or no: about 1.5 s for a
+plain socket. On an ESP32 it runs on a short task of the client's own, below
+the PLC's tasks, so no scan waits for it; it never takes longer than
+`stSessionConfig.tConnectTimeout` (20 s when it is not set). It happens when
+the client connects and each time it reconnects - not every scan. While it
+runs it holds the modem, and the modem block and its methods skip the modem
+for those scans; nothing is lost.
 
-So **put `MQTT_CLIENT` in a task of its own**, at a lower priority than the
-task that runs the machine. On an ESP32 each task runs by itself, so while the
-client waits only its own task waits. `GSM_MODEM` and the other GSM blocks in
-other tasks carry on; they simply skip the modem for the scans the client is
-using it.
+Set `stSessionConfig.tMaxSilence` on cellular - three keep-alives - so a link
+that the network has silently dropped is found and reconnected.
 
 Data use is small: an MQTT connection costs a few hundred bytes to open and
-about a hundred bytes a minute to keep alive at the default sixty-second
-keepalive. Every message costs its topic, its payload and a few bytes more.
+about a hundred bytes a minute to keep alive at a sixty-second keep-alive.
+Every message costs its topic, its payload and a few bytes more.
 
 ## A complete program
 
-The modem in a fast task, the client in a slower one of its own:
+The modem and the client in the network task:
 
 ```
-PROGRAM modem_prg              (* task: 10 ms, priority 1 *)
+PROGRAM net_prg                (* task: 20 ms *)
   VAR
     board  : UIO;
     hat    : HAT_POWER;
-    modem  : GSM_MODEM;
-    status : GSM_STATUS;
+    modem  : FB_GsmModemA7670;
+    mqtt   : FB_MqttClient;
+    every  : TON;
+    rssi   : INT;
+    result : E_GsmResult;
+    sent   : E_MqttResult;
   END_VAR
   VAR RETAIN
-    apn    : STRING(100) := 'internet';
-  END_VAR
-  VAR_EXTERNAL
-    gRssi  : REAL;
+    apn    : ST_GsmApnConfig;
   END_VAR
 
   board();
   hat(ENABLE := TRUE);
-  modem(CONNECT := TRUE, APN := apn);
-  status(MODEM := modem, REFRESH := T#30s);
-  gRssi := INT_TO_REAL(status.RSSI);
-END_PROGRAM
+  modem(bConnect := TRUE, stApnConfig := apn);
+  result := modem.Status(tRefresh := T#30s, nRssi => rssi);
 
-PROGRAM net_prg                (* task: 50 ms, priority 5 *)
-  VAR
-    mqtt  : MQTT_CLIENT;
-    pub   : MQTT_PUBLISH;
-    every : TON;
-  END_VAR
-  VAR_EXTERNAL
-    gRssi : REAL;
-  END_VAR
-
-  mqtt(TRANSPORT := MQTT_CELLULAR, HOST := 'broker.example.com', PORT := 1883,
-       CLIENT_ID := 'pump-station-4');
+  mqtt(eTransport := E_MqttTransport.Cellular, sHost := 'broker.example.com',
+       nPort := 1883, sClientId := 'pump-station-4');
   every(IN := NOT every.Q, PT := T#60s);
-  pub(CLIENT := mqtt, REQ := every.Q AND mqtt.CONNECTED,
-      TOPIC := 'site/pump-station-4/rssi', VALUE := gRssi, QOS := 1);
+  sent := mqtt.Publish(anyValue := rssi, sTopic := 'site/pump-station-4/rssi',
+                       eQos := E_MqttQos.AtLeastOnceDelivery, bExecute := every.Q);
 END_PROGRAM
 ```
 
 ## Sockets
 
-The modem has two connections at a time, shared between `MQTT_CLIENT` and
-`GSM_SOCKET`, and at most two of them encrypted. One client and one socket fit;
-a second client does not.
+Every MQTT client over the modem holds one of its sockets, as each `Socket`
+record does. `stCapacityConfig.nSocketCnt` is 2 by default: one client and
+one socket fit; a second client needs it raised.
 
 ---
 

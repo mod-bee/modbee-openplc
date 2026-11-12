@@ -116,6 +116,7 @@ struct AtRecord : RequestRecord {
 };
 
 struct InboxRecord : Record {
+    bool started = false;
     uint32_t seen = 0;
     char sender[24] = {0};
     char text[161] = {0};
@@ -526,7 +527,7 @@ int atCall(const Call& call, const char* command, size_t commandLength,
 
 namespace {
 
-// A new operation, holding the lock: the first steps of 0.1's GSM_POWER.
+// A new operation, holding the lock.
 void startPower(Calls& c, PowerRecord* r) {
     r->asked = false;
     GsmDeviceBase& gsm = device();
@@ -629,7 +630,7 @@ void powerTickFn(Calls& c) {
 
     if (op == 1) {
         const GsmState state = gsm.state();
-        if (!isOpen()) {
+        if (!isOpen() || !wanted()) {
             r->op = 0;
             r->result = kNotReady;     // the modem block's bConnect is FALSE
         } else if (state == GsmState::Failed) {
@@ -654,7 +655,7 @@ void powerTickFn(Calls& c) {
             // A module that does not answer its reset is the one a restart is
             // for: start the bring-up again, which powers it up afresh.
             gsm.stop();
-            if (!heldOff()) { gsm.start(); }
+            if (wanted()) { gsm.start(); }
             r->op = 0;
             r->why = job->result;
             r->result = statusOf(job->result);
@@ -671,7 +672,7 @@ void powerTickFn(Calls& c) {
         return;
     }
     if (gsm_isFuture(now, r->until)) { return; }
-    if (!heldOff()) { gsm.start(); }
+    if (wanted()) { gsm.start(); }
     r->op = 0;
     r->result = kOk;
 }
@@ -719,8 +720,9 @@ int inboxCall(const Call& call, bool enable, InboxView& out) {
     single.key = "";              // the SIM has one inbox
     InboxRecord* r = enter<InboxRecord>(single, kindInbox, &c, &refused);
     if (r == nullptr) { return refusedCall(c, kindInbox, single, refused); }
-    if (c->smsTick == nullptr) {
-        c->smsTick = &smsTickFn;
+    if (c->smsTick == nullptr) { c->smsTick = &smsTickFn; }
+    if (!r->started) {
+        r->started = true;
         r->seen = c->seq;         // what was taken before this record existed is not new
     }
 

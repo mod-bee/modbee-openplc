@@ -165,6 +165,7 @@ bool isOpen();
 // reason, when it cannot be taken (no memory, or a close not yet finished:
 // try next scan). open() takes it the first time.
 void want(bool on);
+bool wanted();
 bool takeLink(const char** why);
 const Link& openedWith();
 

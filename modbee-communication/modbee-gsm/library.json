@@ -3,7 +3,7 @@
   "displayName": "GSM",
   "version": "0.2.0",
   "namespace": "modbee_gsm",
-  "description": "Function blocks that put a cellular modem inside an OpenPLC program: the ModBee GSM HAT on a Node UIO, or a USB modem on the Runtime. One block brings the modem up and keeps it up - power, SIM, network, data - and recovers it by itself; the others send and receive SMS, open a TCP or TLS socket, read the signal, the network time and a GNSS fix, and send any AT command. MQTT_CLIENT uses the same modem with TRANSPORT := MQTT_CELLULAR. Every connection setting is a pin, so it can come from a retained variable. Nothing here blocks a scan.",
+  "description": "Function blocks that put a cellular modem inside an OpenPLC program: the ModBee GSM HAT on a Node UIO, or a USB modem on the Runtime. One block per modem module - FB_GsmModemA7670 (LTE Cat-1) or FB_GsmModemSim7070 (LTE-M and NB-IoT), each linking only its own driver - brings the modem up and keeps it up: power, SIM, network, data, and recovery by itself. Everything else is a method of that block: SendSms, Inbox, SmsCommand (text-message commands with PINs, replies and a rate limit), AtCommand, Power, Socket (TCP or TLS), Status, NetworkTime and Gnss. The APN, the serial link, the power pins, the radio and the capacity are option structures, so every setting can come from a retained variable. FB_MqttClient uses the same modem with eTransport := E_MqttTransport.Cellular. Nothing here blocks a scan. 0.2.0 replaces the twelve blocks of 0.1.x; a project on 0.1.x stays on it.",
   "build": {
     "verify": "arduino",
     "core": "esp32:esp32"
