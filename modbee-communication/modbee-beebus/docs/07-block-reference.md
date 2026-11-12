@@ -248,8 +248,10 @@ when what it is changes.
      STORE AND FORWARD for one of this node's topics (Topic, Publish): up to
      nDepth samples, each with the age it was taken at, held while there
      is nowhere to send them, so a subscriber that comes back gets the
-     history. 0 turns it off. nHeld: samples waiting. Ok, NotMapped (no
-     such topic on this node).
+     history. 0 turns it off. nHeld: samples waiting. A buffered topic
+     goes out from its ring, change by change: a subscriber's tPeriod does
+     not apply, and a new subscriber waits for the next change. Ok,
+     NotMapped (no such topic on this node).
 
   node.ModbusMap(anyData, eTable, nAddress, eOnLoss, nSafeValue,
                  nCount =>, bWritten =>, sWrittenName =>, nWrittenIndex =>,
@@ -803,7 +805,7 @@ for most sites; `0` and `T#0s` mean the library's default.
 
 | Member | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `sDevice` | `STRING(32)` |  | E_BeeBusTransport.RuntimeSerial: the device, '/dev/ttyUSB0' |
+| `sDevice` | `STRING(127)` |  | E_BeeBusTransport.RuntimeSerial: the device, '/dev/ttyUSB0' or a /dev/serial/by-id/ path |
 | `nBaud` | `DINT` |  | 0 = the transport's default: 115200 |
 | `nPort` | `BYTE` |  | E_BeeBusTransport.ArduinoSerial: the board's hardware serial, 0 = the first |
 | `nRxPin` | `INT` | `-1` | ArduinoSerial on an ESP32: the receive pin; -1 = the board's own |

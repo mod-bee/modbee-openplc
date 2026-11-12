@@ -241,8 +241,15 @@ If more samples arrive than `nDepth` holds, the oldest are overwritten and the
 loss is reported to the subscriber as a gap, so nobody is quietly misled about
 what they have. `nHeld` is how many are waiting.
 
+**A buffered topic goes out from its ring, change by change** - one path,
+network up or down, so a live value never jumps ahead of the history behind it.
+So a subscriber's `tPeriod` does not apply to it, and a subscriber that arrives
+while the value stands still gets nothing until it next changes: `eQuality`
+stays `Unknown` meanwhile.
+
 **Buffer the topics where the history matters** - a meter reading, a fault code,
-an event count. A temperature sampled every second rarely needs it.
+an event count. A temperature sampled every second rarely needs it, and a
+setting a panel must see at once should not be buffered.
 
 For a whole `STRUCT`, `node.Serve` has the same ring for every member
 (`nDepth`).

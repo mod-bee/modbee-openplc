@@ -219,8 +219,10 @@ when what it is changes.
      STORE AND FORWARD for one of this node's topics (Topic, Publish): up to
      nDepth samples, each with the age it was taken at, held while there
      is nowhere to send them, so a subscriber that comes back gets the
-     history. 0 turns it off. nHeld: samples waiting. Ok, NotMapped (no
-     such topic on this node).
+     history. 0 turns it off. nHeld: samples waiting. A buffered topic
+     goes out from its ring, change by change: a subscriber's tPeriod does
+     not apply, and a new subscriber waits for the next change. Ok,
+     NotMapped (no such topic on this node).
 
   node.ModbusMap(anyData, eTable, nAddress, eOnLoss, nSafeValue,
                  nCount =>, bWritten =>, sWrittenName =>, nWrittenIndex =>,
@@ -2395,6 +2397,10 @@ struct BbRecord {
   uint8_t wire = BEEBUS_T_COUNT;
   void* storage = nullptr;       // the address a single topic is bound to
   std::string* text = nullptr;   // Publish of a STRING: the copy its topic is bound to
+  // A single topic's name. The node keeps a pointer to it, so it is the
+  // record's own copy, never the method's parameter, which the next call
+  // overwrites.
+  std::string topicName;
   uint16_t topicId = 0;
   uint8_t peer = 0;
   uint16_t address = 0;
@@ -3160,7 +3166,8 @@ E_BEEBUSRESULT Topic()
         void* where = (void*)anyValue.PVALUE;
         const uint16_t textCap = (r->wire == BEEBUS_T_STRING && anyValue.DISIZE > 1)
                                      ? (uint16_t)anyValue.DISIZE : 0;
-        if (node->addTopicRaw(topicId, r->wire, where, false, sName.c_str(), textCap)) {
+        r->topicName = sName.c_str();
+        if (node->addTopicRaw(topicId, r->wire, where, false, r->topicName.c_str(), textCap)) {
           r->refused = false;
           r->bound = true;
           r->storage = where;
@@ -3231,9 +3238,10 @@ E_BEEBUSRESULT Publish()
         if (r->wire == BEEBUS_T_STRING && r->text == nullptr) r->text = new (std::nothrow) std::string();
         void* where = r->wire == BEEBUS_T_STRING ? (void*)r->text : (void*)anyValue.PVALUE;
         // Topic may already own it, which is not an error: this only sends it.
+        r->topicName = sName.c_str();
         if (where != nullptr &&
-            (node->addTopicRaw(topicId, r->wire, where, false, sName.c_str()) ||
-             node->topicIdOf(sName.c_str()) == topicId)) {
+            (node->addTopicRaw(topicId, r->wire, where, false, r->topicName.c_str()) ||
+             node->topicIdOf(r->topicName.c_str()) == topicId)) {
           r->refused = false;
           r->bound = true;
           r->storage = where;
@@ -3336,7 +3344,8 @@ E_BEEBUSRESULT Subscribe()
         void* where = (void*)anyValue.PVALUE;
         const uint16_t textCap = (r->wire == BEEBUS_T_STRING && anyValue.DISIZE > 1)
                                      ? (uint16_t)anyValue.DISIZE : 0;
-        if (node->registerTopicRaw(peer, topicId, r->wire, where, sName.c_str(), textCap)) {
+        r->topicName = sName.c_str();
+        if (node->registerTopicRaw(peer, topicId, r->wire, where, r->topicName.c_str(), textCap)) {
           r->refused = false;
           r->bound = true;
           r->storage = where;
