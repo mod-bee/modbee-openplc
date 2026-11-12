@@ -16,6 +16,7 @@ see one. `STATUS` is a `GSM_RESULT`: `GSM_OK` when all is well.
 | [`GSM_MODEM`](#gsm_modem) | Runs the cellular modem and hands itself to every other GSM block. |
 | [`GSM_POWER`](#gsm_power) | Powers the module off, on again, or restarts it - each an operation that concludes once. |
 | [`GSM_RADIO`](#gsm_radio) | Which radio, which bands, which operator. |
+| [`GSM_SMS_COMMAND`](#gsm_sms_command) | Text-message commands: a message from an allowed number that says one of COMMAND's words sets Q, and CMD says which - for whatever the program wires it to: a pump start, an irrigation stop, a modem restart, a controller reboot. |
 | [`GSM_SMS_RECEIVE`](#gsm_sms_receive) | Text messages arriving at the SIM, one at a time. |
 | [`GSM_SMS_SEND`](#gsm_sms_send) | Sends one text message when you ask. |
 | [`GSM_SOCKET`](#gsm_socket) | A TCP connection over the modem, plain or TLS, for a program that talks to a server itself. |
@@ -456,6 +457,128 @@ nothing on an ordinary 4G (Cat-1) module such as the A7670.
 The settings are read during the modem's bring-up. A change while the modem
 is up starts the bring-up again, which drops the data connection for the
 seconds that takes.
+
+---
+
+## GSM_SMS_COMMAND
+
+```
+Text-message commands: a message from an allowed number that says one of
+COMMAND's words sets Q, and CMD says which - for whatever the program wires it
+to: a pump start, an irrigation stop, a modem restart, a controller reboot.
+One block for a whole list (or a list of one), beside the one GSM_SMS_RECEIVE
+that reads the SIM.
+
+INBOX         the GSM_SMS_RECEIVE. Call it first in the scan, then every
+              GSM_SMS_COMMAND: they all look at the message it took this scan.
+ENABLE        FALSE ignores every message (and counts nothing).
+COMMAND       the commands, separated by commas: 'START, STOP, SET TIME'.
+              Upper or lower case, extra spaces: all the same. The first one a
+              message starts with is the one taken.
+ALLOWED       who may send it: phone numbers separated by commas or
+              semicolons, e.g. '+64 21 123 4567, 021 987 6543' (spaces inside a
+              number are fine). Matched on their
+              last 8 digits, so +64 21 ... and 021 ... are the same number.
+              A sender that is a NAME or a short code (a provider's portal,
+              e.g. 'PTT NZ' or '2001') is written as it arrives and matched
+              whole, upper or lower case. Not sure what a portal sends as?
+              Send a command: LAST_REFUSED shows it.
+              A name is never answered (it cannot be texted back).
+              Empty: nobody (the safe default). '*': anybody - only with a PIN.
+PIN           the operator PIN for COMMAND. 0 or less: no PIN. Above 0: the
+              message must start with it, e.g. '1111 START'.
+ADMIN_COMMAND commands that need ADMIN_PIN, as COMMAND: 'REBOOT, RECONNECT'.
+              Their CMD numbers follow COMMAND's (COMMAND has 8: the first
+              admin command is CMD 9).
+ADMIN_PIN     0 or less: no admin level - ADMIN_COMMAND is taken like COMMAND.
+              Above 0: ADMIN_COMMAND needs it ('9999 REBOOT'); an operator PIN
+              there is refused ('needs the admin PIN'). ADMIN_PIN works for
+              COMMAND too.
+PULSE         how long Q stays TRUE. T#0s: one scan.
+REPLY         0 never answer; 1 answer an accepted command (the default:
+              'OK REBOOT'); 2 also say why a message was refused. A refusal
+              never answers a number that is not on ALLOWED. Use 0 with a SIM
+              that cannot send texts (IoT plans that take them only from the
+              provider's portal), or every answer shows as ERROR.
+REPLY_TEXT    the answer instead of 'OK <command>', e.g. a status line the
+              program builds. Empty: 'OK <command> <argument>'.
+MAX_PER_HOUR  the most it acts in an hour; past it a message is refused. 0: no
+              limit. A command that reboots or starts a pump wants a small one.
+
+Q             TRUE for PULSE when an allowed message said one of COMMAND.
+CMD           which one, from 1 in COMMAND's order (held until the next).
+MATCHED       its words, as the block reads them: upper case, single spaces (held).
+ARG           what followed the command, e.g. '1500' in 'SETLEVEL 1500'.
+VALUE         ARG as a number; VALUE_OK when it was one.
+DURATION      ARG as a time; DURATION_OK when it was one: number-and-unit
+              pieces, D H M S MS, e.g. '3H30M10S', '90M', '1.5H', '2H 15M',
+              'T#3h30m'. A bare number is not a time.
+ADMIN         the last accepted command came with ADMIN_PIN.
+SENT_BY       who sent the last accepted command.
+COUNT         commands accepted since the PLC started.
+REFUSED       messages that said one of COMMAND and were refused: not on ALLOWED, a
+              wrong or missing PIN, or MAX_PER_HOUR reached.
+LAST_REFUSED  why, and from whom.
+ERROR         INBOX is not running (no modem), or a reply could not be sent.
+STATUS        why. GSM_OK when fine.
+```
+
+**In-out**
+
+| Pin | Type | Default |
+| --- | --- | --- |
+| `INBOX` | `GSM_SMS_RECEIVE` |  |
+
+**Inputs**
+
+| Pin | Type | Default |
+| --- | --- | --- |
+| `ENABLE` | `BOOL` | `TRUE` |
+| `COMMAND` | `STRING(160)` |  |
+| `ALLOWED` | `STRING(200)` |  |
+| `PIN` | `DINT` |  |
+| `ADMIN_COMMAND` | `STRING(160)` |  |
+| `ADMIN_PIN` | `DINT` |  |
+| `PULSE` | `TIME` |  |
+| `REPLY` | `USINT` | `1` |
+| `REPLY_TEXT` | `STRING(140)` |  |
+| `MAX_PER_HOUR` | `UINT` | `10` |
+
+**Outputs**
+
+| Pin | Type | Default |
+| --- | --- | --- |
+| `Q` | `BOOL` |  |
+| `CMD` | `INT` |  |
+| `MATCHED` | `STRING(32)` |  |
+| `ARG` | `STRING(64)` |  |
+| `VALUE` | `REAL` |  |
+| `VALUE_OK` | `BOOL` |  |
+| `DURATION` | `TIME` |  |
+| `DURATION_OK` | `BOOL` |  |
+| `ADMIN` | `BOOL` |  |
+| `SENT_BY` | `STRING(23)` |  |
+| `COUNT` | `UDINT` |  |
+| `REFUSED` | `UDINT` |  |
+| `LAST_REFUSED` | `STRING(64)` |  |
+| `ERROR` | `BOOL` |  |
+| `STATUS` | `GSM_RESULT` |  |
+
+inbox( MODEM := modem );
+  sms( INBOX := inbox, COMMAND := 'REBOOT, START, STOP', ALLOWED := numbers,
+       PIN := pin, MAX_PER_HOUR := 5 );
+  restart( REQ := sms.Q AND sms.CMD = 1 );
+  run.cmdStart := sms.Q AND sms.CMD = 2;
+
+ONLY ONE MESSAGE IS LOOKED AT EACH SCAN, the one GSM_SMS_RECEIVE took - so
+call the receive block first and this one after it, in the same task. A
+message that matches no command is ignored (and deleted from the SIM by
+GSM_SMS_RECEIVE, as always). Several GSM_SMS_COMMANDs may share one
+GSM_SMS_RECEIVE - for different numbers or PINs, say.
+
+A REPLY IS ONE SMS AND COSTS ONE. The block keeps its reply until the modem
+takes it; a command arriving meanwhile replaces it. A reply
+waits for the network to accept the SIM (REGISTERED), not for data.
 
 ---
 
