@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_SoilMap : (Jxct, Linear) := Jxct;
+END_TYPE

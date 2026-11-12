@@ -1,0 +1,10 @@
+TYPE
+  ST_SoilData : STRUCT
+    nUnitId : USINT := 1; (* the sensor's Modbus address, 1..247 (factory 1) *)
+    eMap : E_SoilMap := E_SoilMap.Jxct; (* its register map (Jxct unless the maker's sheet says otherwise) *)
+    tPeriod : TIME := T#10s; (* read it this often (at least 1 s: the sensor answers within 1 s) *)
+    eStatus : E_DeviceStatus; (* status *)
+    sStatus : STRING(30); (* status, in words *)
+    tAge : TIME; (* status: since the last good reading *)
+  END_STRUCT;
+END_TYPE

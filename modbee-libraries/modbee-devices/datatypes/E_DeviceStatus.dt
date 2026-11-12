@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_DeviceStatus : (Off, Ok, Setup, NoReply, Lost, BadData) := Off;
+END_TYPE
