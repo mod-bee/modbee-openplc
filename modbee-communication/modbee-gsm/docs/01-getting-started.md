@@ -40,11 +40,15 @@ PROGRAM modem_prg
     quality: E_GsmQuality;
   END_VAR
   VAR RETAIN
-    apn    : ST_GsmApnConfig := (sApn := 'internet');
+    apnName : STRING(100) := 'internet';
+  END_VAR
+  VAR
+    apn    : ST_GsmApnConfig;
   END_VAR
 
   board();
   hat(ENABLE := TRUE);
+  apn.sApn := apnName;
   modem(bConnect := TRUE, stApnConfig := apn);
   result := modem.Status(tRefresh := T#30s, nRssi => rssi, eQuality => quality);
 END_PROGRAM

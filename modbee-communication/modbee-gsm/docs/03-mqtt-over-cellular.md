@@ -68,11 +68,15 @@ PROGRAM net_prg                (* task: 20 ms *)
     sent   : E_MqttResult;
   END_VAR
   VAR RETAIN
+    apnName : STRING(100) := 'internet';
+  END_VAR
+  VAR
     apn    : ST_GsmApnConfig;
   END_VAR
 
   board();
   hat(ENABLE := TRUE);
+  apn.sApn := apnName;
   modem(bConnect := TRUE, stApnConfig := apn);
   result := modem.Status(tRefresh := T#30s, nRssi => rssi);
 
