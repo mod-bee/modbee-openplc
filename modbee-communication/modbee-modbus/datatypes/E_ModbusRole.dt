@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_ModbusRole : (Client, Server, Both) := Client;
+END_TYPE

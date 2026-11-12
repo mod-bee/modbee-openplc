@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_ModbusParity : (Even, Odd, None, None8N1) := Even;
+END_TYPE

@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_ModbusPointType : (Bit, Int16, UInt16, Int32, UInt32, Float32, RegisterBit) := UInt16;
+END_TYPE

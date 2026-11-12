@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_ModbusOrder : (ABCD, CDAB, BADC, DCBA) := ABCD;
+END_TYPE

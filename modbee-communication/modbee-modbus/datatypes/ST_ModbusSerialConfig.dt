@@ -1,0 +1,13 @@
+TYPE
+  ST_ModbusSerialConfig : STRUCT
+    sDevice   : STRING(48);                 (* the Runtime's serial device, '/dev/ttyUSB0' *)
+    nBaudRate : DINT;                       (* 0 = 19200, the Modbus default *)
+    eParity   : E_ModbusParity;             (* Even (default, 8E1), Odd, None (8N2, per the specification), None8N1 *)
+    nUnitId   : BYTE;                       (* a serial server: the unit id this node answers to, 1..247 *)
+    nUart     : BYTE;                       (* a board: which hardware serial, 0 for the first *)
+    nRxPin    : INT := -1;                  (* a board: receive pin, -1 = the board's own (ESP32 only) *)
+    nTxPin    : INT := -1;                  (* a board: transmit pin, -1 = the board's own (ESP32 only) *)
+    nDePin    : INT := -1;                  (* a board: the RS-485 driver-enable pin, -1 = none *)
+    tDeHold   : LTIME;                      (* a board: driver hold after the last byte where the UART cannot drive DE; 0 = two characters *)
+  END_STRUCT;
+END_TYPE
