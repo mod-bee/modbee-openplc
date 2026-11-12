@@ -1,0 +1,3 @@
+TYPE
+  E_OtaState : (Idle, Offered, Downloading, Verifying, Ready, Applying, Testing, Checking) := Idle;
+END_TYPE

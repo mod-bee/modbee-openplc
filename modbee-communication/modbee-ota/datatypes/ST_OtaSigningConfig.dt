@@ -1,0 +1,6 @@
+TYPE
+  ST_OtaSigningConfig : STRUCT
+    sPublicKey     : STRING(130);        (* the P-256 public key as 128 hex characters, as `modbee_ota.py pubkey` prints it without commas and 0x; empty = no check *)
+    bRequireSigned : BOOL;               (* refuse every update until sPublicKey holds a valid key, then every unsigned one *)
+  END_STRUCT;
+END_TYPE

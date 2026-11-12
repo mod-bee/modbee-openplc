@@ -1,0 +1,3 @@
+TYPE
+  E_OtaResult : (Ok, Pending, Busy, InvalidArgument, NotReady, NoMemory, Unsupported, IoError, WrongBoard, TooLarge, SameVersion, Downgrade, Unsigned, BadSignature, Refused, Timeout, BadChunk, HashMismatch, BadImage, Aborted, RolledBack, NotConfirmed, WrongTask) := Ok;
+END_TYPE

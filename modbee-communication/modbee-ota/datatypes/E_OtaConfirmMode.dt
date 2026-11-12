@@ -1,0 +1,3 @@
+TYPE
+  E_OtaConfirmMode : (OnLinkUp, Manual, OnBoot) := OnLinkUp;
+END_TYPE
