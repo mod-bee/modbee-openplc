@@ -81,7 +81,10 @@ topic path - and renaming the PLC moves everything built from its name.
 | | What happens |
 | --- | --- |
 | The PLC restarts | It connects with the retained login, without asking again |
-| A PLC is replaced | Download the same program - same `CLIENT_ID`, same key - to the new one. It registers, takes the name over, and the old PLC's login stops working |
+| A PLC is replaced | Download the same program - same `CLIENT_ID`, same key - to the new one. Once the old PLC is offline it registers with the same key (nothing to change on the broker), and the old PLC's login stops working. While the old PLC is still connected, the new one is refused and asks again every five minutes - a copy of the key never knocks a working PLC off |
+| A PLC is stolen or lost | An admin disables its login (`modbee user disable pump-station-3`): it is signed out at once and stays out. Nothing else changes - not the key, not another PLC |
+| The key's devices at once are online (`--devices`) | A key may limit how many of the PLCs it let in are online at the same time - any of them. One more is refused (`REFUSED`, the broker's reason in `REASON`) and asks again every five minutes, until one goes or the key is raised (`modbee key set ... --devices`) |
+| The key is turned off (`modbee key set ... --devices 0`) | Every PLC it let in is signed out and refused until the key is raised again - the same key, nothing to download |
 | An admin resets its login (`modbee user reset pump-station-3`) | The stored login is refused, so the PLC registers again with its key by itself. No site visit |
 | Registering again is pending or refused | The old login is **kept** until the broker issues a new one, so the PLC is never left with no login at all, and it tries the old one again every five minutes - a login put back on the broker works again by itself |
 | An admin disables it (`modbee user disable ...`) | It stays out. Registering again does not undo it - an admin enables it |
