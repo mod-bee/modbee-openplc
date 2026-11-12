@@ -1,0 +1,12 @@
+TYPE
+  ST_BeeBusNetworkConfig : STRUCT
+    sGroupAddr     : STRING(32);   (* the multicast group every node joins; empty = 239.192.7.126 *)
+    nUdpPort       : UINT;         (* the port every node uses; 0 = 7126 *)
+    nTtl           : BYTE;         (* RuntimeUdp: multicast hops; 0 = 1, this subnet *)
+    sInterfaceAddr : STRING(32);   (* RuntimeUdp: the interface address to send from; empty = the host's choice *)
+    sSsid          : STRING(32);   (* E_BeeBusTransport.ArduinoWiFi: the network to join *)
+    sWiFiPassword  : STRING(63);   (* its password, up to 63 characters (WPA2) *)
+    sMac           : STRING(32);   (* E_BeeBusTransport.ArduinoEthernet: this board's MAC, 'DE:AD:BE:EF:FE:ED' *)
+    sIp            : STRING(32);   (* ArduinoEthernet: a fixed address; empty = DHCP *)
+  END_STRUCT;
+END_TYPE

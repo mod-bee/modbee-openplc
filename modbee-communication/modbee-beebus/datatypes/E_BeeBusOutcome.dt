@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_BeeBusOutcome : (Accepted, Changed, Refused, ReadOnly, NoTopic, WrongType, Busy, NoAnswer) := NoAnswer;
+END_TYPE

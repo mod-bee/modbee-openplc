@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_BeeBusTransport : (RuntimeUdp, RuntimeSerial, ArduinoSerial, ArduinoWiFi, ArduinoEthernet) := RuntimeUdp;
+END_TYPE

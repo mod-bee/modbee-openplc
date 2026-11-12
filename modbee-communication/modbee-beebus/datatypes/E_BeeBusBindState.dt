@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_BeeBusBindState : (Offline, Syncing, InSync, Pending, Refused, Failed) := Offline;
+END_TYPE
