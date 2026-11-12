@@ -152,7 +152,9 @@ node.Map(anyData := nDemandSpeed, eTable := E_ModbusTable.HoldingRegister, nAddr
          bSafeApplied => bSpeedSafed);
 ```
 
-`stTimingConfig.tFailsafe` is the silence that counts as loss. `eOnLoss` on
+`stTimingConfig.tFailsafe` is the silence that counts as loss: no request
+from any client for that long - on TCP whether the client is still connected
+or has closed its connection. It fires once per loss. `eOnLoss` on
 the map says what that address does about it. `bSafeApplied` says when it
 happened.
 

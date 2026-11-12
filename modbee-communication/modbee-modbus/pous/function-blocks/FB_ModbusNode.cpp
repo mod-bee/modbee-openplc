@@ -102,8 +102,8 @@ METHODS
 Each call is found again by what it is about: its variable's declared name
 and type, and the method. A call with no variable (WriteSingleCoil,
 WriteSingleRegister, MaskWriteRegister, Device) is found by its unit and
-address. So one variable is one record per method. A node holds up to 256
-records; past that a method returns E_ModbusResult.QueueFull. Every method
+address. So one variable is one record per method; the same local in two
+instances of one function block is two. A node holds up to 256 records; past that a method returns E_ModbusResult.QueueFull. Every method
 runs in this block's task and returns E_ModbusResult.WrongTask in any other.
 
 A REQUEST (the Read and Write methods) starts on a rising edge of bExecute and
@@ -404,6 +404,20 @@ METHOD PUBLIC ReadWriteMultipleRegisters : E_ModbusResult
   END_VAR
 END_METHOD
 
+(* Reads a device's nameplate (function code 43, basic objects) on a rising
+   edge of bExecute. Queued, then Ok with the three strings, or why not. *)
+METHOD PUBLIC ReadDeviceIdentification : E_ModbusResult
+  VAR_INPUT
+    nUnitId          : BYTE;                     (* the device, 1..247 *)
+    bExecute         : BOOL;                     (* rising edge reads *)
+  END_VAR
+  VAR_OUTPUT
+    sVendor          : STRING(32);               (* who made it *)
+    sProduct         : STRING(32);               (* what it is *)
+    sRevision        : STRING(32);               (* which version *)
+  END_VAR
+END_METHOD
+
 (* Keeps anyData up to date from a device every tPeriod, called every scan.
    Returns the last read's result; eQuality says how much to believe it. *)
 METHOD PUBLIC Watch : E_ModbusResult
@@ -464,22 +478,8 @@ METHOD PUBLIC Points : E_ModbusResult
   VAR_OUTPUT
     nGoodCnt         : INT;                      (* enabled rows that are ok *)
     nLostCnt         : INT;                      (* enabled rows that are not *)
-    nFirstLost       : INT;                      (* the first such row's index in anySettings; 0 when none *)
+    nFirstLost       : INT;                      (* the first such row, counted from 1; 0 when none *)
     sStatusText      : STRING(30);               (* that row in a few words, for a panel *)
-  END_VAR
-END_METHOD
-
-(* Reads a device's nameplate (function code 43, basic objects) on a rising
-   edge of bExecute. Queued, then Ok with the three strings, or why not. *)
-METHOD PUBLIC ReadDeviceIdentification : E_ModbusResult
-  VAR_INPUT
-    nUnitId          : BYTE;                     (* the device, 1..247 *)
-    bExecute         : BOOL;                     (* rising edge reads *)
-  END_VAR
-  VAR_OUTPUT
-    sVendor          : STRING(32);               (* who made it *)
-    sProduct         : STRING(32);               (* what it is *)
-    sRevision        : STRING(32);               (* which version *)
   END_VAR
 END_METHOD
 
@@ -697,13 +697,12 @@ static ModbusWideType mbb_wideTypeOfClass(uint32_t typeClass)
     return ModbusWideType::None;
 }
 
-// A scalar numeric or BOOL pin read as a number, for a write point. False for
-// a type that is not one.
-static bool mbb_numberOf(const strucpp::IEC_ANY& any, double& out)
+// One value of an elementary class at `p`, as a number: a BOOL is 0 or 1, a
+// TIME its nanoseconds, an enumeration its ordinal (`bits` wide). False for a
+// class that is not a number.
+static bool mbb_readClass(uint32_t cls, uint32_t bits, const uint8_t* p, double& out)
 {
-    if (any.PVALUE == nullptr || any.DICOUNT != 1) return false;
-    const void* p = any.PVALUE;
-    switch ((uint32_t)any.TYPECLASS) {
+    switch (cls) {
         case strucpp::TYPE_CLASS::TYPE_BOOL:
         case strucpp::TYPE_CLASS::TYPE_BIT:   out = *(const bool*)p ? 1.0 : 0.0; return true;
         case strucpp::TYPE_CLASS::TYPE_SINT:  out = *(const int8_t*)p; return true;
@@ -720,22 +719,27 @@ static bool mbb_numberOf(const strucpp::IEC_ANY& any, double& out)
         case strucpp::TYPE_CLASS::TYPE_ULINT: out = (double)*(const uint64_t*)p; return true;
         case strucpp::TYPE_CLASS::TYPE_REAL:  out = *(const float*)p; return true;
         case strucpp::TYPE_CLASS::TYPE_LREAL: out = *(const double*)p; return true;
+        case strucpp::TYPE_CLASS::TYPE_TIME:
+        case strucpp::TYPE_CLASS::TYPE_LTIME: out = (double)*(const int64_t*)p; return true;
+        case strucpp::TYPE_CLASS::TYPE_ENUM:
+            if (bits == 8)  { out = *(const int8_t*)p;  return true; }
+            if (bits == 16) { out = *(const int16_t*)p; return true; }
+            if (bits == 32) { out = *(const int32_t*)p; return true; }
+            if (bits == 64) { out = (double)*(const int64_t*)p; return true; }
+            return false;
         default: break;
     }
     return false;
 }
 
-// And the way back, for a read point: rounded to the nearest for an integer,
-// clamped to its range.
-static bool mbb_storeNumber(const strucpp::IEC_ANY& any, double v)
+// And the way back: rounded to the nearest for an integer, held to its range.
+static bool mbb_writeClass(uint32_t cls, uint32_t bits, uint8_t* p, double v)
 {
-    if (any.PVALUE == nullptr || any.DICOUNT != 1) return false;
-    void* p = any.PVALUE;
     auto clamp = [](double x, double lo, double hi) {
         x = x < 0 ? x - 0.5 : x + 0.5;
         return x < lo ? lo : (x > hi ? hi : x);
     };
-    switch ((uint32_t)any.TYPECLASS) {
+    switch (cls) {
         case strucpp::TYPE_CLASS::TYPE_BOOL:
         case strucpp::TYPE_CLASS::TYPE_BIT:   *(bool*)p = v != 0.0; return true;
         case strucpp::TYPE_CLASS::TYPE_SINT:  *(int8_t*)p = (int8_t)clamp(v, -128, 127); return true;
@@ -756,9 +760,31 @@ static bool mbb_storeNumber(const strucpp::IEC_ANY& any, double v)
             *(uint64_t*)p = (uint64_t)clamp(v, 0, 1.8e19); return true;
         case strucpp::TYPE_CLASS::TYPE_REAL:  *(float*)p = (float)v; return true;
         case strucpp::TYPE_CLASS::TYPE_LREAL: *(double*)p = v; return true;
+        case strucpp::TYPE_CLASS::TYPE_TIME:
+        case strucpp::TYPE_CLASS::TYPE_LTIME: *(int64_t*)p = (int64_t)v; return true;
+        case strucpp::TYPE_CLASS::TYPE_ENUM:
+            if (bits == 8)  { *(int8_t*)p = (int8_t)v;   return true; }
+            if (bits == 16) { *(int16_t*)p = (int16_t)v; return true; }
+            if (bits == 32) { *(int32_t*)p = (int32_t)v; return true; }
+            return false;
         default: break;
     }
     return false;
+}
+
+// A scalar numeric or BOOL pin, for a point. False for anything else.
+static bool mbb_numberOf(const strucpp::IEC_ANY& any, double& out)
+{
+    if (any.PVALUE == nullptr || any.DICOUNT != 1 ||
+        (uint32_t)any.TYPECLASS == strucpp::TYPE_CLASS::TYPE_TIME ||
+        (uint32_t)any.TYPECLASS == strucpp::TYPE_CLASS::TYPE_LTIME) return false;
+    return mbb_readClass((uint32_t)any.TYPECLASS, (uint32_t)any.DISIZE * 8, any.PVALUE, out);
+}
+
+static bool mbb_storeNumber(const strucpp::IEC_ANY& any, double v)
+{
+    if (any.PVALUE == nullptr || any.DICOUNT != 1) return false;
+    return mbb_writeClass((uint32_t)any.TYPECLASS, (uint32_t)any.DISIZE * 8, any.PVALUE, v);
 }
 
 #if defined(MODBUS_PLATFORM_ARDUINO)
@@ -1002,6 +1028,7 @@ struct MbbRecord {
     std::string name;
     std::string type;
     const void* cache = nullptr;
+    uint32_t usedScan = 0;          // the node scan this record was last called in
 
     // A request: the edge, and the conclusion its completion handler brings.
     bool lastExecute = false;
@@ -1046,6 +1073,7 @@ struct MbbRecord {
 
 struct MbbMethods {
     std::vector<MbbRecord*> records;
+    uint32_t scan = 1;              // counted by the node, once per call
     // The last method call that failed: the node's bError / sLastError name it
     // until that call succeeds.
     std::string failKey;
@@ -1115,14 +1143,27 @@ static MbbRecord* mbb_recordOf(MbbMethods* m, uint8_t kind, const strucpp::IEC_A
     key = mbb_fingerprint(key, name, strlen(name));
     key = mbb_fingerprint(key, type, strlen(type));
 
+    // The same variable at the same address first. Then the same name and
+    // type at another address: the variable moved - unless that record has
+    // already been called this scan, when it is another variable of the same
+    // spelling (the same local in two instances of one function block) and
+    // gets a record of its own.
+    if (named && any->PVALUE != nullptr) {
+        for (size_t i = 0; i < m->records.size(); i++) {
+            MbbRecord* r = m->records[i];
+            if (r->kind == kind && r->key == key && r->cache == any->PVALUE) {
+                r->usedScan = m->scan;
+                return r;
+            }
+        }
+    }
     for (size_t i = 0; i < m->records.size(); i++) {
         MbbRecord* r = m->records[i];
-        if (r->kind != kind || r->key != key) continue;
-        if (named && any->PVALUE != nullptr && r->cache == any->PVALUE) return r;
-        if (r->name == name && r->type == type) {
-            if (named) r->cache = any->PVALUE;
-            return r;
-        }
+        if (r->kind != kind || r->key != key || r->name != name || r->type != type) continue;
+        if (named && r->usedScan == m->scan) continue;
+        if (named) r->cache = any->PVALUE;
+        r->usedScan = m->scan;
+        return r;
     }
     if (m->records.size() >= (size_t)MBB_MAX_RECORDS) return nullptr;
     MbbRecord* r = new (std::nothrow) MbbRecord();
@@ -1132,6 +1173,7 @@ static MbbRecord* mbb_recordOf(MbbMethods* m, uint8_t kind, const strucpp::IEC_A
     r->name = name;
     r->type = type;
     r->cache = named ? any->PVALUE : nullptr;
+    r->usedScan = m->scan;
     m->records.push_back(r);
     return r;
 }
@@ -1216,6 +1258,7 @@ void setup()
 void loop()
 {
     nTask = mbb_currentTask();   // the methods compare against it: ONE TASK, above
+    if (MbbMethods* calls = (MbbMethods*)(uintptr_t)(strucpp::XWORD_t)nMethods) calls->scan++;
     ModbusAPI* mb = (ModbusAPI*)(uintptr_t)(strucpp::XWORD_t)nApi;
 
     // Standing down: the port released and the socket dropped, so something
@@ -2088,6 +2131,46 @@ static bool mbb_isArrayOf(const strucpp::IEC_ANY& any, const char* type) {
            any.TYPEDESC->NAME != nullptr && strcasecmp(any.TYPEDESC->NAME, type) == 0;
 }
 
+// The point tables are reached through their descriptors, member by name,
+// never through the generated STRUCT types: a program that does not declare
+// them gets no C++ type for them, and this file must still compile there.
+namespace {
+struct MbbMember {
+    uint32_t offset = 0;
+    uint32_t cls = 0;
+    uint32_t bits = 0;
+    bool found = false;
+};
+MbbMember mbb_member(const strucpp::TypeDesc* desc, const char* name) {
+    MbbMember m;
+    for (uint16_t i = 0; i < desc->MEMBERCOUNT; i++) {
+        const strucpp::MemberDesc& d = desc->MEMBERS[i];
+        if (d.NAME != nullptr && strcasecmp(d.NAME, name) == 0) {
+            m.offset = d.BYTEOFFSET;
+            m.cls = (uint32_t)d.TYPECLASS;
+            m.bits = d.BITSIZE;
+            m.found = true;
+            break;
+        }
+    }
+    return m;
+}
+double mbb_get(const uint8_t* row, const MbbMember& m) {
+    double v = 0.0;
+    if (m.found) mbb_readClass(m.cls, m.bits, row + m.offset, v);
+    return v;
+}
+void mbb_set(uint8_t* row, const MbbMember& m, double v) {
+    if (m.found) mbb_writeClass(m.cls, m.bits, row + m.offset, v);
+}
+int32_t mbb_getMs(const uint8_t* row, const MbbMember& m) {
+    const double ns = mbb_get(row, m);
+    if (ns <= 0) return 0;
+    const double ms = (ns + 999999.0) / 1000000.0;
+    return ms > 2147483647.0 ? 2147483647 : (int32_t)ms;
+}
+}  // namespace
+
 strucpp::E_MODBUSRESULT Points()
 {
     if (!mbb_inTask((strucpp::XWORD_t)nTask)) return strucpp::E_MODBUSRESULT::WRONGTASK;
@@ -2099,18 +2182,25 @@ strucpp::E_MODBUSRESULT Points()
             sStatusText = "not point tables";
             return strucpp::E_MODBUSRESULT::INVALIDARGUMENT;
         }
+        const strucpp::TypeDesc* cd = anySettings.TYPEDESC;
+        const strucpp::TypeDesc* sd = anyPoints.TYPEDESC;
+        const MbbMember cUnit = mbb_member(cd, "nUnitId"), cFn = mbb_member(cd, "eFunction"),
+                        cAddr = mbb_member(cd, "nAddress"), cType = mbb_member(cd, "eType"),
+                        cOrder = mbb_member(cd, "eOrder"), cBit = mbb_member(cd, "nBit"),
+                        cScale = mbb_member(cd, "fScale"), cOffset = mbb_member(cd, "fOffset"),
+                        cPeriod = mbb_member(cd, "tPeriod"), cStale = mbb_member(cd, "tStale"),
+                        cTimeout = mbb_member(cd, "tTimeout"), cEnable = mbb_member(cd, "bEnable");
+        const MbbMember sWrite = mbb_member(sd, "fWriteValue"), sValue = mbb_member(sd, "fValue"),
+                        sBit = mbb_member(sd, "bValue"), sOk = mbb_member(sd, "bOk"),
+                        sQuality = mbb_member(sd, "eQuality"), sAge = mbb_member(sd, "tAge"),
+                        sFailures = mbb_member(sd, "nFailures"), sResult = mbb_member(sd, "eResult");
+
         int64_t rows = anySettings.DICOUNT;
         if (anyPoints.DICOUNT < rows) rows = anyPoints.DICOUNT;
-        auto cfgAt = [&](int64_t k) -> strucpp::ST_MODBUSPOINTCONFIG& {
-            return *(strucpp::ST_MODBUSPOINTCONFIG*)anySettings.at((int32_t)k);
-        };
-        auto stsAt = [&](int64_t k) -> strucpp::ST_MODBUSPOINTSTATUS& {
-            return *(strucpp::ST_MODBUSPOINTSTATUS*)anyPoints.at((int32_t)k);
-        };
 
         ModbusAPI* mb = MBB_LINK();
         if (mb == nullptr || !(bool)bLinkUp) {
-            for (int64_t k = 0; k < rows; k++) stsAt(k).BOK = false;
+            for (int64_t k = 0; k < rows; k++) mbb_set(anyPoints.at((int32_t)k), sOk, 0.0);
             nGoodCnt = 0;
             nLostCnt = (int16_t)rows;
             nFirstLost = 0;
@@ -2137,48 +2227,50 @@ strucpp::E_MODBUSRESULT Points()
         uint8_t firstUnit = 0;
 
         for (int64_t k = 0; k < rows; k++) {
-            strucpp::ST_MODBUSPOINTCONFIG& cfg = cfgAt(k);
-            strucpp::ST_MODBUSPOINTSTATUS& sts = stsAt(k);
+            const uint8_t* cfg = anySettings.at((int32_t)k);
+            uint8_t* sts = anyPoints.at((int32_t)k);
             ModbusPoint* point = mb->points().at(r->index - 1 + (size_t)k);
             if (point == nullptr) continue;
-            const bool enabled = (bool)cfg.BENABLE && (bool)bEnable;
+            const bool fitted = mbb_get(cfg, cEnable) != 0.0;
+            const bool enabled = fitted && (bool)bEnable;
+            const uint8_t unit = (uint8_t)mbb_get(cfg, cUnit);
             const ModbusPointConfig wanted = mbb_pointConfig(
-                (uint8_t)cfg.NUNITID, (int)(strucpp::E_MODBUSPOINTFUNCTION)cfg.EFUNCTION, (uint16_t)cfg.NADDRESS,
-                (int)(strucpp::E_MODBUSPOINTTYPE)cfg.ETYPE, (int)(strucpp::E_MODBUSORDER)cfg.EORDER, (uint8_t)cfg.NBIT,
-                (float)cfg.FSCALE, (float)cfg.FOFFSET, mbb_millisOf(cfg.TPERIOD),
-                mbb_millisOf(cfg.TSTALE), mbb_millisOf(cfg.TTIMEOUT), enabled);
+                unit, (int)mbb_get(cfg, cFn), (uint16_t)mbb_get(cfg, cAddr), (int)mbb_get(cfg, cType),
+                (int)mbb_get(cfg, cOrder), (uint8_t)mbb_get(cfg, cBit), (float)mbb_get(cfg, cScale),
+                (float)mbb_get(cfg, cOffset), mbb_getMs(cfg, cPeriod), mbb_getMs(cfg, cStale),
+                mbb_getMs(cfg, cTimeout), enabled);
             const bool valid = mbb_pointApply(mb, point, wanted);
-            point->setWriteValue((double)(float)sts.FWRITEVALUE);
+            point->setWriteValue((double)(float)mbb_get(sts, sWrite));
 
             const ModbusQuality quality = enabled ? point->quality(now) : ModbusQuality::Unknown;
             const bool ok = valid && enabled && point->ok(now);
-            sts.EQUALITY = (strucpp::E_MODBUSQUALITY)(int32_t)(int)quality;
-            sts.BOK = ok;
-            sts.FVALUE = (float)point->value();
-            sts.BVALUE = point->asBit();
+            mbb_set(sts, sQuality, (double)(int)quality);
+            mbb_set(sts, sOk, ok ? 1.0 : 0.0);
+            mbb_set(sts, sValue, (double)(float)point->value());
+            mbb_set(sts, sBit, point->asBit() ? 1.0 : 0.0);
             const mb_time_t age = point->age(now);
-            sts.TAGE = mbb_timeOf(age == ModbusPoller::NEVER ? 0 : (int32_t)age);
-            sts.NFAILURES = point->failures();
+            mbb_set(sts, sAge, age == ModbusPoller::NEVER ? 0.0 : (double)age * 1000000.0);
+            mbb_set(sts, sFailures, (double)point->failures());
             const ModbusResult last = valid ? point->lastResult() : ModbusResult::InvalidArgument;
-            sts.ERESULT = mbb_result(last);
+            mbb_set(sts, sResult, (double)(int)last);
 
-            if (!(bool)cfg.BENABLE) continue;   // not fitted: neither good nor lost
+            if (!fitted) continue;   // not fitted: neither good nor lost
             if (ok) {
                 good++;
             } else {
                 lost++;
                 if (firstLost < 0) {
-                    firstLost = k;
+                    firstLost = k + 1;   // a row number from 1: 0 is none
                     firstResult = last;
                     firstInvalid = !valid;
                     firstNever = !point->everGood();
-                    firstUnit = (uint8_t)cfg.NUNITID;
+                    firstUnit = unit;
                 }
             }
         }
         nGoodCnt = good;
         nLostCnt = lost;
-        nFirstLost = firstLost >= 0 ? (int16_t)firstLost : 0;
+        nFirstLost = firstLost > 0 ? (int16_t)firstLost : 0;
 
         // One short line for a panel; the codes are in each row.
         char text[31];
