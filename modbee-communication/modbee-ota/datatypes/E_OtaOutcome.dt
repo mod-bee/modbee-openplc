@@ -1,3 +1,4 @@
 TYPE
+  {attribute 'qualified_only'}
   E_OtaOutcome : (None, Success, Failed) := None;
 END_TYPE

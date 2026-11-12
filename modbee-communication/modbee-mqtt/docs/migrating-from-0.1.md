@@ -48,7 +48,8 @@ core ( NODE := sp, DATA := STS );
 - **Each method returns an `E_MqttResult`.** The `ERROR`/`STATUS` pair of every
   0.1.x block is that result; `DONE` and `BUSY` are `Ok` and `Queued`.
 - **Outputs are read with `=>`**: `mqtt.Subscribe(..., eQuality => q)`.
-- **Enumerations are qualified**: `E_MqttResult.Ok`, not `MQTT_OK`.
+- **Enumerations are qualified**: `E_MqttResult.Ok`, not `MQTT_OK`. Each type is
+  `{attribute 'qualified_only'}`, so a bare `Ok` does not compile.
 
 ## Blocks
 

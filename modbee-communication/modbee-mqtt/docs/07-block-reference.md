@@ -2050,7 +2050,7 @@ for most sites; `0` and `T#0s` mean the library's default.
 
 ## Enumerations
 
-Used qualified: `E_MqttQos.AtLeastOnceDelivery`, `E_MqttResult.Ok`.
+Each is `{attribute 'qualified_only'}`, so a value is always written with its type: `E_MqttQos.AtLeastOnceDelivery`, `E_MqttResult.Ok`. A bare `Ok` does not compile.
 
 | Enumeration | Values, in order | Default |
 | --- | --- | --- |

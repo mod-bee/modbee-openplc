@@ -1,3 +1,4 @@
 TYPE
+  {attribute 'qualified_only'}
   E_MqttTrigger : (OnChange, OnInterval, OnRequest, ChangedEvery) := OnChange;
 END_TYPE

@@ -1,3 +1,4 @@
 TYPE
+  {attribute 'qualified_only'}
   E_MqttQos : (AtMostOnceDelivery, AtLeastOnceDelivery, ExactlyOnceDelivery) := AtMostOnceDelivery;
 END_TYPE

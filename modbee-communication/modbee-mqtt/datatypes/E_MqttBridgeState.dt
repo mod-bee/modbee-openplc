@@ -1,3 +1,4 @@
 TYPE
+  {attribute 'qualified_only'}
   E_MqttBridgeState : (Idle, Connecting, Up, Degraded) := Idle;
 END_TYPE

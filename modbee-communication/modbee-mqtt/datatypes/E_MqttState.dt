@@ -1,3 +1,4 @@
 TYPE
+  {attribute 'qualified_only'}
   E_MqttState : (Idle, Connecting, AwaitingConnAck, Authenticating, Connected, Disconnecting, Reconnecting) := Idle;
 END_TYPE

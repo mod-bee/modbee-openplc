@@ -1,3 +1,4 @@
 TYPE
+  {attribute 'qualified_only'}
   E_MqttSecurity : (Plain, TlsVerify, TlsPinned, TlsInsecure) := Plain;
 END_TYPE

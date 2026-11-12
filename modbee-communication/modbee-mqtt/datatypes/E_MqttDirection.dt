@@ -1,3 +1,4 @@
 TYPE
+  {attribute 'qualified_only'}
   E_MqttDirection : (Out, In, Both) := Out;
 END_TYPE

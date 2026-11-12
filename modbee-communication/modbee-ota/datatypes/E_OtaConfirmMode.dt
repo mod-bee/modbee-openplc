@@ -1,3 +1,4 @@
 TYPE
+  {attribute 'qualified_only'}
   E_OtaConfirmMode : (OnLinkUp, Manual, OnBoot) := OnLinkUp;
 END_TYPE

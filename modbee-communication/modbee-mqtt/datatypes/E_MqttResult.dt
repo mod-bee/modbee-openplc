@@ -1,3 +1,4 @@
 TYPE
+  {attribute 'qualified_only'}
   E_MqttResult : (Queued, Ok, NotInitialised, InvalidArgument, InvalidTopic, NotConnected, QueueFull, Duplicate, Superseded, Cancelled, NotSupportedByProtocol, NotSupportedByPeer, PacketTooLarge, QuotaExceeded, NoPacketIdentifier, Refused, NoMatchingSubscribers, TopicNameInvalid, NotAuthorized, PayloadFormatInvalid, QuotaExceededByPeer, PacketIdentifierInUse, ConnectionLost, SessionLost, ConnectionRefused, ProtocolError, MalformedPacket, KeepAliveTimeout, AckTimeout, SessionTakenOver, WrongTask) := Ok;
 END_TYPE
