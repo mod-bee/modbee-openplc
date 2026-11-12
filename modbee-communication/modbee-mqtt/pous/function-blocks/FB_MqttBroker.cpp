@@ -287,17 +287,20 @@ struct MqBrokerUsers {
     size_t next = 0;             // calls come in the same order every scan
 };
 
-std::vector<MqttBrokerAccounts*> mqOwnedAccounts;
-std::vector<MqBrokerUsers*> mqOwnedUsers;
-struct MqAccountsCleanup {
-    ~MqAccountsCleanup() {
-        for (size_t i = 0; i < mqOwnedAccounts.size(); i++) delete mqOwnedAccounts[i];
-        mqOwnedAccounts.clear();
-        for (size_t i = 0; i < mqOwnedUsers.size(); i++) delete mqOwnedUsers[i];
-        mqOwnedUsers.clear();
+// Made on first use, so a program that never uses this block links none of
+// it, and freed when the program is unloaded, before what was made earlier.
+struct MqAccountsOwned {
+    std::vector<MqttBrokerAccounts*> accounts;
+    std::vector<MqBrokerUsers*> users;
+    ~MqAccountsOwned() {
+        for (size_t i = 0; i < accounts.size(); i++) delete accounts[i];
+        for (size_t i = 0; i < users.size(); i++) delete users[i];
     }
 };
-MqAccountsCleanup mqAccountsCleanup;
+MqAccountsOwned& mqAccountsOwned() {
+    static MqAccountsOwned owned;
+    return owned;
+}
 }  // namespace
 
 // The table behind a handle, made if this is the first time it is asked for.
@@ -305,7 +308,7 @@ static MqttBrokerAccounts* mq_brokerAccounts(strucpp::XWORD_t& handle) {
     if (handle) return (MqttBrokerAccounts*)(uintptr_t)handle;
     MqttBrokerAccounts* accounts = new (std::nothrow) MqttBrokerAccounts();
     if (!accounts) return nullptr;
-    mqOwnedAccounts.push_back(accounts);
+    mqAccountsOwned().accounts.push_back(accounts);
     handle = (strucpp::XWORD_t)(uintptr_t)accounts;
     return accounts;
 }
@@ -314,7 +317,7 @@ static MqBrokerUsers* mq_brokerUsers(strucpp::XWORD_t& handle) {
     if (handle) return (MqBrokerUsers*)(uintptr_t)handle;
     MqBrokerUsers* users = new (std::nothrow) MqBrokerUsers();
     if (!users) return nullptr;
-    mqOwnedUsers.push_back(users);
+    mqAccountsOwned().users.push_back(users);
     handle = (strucpp::XWORD_t)(uintptr_t)users;
     return users;
 }
@@ -398,16 +401,19 @@ struct MqBrokerPair {
 };
 }  // namespace
 
-static std::vector<MqBrokerPair*> mqOwnedBrokers;
-
 namespace {
-struct MqBrokerCleanup {
-    ~MqBrokerCleanup() {
-        for (size_t i = 0; i < mqOwnedBrokers.size(); i++) delete mqOwnedBrokers[i];
-        mqOwnedBrokers.clear();
+// Made on first use, so a program that never uses this block links none of
+// it, and freed when the program is unloaded, before what was made earlier.
+struct MqBrokersOwned {
+    std::vector<MqBrokerPair*> all;
+    ~MqBrokersOwned() {
+        for (size_t i = 0; i < all.size(); i++) delete all[i];
     }
 };
-static MqBrokerCleanup mqBrokerCleanup;
+MqBrokersOwned& mqBrokersOwned() {
+    static MqBrokersOwned owned;
+    return owned;
+}
 }  // namespace
 
 #else   // ------------------------------------------------------ a board
@@ -867,7 +873,7 @@ void loop()
             pair->broker.onAuthorise(
                 &MqttBrokerAccounts::hook,
                 (MqttBrokerAccounts*)(uintptr_t)(strucpp::XWORD_t)nAccounts);
-            mqOwnedBrokers.push_back(pair);
+            mqBrokersOwned().all.push_back(pair);
             nBroker = (strucpp::XWORD_t)(uintptr_t)pair;
         }
 

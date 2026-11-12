@@ -273,20 +273,23 @@ END_METHOD
 //
 // The Runtime swaps a new program into the SAME process on every stop and
 // re-download. A node only leaves its client here: the connection is
-// MQTT_CLIENT's, whose own cleanup runs after this one (it was constructed
-// first, in the one translation unit) and closes the link WITHOUT a
+// FB_MqttClient's, whose own cleanup runs after this one (its client was made
+// first: a node needs one) and closes the link WITHOUT a
 // DISCONNECT - so the broker publishes this node's NDEATH, the Will it
 // registered, the moment the PLC stops.
 namespace {
-std::vector<MqttSparkplugNode*> mqSpNodesOwned;
-
-struct MqSpNodeCleanup {
-    ~MqSpNodeCleanup() {
-        for (size_t i = 0; i < mqSpNodesOwned.size(); i++) delete mqSpNodesOwned[i];
-        mqSpNodesOwned.clear();
+// Made on first use, so a program that never uses this block links none of
+// it, and freed when the program is unloaded, before what was made earlier.
+struct MqSpNodesOwned {
+    std::vector<MqttSparkplugNode*> all;
+    ~MqSpNodesOwned() {
+        for (size_t i = 0; i < all.size(); i++) delete all[i];
     }
 };
-MqSpNodeCleanup mqSpNodesCleanupAtUnload;
+MqSpNodesOwned& mqSpNodesOwned() {
+    static MqSpNodesOwned owned;
+    return owned;
+}
 }  // namespace
 // Declared here because every C++ POU in a project lands in ONE translation
 // unit, in filename order - and SPARKPLUG_NODE sorts after MQTT_CLIENT, which
@@ -590,14 +593,18 @@ struct MqSpReport {
     }
 };
 
-std::vector<MqSpReport*> mqSpReportsOwned;
-struct MqSpReportCleanup {
-    ~MqSpReportCleanup() {
-        for (size_t i = 0; i < mqSpReportsOwned.size(); i++) delete mqSpReportsOwned[i];
-        mqSpReportsOwned.clear();
+// Made on first use, so a program that never uses this block links none of
+// it, and freed when the program is unloaded, before what was made earlier.
+struct MqSpReportsOwned {
+    std::vector<MqSpReport*> all;
+    ~MqSpReportsOwned() {
+        for (size_t i = 0; i < all.size(); i++) delete all[i];
     }
 };
-MqSpReportCleanup mqSpReportsCleanupAtUnload;
+MqSpReportsOwned& mqSpReportsOwned() {
+    static MqSpReportsOwned owned;
+    return owned;
+}
 
 // One clause of the point list: members '=' class [',' option]*.
 struct MqSpClause {
@@ -1531,10 +1538,10 @@ void loop()
         // Up to four host writes per writable metric are kept between scans,
         // so a setpoint written twice in one scan loses neither.
         node->queueWrites(4);
-        mqSpNodesOwned.push_back(node);
+        mqSpNodesOwned().all.push_back(node);
         MqSpReport* report = new (std::nothrow) MqSpReport();
         if (report != nullptr) {
-            mqSpReportsOwned.push_back(report);
+            mqSpReportsOwned().all.push_back(report);
             nReport = (strucpp::XWORD_t)(uintptr_t)report;
         }
         nApi = (strucpp::XWORD_t)(uintptr_t)node;
@@ -1910,14 +1917,18 @@ struct MqSpmCalls {
 
 // Freed when the program is unloaded: the Runtime loads the next program into
 // the same process. Runs before the nodes are deleted (constructed after).
-std::vector<MqSpmCalls*> mqSpmTablesOwned;
-struct MqSpmCleanup {
-    ~MqSpmCleanup() {
-        for (size_t i = 0; i < mqSpmTablesOwned.size(); i++) delete mqSpmTablesOwned[i];
-        mqSpmTablesOwned.clear();
+// Made on first use, so a program that never uses this block links none of
+// it, and freed when the program is unloaded, before what was made earlier.
+struct MqSpmTablesOwned {
+    std::vector<MqSpmCalls*> all;
+    ~MqSpmTablesOwned() {
+        for (size_t i = 0; i < all.size(); i++) delete all[i];
     }
 };
-MqSpmCleanup mqSpmCleanupAtUnload;
+MqSpmTablesOwned& mqSpmTablesOwned() {
+    static MqSpmTablesOwned owned;
+    return owned;
+}
 
 // 2020-01-01 in days since 1970: a clock before it has not been set.
 const int64_t MQ_SPM_DAY_PLAUSIBLE = 18262;
@@ -1934,7 +1945,7 @@ static MqSpmCalls* mq_spmTable(strucpp::XWORD_t& held, strucpp::XWORD_t node) {
     if (table == nullptr) {
         table = new (std::nothrow) MqSpmCalls();
         if (table == nullptr) return nullptr;
-        mqSpmTablesOwned.push_back(table);
+        mqSpmTablesOwned().all.push_back(table);
         held = (strucpp::XWORD_t)(uintptr_t)table;
     }
     if (node != 0 && table->node != node) {

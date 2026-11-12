@@ -264,18 +264,20 @@ struct MqSpHostCalls {
 // runs after this one and closes the link WITHOUT a DISCONNECT - so the broker
 // publishes this host's offline STATE, the Will it registered, the moment the
 // PLC stops.
-std::vector<MqttSparkplugHost*> mqSpHostsOwned;
-std::vector<MqSpHostCalls*> mqSpHostCallsOwned;
-
-struct MqSpHostCleanup {
-    ~MqSpHostCleanup() {
-        for (size_t i = 0; i < mqSpHostsOwned.size(); i++) delete mqSpHostsOwned[i];
-        mqSpHostsOwned.clear();
-        for (size_t i = 0; i < mqSpHostCallsOwned.size(); i++) delete mqSpHostCallsOwned[i];
-        mqSpHostCallsOwned.clear();
+// Made on first use, so a program that never uses this block links none of
+// it, and freed when the program is unloaded, before what was made earlier.
+struct MqSpHostsOwned {
+    std::vector<MqttSparkplugHost*> hosts;
+    std::vector<MqSpHostCalls*> calls;
+    ~MqSpHostsOwned() {
+        for (size_t i = 0; i < hosts.size(); i++) delete hosts[i];
+        for (size_t i = 0; i < calls.size(); i++) delete calls[i];
     }
 };
-MqSpHostCleanup mqSpHostsCleanupAtUnload;
+MqSpHostsOwned& mqSpHostsOwned() {
+    static MqSpHostsOwned owned;
+    return owned;
+}
 }  // namespace
 
 MqttSparkplugHost* mq_spHostOf(strucpp::XWORD_t handle) {
@@ -286,7 +288,7 @@ static MqSpHostCalls* mq_spHostCalls(strucpp::XWORD_t& handle) {
     if (handle) return (MqSpHostCalls*)(uintptr_t)handle;
     MqSpHostCalls* calls = new (std::nothrow) MqSpHostCalls();
     if (!calls) return nullptr;
-    mqSpHostCallsOwned.push_back(calls);
+    mqSpHostsOwned().calls.push_back(calls);
     handle = (strucpp::XWORD_t)(uintptr_t)calls;
     return calls;
 }
@@ -456,7 +458,7 @@ void loop()
         }
         host->actAsPrimary((bool)bPrimary);
         host->reorderTimeout((mq_time_t)mq_millisOf(tReorder));
-        mqSpHostsOwned.push_back(host);
+        mqSpHostsOwned().hosts.push_back(host);
         nApi = (strucpp::XWORD_t)(uintptr_t)host;
         nClient = (strucpp::XWORD_t)(uintptr_t)client;
     }

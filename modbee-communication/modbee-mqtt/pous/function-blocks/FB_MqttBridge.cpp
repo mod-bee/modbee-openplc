@@ -136,16 +136,19 @@ struct MqBridgeRig {
 };
 }  // namespace
 
-static std::vector<MqBridgeRig*> mqOwnedBridges;
-
 namespace {
-struct MqBridgeCleanup {
-    ~MqBridgeCleanup() {
-        for (size_t i = 0; i < mqOwnedBridges.size(); i++) delete mqOwnedBridges[i];
-        mqOwnedBridges.clear();
+// Made on first use, so a program that never uses this block links none of
+// it, and freed when the program is unloaded, before what was made earlier.
+struct MqBridgesOwned {
+    std::vector<MqBridgeRig*> all;
+    ~MqBridgesOwned() {
+        for (size_t i = 0; i < all.size(); i++) delete all[i];
     }
 };
-static MqBridgeCleanup mqBridgeCleanup;
+MqBridgesOwned& mqBridgesOwned() {
+    static MqBridgesOwned owned;
+    return owned;
+}
 }  // namespace
 
 void setup()
@@ -201,7 +204,7 @@ void loop()
             eErrorId = E_MQTTRESULT::NOTINITIALISED;
             return;
         }
-        mqOwnedBridges.push_back(rig);
+        mqBridgesOwned().all.push_back(rig);
         nBridge = (strucpp::XWORD_t)(uintptr_t)rig;
     }
 

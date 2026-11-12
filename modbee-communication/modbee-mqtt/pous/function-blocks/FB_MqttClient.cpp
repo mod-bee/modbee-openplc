@@ -1170,17 +1170,20 @@ static MqLink* mq_boardLink(E_MQTTTRANSPORT link, E_MQTTSECURITY security,
 
 void mq_dropMethods();
 
-static std::vector<MqNode*> mqOwnedNodes;
-
 namespace {
-struct MqNodeCleanup {
-    ~MqNodeCleanup() {
+// Made on first use, so a program that never uses this block links none of
+// it, and freed when the program is unloaded, before what was made earlier.
+struct MqNodesOwned {
+    std::vector<MqNode*> all;
+    ~MqNodesOwned() {
         mq_dropMethods();   // first: their hooks hang on these clients
-        for (size_t i = 0; i < mqOwnedNodes.size(); i++) delete mqOwnedNodes[i];
-        mqOwnedNodes.clear();
+        for (size_t i = 0; i < all.size(); i++) delete all[i];
     }
 };
-static MqNodeCleanup mqNodeCleanup;
+MqNodesOwned& mqNodesOwned() {
+    static MqNodesOwned owned;
+    return owned;
+}
 }  // namespace
 
 // How long to wait before trying a failed open again. A refused connection
@@ -2523,7 +2526,7 @@ void loop()
 
         fresh->client.begin(fresh->link->clientTransport(), connection, behaviour);
 
-        mqOwnedNodes.push_back(fresh);
+        mqNodesOwned().all.push_back(fresh);
         nLink = (strucpp::XWORD_t)(uintptr_t)fresh;
         nApi = (strucpp::XWORD_t)(uintptr_t)&fresh->client;
         }   // end of the "first build" branch
