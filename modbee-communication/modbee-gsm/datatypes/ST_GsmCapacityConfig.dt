@@ -1,0 +1,7 @@
+TYPE
+  ST_GsmCapacityConfig : STRUCT
+    nSocketCnt        : USINT := 2;     (* sockets open at once: each Socket call and each MQTT client over the modem holds one *)
+    nSocketBufferSize : UINT := 1500;   (* each socket's send and receive buffer, bytes *)
+    nAtQueueLen       : USINT := 12;    (* modem commands that may wait at once *)
+  END_STRUCT;
+END_TYPE

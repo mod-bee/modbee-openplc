@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_GsmQuality : (Unknown, Bad, Uncertain, Good) := Unknown;
+END_TYPE

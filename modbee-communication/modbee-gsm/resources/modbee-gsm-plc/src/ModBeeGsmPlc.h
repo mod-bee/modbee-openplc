@@ -15,10 +15,12 @@
 // thing for cellular - ONE MODEM PER PLC, owned here, in the OpenPLC layer,
 // so that the core library never has to learn that a PLC exists.
 //
-//   GSM_MODEM        opens it, configures it and polls it
-//   every GSM_ block reaches it here
-//   MQTT_CLIENT      reaches it here too, through GsmPlcClient, when this
-//                    header is on the include path (TRANSPORT := MQTT_CELLULAR)
+//   FB_GsmModemA7670 / FB_GsmModemSim7070
+//                    makes the one device, holding only its module's driver,
+//                    opens it, configures it and polls it; its methods
+//                    (GsmPlcMethods.h) do the rest
+//   FB_MqttClient    reaches it too, through GsmPlcClient, when this header
+//                    is on the include path (E_MqttTransport.Cellular)
 //
 // --- THE LOCK ---
 //
@@ -30,18 +32,20 @@
 // block ever waits on the modem. The one thing that holds it for long is
 // GsmClient::connect(), which Arduino's Client interface requires to return a
 // verdict (1.35 s plain, 5.2 s TLS, measured on an A7670G); while it runs it
-// pumps the modem itself, so nothing is lost by the other blocks standing back.
+// pumps the modem itself, so nothing is lost by the blocks standing back.
 //
 // --- NAMING ---
 //
 // Every C++ POU of a project is emitted into ONE translation unit, and each
-// block's pins are #defines there - ERROR, STATUS, DEVICE, PORT and the rest.
-// This header can be included under any block's defines, so it uses no
-// all-capitals identifier and nothing that starts with "fb".
+// block's pins are #defines there - bError, sHost, nPort, stApnConfig and the
+// rest. This header can be included under any block's defines, so it uses no
+// all-capitals identifier and no name with a lower-case type prefix followed
+// by a capital (internal/tools/check-names.py checks it).
 
 #include <ModBeeGsm.h>
 #include <GsmCmdBuf.h>
 
+#include <new>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -74,11 +78,43 @@ private:
     bool _owned;
 };
 
-// --- The modem ----------------------------------------------------------------
+// --- The device ---------------------------------------------------------------
+//
+// MADE BY THE MODEM BLOCK THAT RUNS IT, holding only that module's driver.
+// FB_GsmModemA7670 makes a GsmDeviceWith<GsmDriverA76XX>, FB_GsmModemSim7070 a
+// GsmDeviceWith<GsmDriverSIM707x>, so a program links the one driver its
+// block names (GsmDevice, which holds both, is never made here). Made once,
+// by the block that claims the modem, at its first scan; never replaced.
 
-GsmDevice& device();
+bool hasDevice();
 
-// Each GSM_MODEM instance takes a number in its setup(). The first to run
+// Only once hasDevice(): every caller checks it (isOpen() implies it).
+GsmDeviceBase& device();
+
+// The module family of the block that made it: "A76XX" or "SIM707x".
+const char* family();
+
+// Memory for the device: PSRAM first on an ESP32, the heap otherwise.
+void* allocate(size_t size, size_t alignment);
+// Hands the made device to the layer. `destroy` ends it at unload.
+void attach(GsmDeviceBase* made, void (*destroy)(GsmDeviceBase*), const char* familyName);
+
+template <typename DeviceType>
+void destroyDevice(GsmDeviceBase* made) {
+    static_cast<DeviceType*>(made)->~DeviceType();
+}
+
+// The device, made if none is: false when there is no memory for it.
+template <typename DeviceType>
+bool makeDevice(const char* familyName) {
+    if (hasDevice()) { return true; }
+    void* memory = allocate(sizeof(DeviceType), alignof(DeviceType));
+    if (memory == nullptr) { return false; }
+    attach(new (memory) DeviceType(), &destroyDevice<DeviceType>, familyName);
+    return true;
+}
+
+// Each modem block instance takes a number in its setup(). The first to run
 // claims the modem; any other says so on its pins. Zero is never issued.
 uint32_t nextId();
 bool claim(uint32_t id);
@@ -88,7 +124,7 @@ bool hasOwner();
 // --- The link -----------------------------------------------------------------
 
 struct Link {
-    // A board. PORT is the UART peripheral, not a pin; -1 is "the board's own".
+    // A board. port is the UART peripheral, not a pin; -1 is "the board's own".
     int32_t port = 0;
     int32_t rxPin = 44;
     int32_t txPin = 43;
@@ -101,8 +137,8 @@ struct Link {
 
     uint32_t baud = 115200;
 
-    // What the modem holds (GSM_MODEM's SOCKETS, SOCKET_BUFFER, AT_QUEUE),
-    // taken once when it is opened. 0 is the library's default each time.
+    // What the modem holds (stCapacityConfig), taken once when it is opened.
+    // 0 is the library's default each time.
     int32_t sockets = 2;
     int32_t socketBuffer = 1500;      // bytes each way, per socket
     int32_t atQueue = 12;
@@ -110,21 +146,24 @@ struct Link {
 
 bool sameLink(const Link& a, const Link& b);
 
+// What is wrong with a board's link settings, or null when they are usable.
+const char* checkLink(const Link& link);
+
 // Opens the serial link and begins the modem, which starts its bring-up.
 // False with a reason. Done once: a modem is not re-opened on other settings
 // while the program runs, because closing one is an orderly shutdown that
-// takes seconds.
+// takes seconds. Needs the device (makeDevice()).
 bool open(const Link& link, const char** why);
 bool isOpen();
 
 // THE SERIAL LINK IS HELD ONLY WHILE THE MODEM IS IN USE. On a board it is an
 // interrupt, its rings and a service task, and their internal RAM is what
-// Wi-Fi needs when a PLC switches to it. GSM_MODEM says each scan whether it
-// wants the modem; service() gives the link back once it does not and the
-// modem is stopped and quiet, and takeLink() takes it again - GSM_MODEM before
-// it starts the modem, sendAt() for a command. False, with a reason, when it
-// cannot be taken (no memory, or a close not yet finished: try next scan).
-// open() takes it the first time.
+// Wi-Fi needs when a PLC switches to it. The modem block says each scan
+// whether it wants the modem; service() gives the link back once it does not
+// and the modem is stopped and quiet, and takeLink() takes it again - the
+// block before it starts the modem, sendAt() for a command. False, with a
+// reason, when it cannot be taken (no memory, or a close not yet finished:
+// try next scan). open() takes it the first time.
 void want(bool on);
 bool takeLink(const char** why);
 const Link& openedWith();
@@ -134,21 +173,26 @@ size_t receiveCapacity();
 
 // --- What the core keeps by pointer, so it is kept here ----------------------
 //
-// Each returns true when the value CHANGED, so GSM_MODEM knows to restart the
-// bring-up for it to take effect.
+// Each returns true when the value CHANGED, so the modem block knows to
+// restart the bring-up for it to take effect.
 
 bool apn(const char* name, const char* user, const char* password);
 bool pin(const char* code);
 bool radio(GsmRadioPreference mode, const char* operatorCode,
            const char* catMBands, const char* nbIotBands);
 
+// What is wrong with a radio setting, or null: an operator code of five or six
+// digits, band lists of 1..255.
+const char* checkRadio(int mode, const char* operatorCode,
+                       const char* catMBands, const char* nbIotBands);
+
 // "3, 28" -> {3, 28}. False on anything that is not a list of 1..255.
 bool parseBands(const char* text, uint8_t* out, uint8_t capacity, uint8_t* count);
 
 // --- Power --------------------------------------------------------------------
 
-// GSM_POWER's switch. While held off, GSM_MODEM does not start the modem
-// whatever CONNECT says.
+// The Power method's switch. While held off, the modem block does not start
+// the modem whatever bConnect says.
 void holdOff(bool held);
 bool heldOff();
 
@@ -159,12 +203,12 @@ void railOff();
 
 // --- Servicing ----------------------------------------------------------------
 
-// Polls the modem and moves the SMS inbox along. GSM_MODEM calls it every
-// scan, holding the lock.
+// Polls the modem and moves the SMS inbox along. The modem block calls it
+// every scan, holding the lock.
 void service();
 
 // Bumped every time the module may have lost its settings: a new bring-up or
-// a module restart. A block that configured something in the module (GNSS
+// a module restart. A method that configured something in the module (GNSS
 // power) compares it and configures again.
 uint32_t generation();
 
@@ -192,9 +236,9 @@ uint32_t smsUnreadable();     // fetched, could not be decoded, deleted
 
 // --- Jobs: one AT command, one SMS ------------------------------------------------
 //
-// A block owns one and keeps it in an __XWORD local. The callbacks run inside
-// service() - in whichever task is polling - so they write only here, and the
-// block copies the result to its pins on its own next scan.
+// A method's record owns one. The callbacks run inside service() - in
+// whichever task is polling - so they write only here, and the record is read
+// holding the lock.
 
 struct Job {
     bool busy = false;
@@ -215,7 +259,7 @@ GsmResult sendSms(Job& job, const char* number, const char* text);
 
 // --- Words -------------------------------------------------------------------
 
-// The text for a result, with the two that need a sentence of their own.
+// The text for a result, with the ones that need a sentence of their own.
 const char* describe(const GsmResult& result);
 
 // Seconds since 1970 for a calendar date and time, as written - no zone.
@@ -240,9 +284,13 @@ inline int64_t nanosOf(uint32_t milliseconds) {
 // Arduino's Client, over the one modem, holding the lock
 // =============================================================================
 //
-// IS A GsmClient - no adapter, no handle. Every call takes the lock and then
-// does exactly what GsmClient does, so MQTT talks to it as it talks to
-// WiFiClient. GsmPlcClientSecure is the same over the module's TLS.
+// MQTT talks to it as it talks to WiFiClient: every call takes the lock and
+// then does exactly what a GsmClient on the modem's sockets does.
+//
+// It is an Arduino Client that MAKES its GsmClient at the first connect():
+// FB_MqttClient may build its cellular link before the modem block has made
+// the device, and a GsmClient is bound to one device's sockets for life.
+// Until then every call answers as a closed client does.
 //
 // Two additions, both because a PLC is not a sketch:
 //   - connect() refuses at once, with a reason, when the modem has no data
@@ -254,17 +302,16 @@ inline int64_t nanosOf(uint32_t milliseconds) {
 
 #define MODBEE_GSM_PLC_CLIENT 1
 
-class GsmPlcClient : public GsmClient {
+class GsmPlcClient : public Client {
 public:
-    explicit GsmPlcClient(GsmSecurity security = GsmSecurity::Plain)
-        : GsmClient(gsmplc::device().sockets(), security) {}
+    explicit GsmPlcClient(GsmSecurity security = GsmSecurity::Plain) : _security(security) {}
+    ~GsmPlcClient();
 
     // Seconds connect() may take. 0 keeps GsmClient's own limit.
     void setConnectSeconds(int seconds) { _connectSeconds = seconds; }
 
     int connect(const char* host, uint16_t port) override;
     int connect(IPAddress ip, uint16_t port) override;
-    using GsmClient::connect;
 
     size_t write(uint8_t value) override;
     size_t write(const uint8_t* buffer, size_t size) override;
@@ -281,8 +328,20 @@ public:
     // not up, otherwise the socket's own reason.
     const char* why() const { return _why; }
 
+    // The GsmClient underneath, once the first connect() has made it.
+    GsmClient* client() const { return _made ? (GsmClient*)(void*)_storage : nullptr; }
+
+    GsmPlcClient(const GsmPlcClient&) = delete;
+    GsmPlcClient& operator=(const GsmPlcClient&) = delete;
+
 private:
+    // Made at the first connect() with a device to make it on.
+    GsmClient* made();
+
+    GsmSecurity _security;
     int _connectSeconds = 0;
+    bool _made = false;
+    alignas(GsmClient) unsigned char _storage[sizeof(GsmClient)];
     char _why[64] = {0};
 };
 

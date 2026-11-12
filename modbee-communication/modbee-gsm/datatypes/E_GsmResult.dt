@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_GsmResult : (Queued, Ok, NotInitialised, InvalidArgument, NotReady, NoBearer, NoSocketAvailable, QueueFull, Superseded, Cancelled, TooLarge, NotSupportedByModule, Error, ModuleError, Timeout, SocketClosed, BearerLost, Unresponsive, PoweredOff, RegistrationDenied, WrongTask) := Ok;
+END_TYPE

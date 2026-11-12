@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_GsmState : (Off, PoweringUp, Syncing, Identifying, Configuring, SimWait, ReadingIdentity, NetworkSetup, Registering, BearerUp, Ready, Recovering, Failed) := Off;
+END_TYPE
