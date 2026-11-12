@@ -272,6 +272,219 @@ FUNCTION_BLOCK FB_MqttClient
     (* The connection whose 'online' (stWillConfig) has gone. *)
     nWillConnects : DINT;
   END_VAR
+  VAR RETAIN
+    (* What Provision was given: this PLC's own login and the values its key
+       hands its devices. Retained, so a power cut keeps them. *)
+    sProvLoginUser : STRING(64);
+    sProvLoginSecret : STRING(64);
+    sProvGroup : STRING(64);
+    sProvPrefix : STRING(127);
+  END_VAR
+  VAR
+    (* The methods' state: their records, Provision's progress. *)
+    nMethods : __XWORD;
+  END_VAR
+
+
+(* Sends anyValue to sTopic once, on a rising edge of bExecute. Inputs are
+   taken at the edge. Returns E_MqttResult.Queued until the broker has it
+   (QoS 1 and 2) or it has left (QoS 0), then E_MqttResult.Ok or the reason
+   it failed, until the next edge. Not connected at the edge:
+   E_MqttResult.NotConnected, nothing queued. *)
+METHOD PUBLIC Publish : E_MqttResult
+  VAR_INPUT
+    anyValue : ANY;              (* what to send, as its declared type: 23.5, 42, true, text *)
+    sTopic : STRING(128);        (* where it goes; no wildcards *)
+    eQos : E_MqttQos;
+    bRetain : BOOL;              (* the broker keeps it for later subscribers *)
+    bExecute : BOOL;             (* rising edge sends *)
+  END_VAR
+END_METHOD
+
+(* Publishes anyValue on sTopic, called every scan. eTrigger says when:
+   OnChange (moved by fDeadband, and every tPeriod anyway), OnInterval (every
+   tPeriod, which must be set) or OnRequest (bExecute's rising edge).
+   E_MqttResult.Ok while the record is valid. *)
+METHOD PUBLIC Report : E_MqttResult
+  VAR_INPUT
+    anyValue : ANY;              (* the variable to report *)
+    sTopic : STRING(128);
+    eTrigger : E_MqttTrigger;
+    fDeadband : LREAL;           (* OnChange: the least change worth a message; 0 = any change *)
+    tPeriod : TIME;              (* OnChange: resend unchanged after this, T#0s never; OnInterval: the interval *)
+    eQos : E_MqttQos;
+    bRetain : BOOL;
+    bEnable : BOOL := TRUE;      (* FALSE stops reporting, keeping the record *)
+    bExecute : BOOL;             (* OnRequest: rising edge sends *)
+  END_VAR
+  VAR_OUTPUT
+    nSent : DINT;                (* messages sent for this record *)
+    tAge : TIME;                 (* since the last one; T#0s before the first *)
+  END_VAR
+END_METHOD
+
+(* Keeps anyValue up to date from sTopic, called every scan. A payload is read
+   as anyValue's declared type; one that does not parse is counted on
+   nMalformed and leaves anyValue alone. *)
+METHOD PUBLIC Subscribe : E_MqttResult
+  VAR_INPUT
+    anyValue : ANY;              (* the variable kept up to date *)
+    sTopic : STRING(128);        (* wildcards allowed *)
+    eQos : E_MqttQos;            (* the most the broker may use *)
+    tExpect : TIME;              (* how often a value is expected; drives eQuality. T#0s = no promise *)
+    bEnable : BOOL := TRUE;      (* FALSE unsubscribes, keeping the record *)
+  END_VAR
+  VAR_OUTPUT
+    bSubscribed : BOOL;
+    eQuality : E_MqttQuality;    (* Unknown: never arrived; Bad: link down or twice overdue *)
+    bSeen : BOOL;                (* a value has arrived for this record *)
+    tAge : TIME;                 (* since the last accepted value *)
+    nReceived : DINT;
+    nMalformed : DINT;
+    bNewValue : BOOL;            (* this call wrote anyValue *)
+  END_VAR
+END_METHOD
+
+(* Publishes every member of the STRUCT anyData on sBase/<member>, called every
+   scan. OnChange: a member when it changes, and every tPeriod anyway;
+   OnInterval: the whole set every tPeriod; OnRequest: the whole set on
+   bExecute's rising edge. A member the wire cannot carry is counted on
+   nSkipped and returns E_MqttResult.InvalidArgument. *)
+METHOD PUBLIC PublishStruct : E_MqttResult
+  VAR_INPUT
+    anyData : ANY;               (* a STRUCT *)
+    sBase : STRING(128);         (* the topic the members hang off *)
+    eTrigger : E_MqttTrigger;
+    tPeriod : TIME;
+    eQos : E_MqttQos;
+    bRetain : BOOL;
+    bEnable : BOOL := TRUE;
+    bExecute : BOOL;             (* OnRequest: rising edge sends the set *)
+  END_VAR
+  VAR_OUTPUT
+    nPoints : INT;               (* members published *)
+    nSkipped : INT;              (* members refused *)
+    nSent : DINT;                (* messages sent for this record *)
+    nChanged : INT;              (* messages sent by this call *)
+  END_VAR
+END_METHOD
+
+(* Keeps every member of the STRUCT anyData up to date from sBase/<member>,
+   called every scan. eQuality is the worst member's, tOldest the oldest
+   member's age. *)
+METHOD PUBLIC SubscribeStruct : E_MqttResult
+  VAR_INPUT
+    anyData : ANY;               (* a STRUCT *)
+    sBase : STRING(128);
+    eQos : E_MqttQos;
+    tExpect : TIME;
+    bEnable : BOOL := TRUE;
+  END_VAR
+  VAR_OUTPUT
+    nPoints : INT;
+    nSkipped : INT;
+    bSubscribed : BOOL;
+    eQuality : E_MqttQuality;
+    bSeen : BOOL;                (* every member has had a value *)
+    tOldest : TIME;
+    nReceived : DINT;
+    nMalformed : DINT;
+    nNewValues : INT;            (* members written by this call *)
+  END_VAR
+END_METHOD
+
+(* Asks a question on sTopic and waits for the answer on sReplyTopic, MQTT 5
+   only. The request carries Response Topic and Correlation Data. Rising edge
+   of bExecute starts it; E_MqttResult.Queued until the answer
+   (E_MqttResult.Ok, in sReply) or tTimeout (E_MqttResult.KeepAliveTimeout). *)
+METHOD PUBLIC Request : E_MqttResult
+  VAR_INPUT
+    anyValue : ANY;              (* the question *)
+    sTopic : STRING(128);        (* where it goes *)
+    sReplyTopic : STRING(128);   (* where the answer comes back; one per requester *)
+    eQos : E_MqttQos;
+    tTimeout : TIME;             (* T#0s = 5 s *)
+    bExecute : BOOL;
+  END_VAR
+  VAR_OUTPUT
+    sReply : STRING(254);
+    nReplyLen : INT;
+  END_VAR
+END_METHOD
+
+(* Answers MQTT 5 requests arriving on sTopic, called every scan. A request's
+   payload is written into anyRequest; a rising edge of bExecute sends
+   anyReply to the last request's Response Topic with its Correlation Data. *)
+METHOD PUBLIC Response : E_MqttResult
+  VAR_INPUT
+    anyRequest : ANY;            (* the request, read as its declared type *)
+    sTopic : STRING(128);        (* where requests arrive; wildcards allowed *)
+    anyReply : ANY;              (* the answer *)
+    eQos : E_MqttQos;
+    bEnable : BOOL := TRUE;      (* FALSE unsubscribes, keeping the record *)
+    bExecute : BOOL;             (* rising edge answers *)
+  END_VAR
+  VAR_OUTPUT
+    bNewRequest : BOOL;          (* this call took a request *)
+    bAwaitingReply : BOOL;       (* the last request has a Response Topic and is not answered yet *)
+    sResponseTopic : STRING(128); (* where the last request asked its answer to go *)
+    nReceived : DINT;
+    nMalformed : DINT;
+  END_VAR
+END_METHOD
+
+(* The text of whatever arrives on sTopic, written into the STRING variable
+   anyPayload, one message per call. Called every scan. *)
+METHOD PUBLIC Message : E_MqttResult
+  VAR_INPUT
+    anyPayload : ANY;            (* a STRING variable *)
+    sTopic : STRING(128);        (* wildcards allowed *)
+    eQos : E_MqttQos;
+    bEnable : BOOL := TRUE;
+  END_VAR
+  VAR_OUTPUT
+    nLen : INT;                  (* characters written *)
+    bTruncated : BOOL;           (* the message was longer than anyPayload or the client's buffer *)
+    nReceived : DINT;
+    bNewMessage : BOOL;          (* this call wrote anyPayload *)
+  END_VAR
+END_METHOD
+
+(* Registers this PLC with a modbee broker using a provisioning key, and keeps
+   the login it is given (retained). sClientId is the PLC's name. Called every
+   scan, before the client's own call on the first scan. *)
+METHOD PUBLIC Provision : E_MqttResult
+  VAR_INPUT
+    sKey : STRING(127);          (* from `modbee key create` on the broker *)
+    bForget : BOOL;              (* rising edge forgets the stored login *)
+  END_VAR
+  VAR_OUTPUT
+    bProvisioned : BOOL;         (* connected with this PLC's own login *)
+    bPending : BOOL;             (* waiting for approval on the broker *)
+    bRefused : BOOL;
+    sUserName : STRING(64);      (* the login the key handed this PLC *)
+    sGroup : STRING(64);         (* the Sparkplug group the key hands its devices *)
+    sPrefix : STRING(127);       (* the topic prefix the key hands its devices *)
+    sReason : STRING(64);        (* why the broker refused, when bRefused *)
+  END_VAR
+END_METHOD
+
+(* The connection's counters. *)
+METHOD PUBLIC Statistics : E_MqttResult
+  VAR_OUTPUT
+    nVersion : BYTE;             (* 5 or 4: the protocol in force *)
+    nConnects : DINT;
+    nDisconnects : DINT;
+    nReconnects : DINT;
+    nPublished : DINT;
+    nReceived : DINT;
+    nPublishFailures : DINT;
+    nProtocolErrors : DINT;
+    nPending : DINT;             (* operations accepted and not yet concluded *)
+    nReasonCode : BYTE;          (* the last reason code from the broker, read with nVersion *)
+  END_VAR
+END_METHOD
+
 // THE TLS ENGINE, INCLUDED PLAINLY AND ON PURPOSE. Read the Ethernet note
 // further down before changing this - it is the same trap, and this is the
 // same answer.
@@ -955,11 +1168,14 @@ static MqLink* mq_boardLink(E_MQTTTRANSPORT link, E_MQTTSECURITY security,
 }
 #endif
 
+void mq_dropMethods();
+
 static std::vector<MqNode*> mqOwnedNodes;
 
 namespace {
 struct MqNodeCleanup {
     ~MqNodeCleanup() {
+        mq_dropMethods();   // first: their hooks hang on these clients
         for (size_t i = 0; i < mqOwnedNodes.size(); i++) delete mqOwnedNodes[i];
         mqOwnedNodes.clear();
     }
@@ -1433,6 +1649,290 @@ uint32_t mq_fingerprintText(uint32_t hash, const char* text)
 {
     hash = mq_fingerprint(hash, text, strlen(text));
     return mq_fingerprint(hash, "", 1);   // a separator: "ab"+"c" differs from "a"+"bc"
+}
+
+// =============================================================================
+// THE METHODS' STATE
+// =============================================================================
+//
+// A method keeps what it needs between calls in a record, keyed by the method
+// and the declared name and type of its ANY argument (IEC_ANY::NAME,
+// TYPENAME). An argument with no name - a literal, an expression - is keyed by
+// its topic instead. PVALUE is kept only as a cache. The records belong to
+// the client instance and are dropped when it is given a different client.
+
+#ifndef MQ_MAX_RECORDS
+#define MQ_MAX_RECORDS 256
+#endif
+
+// How often a pending PLC asks again, and how long after a refusal.
+#ifndef MQ_PROVISION_PENDING_MS
+#define MQ_PROVISION_PENDING_MS 30000
+#endif
+#ifndef MQ_PROVISION_REFUSED_MS
+#define MQ_PROVISION_REFUSED_MS 300000
+#endif
+
+namespace {
+
+enum MqRecordKind : uint8_t {
+    MQ_REC_PUBLISH,
+    MQ_REC_REPORT,
+    MQ_REC_SUBSCRIBE,
+    MQ_REC_PUBLISH_STRUCT,
+    MQ_REC_SUBSCRIBE_STRUCT,
+    MQ_REC_REQUEST,
+    MQ_REC_RESPONSE,
+    MQ_REC_MESSAGE,
+};
+
+// One STRUCT member: the publish side's last value, the subscribe side's
+// handle and arrival.
+struct MqMember {
+    bool hasLast = false;
+    double last = 0.0;
+    uint32_t hash = 0;
+    int32_t sentAt = 0;
+    int16_t handle = -1;
+    bool ever = false;
+    int32_t arrivedAt = 0;
+};
+
+struct MqRecord {
+    uint8_t kind = 0;
+    uint32_t key = 0;
+    std::string name;
+    std::string type;
+    const uint8_t* cache = nullptr;
+
+    std::string topic;            // Response: the request filter the hook matches
+    std::string replyTopic;       // Request: where the answer comes; Response: where it goes
+    int16_t handle = -1;
+    int16_t replyHandle = -1;
+    bool asked = false;
+    int32_t seenConnects = 0;
+
+    bool lastExecute = false;
+    bool pending = false;
+    E_MQTTRESULT result = E_MQTTRESULT::OK;
+    uint32_t seenOk = 0;
+    uint32_t seenFail = 0;
+    int32_t limitMs = 0;
+
+    bool ever = false;            // sent (publishing) or arrived (subscribing)
+    int32_t at = 0;
+    int32_t ageMs = -1;
+    bool hasLast = false;
+    double last = 0.0;
+    uint32_t lastHash = 0;
+    E_MQTTQUALITY quality = E_MQTTQUALITY::UNKNOWN;
+    bool subscribed = false;
+
+    int32_t sent = 0;
+    int32_t received = 0;
+    int32_t malformed = 0;
+    int32_t length = 0;
+    bool truncated = false;
+    int16_t points = 0;
+    int16_t skipped = 0;
+
+    int32_t correlation = 0;
+    std::string reply;
+    std::vector<uint8_t> correlationData;
+    bool answerable = false;
+
+    MqMember* members = nullptr;
+    uint16_t memberCount = 0;
+
+    MqRecord() = default;
+    MqRecord(const MqRecord&) = delete;
+    MqRecord& operator=(const MqRecord&) = delete;
+    ~MqRecord() { delete[] members; }
+};
+
+// Provision's progress. Not dropped with the records: a login switch spans
+// reconnects.
+struct MqProvision {
+    bool usingKey = false;
+    int16_t handle = -1;
+    bool asked = false;
+    int32_t askedAt = 0;
+    int32_t seenConnects = -1;
+    int8_t switchTo = 0;          // 0 none, 1 to the stored login, 2 to the key, 3 the login without a Will
+    bool switchClosed = false;
+    int32_t refusedAt = 0;
+    bool lastForget = false;
+    bool forgetSeen = false;
+    bool withoutWill = false;     // this session is the login without a Will: asking again, then back
+    int32_t lockedAt = 0;         // when the login was last refused as not authorized
+    int32_t oldTriedAt = 0;       // when the kept login was last tried, while registering again
+    bool provisioned = false;
+    bool waiting = false;
+    bool refused = false;
+    std::string userName;
+    std::string reason;
+    E_MQTTRESULT status = E_MQTTRESULT::OK;
+};
+
+struct MqMethods;
+
+// Sees every inbound message with its properties, which the topic registry
+// does not keep: a Response record takes the request's Response Topic and
+// Correlation Data from here. Never takes a message.
+struct MqRequestHook : MqttClientHook {
+    MqMethods* owner = nullptr;
+    bool message(const MqttMessage& message) override;
+};
+
+struct MqMethods {
+    MqMethods* next = nullptr;
+    strucpp::XWORD_t client = 0;
+    std::vector<MqRecord*> records;
+    MqProvision provision;
+    MqRequestHook hook;
+
+    void drop() {
+        if (MqttClient* attached = hook.attachedTo()) attached->detach(hook);
+        for (size_t i = 0; i < records.size(); i++) delete records[i];
+        records.clear();
+    }
+    ~MqMethods() { drop(); }
+};
+
+// A plain pointer, so it needs no construction and outlives every destructor.
+static MqMethods* mqMethodsHead = nullptr;
+
+bool MqRequestHook::message(const MqttMessage& message) {
+    if (owner == nullptr) return false;
+    for (size_t i = 0; i < owner->records.size(); i++) {
+        MqRecord* r = owner->records[i];
+        if (r->kind != MQ_REC_RESPONSE || r->topic.empty()) continue;
+        MqttSpan filter;
+        filter.data = (const uint8_t*)r->topic.c_str();
+        filter.length = (uint32_t)r->topic.size();
+        if (!mq_topicMatches(filter, message.topic)) continue;
+        const MqttProperties* p = message.properties;
+        if (p != nullptr && p->has(MQ_PROP_RESPONSE_TOPIC) && !p->responseTopic.empty()) {
+            r->replyTopic.assign((const char*)p->responseTopic.data, p->responseTopic.length);
+            if (p->has(MQ_PROP_CORRELATION_DATA)) {
+                r->correlationData.assign(p->correlationData.data,
+                                          p->correlationData.data + p->correlationData.length);
+            } else {
+                r->correlationData.clear();
+            }
+            r->answerable = true;
+        } else {
+            // No Response Topic (or a 3.1.1 connection): nothing to answer to.
+            r->replyTopic.clear();
+            r->correlationData.clear();
+            r->answerable = false;
+        }
+    }
+    return false;
+}
+
+}  // namespace
+
+// Called first by MqNodeCleanup, while the clients the hooks hang on still exist.
+void mq_dropMethods() {
+    while (mqMethodsHead != nullptr) {
+        MqMethods* m = mqMethodsHead;
+        mqMethodsHead = m->next;
+        delete m;
+    }
+}
+
+// This instance's method state, made on first use. A different client than
+// the records were made on drops them.
+static MqMethods* mq_methodsFor(strucpp::XWORD_t held, strucpp::XWORD_t api) {
+    MqMethods* m = (MqMethods*)(uintptr_t)held;
+    if (m == nullptr) {
+        m = new (std::nothrow) MqMethods();
+        if (m == nullptr) return nullptr;
+        m->hook.owner = m;
+        m->next = mqMethodsHead;
+        mqMethodsHead = m;
+    }
+    if (api != 0 && m->client != api) {
+        if (m->client != 0) m->drop();
+        m->client = api;
+    }
+    return m;
+}
+
+// The record of one call, found by its key or made. Null past MQ_MAX_RECORDS
+// or out of memory.
+static MqRecord* mq_recordOf(MqMethods* m, uint8_t kind, const strucpp::IEC_ANY& any,
+                             const char* topic) {
+    if (m == nullptr) return nullptr;
+    std::string unnamed;
+    const char* name = any.NAME;
+    if (name == nullptr || *name == '\0') {
+        unnamed = std::string("'") + (topic ? topic : "");
+        name = unnamed.c_str();
+    }
+    const char* type = any.TYPENAME ? any.TYPENAME : "";
+    uint32_t key = mq_fingerprint(2166136261u, &kind, sizeof kind);
+    key = mq_fingerprintText(mq_fingerprintText(key, name), type);
+
+    for (size_t i = 0; i < m->records.size(); i++) {
+        MqRecord* r = m->records[i];
+        if (r->kind != kind || r->key != key) continue;
+        if (any.PVALUE != nullptr && r->cache == any.PVALUE && any.NAME != nullptr) return r;
+        if (r->name == name && r->type == type) {
+            r->cache = any.PVALUE;
+            return r;
+        }
+    }
+    if (m->records.size() >= (size_t)MQ_MAX_RECORDS) return nullptr;
+    MqRecord* r = new (std::nothrow) MqRecord();
+    if (r == nullptr) return nullptr;
+    r->kind = kind;
+    r->key = key;
+    r->name = name;
+    r->type = type;
+    r->cache = any.PVALUE;
+    m->records.push_back(r);
+    return r;
+}
+
+// The handle for `topic`, registered when `held` has none or holds another
+// text (or one from another client). *changed says it was registered.
+static MqttTopicHandle mq_handleFor(MqttClient* client, int16_t& held, const char* topic,
+                                    bool* changed) {
+    MqttTopicHandle handle = (MqttTopicHandle)held;
+    const char* text = handle >= 0 ? client->topicOf(handle) : nullptr;
+    if (text != nullptr && strcmp(text, topic) == 0) return handle;
+    handle = client->registerTopic(topic);
+    if (handle == MQTT_TOPIC_HANDLE_NONE) return handle;
+    held = (int16_t)handle;
+    if (changed) *changed = true;
+    return handle;
+}
+
+static uint8_t mq_qosOf(E_MQTTQOS qos) {
+    const int q = (int)qos;
+    return (uint8_t)(q < 0 ? 0 : (q > 2 ? 2 : q));
+}
+
+// One string field of the broker's provisioning answer, written without
+// spaces: {"status":"ok","username":"...","password":"...","data":{"group":"..."}}.
+// Found by its NAME (`"name":`), never by a value that happens to read the same.
+static bool mq_provisionField(const char* doc, size_t length, const char* name, std::string& out)
+{
+    const std::string text(doc, length);
+    const std::string key = std::string("\"") + name + "\":";
+    size_t at = text.find(key);
+    if (at == std::string::npos) return false;
+    at = text.find('"', at + key.size());
+    if (at == std::string::npos) return false;
+    out.clear();
+    for (size_t i = at + 1; i < text.size(); i++) {
+        if (text[i] == '\\' && i + 1 < text.size()) { out.push_back(text[++i]); continue; }
+        if (text[i] == '"') return true;
+        out.push_back(text[i]);
+    }
+    return false;
 }
 
 void setup()
@@ -2290,6 +2790,1108 @@ void loop()
             }
         }
     }
+}
+
+// =============================================================================
+// THE METHODS
+// =============================================================================
+//
+// Each runs in the caller's task and is refused in any other (one task per
+// client). The record is found first, so a call that cannot go yet still
+// keeps its record.
+
+E_MQTTRESULT Publish()
+{
+    if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
+    MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
+    nMethods = (strucpp::XWORD_t)(uintptr_t)m;
+    MqRecord* r = mq_recordOf(m, MQ_REC_PUBLISH, anyValue, sTopic.c_str());
+    if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
+    MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
+
+    const bool execute = (bool)bExecute;
+    const bool rising = execute && !r->lastExecute;
+    r->lastExecute = execute;
+
+    // Outcomes are running totals on the topic, so none is missed however
+    // seldom this is called.
+    if (r->pending) {
+        if (client == nullptr || !(bool)bLinkUp) {
+            r->pending = false;
+            r->result = E_MQTTRESULT::NOTCONNECTED;
+        } else {
+            const MqttTopicState& state = client->topicState((MqttTopicHandle)r->handle);
+            if (state.published != r->seenOk) {
+                r->pending = false;
+                r->result = E_MQTTRESULT::OK;
+            } else if (state.failed != r->seenFail) {
+                r->pending = false;
+                r->result = (E_MQTTRESULT)(int32_t)(int)state.lastResult;
+            }
+        }
+    }
+    if (!rising || r->pending) return r->result;
+
+    // A start: the inputs as they are now.
+    if (client == nullptr || !(bool)bConnected) {
+        r->result = E_MQTTRESULT::NOTCONNECTED;
+        return r->result;
+    }
+    r->topic = sTopic.c_str();
+    const MqttTopicHandle handle = mq_handleFor(client, r->handle, r->topic.c_str(), nullptr);
+    if (handle == MQTT_TOPIC_HANDLE_NONE) {
+        r->result = E_MQTTRESULT::QUEUEFULL;
+        return r->result;
+    }
+    char payload[512];
+    const size_t length = mq_formatAny(anyValue, payload, sizeof payload);
+    if (length == 0) {
+        r->result = E_MQTTRESULT::INVALIDARGUMENT;
+        return r->result;
+    }
+    const MqttResult asked = client->publishTo(handle, (const uint8_t*)payload, length,
+                                               mq_qosOf((E_MQTTQOS)eQos), (bool)bRetain);
+    if (!mq_tolerated(asked)) {
+        r->result = (E_MQTTRESULT)(int32_t)(int)asked;
+        return r->result;
+    }
+    const MqttTopicState& state = client->topicState(handle);
+    r->seenOk = state.published;
+    r->seenFail = state.failed;
+    r->pending = true;
+    r->result = E_MQTTRESULT::QUEUED;
+    return r->result;
+}
+
+E_MQTTRESULT Report()
+{
+    if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
+    MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
+    nMethods = (strucpp::XWORD_t)(uintptr_t)m;
+    MqRecord* r = mq_recordOf(m, MQ_REC_REPORT, anyValue, sTopic.c_str());
+    if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
+    auto done = [&](E_MQTTRESULT result) -> E_MQTTRESULT {
+        nSent = r->sent;
+        tAge = mq_timeOf(r->ageMs);
+        return result;
+    };
+
+    MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
+    if (client == nullptr || !(bool)bLinkUp) return done(E_MQTTRESULT::NOTCONNECTED);
+
+    const mq_time_t now = mq_millis();
+    if (r->ever) r->ageMs = (int32_t)mq_elapsed((mq_time_t)(uint32_t)r->at, now);
+
+    // The edge is taken whether enabled or not: a bExecute raised while
+    // disabled does not fire on enabling.
+    const bool execute = (bool)bExecute;
+    const bool asked = execute && !r->lastExecute;
+    r->lastExecute = execute;
+
+    if (!(bool)bEnable) return done(E_MQTTRESULT::OK);
+
+    bool changed = false;
+    const MqttTopicHandle handle = mq_handleFor(client, r->handle, sTopic.c_str(), &changed);
+    if (handle == MQTT_TOPIC_HANDLE_NONE) return done(E_MQTTRESULT::QUEUEFULL);
+    if (changed) r->hasLast = false;   // a new topic: its first value always goes
+
+    char payload[512];
+    const size_t length = mq_formatAny(anyValue, payload, sizeof payload);
+    if (length == 0) return done(E_MQTTRESULT::INVALIDARGUMENT);
+
+    const E_MQTTTRIGGER trigger = (E_MQTTTRIGGER)eTrigger;
+    const int32_t intervalMs = mq_millisOf(tPeriod);
+    // ChangedEvery is the Sparkplug node's.
+    if (trigger == E_MQTTTRIGGER::CHANGEDEVERY) return done(E_MQTTRESULT::INVALIDARGUMENT);
+
+    bool due = false;
+    if (trigger == E_MQTTTRIGGER::ONREQUEST) {
+        due = asked;
+    } else if (trigger == E_MQTTTRIGGER::ONINTERVAL) {
+        // No interval is refused, never taken as every scan.
+        if (intervalMs <= 0) return done(E_MQTTRESULT::INVALIDARGUMENT);
+        due = !r->ever ||
+              (int32_t)mq_elapsed((mq_time_t)(uint32_t)r->at, now) >= intervalMs;
+    } else {
+        due = !r->hasLast;
+        double number = 0.0;
+        const bool numeric = mq_numberOf(anyValue, &number);
+        if (!due) {
+            if (numeric) {
+                double moved = number - r->last;
+                if (moved < 0) moved = -moved;
+                due = moved >= (double)fDeadband;
+            } else {
+                due = mq_fingerprint(payload, length) != r->lastHash;
+            }
+        }
+        // The heartbeat: an unchanged value still goes every tPeriod.
+        if (!due && intervalMs > 0 && r->ever) {
+            due = (int32_t)mq_elapsed((mq_time_t)(uint32_t)r->at, now) >= intervalMs;
+        }
+    }
+    if (!due) return done(E_MQTTRESULT::OK);
+
+    const MqttResult sent = client->publishTo(handle, (const uint8_t*)payload, length,
+                                              mq_qosOf((E_MQTTQOS)eQos), (bool)bRetain);
+    if (!mq_tolerated(sent)) return done((E_MQTTRESULT)(int32_t)(int)sent);
+
+    double shadow = 0.0;
+    mq_numberOf(anyValue, &shadow);
+    r->hasLast = true;
+    r->last = shadow;
+    r->lastHash = mq_fingerprint(payload, length);
+    r->at = (int32_t)(uint32_t)now;
+    r->ever = true;
+    r->ageMs = 0;
+    r->sent++;
+    return done(E_MQTTRESULT::OK);
+}
+
+E_MQTTRESULT Subscribe()
+{
+    if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
+    bNewValue = false;
+    MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
+    nMethods = (strucpp::XWORD_t)(uintptr_t)m;
+    MqRecord* r = mq_recordOf(m, MQ_REC_SUBSCRIBE, anyValue, sTopic.c_str());
+    if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
+    auto done = [&](E_MQTTRESULT result) -> E_MQTTRESULT {
+        bSubscribed = r->subscribed;
+        eQuality = r->quality;
+        bSeen = r->ever;
+        tAge = mq_timeOf(r->ageMs);
+        nReceived = r->received;
+        nMalformed = r->malformed;
+        return result;
+    };
+
+    MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
+    if (client == nullptr || !(bool)bLinkUp) {
+        r->subscribed = false;
+        r->quality = mq_qualityOf(r->ever, false, r->ageMs, mq_millisOf(tExpect));
+        return done(E_MQTTRESULT::NOTCONNECTED);
+    }
+
+    const mq_time_t now = mq_millis();
+    if (r->ever) r->ageMs = (int32_t)mq_elapsed((mq_time_t)(uint32_t)r->at, now);
+
+    const char* topic = sTopic.c_str();
+    bool changed = false;
+    const MqttTopicHandle handle = mq_handleFor(client, r->handle, topic, &changed);
+    if (handle == MQTT_TOPIC_HANDLE_NONE) return done(E_MQTTRESULT::QUEUEFULL);
+    if (changed) {
+        // A different topic is a different subscription: UNKNOWN until it
+        // speaks, never the last topic's freshness.
+        r->asked = false;
+        r->ever = false;
+        r->at = 0;
+        r->ageMs = -1;
+        r->quality = E_MQTTQUALITY::UNKNOWN;
+    }
+
+    if (!(bool)bEnable) {
+        if (r->asked) {
+            client->unsubscribe(topic);
+            r->asked = false;
+        }
+        r->subscribed = false;
+        return done(E_MQTTRESULT::OK);
+    }
+
+    // A fresh session needs the subscription again; the library re-issues it
+    // only where the broker kept nothing, and the counter cannot be missed.
+    const int32_t connects = (int32_t)client->status().connects;
+    if (connects != r->seenConnects) {
+        r->seenConnects = connects;
+        r->asked = false;
+    }
+    if (!r->asked && client->isConnected()) {
+        const MqttResult asked = client->subscribeTo(handle, mq_qosOf((E_MQTTQOS)eQos));
+        if (!mq_tolerated(asked)) return done((E_MQTTRESULT)(int32_t)(int)asked);
+        r->asked = true;
+    }
+    r->subscribed = r->asked && client->isConnected();
+
+    uint8_t buffer[MQTT_HANDLE_PAYLOAD_MAX];
+    size_t length = 0;
+    while (client->takeMessage(handle, buffer, sizeof buffer, length)) {
+        if (mq_parseAny((const char*)buffer, length, anyValue)) {
+            r->received++;
+            r->at = (int32_t)(uint32_t)now;
+            r->ever = true;
+            r->ageMs = 0;
+            bNewValue = true;
+        } else {
+            r->malformed++;
+        }
+    }
+
+    r->quality = mq_qualityOf(r->ever, client->isConnected(), r->ageMs, mq_millisOf(tExpect));
+    return done(E_MQTTRESULT::OK);
+}
+
+E_MQTTRESULT Statistics()
+{
+    if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
+    MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
+    if (client == nullptr || !(bool)bLinkUp) return E_MQTTRESULT::NOTCONNECTED;
+    const MqttStatus& s = client->status();
+    nVersion = (uint8_t)s.version;
+    nConnects = (int32_t)s.connects;
+    nDisconnects = (int32_t)s.disconnects;
+    nReconnects = (int32_t)s.reconnects;
+    nPublished = (int32_t)s.published;
+    nReceived = (int32_t)s.received;
+    nPublishFailures = (int32_t)s.publishFailures;
+    nProtocolErrors = (int32_t)s.protocolErrors;
+    nPending = (int32_t)client->operations().pending();
+    nReasonCode = s.lastReasonCode;
+    return E_MQTTRESULT::OK;
+}
+
+// A STRUCT record's member table, made again for a new base or a first bind.
+static bool mq_bindMembers(MqRecord* r, const char* base, uint16_t count) {
+    if (r->members != nullptr && r->topic == base) return true;
+    delete[] r->members;
+    r->members = new (std::nothrow) MqMember[count ? count : 1];
+    r->memberCount = r->members ? count : (uint16_t)0;
+    if (r->members == nullptr) return false;
+    r->topic = base;
+    return true;
+}
+
+E_MQTTRESULT PublishStruct()
+{
+    if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
+    nChanged = 0;
+    MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
+    nMethods = (strucpp::XWORD_t)(uintptr_t)m;
+    MqRecord* r = mq_recordOf(m, MQ_REC_PUBLISH_STRUCT, anyData, sBase.c_str());
+    if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
+    auto done = [&](E_MQTTRESULT result) -> E_MQTTRESULT {
+        nPoints = r->points;
+        nSkipped = r->skipped;
+        nSent = r->sent;
+        return result;
+    };
+
+    MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
+    if (client == nullptr || !(bool)bLinkUp) return done(E_MQTTRESULT::NOTCONNECTED);
+
+    const strucpp::TypeDesc* layout = anyData.TYPEDESC;
+    if (anyData.TYPECLASS != strucpp::TYPE_USERDEF || !layout || !anyData.PVALUE) {
+        r->points = 0;
+        return done(E_MQTTRESULT::INVALIDARGUMENT);
+    }
+    // A different base is a different set of topics: nothing carries over.
+    if (!mq_bindMembers(r, sBase.c_str(), layout->MEMBERCOUNT)) {
+        return done(E_MQTTRESULT::QUEUEFULL);
+    }
+
+    const bool execute = (bool)bExecute;
+    const bool asked = execute && !r->lastExecute;
+    r->lastExecute = execute;
+
+    if (!(bool)bEnable) return done(E_MQTTRESULT::OK);
+
+    const int32_t intervalMs = mq_millisOf(tPeriod);
+    const E_MQTTTRIGGER trigger = (E_MQTTTRIGGER)eTrigger;
+    if ((trigger == E_MQTTTRIGGER::ONINTERVAL && intervalMs <= 0) ||
+        trigger == E_MQTTTRIGGER::CHANGEDEVERY) {
+        return done(E_MQTTRESULT::INVALIDARGUMENT);
+    }
+
+    uint8_t* base = anyData.PVALUE;
+    const mq_time_t now = mq_millis();
+    // OnInterval and OnRequest send the whole set together.
+    const bool sendAll =
+        trigger == E_MQTTTRIGGER::ONREQUEST
+            ? asked
+            : (trigger == E_MQTTTRIGGER::ONINTERVAL &&
+               (!r->ever || (int32_t)mq_elapsed((mq_time_t)(uint32_t)r->at, now) >= intervalMs));
+
+    int published = 0, refused = 0;
+    MqttResult worst = MqttResult::Ok;
+    MqMember* table = r->members;
+    const uint16_t count = layout->MEMBERCOUNT < r->memberCount ? layout->MEMBERCOUNT : r->memberCount;
+    const uint8_t qos = mq_qosOf((E_MQTTQOS)eQos);
+
+    for (uint16_t i = 0; i < count; i++) {
+        const strucpp::MemberDesc& member = layout->MEMBERS[i];
+        // A member the wire cannot carry is refused by name, never skipped quietly.
+        if (!mq_memberIsPublishable(member)) {
+            refused++;
+            if (worst == MqttResult::Ok) worst = MqttResult::InvalidArgument;
+            continue;
+        }
+        strucpp::IEC_ANY any;
+        if (!mq_memberAsAny(member, base, &any)) { refused++; continue; }
+
+        char payload[512];
+        const size_t length = mq_formatAny(any, payload, sizeof payload);
+        if (length == 0) {
+            refused++;
+            if (worst == MqttResult::Ok) worst = MqttResult::InvalidArgument;
+            continue;
+        }
+        published++;
+
+        double number = 0.0;
+        const bool numeric = mq_numberOf(any, &number);
+        const uint32_t hash = mq_fingerprint(payload, length);
+
+        bool due;
+        if (trigger == E_MQTTTRIGGER::ONCHANGE) {
+            due = !table[i].hasLast;
+            // Against what was last published, so a slow drift still goes.
+            if (!due) due = numeric ? number != table[i].last : hash != table[i].hash;
+            if (!due && intervalMs > 0 && table[i].hasLast) {
+                due = (int32_t)mq_elapsed((mq_time_t)(uint32_t)table[i].sentAt, now) >= intervalMs;
+            }
+        } else {
+            due = sendAll;
+        }
+        if (!due) continue;
+
+        char topic[256];
+        if (!mq_memberTopic(sBase.c_str(), member.NAME, topic, sizeof topic)) {
+            refused++;
+            if (worst == MqttResult::Ok) worst = MqttResult::InvalidTopic;
+            continue;
+        }
+        const MqttResult sent = client->publish(topic, (const uint8_t*)payload, length, qos,
+                                                (bool)bRetain);
+        if (!mq_tolerated(sent)) {
+            if (worst == MqttResult::Ok) worst = sent;
+            continue;
+        }
+        table[i].hasLast = true;
+        table[i].last = number;
+        table[i].hash = hash;
+        table[i].sentAt = (int32_t)(uint32_t)now;
+        r->ever = true;
+        r->sent++;
+        nChanged = (int16_t)((int16_t)nChanged + 1);
+    }
+    if (sendAll) r->at = (int32_t)(uint32_t)now;
+
+    r->points = (int16_t)published;
+    r->skipped = (int16_t)refused;
+    return done(worst != MqttResult::Ok ? (E_MQTTRESULT)(int32_t)(int)worst : E_MQTTRESULT::OK);
+}
+
+E_MQTTRESULT SubscribeStruct()
+{
+    if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
+    nNewValues = 0;
+    MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
+    nMethods = (strucpp::XWORD_t)(uintptr_t)m;
+    MqRecord* r = mq_recordOf(m, MQ_REC_SUBSCRIBE_STRUCT, anyData, sBase.c_str());
+    if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
+    auto done = [&](E_MQTTRESULT result) -> E_MQTTRESULT {
+        nPoints = r->points;
+        nSkipped = r->skipped;
+        bSubscribed = r->subscribed;
+        eQuality = r->quality;
+        bSeen = r->ever;
+        tOldest = mq_timeOf(r->ageMs);
+        nReceived = r->received;
+        nMalformed = r->malformed;
+        return result;
+    };
+
+    MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
+    if (client == nullptr || !(bool)bLinkUp) {
+        r->subscribed = false;
+        r->quality = E_MQTTQUALITY::BAD;
+        return done(E_MQTTRESULT::NOTCONNECTED);
+    }
+
+    const strucpp::TypeDesc* layout = anyData.TYPEDESC;
+    if (anyData.TYPECLASS != strucpp::TYPE_USERDEF || !layout || !anyData.PVALUE) {
+        r->points = 0;
+        r->subscribed = false;
+        return done(E_MQTTRESULT::INVALIDARGUMENT);
+    }
+    const bool rebind = r->members == nullptr || r->topic != sBase.c_str();
+    if (!mq_bindMembers(r, sBase.c_str(), layout->MEMBERCOUNT)) {
+        r->subscribed = false;
+        return done(E_MQTTRESULT::QUEUEFULL);
+    }
+    if (rebind) {
+        r->ageMs = -1;
+        r->ever = false;
+        r->quality = E_MQTTQUALITY::UNKNOWN;
+        r->asked = false;
+    }
+
+    const int32_t connects = (int32_t)client->status().connects;
+    if (connects != r->seenConnects) {
+        r->seenConnects = connects;
+        r->asked = false;
+    }
+
+    uint8_t* base = anyData.PVALUE;
+    const mq_time_t now = mq_millis();
+    MqMember* table = r->members;
+    const uint16_t count = layout->MEMBERCOUNT < r->memberCount ? layout->MEMBERCOUNT : r->memberCount;
+    const bool enabled = (bool)bEnable;
+    const uint8_t qos = mq_qosOf((E_MQTTQOS)eQos);
+    const int32_t expectMs = mq_millisOf(tExpect);
+
+    int bound = 0, refused = 0;
+    bool allAsked = true;
+    MqttResult worst = MqttResult::Ok;
+    // The worst quality and the oldest age across the set: one stale member
+    // makes the set stale.
+    E_MQTTQUALITY worstQuality = E_MQTTQUALITY::GOOD;
+    int32_t oldest = 0;
+    bool anyNever = false;
+
+    for (uint16_t i = 0; i < count; i++) {
+        const strucpp::MemberDesc& member = layout->MEMBERS[i];
+        if (!mq_memberIsPublishable(member)) {
+            refused++;
+            if (worst == MqttResult::Ok) worst = MqttResult::InvalidArgument;
+            continue;
+        }
+        strucpp::IEC_ANY any;
+        if (!mq_memberAsAny(member, base, &any)) { refused++; continue; }
+
+        char topic[256];
+        if (!mq_memberTopic(sBase.c_str(), member.NAME, topic, sizeof topic)) {
+            refused++;
+            if (worst == MqttResult::Ok) worst = MqttResult::InvalidTopic;
+            continue;
+        }
+        MqttTopicHandle handle = (MqttTopicHandle)table[i].handle;
+        if (handle < 0) {
+            handle = client->registerTopic(topic);
+            if (handle == MQTT_TOPIC_HANDLE_NONE) {
+                refused++;
+                allAsked = false;
+                if (worst == MqttResult::Ok) worst = MqttResult::QueueFull;
+                continue;
+            }
+            table[i].handle = (int16_t)handle;
+        }
+        bound++;
+
+        if (!enabled) {
+            client->unsubscribe(topic);
+            allAsked = false;
+            continue;
+        }
+        if (!r->asked && client->isConnected()) {
+            const MqttResult asked = client->subscribeTo(handle, qos);
+            if (!mq_tolerated(asked)) {
+                allAsked = false;
+                if (worst == MqttResult::Ok) worst = asked;
+            }
+        }
+
+        uint8_t buffer[MQTT_HANDLE_PAYLOAD_MAX];
+        size_t length = 0;
+        while (client->takeMessage(handle, buffer, sizeof buffer, length)) {
+            if (mq_parseAny((const char*)buffer, length, any)) {
+                r->received++;
+                table[i].arrivedAt = (int32_t)(uint32_t)now;
+                table[i].ever = true;
+                nNewValues = (int16_t)((int16_t)nNewValues + 1);
+            } else {
+                r->malformed++;
+            }
+        }
+
+        const int32_t age = table[i].ever
+            ? (int32_t)mq_elapsed((mq_time_t)(uint32_t)table[i].arrivedAt, now) : 0;
+        if (!table[i].ever) anyNever = true;
+        else if (age > oldest) oldest = age;
+        const E_MQTTQUALITY q = mq_qualityOf(table[i].ever, client->isConnected(), age, expectMs);
+        if ((int)q < (int)worstQuality) worstQuality = q;
+    }
+
+    if (enabled && allAsked && client->isConnected()) r->asked = true;
+
+    r->points = (int16_t)bound;
+    r->skipped = (int16_t)refused;
+    r->subscribed = enabled && r->asked && client->isConnected();
+    r->ageMs = anyNever ? 0 : oldest;
+    r->ever = bound > 0 && !anyNever;
+    r->quality = bound == 0 ? E_MQTTQUALITY::UNKNOWN : worstQuality;
+    return done(worst != MqttResult::Ok ? (E_MQTTRESULT)(int32_t)(int)worst : E_MQTTRESULT::OK);
+}
+
+E_MQTTRESULT Message()
+{
+    if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
+    bNewMessage = false;
+    if (anyPayload.TYPECLASS != strucpp::TYPE_STRING || !anyPayload.wired()) {
+        return E_MQTTRESULT::INVALIDARGUMENT;
+    }
+    MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
+    nMethods = (strucpp::XWORD_t)(uintptr_t)m;
+    MqRecord* r = mq_recordOf(m, MQ_REC_MESSAGE, anyPayload, sTopic.c_str());
+    if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
+    auto done = [&](E_MQTTRESULT result) -> E_MQTTRESULT {
+        nLen = (int16_t)r->length;
+        bTruncated = r->truncated;
+        nReceived = r->received;
+        return result;
+    };
+
+    MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
+    if (client == nullptr || !(bool)bLinkUp) return done(E_MQTTRESULT::NOTCONNECTED);
+
+    const char* topic = sTopic.c_str();
+    bool changed = false;
+    const MqttTopicHandle handle = mq_handleFor(client, r->handle, topic, &changed);
+    if (handle == MQTT_TOPIC_HANDLE_NONE) return done(E_MQTTRESULT::QUEUEFULL);
+    if (changed) r->asked = false;
+
+    if (!(bool)bEnable) {
+        if (r->asked) {
+            client->unsubscribe(topic);
+            r->asked = false;
+        }
+        return done(E_MQTTRESULT::OK);
+    }
+
+    const int32_t connects = (int32_t)client->status().connects;
+    if (connects != r->seenConnects) {
+        r->seenConnects = connects;
+        r->asked = false;
+    }
+    if (!r->asked && client->isConnected()) {
+        const MqttResult asked = client->subscribeTo(handle, mq_qosOf((E_MQTTQOS)eQos));
+        if (!mq_tolerated(asked)) return done((E_MQTTRESULT)(int32_t)(int)asked);
+        r->asked = true;
+    }
+
+    // One message per call: a payload is presented, not folded into a value,
+    // so a backlog drained at once would show only its last message.
+    if (client->topics().hasMessage(handle)) {
+        uint8_t buffer[MQTT_HANDLE_PAYLOAD_MAX];
+        size_t length = 0;
+        if (client->takeMessage(handle, buffer, sizeof buffer, length)) {
+            // Cut by the client's buffer, or by the variable's declared width.
+            const bool cutByRegistry = client->topicState(handle).truncated;
+            const size_t width = (size_t)anyPayload.DISIZE;
+            const size_t shown = length < width ? length : width;
+            mq_parseAny((const char*)buffer, shown, anyPayload);
+            r->length = (int32_t)shown;
+            r->truncated = cutByRegistry || shown != length;
+            r->received++;
+            bNewMessage = true;
+        }
+    }
+    return done(E_MQTTRESULT::OK);
+}
+
+E_MQTTRESULT Request()
+{
+    if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
+    MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
+    nMethods = (strucpp::XWORD_t)(uintptr_t)m;
+    MqRecord* r = mq_recordOf(m, MQ_REC_REQUEST, anyValue, sTopic.c_str());
+    if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
+    auto done = [&]() -> E_MQTTRESULT {
+        sReply = r->reply.c_str();
+        nReplyLen = (int16_t)r->reply.size();
+        return r->result;
+    };
+    MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
+
+    const bool execute = (bool)bExecute;
+    const bool rising = execute && !r->lastExecute;
+    r->lastExecute = execute;
+
+    if (client == nullptr || !(bool)bLinkUp) {
+        if (rising) r->reply.clear();
+        if (r->pending || rising) {
+            r->pending = false;
+            r->result = E_MQTTRESULT::NOTCONNECTED;
+        }
+        return done();
+    }
+
+    // The reply topic is subscribed and kept, so an answer cannot arrive
+    // before anyone listens. Latched while a request waits.
+    const std::string replyTopic = r->pending ? r->replyTopic : std::string(sReplyTopic.c_str());
+    MqttTopicHandle reply = MQTT_TOPIC_HANDLE_NONE;
+    if (!replyTopic.empty()) {
+        bool changed = false;
+        reply = mq_handleFor(client, r->replyHandle, replyTopic.c_str(), &changed);
+        if (changed) r->asked = false;
+    }
+    if (reply != MQTT_TOPIC_HANDLE_NONE) {
+        const int32_t connects = (int32_t)client->status().connects;
+        if (connects != r->seenConnects) {
+            r->seenConnects = connects;
+            r->asked = false;
+        }
+        if (!r->asked && client->isConnected()) {
+            if (mq_tolerated(client->subscribeTo(reply, mq_qosOf((E_MQTTQOS)eQos)))) r->asked = true;
+        }
+    }
+
+    const mq_time_t now = mq_millis();
+    if (r->pending) {
+        uint8_t buffer[MQTT_HANDLE_PAYLOAD_MAX];
+        size_t length = 0;
+        if (reply == MQTT_TOPIC_HANDLE_NONE) {
+            r->pending = false;
+            r->result = E_MQTTRESULT::QUEUEFULL;
+        } else if (client->takeMessage(reply, buffer, sizeof buffer, length)) {
+            // As wide as sReply.
+            const size_t shown = length > 254 ? 254 : length;
+            r->reply.assign((const char*)buffer, shown);
+            r->pending = false;
+            r->result = E_MQTTRESULT::OK;
+        } else if ((int32_t)mq_elapsed((mq_time_t)(uint32_t)r->at, now) >= r->limitMs) {
+            // Unanswered: said, so a sequence waiting on it does not hang.
+            r->pending = false;
+            r->result = E_MQTTRESULT::KEEPALIVETIMEOUT;
+        }
+        return done();
+    }
+    if (!rising) return done();
+
+    // A start: the inputs as they are now, the outputs cleared.
+    r->reply.clear();
+    if (!(bool)bConnected) {
+        r->result = E_MQTTRESULT::NOTCONNECTED;
+        return done();
+    }
+    if (replyTopic.empty()) {
+        r->result = E_MQTTRESULT::INVALIDTOPIC;
+        return done();
+    }
+    if (reply == MQTT_TOPIC_HANDLE_NONE) {
+        r->result = E_MQTTRESULT::QUEUEFULL;
+        return done();
+    }
+    // Refused rather than sent stripped: without Response Topic the responder
+    // has nowhere to answer.
+    if (client->status().version != MqttVersion::V5) {
+        r->result = E_MQTTRESULT::NOTSUPPORTEDBYPROTOCOL;
+        return done();
+    }
+    char payload[512];
+    const size_t length = mq_formatAny(anyValue, payload, sizeof payload);
+    if (length == 0) {
+        r->result = E_MQTTRESULT::INVALIDARGUMENT;
+        return done();
+    }
+
+    // Counted, not random: a PLC has no entropy at start-up, and a counter
+    // tells this record's questions apart.
+    r->correlation++;
+    char correlation[16];
+    snprintf(correlation, sizeof correlation, "%ld", (long)r->correlation);
+    MqttOwnedProperties properties;
+    properties.setResponseTopic(replyTopic.c_str());
+    properties.setCorrelationData(correlation);
+    properties.setPayloadFormat(true);
+
+    const MqttResult asked = client->publish(sTopic.c_str(), (const uint8_t*)payload, length,
+                                             mq_qosOf((E_MQTTQOS)eQos), false, properties);
+    if (!mq_tolerated(asked)) {
+        r->result = (E_MQTTRESULT)(int32_t)(int)asked;
+        return done();
+    }
+    const int32_t ms = mq_millisOf(tTimeout);
+    r->limitMs = ms > 0 ? ms : 5000;
+    r->replyTopic = replyTopic;
+    r->pending = true;
+    r->at = (int32_t)(uint32_t)now;
+    r->result = E_MQTTRESULT::QUEUED;
+    return done();
+}
+
+E_MQTTRESULT Response()
+{
+    if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
+    bNewRequest = false;
+    MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
+    nMethods = (strucpp::XWORD_t)(uintptr_t)m;
+    MqRecord* r = mq_recordOf(m, MQ_REC_RESPONSE, anyRequest, sTopic.c_str());
+    if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
+    auto done = [&](E_MQTTRESULT result) -> E_MQTTRESULT {
+        bAwaitingReply = r->answerable;
+        sResponseTopic = r->replyTopic.c_str();
+        nReceived = r->received;
+        nMalformed = r->malformed;
+        return result;
+    };
+
+    const bool execute = (bool)bExecute;
+    const bool rising = execute && !r->lastExecute;
+    r->lastExecute = execute;
+
+    MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
+    if (client == nullptr || !(bool)bLinkUp) return done(E_MQTTRESULT::NOTCONNECTED);
+    // The request's properties reach the record through the hook.
+    client->attach(m->hook);
+
+    const char* topic = sTopic.c_str();
+    bool changed = false;
+    const MqttTopicHandle handle = mq_handleFor(client, r->handle, topic, &changed);
+    if (handle == MQTT_TOPIC_HANDLE_NONE) return done(E_MQTTRESULT::QUEUEFULL);
+    if (changed || r->topic != topic) {
+        r->topic = topic;
+        r->asked = false;
+        r->answerable = false;
+        r->replyTopic.clear();
+        r->correlationData.clear();
+    }
+
+    if (!(bool)bEnable) {
+        if (r->asked) {
+            client->unsubscribe(topic);
+            r->asked = false;
+        }
+        return done(E_MQTTRESULT::OK);
+    }
+
+    const int32_t connects = (int32_t)client->status().connects;
+    if (connects != r->seenConnects) {
+        r->seenConnects = connects;
+        r->asked = false;
+    }
+    const uint8_t qos = mq_qosOf((E_MQTTQOS)eQos);
+    if (!r->asked && client->isConnected()) {
+        const MqttResult asked = client->subscribeTo(handle, qos);
+        if (!mq_tolerated(asked)) return done((E_MQTTRESULT)(int32_t)(int)asked);
+        r->asked = true;
+    }
+
+    uint8_t buffer[MQTT_HANDLE_PAYLOAD_MAX];
+    size_t length = 0;
+    while (client->takeMessage(handle, buffer, sizeof buffer, length)) {
+        r->received++;
+        bNewRequest = true;
+        if (anyRequest.wired() && !mq_parseAny((const char*)buffer, length, anyRequest)) {
+            r->malformed++;
+        }
+    }
+
+    if (!rising) return done(E_MQTTRESULT::OK);
+
+    // The answer: to the last request's Response Topic, quoting its
+    // Correlation Data. Once per request.
+    if (client->status().version != MqttVersion::V5) {
+        return done(E_MQTTRESULT::NOTSUPPORTEDBYPROTOCOL);
+    }
+    if (!client->isConnected()) return done(E_MQTTRESULT::NOTCONNECTED);
+    if (!r->answerable) return done(E_MQTTRESULT::INVALIDTOPIC);
+    char payload[512];
+    const size_t replyLength = mq_formatAny(anyReply, payload, sizeof payload);
+    if (replyLength == 0) return done(E_MQTTRESULT::INVALIDARGUMENT);
+
+    MqttOwnedProperties properties;
+    if (!r->correlationData.empty()) {
+        properties.setCorrelationData(r->correlationData.data(), r->correlationData.size());
+    }
+    properties.setPayloadFormat(true);
+    const MqttResult sent = client->publish(r->replyTopic.c_str(), (const uint8_t*)payload,
+                                            replyLength, qos, false, properties);
+    if (!mq_tolerated(sent)) return done((E_MQTTRESULT)(int32_t)(int)sent);
+    r->answerable = false;
+    return done(E_MQTTRESULT::OK);
+}
+
+E_MQTTRESULT Provision()
+{
+    // What the key handed this PLC, as kept: valid before the first connect,
+    // so a Sparkplug node's Will is on the right group from the start.
+    sGroup = sProvGroup.c_str();
+    sPrefix = sProvPrefix.c_str();
+    if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
+    MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
+    nMethods = (strucpp::XWORD_t)(uintptr_t)m;
+    if (m == nullptr) return E_MQTTRESULT::QUEUEFULL;
+    MqProvision& p = m->provision;
+    auto done = [&]() -> E_MQTTRESULT {
+        bProvisioned = p.provisioned;
+        bPending = p.waiting;
+        bRefused = p.refused;
+        sUserName = p.userName.c_str();
+        sGroup = sProvGroup.c_str();
+        sPrefix = sProvPrefix.c_str();
+        sReason = p.reason.c_str();
+        return p.status;
+    };
+    const mq_time_t now = mq_millis();
+
+    if (sClientId.length() == 0) {
+        p.status = E_MQTTRESULT::INVALIDARGUMENT;
+        p.reason = "set sClientId - it is this PLC's name";
+        return done();
+    }
+    const bool haveLogin = sProvLoginUser.length() > 0 && sProvLoginSecret.length() > 0;
+    if (!haveLogin && sKey.length() == 0) {
+        p.status = E_MQTTRESULT::INVALIDARGUMENT;
+        p.reason = "set sKey - from `modbee key create` on the broker";
+        return done();
+    }
+
+    // bForget's rising edge - not at program start, where one wired TRUE
+    // would throw the login away on every reboot.
+    const bool forget = (bool)bForget;
+    if (p.forgetSeen && forget && !p.lastForget) {
+        sProvLoginUser = "";
+        sProvLoginSecret = "";
+        if ((bool)bLinkUp) p.switchTo = 2;
+    }
+    p.lastForget = forget;
+    p.forgetSeen = true;
+
+    // Before the client builds its link: which login it uses.
+    if (!(bool)bLinkUp) {
+        const bool stored = sProvLoginUser.length() > 0 && sProvLoginSecret.length() > 0;
+        if (stored) {
+            sProvUser = sProvLoginUser.c_str();
+            sProvPassword = sProvLoginSecret.c_str();
+        } else {
+            sProvUser = "$provision";
+            sProvPassword = sKey.c_str();
+        }
+        p.usingKey = !stored;
+        p.withoutWill = false;
+        bProvisioning = !stored;
+        p.provisioned = false;
+        p.userName = stored ? sProvLoginUser.c_str() : "";
+        return done();
+    }
+
+    MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
+    if (client == nullptr) return done();
+
+    // Changing logins on the SAME client, which every record's handles are
+    // into: down first, then the new login, then up.
+    if (p.switchTo != 0) {
+        if (client->isConnected()) {
+            if (!p.switchClosed) {
+                client->disconnect();
+                p.switchClosed = true;
+            }
+        } else if (client->state() == MqttState::Idle || client->state() == MqttState::Reconnecting) {
+            const bool toKey = p.switchTo == 2;
+            const bool withoutWill = p.switchTo == 3;
+            MqttConnectionConfig c = client->connection();
+            c.hasUserName = true;
+            c.hasPassword = true;
+            // With the key, or the login only asking again: a session without
+            // the node's Will (registration).
+            c.registration = toKey || withoutWill;
+            if (toKey) {
+                c.userName = "$provision";
+                c.password.assign(sKey.c_str(), sKey.c_str() + sKey.length());
+            } else {
+                c.userName = std::string(sProvLoginUser.c_str(), sProvLoginUser.length());
+                c.password.assign(sProvLoginSecret.c_str(),
+                                  sProvLoginSecret.c_str() + sProvLoginSecret.length());
+            }
+            client->reconfigure(c);
+            client->connect();
+            p.usingKey = toKey;
+            p.withoutWill = withoutWill;
+            // Holds the rest of the program off a session that only asks.
+            bProvisioning = toKey || withoutWill;
+            p.switchTo = 0;
+            p.switchClosed = false;
+            p.asked = false;
+        }
+    }
+
+    const uint8_t refusal = client->status().connectReasonCode;
+    const bool v311 = client->activeVersion() == MqttVersion::V311;
+    const bool badLogin = !client->isConnected() &&
+                          (refusal == MQ_REASON_BAD_USER_NAME_OR_PASSWORD ||
+                           (v311 && refusal == MQ_RETURN_BAD_CREDENTIALS));
+    const bool notAuthorized = !client->isConnected() &&
+                               (refusal == MQ_REASON_NOT_AUTHORIZED ||
+                                (v311 && refusal == MQ_RETURN_NOT_AUTHORIZED));
+
+    // The reply topic, kept registered: the key's answer, or the login's
+    // when it asks again.
+    const std::string id(sClientId.c_str(), sClientId.length());
+    const std::string base = "$modbee/provision/" + id;
+    const std::string replyTopic = base + "/reply";
+    bool changed = false;
+    const MqttTopicHandle handle = mq_handleFor(client, p.handle, replyTopic.c_str(), &changed);
+    if (handle == MQTT_TOPIC_HANDLE_NONE) {
+        p.status = E_MQTTRESULT::QUEUEFULL;
+        p.reason = "no topic slot left on the client";
+        return done();
+    }
+    if (changed) p.asked = false;
+    // The subscription and the request belong to the session they were made on.
+    const int32_t connects = (int32_t)client->status().connects;
+    if (connects != p.seenConnects) {
+        p.seenConnects = connects;
+        p.asked = false;
+    }
+
+    if (!p.usingKey) {
+        // Its own login. Refused as wrong (reset by an admin, or taken over
+        // by a replacement): ask again with the key, keeping the old login
+        // until a new one is issued; it is retried every five minutes.
+        if (badLogin && p.switchTo == 0 && sKey.length() > 0) {
+            p.oldTriedAt = (int32_t)(uint32_t)now;
+            p.switchTo = 2;
+        }
+        // Not authorized: disabled or pending, or a Will the login may no
+        // longer publish because the site's group changed. Connect once
+        // without the Will and ask again.
+        if (notAuthorized && p.switchTo == 0 && !p.withoutWill &&
+            (p.lockedAt == 0 ||
+             mq_elapsed((mq_time_t)(uint32_t)p.lockedAt, now) >= MQ_PROVISION_REFUSED_MS)) {
+            p.lockedAt = (int32_t)(uint32_t)(now | 1u);
+            p.switchTo = 3;
+        }
+        if (p.withoutWill && notAuthorized && p.switchTo == 0) {
+            p.refused = true;
+            p.status = E_MQTTRESULT::NOTAUTHORIZED;
+            p.reason = "this PLC's login is disabled or waiting for approval";
+            p.switchTo = 1;   // back to the normal session, Will and all; asks again later
+            return done();
+        }
+
+        // Connected: ask again for what the key hands its devices.
+        if (client->isConnected() && !p.asked) {
+            client->subscribeTo(handle, MQ_QOS_1);
+            const std::string request = base + "/request";
+            const char refresh[] = "{\"refresh\":true}";
+            const MqttResult asked = client->publish(request.c_str(), (const uint8_t*)refresh,
+                                                     sizeof refresh - 1, MQ_QOS_1, false);
+            if (mq_tolerated(asked)) {
+                p.asked = true;
+                p.askedAt = (int32_t)(uint32_t)now;
+            }
+        }
+        uint8_t buffer[MQTT_HANDLE_PAYLOAD_MAX];
+        size_t length = 0;
+        while (client->takeMessage(handle, buffer, sizeof buffer, length)) {
+            std::string status, group, prefix;
+            mq_provisionField((const char*)buffer, length, "status", status);
+            if (status != "ok") continue;
+            // The whole set: a value the broker no longer has is gone here too.
+            mq_provisionField((const char*)buffer, length, "group", group);
+            mq_provisionField((const char*)buffer, length, "prefix", prefix);
+            const bool moved = group.size() <= 64 &&
+                               group != std::string(sProvGroup.c_str(), sProvGroup.length());
+            if (group.size() <= 64) sProvGroup = group.c_str();
+            if (prefix.size() <= 127) sProvPrefix = prefix.c_str();
+            if (!p.withoutWill) {
+                p.lockedAt = 0;
+            } else {
+                // Only asking: back to the real session, Will on the new group.
+                p.switchTo = 1;
+                if (moved) {
+                    p.lockedAt = 0;
+                } else {
+                    // The same group: the login's rights no longer cover its
+                    // Will. The hold is kept, so a refused session does not
+                    // start again at once.
+                    p.refused = true;
+                    p.status = E_MQTTRESULT::NOTAUTHORIZED;
+                    p.reason = "the broker refuses this PLC's Will";
+                }
+            }
+        }
+
+        p.provisioned = sProvLoginUser.length() > 0 && client->isConnected() && !p.withoutWill;
+        p.waiting = false;
+        if (p.provisioned) p.refused = false;
+        p.userName = sProvLoginUser.c_str();
+        if (p.switchTo == 0 && !p.refused) {
+            p.status = E_MQTTRESULT::OK;
+            p.reason = "";
+        }
+        return done();
+    }
+
+    // Connected with the key: ask for a login.
+    p.provisioned = false;
+    p.userName = "";
+
+    // Pending or refused, with a login kept from before: try it again every
+    // five minutes - a login put back on the broker works again by itself.
+    const bool keptLogin = sProvLoginUser.length() > 0 && sProvLoginSecret.length() > 0;
+    if (keptLogin && (p.waiting || p.refused || badLogin) && p.switchTo == 0 &&
+        mq_elapsed((mq_time_t)(uint32_t)p.oldTriedAt, now) >= MQ_PROVISION_REFUSED_MS) {
+        p.oldTriedAt = (int32_t)(uint32_t)now;
+        p.switchTo = 1;
+        return done();
+    }
+
+    if (badLogin) {
+        // The key itself was refused at CONNECT.
+        if (!p.refused) p.refusedAt = (int32_t)(uint32_t)now;
+        p.refused = true;
+        p.waiting = false;
+        p.status = E_MQTTRESULT::NOTAUTHORIZED;
+        p.reason = "the broker refused the provisioning key";
+        if (client->state() == MqttState::Idle &&
+            mq_elapsed((mq_time_t)(uint32_t)p.refusedAt, now) >= MQ_PROVISION_REFUSED_MS) {
+            p.refusedAt = (int32_t)(uint32_t)now;
+            client->connect();
+        }
+        return done();
+    }
+    if (!client->isConnected()) return done();
+
+    const mq_time_t since = mq_elapsed((mq_time_t)(uint32_t)p.askedAt, now);
+    const bool askAgain = (p.waiting && since >= MQ_PROVISION_PENDING_MS) ||
+                          (p.refused && since >= MQ_PROVISION_REFUSED_MS);
+    if (!p.asked || askAgain) {
+        if (!p.asked) client->subscribeTo(handle, MQ_QOS_1);
+        const std::string request = base + "/request";
+        const MqttResult asked =
+            client->publish(request.c_str(), (const uint8_t*)"{}", 2, MQ_QOS_1, false);
+        if (mq_tolerated(asked)) {
+            p.asked = true;
+            p.askedAt = (int32_t)(uint32_t)now;
+        }
+    }
+
+    uint8_t buffer[MQTT_HANDLE_PAYLOAD_MAX];
+    size_t length = 0;
+    while (client->takeMessage(handle, buffer, sizeof buffer, length)) {
+        std::string status, user, secret, why, group, prefix;
+        mq_provisionField((const char*)buffer, length, "status", status);
+        if (status == "ok" && mq_provisionField((const char*)buffer, length, "username", user) &&
+            mq_provisionField((const char*)buffer, length, "password", secret) &&
+            !user.empty() && user.size() <= 64 && !secret.empty() && secret.size() <= 64) {
+            mq_provisionField((const char*)buffer, length, "group", group);
+            mq_provisionField((const char*)buffer, length, "prefix", prefix);
+            sProvLoginUser = user.c_str();
+            sProvLoginSecret = secret.c_str();
+            sProvGroup = group.size() <= 64 ? group.c_str() : "";
+            sProvPrefix = prefix.size() <= 127 ? prefix.c_str() : "";
+            p.switchTo = 1;
+            p.waiting = false;
+            p.refused = false;
+            p.status = E_MQTTRESULT::OK;
+            p.reason = "";
+        } else if (status == "pending") {
+            p.waiting = true;
+            p.refused = false;
+            p.status = E_MQTTRESULT::OK;
+            p.reason = "waiting for approval on the broker";
+        } else {
+            p.waiting = false;
+            p.refused = true;
+            p.status = E_MQTTRESULT::NOTAUTHORIZED;
+            if (!mq_provisionField((const char*)buffer, length, "reason", why)) why = "refused";
+            if (why.size() > 63) why.resize(63);
+            p.reason = why;
+        }
+    }
+    return done();
 }
 
 END_FUNCTION_BLOCK

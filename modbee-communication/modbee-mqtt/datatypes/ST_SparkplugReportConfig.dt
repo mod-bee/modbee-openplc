@@ -1,0 +1,8 @@
+TYPE
+  ST_SparkplugReportConfig : STRUCT
+    tLogInterval   : TIME := T#15m;       (* the log class looks for what moved this often; at most T#15m *)
+    tLiveInterval  : TIME := T#30s;       (* the live class, and the log class while someone views *)
+    fDeadbandPct   : REAL;                (* the log class's deadband in % where a member gives no pct= *)
+    bRemoteControl : BOOL;                (* the cmd and set classes take writes from the host *)
+  END_STRUCT;
+END_TYPE
