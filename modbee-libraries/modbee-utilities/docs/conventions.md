@@ -363,7 +363,7 @@ sit between a measurement and its consumers: wire the measurement to the decorat
 | `E_RunResume` | `Resume`, `Restart`, `None` (a run after a power cut) |
 | `E_Band` | `None`, `LowLow`, `Low`, `High`, `HighHigh` (switch bands) |
 | `E_Unit` | `None`, `Bar`, `KPa`, `Psi`, `MetreH2O`, `LitrePerSec`, `LitrePerMin`, `M3PerHour`, `GalPerMin`, `Litre`, `M3`, `MegaLitre`, `Gallon`, `DegC`, `DegF`, `Kelvin`, `Mm`, `Cm`, `Metre`, `Inch`, `Foot`, `Percent`, `Amp`, `Hertz`, `KW`, `M3PerDay`, `MegaLitrePerDay`, `Kg`, `Tonne` |
-| `E_UnitKind` | `None`, `Pressure`, `Flow`, `Volume`, `Temperature`, `Length`, `Percent`, `Current`, `Frequency`, `Power` |
+| `E_UnitKind` | `None`, `Pressure`, `Flow`, `Volume`, `Temperature`, `Length`, `Percent`, `Current`, `Frequency`, `Power`, `Mass` |
 | `E_IoSrc`, `E_IoKind`, `E_IoQ` | the IO map's sources, kinds and channel qualities ([FB_IoMapIn](blocks/FB_IoMapIn.md)) |
 
 ## Time

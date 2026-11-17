@@ -37,6 +37,8 @@ E_Unit.Cm:   F_UnitKind := E_UnitKind.Length; fK := 0.01;
 E_Unit.Metre:    F_UnitKind := E_UnitKind.Length;
 E_Unit.Inch:   F_UnitKind := E_UnitKind.Length; fK := 0.0254;
 E_Unit.Foot:   F_UnitKind := E_UnitKind.Length; fK := 0.3048;
+E_Unit.Kg:   F_UnitKind := E_UnitKind.Mass;
+E_Unit.Tonne:   F_UnitKind := E_UnitKind.Mass; fK := 1000.0;
 E_Unit.Percent:  F_UnitKind := E_UnitKind.Percent;
 E_Unit.Amp:    F_UnitKind := E_UnitKind.Current;
 E_Unit.Hertz:   F_UnitKind := E_UnitKind.Frequency;

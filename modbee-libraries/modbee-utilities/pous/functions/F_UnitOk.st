@@ -1,5 +1,5 @@
 (* TRUE when F_UnitConv can convert eFromUnit to eToUnit: both units are of the same
-kind and neither is NONE *)
+kind and neither is None *)
 
 FUNCTION F_UnitOk : BOOL
   VAR_INPUT

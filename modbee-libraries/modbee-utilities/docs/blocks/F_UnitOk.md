@@ -12,7 +12,7 @@ TRUE when F_UnitConv can convert between two units.
 
 ## How it works
 
-TRUE when [`F_UnitConv`](F_UnitConv.md) can convert `eFromUnit` to `eToUnit`: both units are of the same kind and neither is NONE
+TRUE when [`F_UnitConv`](F_UnitConv.md) can convert `eFromUnit` to `eToUnit`: both units are of the same kind and neither is None
 
 ## Example
 
