@@ -1,0 +1,5 @@
+TYPE
+  ST_DoseTimedSts EXTENDS ST_DoseSts : STRUCT
+    bCarrierOk : BOOL;
+  END_STRUCT;
+END_TYPE

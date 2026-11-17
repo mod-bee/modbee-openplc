@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_DstRule : USINT (None, Nz, AuSe, Eu, Us) := None;
+END_TYPE

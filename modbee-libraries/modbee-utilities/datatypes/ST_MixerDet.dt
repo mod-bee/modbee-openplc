@@ -1,0 +1,5 @@
+TYPE
+  ST_MixerDet : STRUCT
+    tTimeLeft : TIME; (* of the pre-run, post-run, on or off time *)
+  END_STRUCT;
+END_TYPE

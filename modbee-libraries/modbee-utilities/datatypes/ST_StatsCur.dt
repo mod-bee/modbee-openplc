@@ -1,0 +1,13 @@
+TYPE
+  ST_StatsCur : STRUCT
+    fMin : REAL;
+    fMax : REAL;
+    fSum : LREAL; (* value x milliseconds *)
+    fComp : LREAL; (* Kahan compensation *)
+    nSamples : UDINT;
+    tDuration : TIME; (* time collected *)
+    tMinAt : TIME; (* time into the period of the minimum *)
+    tMaxAt : TIME;
+    tElapsed : TIME; (* time since the period started *)
+  END_STRUCT;
+END_TYPE

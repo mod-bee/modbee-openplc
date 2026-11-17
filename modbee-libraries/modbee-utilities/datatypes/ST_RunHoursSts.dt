@@ -1,0 +1,10 @@
+TYPE
+  ST_RunHoursSts : STRUCT
+    fHours : LREAL; (* lifetime *)
+    fServiceHours : LREAL; (* since the last service *)
+    fServiceLeft : LREAL;
+    bServiceDue : BOOL;
+    tLastRun : TIME; (* written at each run end *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

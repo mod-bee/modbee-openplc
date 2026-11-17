@@ -1,0 +1,9 @@
+TYPE
+  ST_StatsPrev : STRUCT
+    fMin : REAL;
+    fMax : REAL;
+    fAverage : REAL;
+    tDuration : TIME;
+    nSamples : UDINT;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,6 @@
+TYPE
+  ST_DoseFlowData EXTENDS ST_DoseData : STRUCT
+    set : ST_DoseFlowSet;
+    sts : ST_DoseFlowSts;
+  END_STRUCT;
+END_TYPE

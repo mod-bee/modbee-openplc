@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_RunResume : (Resume, Restart, None) := Resume;
+END_TYPE

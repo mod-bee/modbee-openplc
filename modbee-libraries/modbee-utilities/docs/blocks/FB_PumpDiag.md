@@ -1,0 +1,72 @@
+# FB_PumpDiag — Pump hydraulic diagnosis
+
+Names the likely cause of a pump's hydraulic trouble from its pressure, flow and suction: blocked, burst, suction low or no lift. It only tells; it stops nothing.
+
+## Pins
+
+| | Pin | Type | Default | What to wire |
+| --- | --- | --- | --- | --- |
+| in | `bRunning` | `BOOL` |  | the pump runs |
+| in | `ipPressure` | `I_Measurement` |  | optional. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
+| in | `ipFlow` | `I_Measurement` |  | optional. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
+| in | `ipSuction` | `I_Measurement` |  | optional. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
+| in | `refData` | `REFERENCE TO ST_PumpDiagData` |  | Its record (a variable of this type) |
+| in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
+| out | `eDiagnosis` | `E_PumpDiag` |  | `Normal`, `Blocked`, `Burst`, `NoLift` or `Suction` |
+| out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
+| out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
+| out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
+| out | `eState` | `E_State` |  | What it is doing now (Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault) *(from FB_Object)* |
+
+`bError`, `bWarning`, `eErrorId`, `eState` work as in every block: see [errors and state](../conventions.md#errors-and-state).
+
+## Record `ST_PumpDiagData` (pin `refData`)
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `eDiagnosis` | `E_PumpDiag` |  | status |
+| `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+
+**Settings `set`** (`ST_PumpDiagSet`)
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `fPressureHigh` | `REAL` |  | in the pressure's unit (0 = off) |
+| `fPressureLow` | `REAL` |  |  |
+| `fFlowHigh` | `REAL` |  | in the flow's unit (0 = off) |
+| `fFlowLow` | `REAL` |  |  |
+| `fSuctionLow` | `REAL` |  | in the suction's unit (0 = off) |
+| `tDelay` | `TIME` | `T#10s` | the finding must stand this long |
+
+## Lists
+
+- `E_PumpDiag`: `Normal`, `Blocked`, `Burst`, `NoLift`, `Suction` (default `Normal`)
+
+## How it works
+
+The likely cause of a pump's hydraulic trouble from its pressure, flow and suction. An observer: it only tells, the pump's [`FB_LevelCheck`](FB_LevelCheck.md) parts act.
+
+While `bRunning` (the pump runs), after `set.tDelay` of the same finding:
+
+```
+  Blocked   pressure high and flow low (a closed valve, a blocked line)
+  Burst     pressure low and flow high (a burst or open line)
+  Suction   suction low (a dry well, a blocked inlet)
+  NoLift    pressure low and flow low (air-locked, worn, turning backwards)
+```
+
+in that order. Each measurement is optional (unwired, not fitted or not good: its tests are left out); each limit 0 is off. Not running: Normal.
+
+## Example
+
+A pump with pressure and flow transmitters.
+
+| Pin | Wire |
+| --- | --- |
+| `bRunning` | `fbMotor1.bQ` (or the motor's run feedback) |
+| `ipPressure` | `fbPressure` |
+| `ipFlow` | `fbFlow` |
+| `refData` | `stDiag1` |
+| `eDiagnosis` | the HMI |
+
+**Back to** [the index](../README.md).

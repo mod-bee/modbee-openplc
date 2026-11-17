@@ -1,0 +1,7 @@
+TYPE
+  ST_ValveData EXTENDS ST_EquipmentData : STRUCT
+    set : ST_ValveSet;
+    sts : ST_ValveSts;
+    tot : ST_ValveTot;
+  END_STRUCT;
+END_TYPE

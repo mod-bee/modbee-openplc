@@ -1,0 +1,8 @@
+TYPE
+  ST_MotorSts EXTENDS ST_EquipmentSts : STRUCT
+    stOverload : ST_ProtectionSts;
+    stNoFeedback : ST_ProtectionSts;
+    stFeedbackLost : ST_ProtectionSts;
+    stStuck : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

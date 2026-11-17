@@ -1,0 +1,7 @@
+TYPE
+  ST_ValveLatchSts : STRUCT
+    bPulsing : BOOL;
+    nLastPos : USINT; (* the kept position: 0 unknown, 1 closed, 2 open *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

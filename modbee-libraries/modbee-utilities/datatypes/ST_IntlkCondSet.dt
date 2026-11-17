@@ -1,0 +1,7 @@
+TYPE
+  ST_IntlkCondSet : STRUCT
+    tDelay : TIME; (* must be not OK this long to count *)
+    eReset : E_ResetMode := E_ResetMode.Auto; (* Auto, Manual (held until reset) or Retry *)
+    bBypassAllowed : BOOL; (* a bypass may be asked for this condition *)
+  END_STRUCT;
+END_TYPE

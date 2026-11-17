@@ -1,0 +1,14 @@
+TYPE
+  ST_ValveSts EXTENDS ST_EquipmentSts : STRUCT
+    bOpen : BOOL;
+    bClosed : BOOL;
+    bMoving : BOOL;
+    stTravel : ST_ProtectionSts;
+    stBothLimits : ST_ProtectionSts;
+    stPositionLost : ST_ProtectionSts;
+    tLastStroke : TIME; (* the last stroke confirmed by its end switch *)
+    bActLocal : BOOL; (* the actuator is in Local (bActRemote FALSE) *)
+    stSlowStroke : ST_ProtectionSts;
+    stActLocal : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

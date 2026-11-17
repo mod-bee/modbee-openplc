@@ -1,0 +1,8 @@
+TYPE
+  ST_IoAch : STRUCT
+    fV : REAL; (* the raw value (inputs: before scaling) *)
+    bBad : BOOL;
+    bForced : BOOL;
+    nFn : USINT;
+  END_STRUCT;
+END_TYPE

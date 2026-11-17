@@ -1,0 +1,20 @@
+TYPE
+  ST_ZoneSeqSet : STRUCT
+    tPumpStartDelay : TIME := T#3s;
+    tValveOverlap : TIME := T#5s;
+    tValveCloseDelay : TIME := T#5s;
+    tValveProve : TIME := T#30s;
+    tMasterCloseDelay : TIME; (* the master valve closes this long after the last zone valve *)
+    tFlushTime : TIME := T#2m; (* dosing stops this long before a zone cycle ends *)
+    tMaxPumpWait : TIME; (* no pump this long ends the program (0 = wait for ever) *)
+    bPumpWaitSkips : BOOL; (* ... or skips the zone *)
+    bDose : BOOL; (* runs dose by default (nDoseReq -1) *)
+    nRepeats : INT := 1; (* the program runs this many passes (1..100) *)
+    eRainAction : E_RainAction; (* what bRainHold does *)
+    fDefaultSp : REAL; (* the pressure setpoint of a zone with none of its own *)
+    eResume : E_RunResume := E_RunResume.Resume; (* a program that was on at a power cut *)
+    tResumeWindow : TIME := T#1m; (* a held run: its bRun must be back within this, else it ends *)
+    tMaxTime : TIME; (* the cap of a zone cycle whose only target is a volume (0 = worked out) *)
+    tDefaultCap : TIME := T#2h; (* ... when there is no tMaxTime and no zone minimum flow *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,10 @@
+TYPE
+  ST_BoosterSet : STRUCT
+    eStartBy : E_BoostStart;
+    tDelay : TIME := T#10s; (* Delay: after the duty pumps run *)
+    fStartAt : REAL; (* Pressure: start at or below *)
+    fStopAt : REAL; (* Pressure: stop at or above *)
+    bRequired : BOOL := TRUE; (* a booster that does not run when wanted is BoosterLost *)
+    stLost : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#30s);
+  END_STRUCT;
+END_TYPE

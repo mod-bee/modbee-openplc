@@ -1,0 +1,16 @@
+TYPE
+  ST_Alarm : STRUCT
+    bIn : BOOL; (* the condition (the project's rung) *)
+    eState : E_AlarmState;
+    bQ : BOOL; (* on: Active, Latched or Locked *)
+    bUnacked : BOOL;
+    nRetries : USINT;
+    bCond : BOOL; (* the condition after the delays *)
+    bInPrev : BOOL;
+    bSilenced : BOOL;
+    tChange : TIME; (* when bIn last changed *)
+    tWin : TIME; (* when the retry window started *)
+    tAck : TIME; (* when it was silenced or acknowledged *)
+    bSounding : BOOL; (* it calls for the siren now *)
+  END_STRUCT;
+END_TYPE

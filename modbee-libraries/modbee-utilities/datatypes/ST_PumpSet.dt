@@ -1,0 +1,13 @@
+TYPE
+  ST_PumpSet EXTENDS ST_EquipmentSet : STRUCT
+    tMinOff : TIME; (* after a stop, before the next start (a power-up counts as a stop) *)
+    tStartDelay : TIME; (* the request must last this long to start *)
+    tStopDelay : TIME; (* the request must be gone this long to stop *)
+    tMinRun : TIME; (* anti-short-cycle (a trip stops at once) *)
+    tStartMask : TIME := T#10s; (* after a start, parts that mask at start ignore their cause *)
+    stStartFail : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#10s, eReset := E_ResetMode.Retry, tRecover := T#1m, nMaxRetries := 3);
+    stDropped : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#0s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0);
+    eRole : E_PumpRole; (* its role in a station *)
+    fCapacity : REAL; (* flow at full speed, in the station's flow unit (0 = not known) *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,9 @@
+TYPE
+  ST_MotorRevSts : STRUCT
+    bReverse : BOOL; (* running in reverse *)
+    bAtLimitFwd : BOOL;
+    bAtLimitRev : BOOL;
+    bRefused : BOOL;
+    stChangeover : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

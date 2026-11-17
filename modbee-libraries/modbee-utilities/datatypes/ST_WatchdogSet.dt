@@ -1,0 +1,8 @@
+TYPE
+  ST_WatchdogSet : STRUCT
+    tTimeout : TIME := T#90s; (* no change for this long = link dead *)
+    tRecover : TIME; (* alive this long before bOk returns (and Auto clears bCommsFail) *)
+    tBeatPeriod : TIME := T#30s; (* bHeartbeatOut toggles every tBeatPeriod (T#0s = off) *)
+    eFailReset : E_ResetMode := E_ResetMode.Auto;
+  END_STRUCT;
+END_TYPE

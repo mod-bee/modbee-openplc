@@ -1,0 +1,18 @@
+TYPE
+  ST_LevelControlSet : STRUCT
+    eMode : E_LevelMode;
+    bDemandOnly : BOOL;
+    fStart : REAL;
+    fStop : REAL;
+    fDemandStop : REAL;
+    fHighHigh : REAL := 3.4E38; (* EMPTY: overflow run; FILL: full, no run (3.4E38 / -3.4E38: not used) *)
+    fLowLow : REAL := -3.4E38; (* EMPTY: cut-out; FILL: alarm only *)
+    eLevelFail : E_LevelFail;
+    stLevelBad : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#10s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0);
+    tRunOnMax : TIME := T#10m; (* RunOn: the longest run-on on a failed level *)
+    fStartVariation : REAL; (* the start moves at random by up to this each cycle (0 = off) *)
+    fDemandRestart : REAL; (* a held demand reruns at this level (0 = the start level) *)
+    tOnTime : TIME := T#5m; (* TIMED *)
+    tOffTime : TIME := T#5m;
+  END_STRUCT;
+END_TYPE

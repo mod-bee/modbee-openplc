@@ -1,0 +1,7 @@
+TYPE
+  ST_StartsData : STRUCT
+    bCmdReset : BOOL; (* clear the refused report (cleared by the block) *)
+    set : ST_StartsSet;
+    sts : ST_StartsSts;
+  END_STRUCT;
+END_TYPE

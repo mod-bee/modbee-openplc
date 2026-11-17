@@ -1,0 +1,11 @@
+TYPE
+  ST_ReportSts : STRUCT
+    fLastValue : REAL;
+    bLastGood : BOOL;
+    eReason : E_ReportReason;
+    nReports : UDINT;
+    nSuppressed : UDINT; (* held back by tMinInterval *)
+    tSinceLast : TIME;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

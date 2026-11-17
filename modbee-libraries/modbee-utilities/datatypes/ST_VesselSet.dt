@@ -1,0 +1,8 @@
+TYPE
+  ST_VesselSet : STRUCT
+    fLevelOffset : REAL; (* added to the level (sensor zero above / below the bottom) *)
+    fDeadVolume : REAL; (* unusable volume, in eVolumeUnit *)
+    fPctLow : REAL; (* sts.fLevelPercent is 0 % at this level; both 0 = the whole height *)
+    fPctHigh : REAL; (* sts.fLevelPercent is 100 % at this level *)
+  END_STRUCT;
+END_TYPE

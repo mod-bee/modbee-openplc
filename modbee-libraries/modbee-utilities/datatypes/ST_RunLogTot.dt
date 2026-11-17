@@ -1,0 +1,13 @@
+TYPE
+  ST_RunLogTot : STRUCT
+    nRuns : UDINT;
+    nDone : UDINT;
+    nStopped : UDINT;
+    nFaults : UDINT;
+    nPowerCuts : UDINT;
+    tLastRun : TIME; (* the last run's counted time *)
+    tLastWall : TIME; (* from its start to its end *)
+    fLastVolume : LREAL; (* in the meter's total unit (0 without a meter) *)
+    eLastReason : E_StopReason;
+  END_STRUCT;
+END_TYPE

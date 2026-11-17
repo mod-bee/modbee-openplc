@@ -1,0 +1,10 @@
+TYPE
+  ST_AnalogOutData : STRUCT
+    bCmdManual : BOOL; (* choose Manual (cleared by the block) *)
+    bCmdAuto : BOOL; (* choose Auto (cleared by the block) *)
+    bCmdReset : BOOL; (* clear bRefused (cleared by the block) *)
+    set : ST_AnalogOutSet;
+    sts : ST_AnalogOutSts;
+    nRaw : UINT; (* detail: nOutRaw *)
+  END_STRUCT;
+END_TYPE

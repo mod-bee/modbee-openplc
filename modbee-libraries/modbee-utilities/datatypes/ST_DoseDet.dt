@@ -1,0 +1,7 @@
+TYPE
+  ST_DoseDet : STRUCT
+    tDoseTime : TIME;
+    tTimeLeft : TIME;
+    nPulses : UDINT;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,8 @@
+TYPE
+  ST_StatsSts : STRUCT
+    fMinimum : REAL; (* current period (0 while no samples) *)
+    fMaximum : REAL;
+    fAverage : REAL; (* time-weighted *)
+    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+  END_STRUCT;
+END_TYPE

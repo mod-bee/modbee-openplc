@@ -1,0 +1,6 @@
+TYPE
+  ST_RunDet : STRUCT
+    tElapsed : TIME; (* run time counted (while the equipment runs) *)
+    tTimeLeft : TIME;
+  END_STRUCT;
+END_TYPE

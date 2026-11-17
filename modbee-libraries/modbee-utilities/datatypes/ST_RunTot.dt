@@ -1,0 +1,6 @@
+TYPE
+  ST_RunTot : STRUCT
+    nRuns : UDINT;
+    tLastRun : TIME; (* the last run's counted time *)
+  END_STRUCT;
+END_TYPE

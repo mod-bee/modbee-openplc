@@ -1,0 +1,7 @@
+TYPE
+  ST_ValveFloatSts : STRUCT
+    bHomed : BOOL;
+    bHoming : BOOL;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

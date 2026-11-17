@@ -1,0 +1,9 @@
+TYPE
+  ST_SequencerData : STRUCT
+    bCmdStart : BOOL; (* the HMI commands act once per write, then are cleared *)
+    bCmdStop : BOOL;
+    bCmdReset : BOOL;
+    set : ST_SequencerSet;
+    sts : ST_SequencerSts;
+  END_STRUCT;
+END_TYPE

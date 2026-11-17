@@ -1,0 +1,8 @@
+TYPE
+  ST_LevelMeterSts : STRUCT
+    bGood : BOOL;
+    fRate : REAL; (* per hour *)
+    fRunMoved : LREAL; (* this run so far *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

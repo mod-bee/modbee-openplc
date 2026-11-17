@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_PumpDiag : USINT (Normal, Blocked, Burst, NoLift, Suction) := Normal;
+END_TYPE

@@ -1,0 +1,16 @@
+TYPE
+  ST_LevelControlSts : STRUCT
+    eState : E_State;
+    eErrorId : E_UtError;
+    bCall : BOOL;
+    bDemandActive : BOOL;
+    bAtStop : BOOL;
+    bHighHigh : BOOL;
+    bLowLow : BOOL;
+    bRequest : BOOL; (* what it asks of the pump *)
+    bRefused : BOOL;
+    stLevelBad : ST_ProtectionSts;
+    fStartNow : REAL; (* the start level in use (with its variation) *)
+    bRunOn : BOOL; (* running on a failed level *)
+  END_STRUCT;
+END_TYPE

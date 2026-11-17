@@ -1,0 +1,14 @@
+TYPE
+  ST_LevelCheckSet EXTENDS ST_ProtectionSet : STRUCT
+    eDirection : E_LevelDir;
+    fSetpoint : REAL;
+    fDeadband : REAL;
+    eBand : E_Band; (* a switch band that also signals it (None: the value only) *)
+    bUseValue : BOOL := TRUE; (* FALSE: the band only *)
+    bOnlyWhenRunning : BOOL;
+    bMaskAtStart : BOOL;
+    tBadRide : TIME := T#5s;
+    eErrorId : E_UtError := E_UtError.Protection;
+    bDoneWhenReached : BOOL; (* with eResponse Signal: reaching the level ENDS the owner's run (Done) instead *)
+  END_STRUCT;
+END_TYPE

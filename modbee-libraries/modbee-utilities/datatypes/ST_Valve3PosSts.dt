@@ -1,0 +1,7 @@
+TYPE
+  ST_Valve3PosSts EXTENDS ST_EquipmentSts : STRUCT
+    nTargetPos : INT; (* going to (0 = hold) *)
+    nActualPos : INT; (* reached (-1 not known) *)
+    stTravel : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

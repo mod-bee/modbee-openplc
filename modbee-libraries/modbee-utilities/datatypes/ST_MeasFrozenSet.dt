@@ -1,0 +1,6 @@
+TYPE
+  ST_MeasFrozenSet : STRUCT
+    fBand : REAL := 0.1; (* a change larger than this is a change *)
+    stFrozen : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#10m, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
+  END_STRUCT;
+END_TYPE

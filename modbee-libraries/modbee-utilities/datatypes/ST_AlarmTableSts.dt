@@ -1,0 +1,13 @@
+TYPE
+  ST_AlarmTableSts : STRUCT
+    nFirst : INT; (* the first trip (lowest row), else the first warning (0 none) *)
+    nLatest : INT; (* the row raised last *)
+    nFirstOut : INT; (* the first row raised since the last reset *)
+    eFirstCode : E_UtError;
+    eLatestCode : E_UtError;
+    nOn : INT;
+    nTrips : INT;
+    nUnacked : INT;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

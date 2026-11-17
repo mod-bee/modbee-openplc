@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_RunStyle : USINT (Held, Toggle, KeepAlive, Pulse) := Held;
+END_TYPE

@@ -1,0 +1,10 @@
+TYPE
+  ST_PumpPrimeSts : STRUCT
+    bPriming : BOOL;
+    bPrimeNext : BOOL; (* the next start primes *)
+    bPrimed : BOOL; (* the last prime was done (FALSE: it timed out) *)
+    tTimeLeft : TIME; (* until the timeout (or the run time with RunTime) *)
+    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    stTimeout : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

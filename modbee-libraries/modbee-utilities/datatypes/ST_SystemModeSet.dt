@@ -1,0 +1,11 @@
+TYPE
+  ST_SystemModeSet : STRUCT
+    eMode : E_SysMode;
+    ePowerUp : E_PowerUp;
+    nAutoType : INT := 1;
+    nAutoTypes : INT := 1; (* 1..8 offered *)
+    tManualMaxRun : TIME; (* 0 = no limit *)
+    tPowerOnDelay : TIME;
+    eModeSource : E_ModeSource; (* where the mode comes from *)
+  END_STRUCT;
+END_TYPE

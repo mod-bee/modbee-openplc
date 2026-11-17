@@ -1,0 +1,7 @@
+TYPE
+  ST_StagesData : STRUCT
+    set : ST_StagesSet;
+    nExtra : INT; (* status *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

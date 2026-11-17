@@ -1,0 +1,8 @@
+TYPE
+  ST_DoseFlowSts EXTENDS ST_DoseSts : STRUCT
+    bCarrierOk : BOOL;
+    fRequired : REAL; (* dose units per hour *)
+    fRatioActive : REAL;
+    stOverCapacity : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

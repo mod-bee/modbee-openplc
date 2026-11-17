@@ -1,0 +1,11 @@
+TYPE
+  ST_BeaconSet : STRUCT
+    eStyle : E_BeaconStyle;
+    nBits : INT := 6; (* Binary: bits shown (1..15) *)
+    tShort : TIME := T#250ms; (* short flash (Count, and Binary 0) *)
+    tLong : TIME := T#1s; (* long flash (Binary 1) *)
+    tGap : TIME := T#500ms; (* lamp off between flashes *)
+    tPause : TIME := T#3s; (* lamp off between numbers *)
+    bSteadyWhenNone : BOOL;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,10 @@
+TYPE
+  ST_RateSts : STRUCT
+    fRate : REAL; (* the rate, per unit *)
+    bRisingFast : BOOL;
+    bFallingFast : BOOL;
+    bReady : BOOL; (* a full window of good readings has been measured *)
+    bBadInput : BOOL; (* fIn not usable now: fRate held *)
+    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+  END_STRUCT;
+END_TYPE

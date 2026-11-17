@@ -1,0 +1,9 @@
+TYPE
+  ST_FlowTotalData : STRUCT
+    bCmdResetTotal : BOOL; (* the totals back to 0 (cleared by the block) *)
+    bCmdResetBatch : BOOL; (* the batch back to 0 (cleared by the block) *)
+    set : ST_FlowTotalSet;
+    sts : ST_FlowTotalSts;
+    tot : ST_FlowTotalTot;
+  END_STRUCT;
+END_TYPE

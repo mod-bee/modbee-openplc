@@ -1,0 +1,11 @@
+TYPE
+  ST_RegisterMeterSet : STRUCT
+    fScale : REAL := 1.0; (* total units per register unit *)
+    eInUnit : E_Unit; (* the volume unit of the register (None = no conversion) *)
+    eOutUnit : E_Unit; (* the volume unit of the total (None = no conversion) *)
+    fRolloverAt : LREAL; (* the register wraps to 0 here (0 = never) *)
+    fMaxStep : LREAL; (* a larger increase in one read is a glitch (0 = no limit) *)
+    tRateWindow : TIME := T#60s;
+    stInputBad : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#30s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0);
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,5 @@
+TYPE
+  ST_StarterSoftSet : STRUCT
+    stStartTooLong : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#15s, eReset := E_ResetMode.Manual);
+  END_STRUCT;
+END_TYPE

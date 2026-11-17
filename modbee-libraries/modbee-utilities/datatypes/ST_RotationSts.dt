@@ -1,0 +1,13 @@
+TYPE
+  ST_RotationSts : STRUCT
+    fSpeed : REAL; (* in set.eSpeedUnit *)
+    bRotating : BOOL; (* pulses being seen *)
+    bTooFast : BOOL; (* pulses at the scan limit (5 s) *)
+    bUnitBad : BOOL; (* eSpeedUnit / fDistPerPulse not usable: speed 0, speed checks off *)
+    stStall : ST_ProtectionSts;
+    stUnderspeed : ST_ProtectionSts;
+    stOverspeed : ST_ProtectionSts;
+    stSensor : ST_ProtectionSts;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

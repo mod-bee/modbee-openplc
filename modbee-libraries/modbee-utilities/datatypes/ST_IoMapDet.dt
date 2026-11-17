@@ -1,0 +1,5 @@
+TYPE
+  ST_IoMapDet : STRUCT
+    tForceLeft : TIME; (* the longest time left of the active forces *)
+  END_STRUCT;
+END_TYPE

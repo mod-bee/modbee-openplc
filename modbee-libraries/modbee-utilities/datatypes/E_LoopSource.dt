@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_LoopSource : (Pid, External) := Pid;
+END_TYPE

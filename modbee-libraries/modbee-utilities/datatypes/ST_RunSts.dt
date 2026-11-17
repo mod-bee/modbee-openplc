@@ -1,0 +1,11 @@
+TYPE
+  ST_RunSts : STRUCT
+    eState : E_State;
+    eErrorId : E_UtError;
+    eStopReason : E_StopReason; (* why the last run ended *)
+    bActive : BOOL;
+    bPaused : BOOL;
+    bWaiting : BOOL; (* a new run waits for the permissive *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

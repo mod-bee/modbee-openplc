@@ -1,0 +1,12 @@
+TYPE
+  ST_CascadeData : STRUCT
+    set : ST_CascadeSet;
+    nExtra : INT; (* status *)
+    tTimeLeft : TIME; (* to the next change *)
+    bRefused : BOOL;
+    eStageUsed : E_StageBy; (* the rule in use (Pressure on a fallback) *)
+    bJockeyTurn : BOOL; (* the jockey alone *)
+    bPvStaging : BOOL; (* the flow rule left the pressure short: the Pressure rule until the next start *)
+    bFlowBad : BOOL; (* Flow / PerPump without a good flow *)
+  END_STRUCT;
+END_TYPE

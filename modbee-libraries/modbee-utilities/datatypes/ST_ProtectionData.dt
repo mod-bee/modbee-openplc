@@ -1,0 +1,7 @@
+TYPE
+  ST_ProtectionData : STRUCT
+    bCmdReset : BOOL;
+    set : ST_ProtectionPartSet;
+    sts : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

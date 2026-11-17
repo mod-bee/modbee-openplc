@@ -1,0 +1,7 @@
+TYPE
+  ST_StartsSet : STRUCT
+    nMaxPerHour : INT; (* starts per window (0 = no limit, 1..60) *)
+    tMinBetween : TIME; (* shortest time from one start to the next *)
+    tFailWait : TIME; (* wait after a failed start (0 = none) *)
+  END_STRUCT;
+END_TYPE

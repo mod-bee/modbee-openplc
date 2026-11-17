@@ -1,0 +1,19 @@
+TYPE
+  ST_RotationSet : STRUCT
+    nPulsesPerRev : INT := 1; (* pulses per revolution, for rpm and rev/s *)
+    eSpeedUnit : E_SpeedUnit; (* rpm, rev/s, m/min, m/s *)
+    fDistPerPulse : REAL; (* m/min and m/s: travel per pulse, m *)
+    tStartDelay : TIME := T#5s; (* after a start, stall and underspeed are ignored this long *)
+    tStallTime : TIME := T#3s; (* no pulse this long while running = stalled *)
+    fMinSpeed : REAL; (* underspeed below this (0 = off) *)
+    fMaxSpeed : REAL; (* overspeed above this (0 = off) *)
+    tSpeedDelay : TIME := T#5s; (* under / over speed must last this long *)
+    tFilterTime : TIME := T#1s; (* the speed is measured over at least this *)
+    tCoastDown : TIME := T#10s; (* after a stop, pulses are expected this long *)
+    tRetryWindow : TIME := T#1h;
+    stStall : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Manual, tRecover := T#10s, nMaxRetries := 3);
+    stUnderspeed : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#0s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
+    stOverspeed : ST_ProtectionSet := (eResponse := E_Response.Off, tDelay := T#0s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
+    stSensor : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#0s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
+  END_STRUCT;
+END_TYPE

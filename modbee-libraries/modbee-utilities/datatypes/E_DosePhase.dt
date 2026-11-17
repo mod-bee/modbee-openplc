@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_DosePhase : USINT (Idle, Fast, Slow, Settle, Held, Done, Aborted, Dosing, Waiting) := Idle;
+END_TYPE

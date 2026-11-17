@@ -1,0 +1,5 @@
+TYPE
+  ST_DigitalInDet : STRUCT
+    tStateFor : TIME; (* time bQ has been in its present state *)
+  END_STRUCT;
+END_TYPE

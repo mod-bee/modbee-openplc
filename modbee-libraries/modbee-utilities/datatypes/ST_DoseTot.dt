@@ -1,0 +1,6 @@
+TYPE
+  ST_DoseTot : STRUCT
+    nDosed : LINT; (* millionths of a unit *)
+    nDoses : UDINT; (* Batch doses completed *)
+  END_STRUCT;
+END_TYPE

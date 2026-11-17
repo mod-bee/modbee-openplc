@@ -1,0 +1,7 @@
+TYPE
+  ST_MotorJogData : STRUCT
+    set : ST_MotorJogSet;
+    bLimited : BOOL; (* tJogMax ended the jog: release bJog *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

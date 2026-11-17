@@ -1,0 +1,8 @@
+TYPE
+  ST_WatchdogSts : STRUCT
+    bOk : BOOL;
+    bCommsFail : BOOL;
+    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    stFail : ST_ProtectionSts; (* nCount: failures since bCmdResetCount *)
+  END_STRUCT;
+END_TYPE

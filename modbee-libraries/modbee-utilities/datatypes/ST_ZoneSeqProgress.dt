@@ -1,0 +1,10 @@
+TYPE
+  ST_ZoneSeqProgress : STRUCT
+    bActive : BOOL;
+    bLatched : BOOL;
+    nZone : INT;
+    nPass : INT;
+    nRunOnly : INT;
+    bDoseRun : BOOL;
+  END_STRUCT;
+END_TYPE

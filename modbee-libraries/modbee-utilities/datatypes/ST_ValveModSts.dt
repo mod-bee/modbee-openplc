@@ -1,0 +1,6 @@
+TYPE
+  ST_ValveModSts : STRUCT
+    fOut : REAL;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

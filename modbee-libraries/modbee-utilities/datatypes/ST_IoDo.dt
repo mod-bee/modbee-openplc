@@ -1,0 +1,10 @@
+TYPE
+  ST_IoDo : STRUCT
+    bQ : BOOL; (* your logic: the output wanted *)
+    bHoldOff : BOOL; (* your logic (a motor's bHoldOff): holds the output off, forced or not *)
+    bOut : BOOL; (* status: what went to the channel (after a force or the hold) *)
+    bOk : BOOL; (* status: the channel is fitted, answering and good *)
+    bFit : BOOL;
+    eWhy : E_IoQ;
+  END_STRUCT;
+END_TYPE

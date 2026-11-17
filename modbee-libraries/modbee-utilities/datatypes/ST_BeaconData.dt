@@ -1,0 +1,8 @@
+TYPE
+  ST_BeaconData : STRUCT
+    set : ST_BeaconSet;
+    nActive : INT; (* status *)
+    nCode : INT;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

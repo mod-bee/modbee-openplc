@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_IoSrc : (None, Board, I2c, Field, Remote) := None;
+END_TYPE

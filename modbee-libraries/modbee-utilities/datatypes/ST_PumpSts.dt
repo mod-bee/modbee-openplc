@@ -1,0 +1,9 @@
+TYPE
+  ST_PumpSts EXTENDS ST_EquipmentSts : STRUCT
+    bMotorInHand : BOOL;
+    bMotorFaulted : BOOL;
+    bMasked : BOOL; (* the start mask is on *)
+    stStartFail : ST_ProtectionSts;
+    stDropped : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

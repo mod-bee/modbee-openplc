@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_AlarmState : USINT (Normal, Active, Returned, Latched, Locked, Off) := Normal;
+END_TYPE

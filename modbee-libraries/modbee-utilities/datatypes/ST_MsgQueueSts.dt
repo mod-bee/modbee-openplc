@@ -1,0 +1,10 @@
+TYPE
+  ST_MsgQueueSts : STRUCT
+    nCount : INT;
+    bFull : BOOL;
+    nLost : UDINT;
+    bWrnConfig : BOOL; (* no slot or no source *)
+    bWrnSrc : BOOL; (* a call this scan had an nSrc outside aSources (ignored) *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

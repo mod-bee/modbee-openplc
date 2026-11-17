@@ -1,0 +1,11 @@
+TYPE
+  ST_ReportSet : STRUCT
+    fDeadband : REAL := 1.0;
+    eDeadbandMode : E_DeadbandMode;
+    fSpan : REAL; (* PctSpan: the measuring span *)
+    fResolution : REAL; (* round to this step first (0 = off) *)
+    tMinInterval : TIME; (* 0 = no rate cap *)
+    tHeartbeat : TIME; (* 0 = off *)
+    bReportOnStart : BOOL := TRUE;
+  END_STRUCT;
+END_TYPE

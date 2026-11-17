@@ -1,397 +1,311 @@
 # modbee-utilities
 
-Ready-made IEC 61131-3 function blocks for OpenPLC: motors, pumps, valves,
-signals, alarms, totals and sequences. Each block does one job the way a good
-panel builder would wire it, with the protections, modes and fault handling already
-in place. They work from Ladder, FBD and Structured Text (ST).
+Ready-made IEC 61131-3 function blocks for OpenPLC: motors, pumps, valves, levels,
+dosing, irrigation, measurements, totals, alarms and sequences. Each block does one
+job the way a good panel builder would wire it, with the protections, modes and fault
+handling already in place.
 
-**Hardware:** an ESP32-S3 (such as the ModBee Node) or anything more powerful,
-including OpenPLC Runtime v4 on a Raspberry Pi or PC. The blocks are too big for
-small boards such as the Arduino Uno and Mega.
+This is version **0.2**. Its blocks are named `FB_…` and `F_…`. A project built on 0.1
+(the `UT_…` blocks) keeps working on 0.1: see [migrating-from-0.1.md](migrating-from-0.1.md).
+
+**Hardware:** an ESP32-S3 (such as the ModBee Node UIO) or anything more powerful,
+including OpenPLC Runtime v4 on a Raspberry Pi or PC.
 
 ## How to use a block
 
-1. **Drop it in.** In Ladder or FBD, give every library block its own rung with
-   nothing in series in front of it. A block whose rung is false doesn't run, and
-   its outputs freeze. See [ladder-rules.md](ladder-rules.md).
-2. **Wire the pins.** The first input is the main signal; the first output is the
-   main result. Unwired pins have safe defaults.
-3. **Set the record.** Each block has a record (`Data`) holding its settings, HMI
-   commands and status. Every setting has a working default, so you only change
-   what the site needs, either from the HMI or in code.
+1. **Drop it in.** In Ladder, give every library block its own rung with nothing in
+   series in front of it. A block whose rung is false doesn't run, and its outputs
+   freeze. See [ladder-rules.md](ladder-rules.md).
+2. **Wire the pins.** Signals go on the named pins. Blocks connect to blocks through
+   their `ip…` pins: write the other block's instance name on the pin (a pump's
+   `ipMotor := fbMotor1`).
+3. **Give it its record.** Declare one record variable per block (`stPump1 : ST_PumpData`)
+   and wire it to `refData`. The record holds the HMI commands, the settings, the
+   status and the totals. Every setting has a working default, so you only change what
+   the site needs. Do not make the record RETAIN: the block keeps its settings and
+   totals itself.
 
-Each block's page lists its pins first, then the record, how it works and an example.
+Each block's page lists its pins first, then its record, how it works and an example.
+
+## How the 0.2 blocks fit together
+
+- **Equipment has an owner.** Motors, pumps and valves have no Run / Start / Stop
+  pins. In Auto they do what their **owner** asks: the pump asks its motor, a level
+  control or a group asks the pump, a zone asks its valve. In Hand the HMI or an
+  [FB_LocalControl](blocks/FB_LocalControl.md) on the panel door runs them. Out of
+  service (motors and valves) takes a machine out of use for maintenance.
+- **Process blocks take the wires.** Runs, level controls, doses, sequences and zone
+  programs have the `bRun` / `bStart` / `bStop` pins, and drive the equipment.
+- **Parts add what is fitted.** A thermistor, a dry-run level, a CT, a soft starter, a
+  prime, a starts limit, a booster pump: each is a small block with an `ipOwner` pin, on
+  its own rung before its owner.
+- **One system block.** [FB_SystemMode](blocks/FB_SystemMode.md) is the plant's Off /
+  Manual / Auto, power-on delay and reset; wire it to every block's `ipSystem`.
+- **Every block reports the same way:** `bError`, `bWarning`, `eErrorId` (an
+  `E_UtError` code) and `eState`. The HMI shows the words.
+
+The rules are in [conventions.md](conventions.md).
 
 ---
 
 ## Pick a block
 
+### The system and the panel door
+
+- **[FB_SystemMode](blocks/FB_SystemMode.md)**: The plant's own mode: Off / Manual / Auto, the auto type, a manual run, the power-on delay and the plant-wide reset. Every other block can read it through its `ipSystem` pin.
+- **[FB_LocalControl](blocks/FB_LocalControl.md)**: The panel-door controls of one motor, pump or valve: an Off / Hand / Auto selector and start / stop push-buttons. It drives the equipment through its `ipOwner` pin.
+- **[FB_Cmd](blocks/FB_Cmd.md)**: Arbitrates commands from two masters, the local panel HMI and a remote SCADA / IoT system: stop bits win, local wins over remote, and remote control can be switched off.
+
 ### Motors
 
-**[UT_MOTOR](blocks/UT_MOTOR.md)**: runs and protects one motor on a contactor
-or soft starter, with Hand/Off/Auto, overload, thermistor, current and feedback checks.
-- *Use it when:* a pump, fan, conveyor or heater bank is started direct on line, or
-  by a soft starter, and you have a run relay and a run feedback.
-- *Not for:* a VSD (use UT_MOTOR_VSD), a reversing, star-delta or two-speed starter
-  (use the blocks below).
+- **[FB_Motor](blocks/FB_Motor.md)**: Runs and protects one motor on a contactor or a run relay: overload, no feedback, feedback lost and stuck, with run hours and starts. It has its own Off / Hand / Auto; in Auto its owner (a pump, a group, a sequence) drives it.
+- **[FB_MotorVsd](blocks/FB_MotorVsd.md)**: A motor on a variable speed drive over hard-wired IO: run, running and ready relays, a speed reference and feedback, speed limits, ramps, a skip band and a drive-reset pulse.
+- **[FB_MotorRev](blocks/FB_MotorRev.md)**: A reversing starter: forward and reverse contactors that are never on together, a dead time between directions and end-of-travel limits.
+- **[FB_MotorStarDelta](blocks/FB_MotorStarDelta.md)**: A star-delta starter: main, star and delta contactors, the timed star stage and the open transition, star and delta never on together.
+- **[FB_Motor2Speed](blocks/FB_Motor2Speed.md)**: A two-speed starter (Dahlander or separate windings): low and high contactors never on together, an optional star-bridge contactor and an optional start in low.
+- **[FB_Changeover](blocks/FB_Changeover.md)**: Two contactors that must never be on together, with the dead time between them and an aux check. The reversing, two-speed and star-delta motors use it; it also works on its own.
+- **[FB_MotorJog](blocks/FB_MotorJog.md)**: A held jog (inch) button for a motor in Hand: the motor runs while the button is held, and stops when it is let go.
+- **[FB_MotorSimulate](blocks/FB_MotorSimulate.md)**: Tests a motor or valve without the plant: while simulating, the feedback follows the block's own output, with a warning so it is never mistaken for the real thing.
 
-**[UT_MOTOR_VSD](blocks/UT_MOTOR_VSD.md)**: runs a variable speed drive over
-hard-wired I/O (run, running, ready and fault relays, speed reference and feedback),
-with speed limits, ramps, a skip band, a hand speed and a drive-reset pulse.
-- *Use it when:* the motor is on a VSD and you set the speed from the PLC.
-- *Not for:* deciding the speed. To hold a pressure, flow or level, put
-  [UT_SPEED_CTRL](blocks/UT_SPEED_CTRL.md) in front of it.
+### Pumps, groups and speed control
 
-**[UT_MOTOR_REV](blocks/UT_MOTOR_REV.md)**: forward and reverse contactors that are
-never on together, with a dead time so the motor stops before it changes direction.
-- *Use it when:* a gate, screw conveyor, roller door or mixer needs to run both ways.
+- **[FB_Pump](blocks/FB_Pump.md)**: One pump: its run decision (start / stop delays, minimum run and off times), start fail and dropped checks, and the motor it drives (`ipMotor`). Its owner (a level control, a group, a run) drives it.
+- **[FB_Group](blocks/FB_Group.md)**: Duty / standby / assist over up to four pumps or motors: rotation (also by run hours), staging, failover, swap while running, a staged stop, idle exercise and a jockey pump. A level control or a run drives the group as it would drive one pump.
+- **[FB_SpeedLoop](blocks/FB_SpeedLoop.md)**: Holds a pressure, flow or level by changing a pump's speed (PID), or runs it at a fixed speed: presets, pipe fill, sleep and wake, a flow limit, and protections for high pressure, a burst main, not reaching the setpoint, hunting and a failed sensor.
+- **[FB_Cascade](blocks/FB_Cascade.md)**: Decides how many pumps of a group run on one header: staging by speed and pressure, by flow or by flow per pump, with or without VSDs, and a jockey pump for low demand.
+- **[FB_PumpDiag](blocks/FB_PumpDiag.md)**: Names the likely cause of a pump's hydraulic trouble from its pressure, flow and suction: blocked, burst, suction low or no lift. It only tells; it stops nothing.
 
-**[UT_MOTOR_SD](blocks/UT_MOTOR_SD.md)**: main, star and delta contactors, with a
-timed (or current-confirmed) star stage, and star and delta never on together.
-- *Use it when:* a larger motor is started star-delta to cut the starting current.
+### Parts: protections and add-ons
 
-**[UT_MOTOR_2SPD](blocks/UT_MOTOR_2SPD.md)**: low and high speed contactors that are
-never on together, with an optional star-bridge contactor (Dahlander) and an
-optional "start in low first".
-- *Use it when:* a two-speed fan or pump (Dahlander or separate windings).
+- **[FB_Protection](blocks/FB_Protection.md)**: One protection on any condition, added to a motor, pump or valve: a thermistor, a drive fault, an external fault, a seal leak, a phase failure, a maximum run time.
+- **[FB_LevelCheck](blocks/FB_LevelCheck.md)**: One alarm level on any measurement, added to its owner: low or high pressure, no flow, dry run, a high tank level. One block for each level fitted.
+- **[FB_MotorCurrent](blocks/FB_MotorCurrent.md)**: A motor's current from a CT, added to its motor as a part: % of full load, a run proven by current, high and low current, a start that takes too long, a bad CT.
+- **[FB_StarterSoft](blocks/FB_StarterSoft.md)**: A soft starter's top-of-ramp check, added to its motor as a part: a start that never reaches full speed trips the motor.
+- **[FB_Rotation](blocks/FB_Rotation.md)**: Watches a proximity sensor on a driven shaft, pulley or target wheel: the speed (rpm, rev/s, m/min, m/s), a stall, underspeed (belt slip), overspeed and pulses while stopped. Added to its motor as a part, a stall trips the motor.
+- **[FB_PumpPrime](blocks/FB_PumpPrime.md)**: Primes a pump at its start: masks the low pressure / no flow checks until the pipe is full (by pressure, flow, a contact or a run time), with a prime timeout.
+- **[FB_Starts](blocks/FB_Starts.md)**: Anti-cycling for a motor or pump: a maximum number of starts per window and a minimum time between starts. A start that would break a limit waits; a running motor is never stopped.
+- **[FB_Exercise](blocks/FB_Exercise.md)**: Keeps idle equipment from seizing: after a set idle time it asks its owner for a short run.
+- **[FB_LevelFloats](blocks/FB_LevelFloats.md)**: The floats of a sump or wet well, added to its level control: an overflow backup run, a check of the level transmitter against the high float, and float / timer control when the transmitter is lost.
+- **[FB_Stages](blocks/FB_Stages.md)**: The extra level stages 2 to 4 of a pump station: tells an FB_Group how many more pumps to call.
+- **[FB_SumpClean](blocks/FB_SumpClean.md)**: Sump cleaning: every so many pump cycles it pumps the sump down below its normal stop level and runs on there for a while to clear settled solids.
+- **[FB_Booster](blocks/FB_Booster.md)**: A series booster pump that runs with a station's duty pumps, added to the station's level control: started after a delay or on low pressure; a booster that will not run can stop the station.
 
-**[UT_DUTY](blocks/UT_DUTY.md)**: shares "I need N running" across a group of motors,
-with rotation, failover to a standby, staggered starts and exercise runs for idle units.
-- *Use it when:* duty/assist/standby fans, compressors, blowers, heater banks or
-  cooling towers.
-- *Not for:* a pump station on level or pressure (use UT_PUMP_STATION, which adds
-  the level logic and floats), or a VSD booster set (UT_PUMP_CASCADE).
+### Levels, mixing and dosing
 
-**[UT_STARTS](blocks/UT_STARTS.md)**: counts starts and stops a motor starting too
-often: a maximum per hour, a minimum time between starts, and a longer wait after a
-failed start. Its `StartPermit` goes to the motor's `Permissive`.
-- *Use it when:* a motor or pump could short-cycle (a float near its switch point,
-  an undersized tank) and the motor maker gives a start limit.
+- **[FB_LevelControl](blocks/FB_LevelControl.md)**: Keeps a level by driving a pump or a group: EMPTY (a sump, a wet well), FILL (a tank) or TIMED (on / off with no level), with high-high and low-low levels, a demand run, a moving start level and an action for a bad level.
+- **[FB_Mixer](blocks/FB_Mixer.md)**: Runs a stirrer or agitator before the pump starts (holding the pump), with the pump, after it, and on a timed cycle. A stirrer that cannot run never holds the pump.
+- **[FB_DoseBatch](blocks/FB_DoseBatch.md)**: Doses a batch to a target quantity: fast then slow feed, an early stop for what is still in flight (learned), a settle time and a tolerance check; Hand runs the dosing pump at a set rate.
+- **[FB_DoseFlow](blocks/FB_DoseFlow.md)**: Doses in proportion to the carrier flow (fertigation, chlorination): the dosing pump's speed follows the flow, or stroke pulses go to a pulse pump; Hand runs it at a set rate.
+- **[FB_DoseTimed](blocks/FB_DoseTimed.md)**: Timed dosing: the dosing pump on for a set time, off for a set time, over and over, while the carrier runs; Hand runs it at a set rate.
 
-**[UT_ROTATION](blocks/UT_ROTATION.md)**: watches a proximity sensor on a shaft, pulley
-or target wheel for a stall, underspeed (belt slip) and overspeed, and measures the speed
-in rpm, rev/s, or as a belt / chain line speed in m/min or m/s.
-- *Use it when:* a conveyor, elevator or crusher needs belt-slip or stall protection.
-  Wire `Healthy` to the motor's `Interlock`.
+### Runs
 
-### Pumps and pump stations
+- **[FB_Run](blocks/FB_Run.md)**: One run of any equipment: a held request or a latched start, ended by its time target, a stop, an abort, its maximum time, the interlock, a part or a power cut. Its `bRunCmd` drives the equipment.
+- **[FB_RunVolume](blocks/FB_RunVolume.md)**: A volume target for a run, added to it: the run ends when the target has been delivered; a meter that stops counting trips the run.
+- **[FB_RunPause](blocks/FB_RunPause.md)**: An operator pause and resume for a run, added to it. The pause ends with the run.
+- **[FB_RunGate](blocks/FB_RunGate.md)**: A run waits for a permissive (a tank, a valve's open confirmation, a pressure), with a maximum wait.
+- **[FB_RunStyle](blocks/FB_RunStyle.md)**: The way a run takes its signal: held, toggle (push-on / push-off), keep-alive pulses or a single pulse. Put it in front of FB_Run.
+- **[FB_RunLog](blocks/FB_RunLog.md)**: Logs each run's time, volume and end reason, and counts the runs by how they ended. It only watches its run.
 
-The pump blocks sit **on top of** a motor block. The motor block keeps Hand/Off/Auto
-and the electrical protection; the pump block decides when to run and protects the pump.
+### Irrigation and routing
 
-**[UT_PUMP](blocks/UT_PUMP.md)**: decides when one pump runs (on demand, empty on
-level, fill on level, or timed on/off) and protects it with whatever is fitted:
-pressure, flow and suction, each a switch, a transmitter, both or nothing. It also
-names the likely cause (blocked, burst, no lift, suction low).
-- *Use it when:* any pump: a single sump pump on a float, a bore pump filling a tank,
-  a stock-water pump with dry-run protection, or each pump in a station.
-- *Not for:* sharing work between pumps (add UT_PUMP_STATION) or holding a pressure
-  with a VSD (add UT_SPEED_CTRL).
-
-**[UT_PUMP_STATION](blocks/UT_PUMP_STATION.md)**: runs any number of pumps from one
-level or pressure signal: staged start and stop points, duty rotation, failover,
-backup floats, a check that the transmitter agrees with the high float, sump
-cleaning and inflow figures.
-- *Use it when:* a sump or wet well with 2–6 pumps and a level transmitter plus
-  backup floats, or a reservoir or fixed-speed booster that fills on a level or
-  pressure.
-- *Not for:* fans and compressors with no level (UT_DUTY), or pumps on VSDs holding a
-  pressure (UT_SPEED_CTRL, UT_PUMP_CASCADE).
-
-**[UT_SPEED_CTRL](blocks/UT_SPEED_CTRL.md)**: holds a pressure, flow, level or
-temperature by changing a drive's speed. It fills the pipe gently first, sleeps when
-demand stops, wakes on a pressure drop, and guards against a badly tuned loop, a
-burst pipe, overpressure and a failed sensor.
-- *Use it when:* an irrigation or stock-water pump on a VSD, a constant-pressure
-  supply, a borehole pump, or a duct-pressure or cooling-tower fan.
-- *Not for:* starting extra pumps by itself. It gives `MoreNeeded` / `LessNeeded`
-  signals; a multi-pump set needs a group block (UT_PUMP_CASCADE).
-
-**[UT_PUMP_CASCADE](blocks/UT_PUMP_CASCADE.md)**: a multi-pump manifold or booster set.
-The pumps are an array of motor records, any mix of VSD, soft starter and contactor;
-every VSD gets the same speed. It stages pumps in and out one at a time on pressure,
-flow or flow per pump, shares the work by run hours, hands over from a failed pump, and
-lets a small jockey pump carry the low demand. The pipe fill, sleep, overpressure,
-burst and failed-sensor handling are UT_SPEED_CTRL's.
-- *Use it when:* a booster set or irrigation manifold with several pumps sharing one
-  header, on VSDs, contactors, soft starters or a mix, with or without a jockey pump.
-- *Not for:* a sump or wet well on level (UT_PUMP_STATION), or fans and compressors
-  (UT_DUTY).
-
-**[UT_DOSE](blocks/UT_DOSE.md)**: doses chemical, fertiliser or product: a batch to a
-target (with a learned early stop), in proportion to the water flow (speed or stroke
-pulses to the dosing pump), or timed on/off.
-- *Use it when:* fertigation, chlorination, stock-water additives, tank filling to a
-  quantity or irrigation shots.
-
-**[UT_MIXER](blocks/UT_MIXER.md)**: runs a stirrer, agitator or mixer before the pump
-starts (holding the pump through its `StartHold`), with the pump, for a while after
-it, and on a timed on/off cycle. A mixer that can't run never holds the pump.
-- *Use it when:* an effluent sump or tank must be mixed before and while it is pumped.
+- **[FB_ZoneSeq](blocks/FB_ZoneSeq.md)**: An irrigation or wash-down program: the zones watered in turn, by time or by volume, in a safe valve and pump order, with a master valve, repeats, rain action, cycles and soak, a pump wait, a dosing hook and a resume after a power cut.
+- **[FB_Zone](blocks/FB_Zone.md)**: One zone of an irrigation or wash-down program: its valve, its water time or volume, cycles and soak, a flow check and its pressure setpoint. Used by FB_ZoneSeq.
+- **[FB_Schedule](blocks/FB_Schedule.md)**: A weekly time-of-day schedule (a local fallback; the platform holds the real calendar): time windows by day, overrides, hour and day pulses.
+- **[FB_IrrDefer](blocks/FB_IrrDefer.md)**: The wet-weather inhibit: says when not to irrigate (rain, wet soil, a lost sensor, a manual or remote defer), why, and to send the effluent to storage instead.
+- **[FB_Route](blocks/FB_Route.md)**: The outlet selector for up to four outlet valves: which outlet the pumps deliver to, valve first, the wet-weather divert to storage, a blocked irrigator.
 
 ### Valves
 
-**[UT_VALVE](blocks/UT_VALVE.md)**: opens and closes a two-position valve, cylinder or
-damper and checks its limit switches. It covers spring return (one coil), double
-solenoid held, bistable (pulsed) and motorised open/close.
-- *Use it when:* an on/off valve or cylinder: an irrigation solenoid, a tank inlet,
-  an actuated butterfly valve, a pneumatic gate.
-- *Not for:* a third position (UT_VALVE_3POS) or a valve set to a percentage
-  (UT_VALVE_MOD or UT_VALVE_FLOAT).
+- **[FB_Valve](blocks/FB_Valve.md)**: A two-position valve, cylinder or damper: spring return (normally closed or open) or double-acting, with end switches or travel times, a safe position and stroke counts.
+- **[FB_ValveLatch](blocks/FB_ValveLatch.md)**: A latching (pulsed) DC solenoid valve: a pulse on the open or close coil when the position changes; the last position is kept over a power cut.
+- **[FB_ValveMotor](blocks/FB_ValveMotor.md)**: A motorised two-position valve or damper: open and close drives never together, a reversal pause, the drive stopping at the end.
+- **[FB_Valve3Pos](blocks/FB_Valve3Pos.md)**: A three-position valve: a 3-way diverter, a spring-centred double solenoid, a three-coil valve or a motorised valve with a mid position.
+- **[FB_ValveMod](blocks/FB_ValveMod.md)**: A modulating valve or damper with a positioner (4-20 mA / 0-10 V): the position from its owner, shaped, clamped and ramped.
+- **[FB_ValveFloat](blocks/FB_ValveFloat.md)**: A floating (three-point) valve or damper with raise / lower contacts only: positioned by drive time, re-synced at the ends, homed at power-up.
 
-**[UT_VALVE_3POS](blocks/UT_VALVE_3POS.md)**: three positions: a diverter A / closed / B,
-a spring-centred double solenoid, three coils, or a motorised valve with a mid position.
-- *Use it when:* a 3-way diverter (to tank A or tank B), or a cylinder with a centre stop.
+### Measurements
 
-**[UT_VALVE_MOD](blocks/UT_VALVE_MOD.md)**: drives a valve or damper that has a
-positioner (4–20 mA or 0–10 V demand), with optional position feedback.
-- *Use it when:* the actuator takes an analog signal, usually after a `PID`.
-- *Not for:* an actuator with only open and close contacts (UT_VALVE_FLOAT).
+- **[FB_AnalogIn](blocks/FB_AnalogIn.md)**: An analog reading to an engineering value with its health: 4-20 mA (NE43 fail bands), 0-20 mA, 0-10 V, custom or a value already in units, with a fault ride-through.
+- **[FB_SwitchSet](blocks/FB_SwitchSet.md)**: Up to four level switches (LL, L, H, HH) and one plain contact as one measurement, each debounced, with a quality per switch and a check that the switches agree.
+- **[FB_DigitalIn](blocks/FB_DigitalIn.md)**: A switch, float or contact cleaned up: debounce, an alarm on a state, chatter detection, and running totals of changes and on-time.
+- **[FB_Vessel](blocks/FB_Vessel.md)**: A tank, sump, silo or pond: its volume, % full, free space, mass and surface area from a level measurement, for six shapes and several joined tanks.
+- **[FB_SignalSelect](blocks/FB_SignalSelect.md)**: Two or three sensors measuring the same thing, voted into one trusted measurement.
+- **[FB_MeasFilter](blocks/FB_MeasFilter.md)**: Placed after a measurement: smooths it, cuts off creep below a low limit and clamps it.
+- **[FB_MeasFrozen](blocks/FB_MeasFrozen.md)**: Placed after a measurement: warns (or trips) when a value that should move has not moved.
+- **[FB_MeasOverride](blocks/FB_MeasOverride.md)**: Placed after a measurement: simulation, and what a bad value shows (pass, hold or a substitute).
+- **[FB_Linearise](blocks/FB_Linearise.md)**: A lookup table / curve: tank strapping tables, non-linear sensors, weirs and flumes, pump curves.
+- **[FB_Rate](blocks/FB_Rate.md)**: The rate of change of a value (a least-squares trend), with rising-fast and falling-fast warnings.
+- **[FB_Stats](blocks/FB_Stats.md)**: Minimum, maximum and time-weighted average of a value, for the current period and the previous one.
+- **[FB_AnalogOut](blocks/FB_AnalogOut.md)**: An engineering demand to an analog output card: clamp, ramp, a fail value on the interlock, Manual / Auto, the raw value for the card.
 
-**[UT_VALVE_FLOAT](blocks/UT_VALVE_FLOAT.md)**: positions an actuator that has only
-raise and lower contacts, estimating where it is from the run time (feedback and end
-switches are used if fitted).
-- *Use it when:* an HVAC mixing valve, an irrigation valve or a damper with a
-  3-wire floating actuator and no positioner.
+### Meters and totals
 
-### Signals and measurements
+- **[FB_PulseMeter](blocks/FB_PulseMeter.md)**: A pulse flow meter or a hardware pulse counter, as a total and a rate, with unit conversion and a batch target.
+- **[FB_FlowTotal](blocks/FB_FlowTotal.md)**: A total from a flow rate, from running time at a nominal rate, or from samples of a slow reading, with unit conversion and a batch target.
+- **[FB_RegisterMeter](blocks/FB_RegisterMeter.md)**: A total from a device's own total register (a Modbus energy or flow meter, a BeeBus counter): increases counted, resets, wraps and glitches handled, with unit conversion and a batch target.
+- **[FB_LevelMeter](blocks/FB_LevelMeter.md)**: The volume a pump moves, worked out from the tank's level (with a high-water mark, so waves are never counted twice).
+- **[FB_RunHours](blocks/FB_RunHours.md)**: A run-hour and start meter with a service interval, for anything that runs.
 
-| Block | What it does | Use it when |
-| --- | --- | --- |
-| [UT_ANALOG_IN](blocks/UT_ANALOG_IN.md) | Scales a raw analog reading to engineering units, spots a failed transmitter or broken wire (NAMUR NE43 for 4–20 mA), filters it and reports quality | Any 4–20 mA or 0–10 V transmitter: level, pressure, flow, temperature |
-| [UT_SCALE](blocks/UT_SCALE.md) | Plain linear scaling, no record | A quick conversion where you don't need fault handling |
-| [UT_DIGITAL_IN](blocks/UT_DIGITAL_IN.md) | Debounces a switch or float, alarms on it, spots chatter, and can simulate it | A float, pressure switch or alarm contact you want to watch properly |
-| [UT_DEBOUNCE](blocks/UT_DEBOUNCE.md) | On and off delay filter | Just cleaning up a bouncing contact; use UT_DIGITAL_IN if you also want the alarm and chatter check |
-| [UT_ANALOG_OUT](blocks/UT_ANALOG_OUT.md) | Turns a % or engineering value into the raw output, with limits, a rate limit, a hand value and a set value on interlock | A speed reference or valve demand on an analog output card |
-| [UT_FILTER](blocks/UT_FILTER.md) | Smooths a noisy value (low-pass, moving average or block average) | A level with waves, a pulsing flow, per-minute averages for logging |
-| [UT_RAMP](blocks/UT_RAMP.md) | Moves an output toward a target at a set rate | Soft speed changes, gentle valve moves, heating setpoint ramps |
-| [UT_LINEARISE](blocks/UT_LINEARISE.md) | Converts through a table of points with straight lines between | Odd-shaped tank strapping tables, V-notch weirs and flumes, pump curves |
-| [UT_VESSEL](blocks/UT_VESSEL.md) | Level to volume, percent and mass for standard shapes (vertical, cone-bottom silo, horizontal, rectangular, sphere) | Showing tank or silo contents; for odd shapes use UT_LINEARISE |
-| [UT_SIGNAL_SELECT](blocks/UT_SIGNAL_SELECT.md) | Combines two or three transmitters into one trusted value, drops bad ones, alarms when they disagree | Duplicate level or pressure transmitters on a critical measurement |
-| [UT_LIMIT](blocks/UT_LIMIT.md) | Checks a value against HH, H, L and LL, each with its own delay, response and reset | High and low alarms or trips on any analog value |
-| [UT_RATE](blocks/UT_RATE.md) | Measures how fast a value changes and alarms if it rises or falls too fast | Wet-well level rise, a temperature climb, pressure decay in a leak test |
-| [UT_UNIT_CONV](blocks/UT_UNIT_CONV.md) | Converts pressure, flow, volume, temperature and length units (bar ↔ psi ↔ kPa, L/s ↔ m³/h, °C ↔ °F); a function, with UT_UNIT_OK to check a pair | Showing a value in the units a client or a spec sheet uses |
-| [UT_IO_MAP_IN](blocks/UT_IO_MAP_IN.md) | Connects input terminals (board, I2C module, field bus or remote value) to named functions from settings, with NC, debounce, a fail-safe value when a module or channel is lost, and timed commissioning forces | Re-wiring a site, or moving an input to an I2C or remote module, should be a setting, not a program change |
-| [UT_IO_MAP_OUT](blocks/UT_IO_MAP_OUT.md) | Connects named output functions to output terminals from settings, turns spare outputs off, says whether each output reached the field, and allows timed forces only while the system is Off | The same for relays and analog outputs; a hard trip on `block` keeps an output off even when forced |
+### Sequences
 
-### Timers and logic
+- **[FB_Sequencer](blocks/FB_Sequencer.md)**: A start / stop chain (conveyors, crushers, process trains): one step per machine, started in order with proven feedback, stopped in reverse, with fault cascades and an auto restart.
+- **[FB_StepSeq](blocks/FB_StepSeq.md)**: A timed or conditional step sequence (backwash, CIP, fill-mix-drain): each step switches its outputs and lasts its time or until its condition, with jumps, loops and stop steps.
+- **[FB_PulseSeq](blocks/FB_PulseSeq.md)**: Sequential pulsing (jet-pulse filter cleaning, flush valves): one output at a time, in order, with gaps and pauses, on demand or continuously.
 
-| Block | What it does | Use it when |
-| --- | --- | --- |
-| [UT_TOGGLE](blocks/UT_TOGGLE.md) | One press on, the next press off | A single pushbutton for lights or a manual run |
-| [UT_FLASHER](blocks/UT_FLASHER.md) | On/off pulse generator | A flashing lamp, a pulsing horn, an "every 10 minutes" trigger |
-| [UT_TONR](blocks/UT_TONR.md) | A `TON` that keeps its time when the input drops, then carries on (cleared at a power cut) | Totting up how long a condition has lasted over several goes |
-| [UT_COUNTDOWN](blocks/UT_COUNTDOWN.md) | Time left on any timer (a function) | Showing "time remaining" on an HMI |
-| [UT_TIME_SPLIT](blocks/UT_TIME_SPLIT.md) | A duration as days, hours, minutes, seconds, or as text | Showing run time or time left on an HMI |
-| [UT_TIME_TEXT](blocks/UT_TIME_TEXT.md) | A duration as short text: `1 h 20 m`, `42 m`, `35 s` (a function) | Showing a block's `timeLeft` on a simple display, or in your own texts |
-| [UT_TIME_BUILD](blocks/UT_TIME_BUILD.md) | Days, hours, minutes and seconds into a TIME (a function) | Letting an operator enter "2 h 30 min" as separate numbers |
-| [UT_LOCAL_TIME](blocks/UT_LOCAL_TIME.md) | UTC to local time with daylight saving (NZ, AU, EU, US rules; a function) | Showing site time on an HMI, local-time schedules and reports |
-| [UT_SCHEDULE](blocks/UT_SCHEDULE.md) | Weekly time windows on chosen days, with an operator override | Irrigation start times, lighting, off-peak pumping |
-| [UT_TWO_POINT](blocks/UT_TWO_POINT.md) | On/off control with a gap between on and off points (like a thermostat) | Filling or emptying a tank, heating or cooling, without chatter |
-| [UT_HOA](blocks/UT_HOA.md) | Hand/Off/Auto (from the HMI or a selector switch) for an output with no block of its own | Lights, heaters, solenoids, a whole system |
-| [UT_INTERLOCK](blocks/UT_INTERLOCK.md) | Gathers every "must be healthy" condition into one OK signal, records which one dropped first, and allows keyed bypasses | Pull cords, guards and upstream-running checks feeding a motor's `Interlock` or `Permissive` |
+### Alarms, interlocks and the HMI
 
-### Plant mode, commands and settings
+- **[FB_AlarmTable](blocks/FB_AlarmTable.md)**: All of a panel's alarms in one block, one row each, with the fault and warning lamps, the beacon, the siren and the healthy relay.
+- **[FB_Alarm](blocks/FB_Alarm.md)**: One alarm as its own block, the ISA-18.2 way: shelving, suppression, out of service, priority and time stamps. Use FB_Annunciator for the group's horn and lamp.
+- **[FB_Annunciator](blocks/FB_Annunciator.md)**: The horn, alarm lamp and first-out for a group of FB_Alarm blocks.
+- **[FB_AlarmBeacon](blocks/FB_AlarmBeacon.md)**: Flashes alarm numbers on a single lamp, for sites with one fault lamp and no HMI.
+- **[FB_Interlock](blocks/FB_Interlock.md)**: All the conditions that must be healthy before a device may run, as one `bOk`, with first-out and maintenance bypasses.
+- **[FB_MsgQueue](blocks/FB_MsgQueue.md)**: A message ticker and site-status board for an HMI: each source's state and error code, queued or as a list of what is wrong now.
+- **[FB_EventLog](blocks/FB_EventLog.md)**: The last events (trips, stops, end reasons) with their time, newest first, optionally kept over a power cut: "what happened overnight".
 
-| Block | What it does | Use it when |
-| --- | --- | --- |
-| [UT_SYSTEM_MODE](blocks/UT_SYSTEM_MODE.md) | The plant's Off / Manual / Auto with a choice of auto programs, local / remote, and a manual run while a run request is held | Any site with a plant-wide mode on top of its devices: an effluent system, an irrigation scheme, a water treatment plant |
-| [UT_CMD](blocks/UT_CMD.md) | Takes commands from two masters (the panel HMI and SCADA), each writing its own variables, with local / remote, stop wins, and refusals counted | A device commanded from both an HMI and SCADA, or by a SCADA that rewrites its values every poll |
-| [UT_SETTING_CHECK](blocks/UT_SETTING_CHECK.md) | Takes a setting written by an HMI or SCADA only if it is sensible (min, max, above or below a related setting), else keeps the old one and says why; UT_SETTING_ARRAY for a list | Setpoints and levels operators can change: start / stop levels, pressures, times |
+### Settings and reporting
 
-**UT_HOA or UT_MODE_SELECT?** UT_HOA gives you a mode **and** switches the output.
-UT_MODE_SELECT only works out the mode (including Out of service); use it when you
-are writing your own device logic. Motors and valves already have it built in, so
-they need neither.
+- **[FB_SettingCheck](blocks/FB_SettingCheck.md)**: A write gate for one project value that belongs to no block: a new value from the HMI is checked against its limits before it is used.
+- **[FB_SettingArray](blocks/FB_SettingArray.md)**: FB_SettingCheck for a list of project values, one row each; the values are kept over a power cut.
+- **[FB_Report](blocks/FB_Report.md)**: Report by exception: decides when one value is worth sending (a change past a deadband, a heartbeat, a force), for a value sent by other means than modbee-mqtt.
+- **[FB_ReportArray](blocks/FB_ReportArray.md)**: FB_Report for a list of values, one row each.
 
-### Counting and totals
+### Remote sites
 
-| Block | What it does | Use it when |
-| --- | --- | --- |
-| [UT_TOTALISER](blocks/UT_TOTALISER.md) | Totals from pulses, a fast counter, a 4–20 mA flow, a meter's own register, or run time × rated flow. Hour, day and user totals, a batch total, a rate, and 15-minute interval records for the IoT platform | Water take, effluent volume, energy, production counts, compliance metering |
-| [UT_RUN_HOURS](blocks/UT_RUN_HOURS.md) | Run hours (total, today, yesterday) kept over a power cut, with a service-due flag | Pump, motor or filter servicing by hours |
-| [UT_STATS](blocks/UT_STATS.md) | Minimum, maximum and average per period, for this period and the last | Daily figures for reports, dashboards and IoT uploads |
+- **[FB_Watchdog](blocks/FB_Watchdog.md)**: Watches a heartbeat or counter from the other end of a link, and makes one for it to watch.
+- **[FB_LinkSupervisor](blocks/FB_LinkSupervisor.md)**: Escalating recovery of a remote site's comms link: restart the modem, power cycle it, and at most a few controlled reboots a day.
 
-UT_STARTS (start counts) is under [Motors](#motors).
+### The IO map
 
-### Alarms and reporting
+- **[FB_IoMapIn](blocks/FB_IoMapIn.md)**: The input side of the IO map: terminals to functions, from a table, with fail-safe values, debounce and commissioning forces. Call it first in the scan.
+- **[FB_IoMapOut](blocks/FB_IoMapOut.md)**: The output side of the IO map: functions to terminals, from a table, with commissioning forces and a hold-off per output. Call it last in the scan.
+- **[F_IoAddrOk](blocks/F_IoAddrOk.md)**: TRUE when an IO address can be kept by the IO maps (a known source, a module of at most 127).
+- **[F_IoAddrPack](blocks/F_IoAddrPack.md)**: Packs an IO channel address into one DWORD (the IO maps' kept copies).
+- **[F_IoAddrUnpack](blocks/F_IoAddrUnpack.md)**: Unpacks the address F_IoAddrPack packed.
+- **[F_IoFind](blocks/F_IoFind.md)**: Finds a channel through the IO module table (used by the IO maps).
+- **[F_IoForceSlot](blocks/F_IoForceSlot.md)**: One commissioning force slot (used by the IO maps).
 
-| Block | What it does | Use it when |
-| --- | --- | --- |
-| [UT_ALARM](blocks/UT_ALARM.md) | One managed alarm: on and off delays, acknowledge, latching, shelving, suppression, priority and counts | Any condition an operator should see and acknowledge |
-| [UT_ANNUNCIATOR](blocks/UT_ANNUNCIATOR.md) | Horn and lamp for a group of alarms: fast flash and horn for new, steady when acknowledged, slow flash when cleared but not acknowledged; first-out; silence and lamp test | A panel with a horn and alarm beacon |
-| [UT_ALARM_BEACON](blocks/UT_ALARM_BEACON.md) | Flashes the number of each active alarm in turn on one lamp | A site with one fault lamp and no HMI |
-| [UT_ALARM_TABLE](blocks/UT_ALARM_TABLE.md) | Every alarm of a site in one array, one row each: on and off delays, warn or trip, clears by itself, latched or retry-then-lockout, acknowledge, siren with silence and re-arm, beacon, and one status line naming the first alarm | A site that wants all its alarms, the horn and the beacon from one block, with the alarm words kept in the HMI |
-| [UT_MSG_QUEUE](blocks/UT_MSG_QUEUE.md) | One HMI text line for the whole site: a ticker of new status messages (QUEUE), or each device's current problem in turn (ACTIVE). It keeps the status codes and gives the words of the one on display; you size its buffer | Showing every device's status on one screen line |
-| [UT_EVENT_LOG](blocks/UT_EVENT_LOG.md) | The last N trips, stops and end reasons (as codes) with their time, newest first; optionally kept over a power cut | "What happened overnight" on a remote site, also while comms were down |
-| [UT_REPORT](blocks/UT_REPORT.md) | Decides when a value is worth sending: changed by a deadband, quality changed, or a heartbeat time has passed, with a minimum gap | Publishing over a cellular link without flooding it |
-| [UT_REPORT_ARRAY](blocks/UT_REPORT_ARRAY.md) | UT_REPORT for a whole list of values in one block, each with its own settings | A site sending dozens of metrics to SCADA or the IoT platform |
-| [UT_WATCHDOG](blocks/UT_WATCHDOG.md) | Raises `CommsFail` when a heartbeat or counter stops changing, and makes a heartbeat for the other end | Checking a remote PLC, Modbus device or MQTT link is still alive |
-| [UT_LINK_SUPERVISOR](blocks/UT_LINK_SUPERVISOR.md) | Gets a dead link back by itself: modem restart, modem power cycle, one controlled reboot, then retries further apart; reboots limited per day and never in a loop | A remote site on a cellular modem that must come back online unattended |
+### Timers, logic and signal helpers
 
-### Sequencing
+- **[FB_Tonr](blocks/FB_Tonr.md)**: A retentive (accumulating) on-delay timer: the time adds up over several on periods.
+- **[FB_Debounce](blocks/FB_Debounce.md)**: An on / off delay filter: ignores anything shorter than its delays.
+- **[FB_Toggle](blocks/FB_Toggle.md)**: Push-on / push-off: each press flips the output.
+- **[FB_Flasher](blocks/FB_Flasher.md)**: An on / off pulse generator that never drifts: a flasher, or an "every X, pulse" timer.
+- **[FB_Filter](blocks/FB_Filter.md)**: A smoothing filter: low-pass, moving average or block average.
+- **[FB_Ramp](blocks/FB_Ramp.md)**: A rate-limited setpoint: the output moves toward the input at a set rate.
+- **[FB_TwoPoint](blocks/FB_TwoPoint.md)**: An on / off (hysteresis) controller, thermostat style, with delays and anti-short-cycle times.
+- **[FB_TimeSplit](blocks/FB_TimeSplit.md)**: Splits a TIME into days, hours, minutes, seconds and milliseconds, with texts for an HMI.
+- **[F_Countdown](blocks/F_Countdown.md)**: Time remaining on any timer: preset minus elapsed, never negative.
+- **[F_Scale](blocks/F_Scale.md)**: Linear scaling from one range onto another.
+- **[F_TimeBuild](blocks/F_TimeBuild.md)**: Days, hours, minutes, seconds and milliseconds to a TIME (an HMI enters a delay as numbers).
+- **[F_TimeText](blocks/F_TimeText.md)**: A duration as a short text for a simple display ('42 m 10 s').
+- **[F_Blink](blocks/F_Blink.md)**: A flashing lamp from the PLC clock: every lamp using it flashes in step.
 
-**[UT_SEQUENCER](blocks/UT_SEQUENCER.md)**: starts a chain of machines in order, each
-waiting for the one before to prove it's running, and stops them in reverse. If one
-drops out, everything feeding it stops at once (cascade stop). It can restart
-automatically after a fault, with a pre-start siren.
-- *Use it when:* conveyors, crushers and screens that must start downstream-first.
-- *Not for:* timed recipes (UT_STEP_SEQ).
+### Time and units
 
-**[UT_STEP_SEQ](blocks/UT_STEP_SEQ.md)**: runs a recipe of steps, each switching a set
-of outputs for a time and/or until a condition is met. Steps can jump and loop, and a
-stop goes through a safe end step (for example, drain).
-- *Use it when:* filter backwash, dairy vat or CIP wash, tank fill-mix-drain.
-- *Not for:* a chain of machines with run feedbacks (UT_SEQUENCER).
+- **[F_LocalTime](blocks/F_LocalTime.md)**: Local time from a UTC clock: the offset plus daylight saving.
+- **[F_DateDays](blocks/F_DateDays.md)**: Days from 1970-01-01 to a date.
+- **[F_DstActive](blocks/F_DstActive.md)**: TRUE while daylight saving is in force under a rule (NZ, AU south-east, EU, US).
+- **[F_ClockOk](blocks/F_ClockOk.md)**: TRUE when the site clock has been set (a date from 2020 up to 2100).
+- **[F_UnitConv](blocks/F_UnitConv.md)**: Converts a value from one engineering unit to another (bar to psi, L/s to m3/h ...).
+- **[F_UnitOk](blocks/F_UnitOk.md)**: TRUE when F_UnitConv can convert between two units.
+- **[F_UnitKind](blocks/F_UnitKind.md)**: The unit table behind F_UnitConv: a unit's kind and how to reach its base unit.
+- **[F_UnitFactor](blocks/F_UnitFactor.md)**: The factor from one volume unit to another (litre, m3, megalitre, gallon), used by the meters' input and output units.
 
-**[UT_ZONE_SEQ](blocks/UT_ZONE_SEQ.md)**: runs irrigation or wash-down zones one after
-another, by time or by volume. It opens the right valve, calls the pump, sets each
-zone's pressure, and overlaps valves so the pump never deadheads. It also does cycle
-and soak, rain hold and a flow check per zone.
-- *Use it when:* irrigation blocks, pivots, wash-down stations or effluent spreading.
+### Building your own (ST)
 
-**[UT_RUN_LIMIT](blocks/UT_RUN_LIMIT.md)**: one run by time, by volume (whichever
-first), or for as long as a remote signal is held, with pauses while the pump is not
-running, and why it ended (`Done`, `Stopped: low level`), with the time and volume
-it ran.
-- *Use it when:* an effluent or irrigation run, filling a trough, flushing a line,
-  running a generator for a set time, a SCADA schedule that holds a run signal.
-- *Not for:* several zones in turn (UT_ZONE_SEQ) or chemical batches (UT_DOSE).
-
-**[UT_IRR_DEFER](blocks/UT_IRR_DEFER.md)**: says when not to irrigate and why: rain,
-wet soil, a lost rain or soil sensor, or a manual or remote defer, with an on delay
-and a clear delay while the soil drains. `ToStorage` sends the effluent to storage
-meanwhile.
-- *Use it when:* effluent or irrigation runs must stop in wet weather: `Defer` to
-  UT_ZONE_SEQ's `RainHold`, or through `NOT` to UT_RUN_LIMIT's `Permit`.
-
-**[UT_PULSE_SEQ](blocks/UT_PULSE_SEQ.md)**: pulses a row of outputs one at a time,
-never two together, continuously or on demand.
-- *Use it when:* dust-collector jet-pulse cleaning on high differential pressure,
-  irrigation flush valves, staged heaters.
-
-### Building blocks
-
-The bigger blocks are built from these. You'll rarely need them directly, but each
-one works on its own.
-
-| Block | What it does | Use it directly when |
-| --- | --- | --- |
-| [UT_PROTECT](blocks/UT_PROTECT.md) | One protection: delay, response (off, warn, trip) and reset mode (also as the function UT_PROT_RUN) | You have your own condition that should warn or stop something |
-| [UT_LEVEL_CHECK](blocks/UT_LEVEL_CHECK.md) | One alarm level with a setpoint and deadband | A single high or low check; UT_LIMIT is four of these |
-| [UT_MEAS_CHECK](blocks/UT_MEAS_CHECK.md) | HH, H, L and LL for a measurement that may be a switch, a transmitter, both or nothing | Your own equipment block that must cope with whatever is fitted on site |
-| [UT_MODE_SELECT](blocks/UT_MODE_SELECT.md) | Off / Hand / Auto / Out of service from the HMI or a selector, with what happens after a power cut and a forced Off | Your own device logic that needs a mode (see UT_HOA above) |
-| [UT_STATUS_TEXT](blocks/UT_STATUS_TEXT.md) | A status and its fault in words: `Latched: overload` (a function), and UT_STATUS_KIND, its kind (normal, held, warning, fault, configuration) | Your own block's status line, or an HMI colour from a status code |
-| [UT_STOP_TEXT](blocks/UT_STOP_TEXT.md) | Why a run ended, in words: `Stopped: interlock` (a function) | Showing a `stopReason` on a simple display |
-| [UT_RESET_TEXT](blocks/UT_RESET_TEXT.md) | How a trip will clear, as the end of a fault text: `, auto reset in 25 s` (a function) | A fault line of your own on a simple display |
-| [UT_MOTOR_CORE](blocks/UT_MOTOR_CORE.md) | Everything the motor blocks share (two functions) | Building a new kind of motor starter |
-| [UT_VALVE_CORE](blocks/UT_VALVE_CORE.md) | Everything the valve blocks share (two functions) | Building a new kind of valve block |
-| [UT_IO_FORCE_RUN](blocks/UT_IO_FORCE_RUN.md) | One commissioning force slot of the IO maps: start, time-out, release (a function) | Never: UT_IO_MAP_IN and UT_IO_MAP_OUT call it |
+- **[F_Protect](blocks/F_Protect.md)**: The protection engine every block is built from: delay, response, reset mode and retries for one condition. Use it in your own ST code to protect something the library does not cover.
+- **[F_CheckReal](blocks/F_CheckReal.md)**: The settings-check rule for a REAL: why a value is refused, or `None`.
+- **[F_CheckLreal](blocks/F_CheckLreal.md)**: The settings-check rule for an LREAL: why a value is refused, or `None`.
+- **[F_CheckTime](blocks/F_CheckTime.md)**: The settings-check rule for a TIME: why a value is refused, or `None`.
+- **[F_CheckInt](blocks/F_CheckInt.md)**: The settings-check rule for an INT: why a value is refused, or `None`.
+- **[F_BitPut](blocks/F_BitPut.md)**: Sets one bit of a DWORD.
+- **[F_HoursAdd](blocks/F_HoursAdd.md)**: Whole milliseconds of running to add this scan, exact over years (for your own run-hour counts).
 
 ---
 
-## Common patterns
+## Putting a site together
 
-**Sump pump station.** A level transmitter goes through
-[UT_ANALOG_IN](blocks/UT_ANALOG_IN.md) into [UT_PUMP_STATION](blocks/UT_PUMP_STATION.md),
-with the high and low floats on its `HighFloat` and `LowFloat` pins. Each pump has a
-[UT_PUMP](blocks/UT_PUMP.md) (one element of the station's pump array) driving a
-[UT_MOTOR](blocks/UT_MOTOR.md): pump `RunCmd` to motor `AutoCmd`, pump `Healthy` to
-motor `Interlock`. If the transmitter fails or disagrees with the high float, the
-station runs on the floats and timers. Give each pump's `Demand` the high float, so
-the pumps still run on it if the station block ever stops. Add
-[UT_RUN_HOURS](blocks/UT_RUN_HOURS.md) and [UT_STARTS](blocks/UT_STARTS.md) per motor,
-and [UT_ANNUNCIATOR](blocks/UT_ANNUNCIATOR.md) for the panel horn and beacon.
+**Sump with two pumps.** A level transmitter goes into an
+[FB_AnalogIn](blocks/FB_AnalogIn.md) (`fbSumpLevel`); high and low floats into an
+[FB_SwitchSet](blocks/FB_SwitchSet.md) (`fbFloats`). Each pump is an
+[FB_Motor](blocks/FB_Motor.md) with an [FB_Pump](blocks/FB_Pump.md) on top
+(`ipMotor := fbMotor1`) and an [FB_LevelCheck](blocks/FB_LevelCheck.md) for dry run
+(`ipOwner := fbPump1`). An [FB_Group](blocks/FB_Group.md) shares the duty
+(`ipMember1 := fbPump1`, `ipMember2 := fbPump2`), and an
+[FB_LevelControl](blocks/FB_LevelControl.md) in EMPTY mode drives the group
+(`ipLevel := fbSumpLevel`, `ipTarget := fbGroup`). [FB_LevelFloats](blocks/FB_LevelFloats.md)
+(`ipFloats := fbFloats`, `ipOwner := fbLevelCtl`) runs the pumps on the floats if the
+transmitter fails, and checks it against the high float.
+[FB_AlarmTable](blocks/FB_AlarmTable.md) drives the panel's lamps and siren.
 
-**Pressure booster.** A pressure transmitter feeds
-[UT_SPEED_CTRL](blocks/UT_SPEED_CTRL.md). Its `Run` goes to the pump's `Demand`
-([UT_PUMP](blocks/UT_PUMP.md)), the pump's `RunCmd` to the drive's `AutoCmd`
-([UT_MOTOR_VSD](blocks/UT_MOTOR_VSD.md)), and `Speed` to the drive's `AutoSpeed`. It
-fills the main gently, holds the pressure, and sleeps at no demand. For several pumps
-on one header, [UT_PUMP_CASCADE](blocks/UT_PUMP_CASCADE.md) stages them in and out. A fixed-speed set
-on pressure switch points can use [UT_PUMP_STATION](blocks/UT_PUMP_STATION.md) in FILL mode.
+**Station with a booster pump.** When the duty pumps push through a series booster,
+make the booster its own FB_Pump (not a group member) and add an
+[FB_Booster](blocks/FB_Booster.md) (`ipBooster := fbBoosterPump`,
+`ipOwner := fbLevelCtl`). It starts the booster a delay after the duty pumps, or on low
+pressure (`ipPressure`). The booster stops at once at the end of a cycle, so give each
+duty FB_Pump a `set.tStopDelay` to stop that much later.
 
-**Irrigation zones.** [UT_SCHEDULE](blocks/UT_SCHEDULE.md) starts
-[UT_ZONE_SEQ](blocks/UT_ZONE_SEQ.md) at the set times. The zone sequencer opens each
-zone valve, sends `PumpDemand` and the zone's pressure (`ZoneSp`) to UT_SPEED_CTRL
-(above), and holds for rain. A flow meter on `Flow` lets zones run by volume and
-catches a blocked dripper line or a burst lateral. A
-[UT_TOTALISER](blocks/UT_TOTALISER.md) on the same meter gives daily and per-run
-totals, and [UT_DOSE](blocks/UT_DOSE.md) in flow-paced mode can add fertiliser.
+**Pumping on a timer.** With no level to keep (a circulation pump, a timed transfer),
+set the FB_LevelControl's `set.eMode := Timed`: it runs the pump `set.tOnTime`, rests
+`set.tOffTime`, over and over while `bRun` is on. `ipLevel` may stay unwired.
 
-**Compliance water metering.** Put the meter into
-[UT_TOTALISER](blocks/UT_TOTALISER.md) with the right method: `REGISTER` if the meter
-keeps its own total (nothing is lost while the PLC is off), `PULSE` or `COUNT` if the
-PLC counts pulses (then set a short `saveEvery`, for example 1 minute). Wire the
-real-time clock to `Clock`. Every 15 minutes the block writes an interval record
-(volume, end time, total and a sequence number that shows a missed record) and pulses
-`IntervalDone`: publish the record on that pulse. The IoT platform stores the
-history. NZ rules need 15-minute records, sent daily, for takes of 5 L/s or more.
-[UT_WATCHDOG](blocks/UT_WATCHDOG.md) can watch the link.
+**Tank to tank transfer.** An [FB_Run](blocks/FB_Run.md) is one transfer: started from
+the HMI or a schedule, its `bRunCmd` goes to an FB_LevelControl's `bDemand` (with
+`set.bDemandOnly`), and the level control's `bRunning` back to the run's
+`bEquipRunning`. [FB_RunVolume](blocks/FB_RunVolume.md) (`ipRun := fbTransfer`,
+`ipMeter := fbFlowMeter`) ends it at a volume, with a safety time cap. Two
+[FB_LevelCheck](blocks/FB_LevelCheck.md) parts on the run: the source tank low
+(Signal: the transfer pauses until the level is back) and the destination full (Signal
+with `set.bDoneWhenReached`: the transfer ends normally).
 
-**Conveyor or crusher chain.** Each machine is a [UT_MOTOR](blocks/UT_MOTOR.md) (or
-[UT_MOTOR_SD](blocks/UT_MOTOR_SD.md) for the big ones). [UT_SEQUENCER](blocks/UT_SEQUENCER.md)
-has one step per machine in start order (the last conveyor first, the feeder last):
-each step's `cmd` goes to the motor's `AutoCmd`, and the motor's `Running` and
-`Ready` come back to the step. If a conveyor stops, everything feeding it stops at
-once. Pull cords and guards go through [UT_INTERLOCK](blocks/UT_INTERLOCK.md) to each
-motor's `Interlock`, and [UT_ROTATION](blocks/UT_ROTATION.md) catches belt slip. Wire
-the e-stop healthy signal, inverted, to `Abort`, and `Restarting` to a pre-start siren.
+**Pressure set.** A pressure transmitter (FB_AnalogIn) feeds an
+[FB_SpeedLoop](blocks/FB_SpeedLoop.md) (`ipPv`), which drives an FB_Pump on an
+[FB_MotorVsd](blocks/FB_MotorVsd.md). For several pumps on one header the loop drives
+an FB_Group, and [FB_Cascade](blocks/FB_Cascade.md) sets how many pumps run
+(`nExtra` to the group's `nExtra`).
 
----
+**Pressure set with a jockey pump.** Add a small pump to the same FB_Group with its
+FB_Pump `set.eRole := Jockey`. The group never makes it the lead; wire the group's
+`fJockeyCapacity` and `bJockeyReady` to the FB_Cascade, and the header flow to its
+`ipFlow`. At low demand the cascade asks for the jockey alone (`nExtra` -1); when the
+jockey falls short a duty pump takes over, and the jockey stays on until it runs.
 
-## How every block behaves
+**Irrigation zones.** [FB_Schedule](blocks/FB_Schedule.md) starts an
+[FB_ZoneSeq](blocks/FB_ZoneSeq.md). Each zone is an [FB_Zone](blocks/FB_Zone.md) with
+its own [FB_Valve](blocks/FB_Valve.md). The program opens each valve, asks for the pump
+(`ipPump`: a pump, a group or a level control) and waters by time or by volume
+([FB_PulseMeter](blocks/FB_PulseMeter.md) on the flow meter), with cycles and soak per
+zone and `set.repeats` passes of the whole program. A master valve goes on
+`ipMasterValve`: it opens with the first zone and closes `set.tMasterCloseDelay` after
+the last. For rain, wire [FB_IrrDefer](blocks/FB_IrrDefer.md)'s `bDefer` to the
+program's `bRainHold` and pick `set.eRainAction` (Pause, Skip, Cancel or Ignore).
+[FB_DoseFlow](blocks/FB_DoseFlow.md) can add fertiliser in proportion to the flow.
 
-The full rules are in [conventions.md](conventions.md). The short version:
+**Conveyor chain.** Each machine is an FB_Motor (or
+[FB_MotorStarDelta](blocks/FB_MotorStarDelta.md)). [FB_Sequencer](blocks/FB_Sequencer.md)
+has one row per machine in start order; pull cords and guards go through
+[FB_Interlock](blocks/FB_Interlock.md) to each motor's `bInterlock`. Wire the e-stop
+healthy signal, inverted, to the sequencer's `bAbort`.
 
-- **Modes: Off, Hand, Auto** (and Out of service on motors and valves). Everything
-  starts in **Off**, so a freshly loaded program does nothing until someone chooses.
-  By default the mode is kept over a power cut; a device's `powerUp` setting can
-  bring it back Off instead. A motor in Auto restarts by itself once its
-  restart delay has run (5 s by default, counted from power-up, so motors come back
-  one after another). A motor in Hand needs a fresh start press, and a UT_HOA output
-  left in Hand comes back off.
-- **Inputs are TRUE = active.** A fault input is TRUE when tripped, a float TRUE when
-  it signals. There is no "NC" setting: wire a normally-closed contact through `NOT`
-  at the pin. A broken wire then reads as tripped, which is the safe side.
-- **Interlock vs permissive.** An **interlock** stops a running device and blocks a
-  start, in Hand too. A **permissive** only blocks a start; a running device keeps
-  running. Unwired, both read as OK. Neither is a fault.
-- **Trips recover by themselves where that is safe.** Each protection has a response
-  (off, warn or trip) and a reset mode:
-  - **AUTO**: clears once the cause has gone for a set time, and the device carries
-    on. For example, an overload reset in the panel puts the sump pump straight back
-    in service with no HMI needed.
-  - **RETRY**: as AUTO, but only so many times in a window, then it latches.
-  - **MANUAL**: stays until it is reset and the cause has gone. Reset with the
-    `Reset` pin, the HMI `cmdReset`, or by switching the device to Off and back.
-- **Reset clears faults only.** On a block with faults, `Reset` and `cmdReset` never
-  clear totals, counts or statistics; those have their own commands. After a MANUAL reset, a held run command must drop and come
-  back before the device restarts (unless you set it to restart after a reset).
-- **Kept over a power cut:** only the modes, run hours, starts, valve strokes, flow
-  and dose totals. Counts and totals are saved every 12 hours by default
-  (`saveEvery`), so a power cut loses at most that much counting.
-  **Not kept:** trips (a fault still there trips again), alarms, leads, statistics,
-  retries and any sequence in progress. UT_SEQUENCER, UT_STEP_SEQ, UT_ZONE_SEQ and
-  UT_DOSE come back stopped, with their outputs off, and need a new start. To keep your settings, declare the record `RETAIN`.
-- **Invalid settings never run anything.** A setting that is not a number, negative
-  where it can't be, or out of range either falls back to a safe value with a
-  warning, or keeps the device off with a fault until it's fixed. Each block's page
-  lists its checks.
-- **HMI commands act once.** A `cmd…` field acts when it is written (a BOOL on its
-  rising edge), and the block clears it. A command held on (a Modbus coil left on)
-  still acts only once, and stop always wins over start. With two masters, or a
-  SCADA that rewrites its values every poll, put [UT_CMD](blocks/UT_CMD.md) in front.
-- **Every device says what it is doing.** Its record has `statusCode` (what it is
-  doing, or what holds it back), `faultId` (which fault or setting) and `statusText`
-  (the two in words, such as `Latched: overload`). HMIs and SCADA read the codes; the
-  full lists are in [conventions.md](conventions.md#status-every-critical-block-says-what-it-is-doing-and-why).
-- **Time left is always visible.** Timed blocks show `timeLeft` (and `phaseTime`
-  where useful) in their record, beside the status: a status never holds a number.
+**A motor with more fitted.** Parts go on their own rungs before the motor, each with
+`ipOwner := fbMotor1`: [FB_Protection](blocks/FB_Protection.md) for a thermistor or an
+overload contact, [FB_MotorCurrent](blocks/FB_MotorCurrent.md) for a CT,
+[FB_StarterSoft](blocks/FB_StarterSoft.md) for a soft starter's top-of-ramp relay.
+[FB_MotorJog](blocks/FB_MotorJog.md) adds a held jog button in Hand.
+[FB_MotorSimulate](blocks/FB_MotorSimulate.md) sits between the field feedback and the
+motor's `bFeedback`, for testing without the plant.
+
+**Remote site.** [FB_Watchdog](blocks/FB_Watchdog.md) watches the SCADA heartbeat;
+[FB_LinkSupervisor](blocks/FB_LinkSupervisor.md) restarts or power cycles the modem when
+the link stays down.
 
 ---
 
 ## More reading
 
-- [conventions.md](conventions.md): modes, states, faults, interlocks, the status codes, defaults and retain in full.
-- [ladder-rules.md](ladder-rules.md): using library blocks in Ladder and FBD.
+- [conventions.md](conventions.md): errors and state, the `E_UtError` codes, records,
+  kept settings, equipment and owners, parts, tables, retained data, protections.
+- [ladder-rules.md](ladder-rules.md): using library blocks in Ladder.
+- [migrating-from-0.1.md](migrating-from-0.1.md): moving a project from the `UT_…`
+  blocks of 0.1.

@@ -1,0 +1,15 @@
+TYPE
+  ST_SettingItem : STRUCT
+    fValue : REAL; (* the value in use (kept) *)
+    fMin : REAL := REAL#-3.4E38;
+    fMax : REAL := REAL#3.4E38;
+    nAbove : INT; (* must be above this item's value (position; 0 = none) *)
+    nBelow : INT; (* must be below this item's value (position; 0 = none) *)
+    fRequest : REAL; (* the value wanted: checked when it changes *)
+    bCmdCheck : BOOL; (* check the request again even if unchanged (cleared by the block) *)
+    bRefused : BOOL; (* the last request was refused (until one is accepted) *)
+    bBad : BOOL; (* the value in use fails the checks now *)
+    eRefusedId : E_UtError;
+    fSeen : REAL; (* the request as last read *)
+  END_STRUCT;
+END_TYPE

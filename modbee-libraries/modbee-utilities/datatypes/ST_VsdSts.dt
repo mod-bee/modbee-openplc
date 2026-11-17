@@ -1,0 +1,13 @@
+TYPE
+  ST_VsdSts : STRUCT
+    fSpeedRef : REAL;
+    fSpeedFb : REAL;
+    bAtSpeed : BOOL;
+    bDriveReady : BOOL;
+    bRefused : BOOL;
+    stDriveNotReady : ST_ProtectionSts;
+    stSpeedDev : ST_ProtectionSts;
+    fSpeedHz : REAL; (* the speed in Hz (set.fRatedHz) *)
+    fSpeedRpm : REAL; (* the speed in rpm (set.fRatedRpm) *)
+  END_STRUCT;
+END_TYPE

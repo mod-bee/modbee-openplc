@@ -1,0 +1,8 @@
+TYPE
+  ST_IoDch : STRUCT
+    bQ : BOOL; (* the terminal: input contact made / output energised *)
+    bBad : BOOL; (* its driver: this channel can't be trusted *)
+    bForced : BOOL; (* status: a force slot holds it *)
+    nFn : USINT; (* status: the function row on it (inputs: the first one); 0 = spare *)
+  END_STRUCT;
+END_TYPE

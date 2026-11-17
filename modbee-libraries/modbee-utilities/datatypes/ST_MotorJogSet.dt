@@ -1,0 +1,5 @@
+TYPE
+  ST_MotorJogSet : STRUCT
+    tJogMax : TIME; (* longest jog (0 = no limit) *)
+  END_STRUCT;
+END_TYPE

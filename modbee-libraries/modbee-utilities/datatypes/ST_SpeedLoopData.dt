@@ -1,0 +1,9 @@
+TYPE
+  ST_SpeedLoopData : STRUCT
+    bCmdManual : BOOL;
+    bCmdAuto : BOOL;
+    bCmdReset : BOOL;
+    set : ST_SpeedLoopSet;
+    sts : ST_SpeedLoopSts;
+  END_STRUCT;
+END_TYPE

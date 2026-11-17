@@ -1,0 +1,18 @@
+TYPE
+  ST_VesselConfig : STRUCT
+    eShape : E_VesselShape;
+    nTanks : INT := 1; (* identical tanks joined at the bottom (1..100) *)
+    fDiameter : REAL := 1.0;
+    fHeight : REAL := 1.0; (* Cone: the cylinder above the cone *)
+    fLength : REAL := 1.0;
+    fWidth : REAL := 1.0;
+    fConeHeight : REAL;
+    fOutletDiameter : REAL;
+    fSlope : REAL; (* Pond: horizontal per 1 vertical *)
+    eLevelUnit : E_Unit; (* Metre, Cm, Mm or Percent; None: the level's own unit *)
+    eVolumeUnit : E_Unit := E_Unit.M3; (* M3, Litre or MegaLitre *)
+    eMassUnit : E_Unit := E_Unit.Kg; (* Kg or Tonne *)
+    fDensity : REAL := 1000.0; (* kg/m3 *)
+    fFraction : REAL := 1.0; (* share of the vessel *)
+  END_STRUCT;
+END_TYPE

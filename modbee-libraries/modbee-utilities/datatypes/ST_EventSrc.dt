@@ -1,0 +1,10 @@
+TYPE
+  ST_EventSrc : STRUCT
+    nCode : INT;
+    eStop : E_StopReason;
+    eFault : E_UtError;
+    nCount : UDINT;
+    bNewPrev : BOOL;
+    bSeen : BOOL;
+  END_STRUCT;
+END_TYPE

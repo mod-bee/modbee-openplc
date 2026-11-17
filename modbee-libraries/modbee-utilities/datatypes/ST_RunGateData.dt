@@ -1,0 +1,8 @@
+TYPE
+  ST_RunGateData : STRUCT
+    set : ST_RunGateSet;
+    bWaiting : BOOL; (* status *)
+    tWaited : TIME;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

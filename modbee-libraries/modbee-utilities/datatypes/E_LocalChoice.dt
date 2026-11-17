@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_LocalChoice : (None, Low, High, Forward, Reverse, Pos1, Pos2, Pos3, Halt) := None;
+END_TYPE

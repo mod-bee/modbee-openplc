@@ -1,0 +1,8 @@
+TYPE
+  ST_PulseMeterSts : STRUCT
+    bGood : BOOL;
+    fRate : REAL; (* per hour *)
+    bRefused : BOOL;
+    stInputBad : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

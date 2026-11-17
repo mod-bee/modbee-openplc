@@ -1,0 +1,11 @@
+TYPE
+  ST_AlarmSettings : STRUCT
+    stRow : ST_AlarmSet; (* as an FB_AlarmTable row *)
+    bLatch : BOOL;
+    bAckRequired : BOOL := TRUE;
+    ePriority : E_AlarmPriority := E_AlarmPriority.Medium;
+    tMaxShelve : TIME := T#8h; (* 0 = shelving not allowed *)
+    tShelveFor : TIME; (* 0 = tMaxShelve *)
+    tRetryWindow : TIME := T#1h; (* Retry: from the first raise (0 = until a reset) *)
+  END_STRUCT;
+END_TYPE

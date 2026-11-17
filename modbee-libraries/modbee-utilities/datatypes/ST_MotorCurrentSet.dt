@@ -1,0 +1,11 @@
+TYPE
+  ST_MotorCurrentSet : STRUCT
+    fFullLoad : REAL; (* full-load current, in the CT's unit (0 = no monitoring) *)
+    fRunPercent : REAL := 20.0; (* bProvesRun at or above this % of full load *)
+    tStartMask : TIME := T#5s; (* high / low wait this long after the motor runs *)
+    stHigh : ST_CurrentLevelSet := (eResponse := E_Response.Off, tDelay := T#5s, eReset := E_ResetMode.Retry, tRecover := T#5m, nMaxRetries := 3, fPercent := 115.0, fDeadband := 5.0);
+    stLow : ST_CurrentLevelSet := (eResponse := E_Response.Off, tDelay := T#5s, eReset := E_ResetMode.Retry, tRecover := T#5m, nMaxRetries := 3, fPercent := 40.0, fDeadband := 5.0);
+    stStartTooLong : ST_CurrentLevelSet := (eResponse := E_Response.Off, tDelay := T#15s, eReset := E_ResetMode.Manual, fPercent := 150.0, fDeadband := 0.0);
+    stBad : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
+  END_STRUCT;
+END_TYPE

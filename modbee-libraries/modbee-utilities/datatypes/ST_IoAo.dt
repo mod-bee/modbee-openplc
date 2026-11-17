@@ -1,0 +1,9 @@
+TYPE
+  ST_IoAo : STRUCT
+    fV : REAL; (* your logic: the raw value wanted *)
+    fOut : REAL; (* status: what went to the channel *)
+    bOk : BOOL;
+    bFit : BOOL;
+    eWhy : E_IoQ;
+  END_STRUCT;
+END_TYPE

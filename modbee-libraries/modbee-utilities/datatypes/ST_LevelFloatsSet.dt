@@ -1,0 +1,9 @@
+TYPE
+  ST_LevelFloatsSet : STRUCT
+    tHighHold : TIME := T#2m; (* the overflow keeps running this long after the high float clears *)
+    tFloatRunTime : TIME := T#5m; (* float control: runs on this long after the high float clears *)
+    tLockout : TIME := T#1m; (* float control: then this long before the high float starts it again *)
+    tCheckDelay : TIME := T#10s; (* transducer check *)
+    fCheckLevel : REAL; (* the high float made with the level below this = transducer fault (0: the owner's high-high) *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_LoopPreset : (Normal, Low, High) := Normal;
+END_TYPE

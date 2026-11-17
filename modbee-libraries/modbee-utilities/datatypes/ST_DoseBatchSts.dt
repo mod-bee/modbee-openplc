@@ -1,0 +1,9 @@
+TYPE
+  ST_DoseBatchSts EXTENDS ST_DoseSts : STRUCT
+    fTargetActive : REAL;
+    fPreactActive : REAL;
+    fLastError : REAL; (* delivered - target of the last dose *)
+    stNoFlow : ST_ProtectionSts;
+    stOutOfTolerance : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

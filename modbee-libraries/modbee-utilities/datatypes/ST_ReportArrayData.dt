@@ -1,0 +1,7 @@
+TYPE
+  ST_ReportArrayData : STRUCT
+    bCmdForce : BOOL; (* every item reports now (cleared by the block) *)
+    set : ST_ReportArraySet;
+    sts : ST_ReportArraySts;
+  END_STRUCT;
+END_TYPE

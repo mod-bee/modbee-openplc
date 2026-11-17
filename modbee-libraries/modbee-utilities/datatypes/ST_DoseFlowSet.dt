@@ -1,0 +1,11 @@
+TYPE
+  ST_DoseFlowSet EXTENDS ST_DoseSet : STRUCT
+    fRatio : REAL; (* dose units per carrier unit *)
+    fMinFlow : REAL; (* carrier flow needed (per hour) *)
+    tCarrierProven : TIME := T#10s;
+    fMaxRate : REAL := 100.0; (* % *)
+    fPulseVolume : REAL; (* dose per stroke pulse (0 = no pulses) *)
+    tPulseWidth : TIME := T#200ms;
+    stOverCapacity : ST_ProtectionSet := (eResponse := E_Response.Warn, eReset := E_ResetMode.Auto);
+  END_STRUCT;
+END_TYPE

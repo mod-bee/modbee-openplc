@@ -1,0 +1,9 @@
+TYPE
+  ST_RouteSet : STRUCT
+    aOutlet : ARRAY [1..4] OF ST_Outlet;
+    nLevelOutlet : USINT; (* 0 = no valve *)
+    nRunOutlet : USINT;
+    nStorageOutlet : USINT; (* 0 = no storage *)
+    tCloseDelay : TIME := T#5s; (* 0 .. 10 min *)
+  END_STRUCT;
+END_TYPE

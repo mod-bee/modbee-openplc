@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_PulsePhase : USINT (Idle, StartDelay, PulseOn, PulseGap, ChannelGap, CyclePause) := Idle;
+END_TYPE

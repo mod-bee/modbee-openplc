@@ -1,0 +1,13 @@
+TYPE
+  ST_Motor2SpeedSet : STRUCT
+    tSpeedChange : TIME := T#1s; (* dead time low -> high *)
+    tDownChange : TIME; (* high -> low (0 = tSpeedChange) *)
+    bStartInLow : BOOL := TRUE;
+    tLowStart : TIME := T#3s;
+    bDahlander : BOOL;
+    fLowSpeedPct : REAL := 50.0; (* low speed as % of high *)
+    bHandHigh : BOOL; (* Hand speed chosen last (kept) *)
+    tChangeover : TIME := T#2s;
+    stChangeover : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0);
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,6 @@
+TYPE
+  ST_ValveModData : STRUCT
+    set : ST_ValveModSet;
+    sts : ST_ValveModSts;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,13 @@
+TYPE
+  ST_LoopSleepSet : STRUCT
+    bEnable : BOOL; (* sleep when the demand has gone *)
+    fSpeed : REAL := 35.0; (* at or below this speed (and satisfied) ... *)
+    fFlow : REAL; (* ... or the flow below this (0 = not used) ... *)
+    tDelay : TIME := T#30s; (* ... for this long: boost, then sleep *)
+    fBoost : REAL := 5.0; (* % of the setpoint added before sleeping *)
+    tBoostTime : TIME := T#10s; (* how long the boost lasts *)
+    fWakeDrop : REAL := 0.3; (* wake when the value is this far short of the setpoint ... *)
+    tWakeDelay : TIME := T#2s; (* ... for this long *)
+    tMinSleep : TIME := T#30s; (* sleep at least this long *)
+  END_STRUCT;
+END_TYPE

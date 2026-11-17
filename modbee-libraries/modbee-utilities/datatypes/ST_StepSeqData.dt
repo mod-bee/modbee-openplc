@@ -1,0 +1,12 @@
+TYPE
+  ST_StepSeqData : STRUCT
+    bCmdStart : BOOL; (* the HMI commands act once per write, then are cleared *)
+    bCmdStop : BOOL;
+    bCmdPause : BOOL;
+    bCmdNext : BOOL;
+    bCmdReset : BOOL;
+    nCmdJump : INT := -1; (* go to this position (start it there when idle); -1 = none *)
+    set : ST_StepSeqSet;
+    sts : ST_StepSeqSts;
+  END_STRUCT;
+END_TYPE

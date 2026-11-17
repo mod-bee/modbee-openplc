@@ -1,0 +1,15 @@
+TYPE
+  ST_SequencerSts : STRUCT
+    eMode : E_SeqMode;
+    nFaultStep : INT; (* the first faulted step (0 = none) *)
+    bFltTimeout : BOOL; (* did not prove / did not stop *)
+    bFltLoss : BOOL; (* lost its feedback *)
+    bFltConfig : BOOL;
+    nConfigStep : INT; (* the first step with a bad setting (0 = the chain's own) *)
+    nRestarts : INT; (* auto restarts in this window *)
+    bRestartLocked : BOOL;
+    tRestartIn : TIME;
+    tTimeLeft : TIME;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

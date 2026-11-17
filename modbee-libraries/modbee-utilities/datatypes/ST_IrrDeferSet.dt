@@ -1,0 +1,12 @@
+TYPE
+  ST_IrrDeferSet : STRUCT
+    bUseRain : BOOL := TRUE;
+    bUseSoil : BOOL := TRUE;
+    tOnDelay : TIME := T#1m;
+    tClearDelay : TIME := T#1h;
+    bStorage : BOOL := TRUE; (* a storage is fitted: bToStorage follows bDefer *)
+    fSoilWet : REAL := 35.0; (* soil transmitter: wet at or above, % *)
+    fSoilDry : REAL := 30.0; (* dry again below *)
+    bManualDefer : BOOL; (* HMI defer *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,7 @@
+TYPE
+  ST_IntlkSet : STRUCT
+    tBypassTimeout : TIME := T#8h; (* 0 = never drops out *)
+    nMaxRetries : INT := 3; (* Retry conditions *)
+    tRetryWindow : TIME := T#1h;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,9 @@
+TYPE
+  ST_DigitalInSts : STRUCT
+    bQ : BOOL;
+    bAlarm : BOOL;
+    bChatter : BOOL;
+    bGood : BOOL;
+    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+  END_STRUCT;
+END_TYPE

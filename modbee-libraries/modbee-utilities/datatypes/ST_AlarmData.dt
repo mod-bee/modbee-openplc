@@ -1,0 +1,15 @@
+TYPE
+  ST_AlarmData : STRUCT
+    bCmdAck : BOOL; (* HMI commands, once per write, cleared by the block *)
+    bCmdReset : BOOL;
+    bCmdShelve : BOOL;
+    bCmdUnshelve : BOOL;
+    bCmdOutOfService : BOOL;
+    bCmdInService : BOOL;
+    bCmdResetCount : BOOL;
+    bGrpAck : BOOL; (* written only by FB_Annunciator *)
+    set : ST_AlarmSettings;
+    sts : ST_AlarmSts;
+    det : ST_AlarmDet;
+  END_STRUCT;
+END_TYPE

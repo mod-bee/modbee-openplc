@@ -1,0 +1,12 @@
+TYPE
+  ST_LevelFloatsSts : STRUCT
+    bRun : BOOL; (* asks the level control to run *)
+    bStop : BOOL; (* the low float stops it (float control) *)
+    bFloatControl : BOOL;
+    bTransducerFault : BOOL;
+    bDisagree : BOOL; (* high and low made together *)
+    bLocked : BOOL; (* float control lockout *)
+    tTimeLeft : TIME; (* of the high hold, the run-on or the lockout now counting *)
+    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+  END_STRUCT;
+END_TYPE

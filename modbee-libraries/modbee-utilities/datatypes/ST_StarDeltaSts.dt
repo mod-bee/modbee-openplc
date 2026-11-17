@@ -1,0 +1,10 @@
+TYPE
+  ST_StarDeltaSts : STRUCT
+    bInStar : BOOL;
+    bInDelta : BOOL;
+    tStarLeft : TIME;
+    bRefused : BOOL;
+    stChangeover : ST_ProtectionSts;
+    bCurrentRisen : BOOL; (* the star current has risen to fStarCurrentPct in this start *)
+  END_STRUCT;
+END_TYPE

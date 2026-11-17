@@ -1,0 +1,7 @@
+TYPE
+  ST_IoAoSet : STRUCT
+    eSrc : E_IoSrc;
+    nModule : USINT;
+    nCh : USINT;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,11 @@
+TYPE
+  ST_DoseData : STRUCT
+    nCmdMode : INT := -1; (* 0 Off, 1 Hand, 2 Auto: once, then -1 (cleared) *)
+    bCmdStart : BOOL; (* start a dose (cleared by the block) *)
+    bCmdStop : BOOL; (* end the dose (cleared) *)
+    bCmdHold : BOOL; (* pause until the next start (cleared) *)
+    bCmdReset : BOOL; (* reset trips whose cause has gone (cleared) *)
+    det : ST_DoseDet;
+    tot : ST_DoseTot;
+  END_STRUCT;
+END_TYPE

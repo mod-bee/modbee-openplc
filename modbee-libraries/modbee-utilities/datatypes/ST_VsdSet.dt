@@ -1,0 +1,21 @@
+TYPE
+  ST_VsdSet : STRUCT
+    fMinSpeed : REAL;
+    fMaxSpeed : REAL := 100.0;
+    fAccelRate : REAL; (* % per second (0 = the drive ramps) *)
+    fDecelRate : REAL;
+    fSkipLow : REAL; (* resonance band (equal = off) *)
+    fSkipHigh : REAL;
+    fHandSpeed : REAL := 50.0;
+    fAutoSpeed : REAL := 100.0;
+    fRawMin : REAL;
+    fRawMax : REAL := 65535.0;
+    tResetPulse : TIME := T#500ms;
+    fDevBand : REAL := 10.0; (* speed deviation, % *)
+    stDriveNotReady : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#1s, eReset := E_ResetMode.Retry, tRecover := T#10s, nMaxRetries := 3);
+    stSpeedDev : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#10s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0);
+    tDriveRamp : TIME; (* the drive's own 0 -> 100 % time: bAtSpeed / speedDev wait for it *)
+    fRatedHz : REAL; (* the motor's frequency at 100 % (display; 0 = none) *)
+    fRatedRpm : REAL; (* its speed at 100 % (display; 0 = none) *)
+  END_STRUCT;
+END_TYPE

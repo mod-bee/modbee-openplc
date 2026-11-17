@@ -1,0 +1,15 @@
+TYPE
+  ST_EquipmentSts : STRUCT
+    eState : E_State;
+    eErrorId : E_UtError; (* first-out: the first error since the last reset *)
+    eStopReason : E_StopReason;
+    bRunning : BOOL;
+    bReady : BOOL; (* could start now if asked *)
+    bAvailable : BOOL; (* in Auto, not tripped, not interlocked *)
+    bLinked : BOOL; (* an owner is driving it *)
+    bInterlocked : BOOL;
+    bRefused : BOOL; (* a setting write was refused and put back *)
+    bJogging : BOOL; (* jogging (FB_MotorJog, Hand only) *)
+    bMustCycle : BOOL; (* a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) *)
+  END_STRUCT;
+END_TYPE

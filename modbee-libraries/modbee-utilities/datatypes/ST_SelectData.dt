@@ -1,0 +1,7 @@
+TYPE
+  ST_SelectData : STRUCT
+    bCmdReset : BOOL; (* as bReset (cleared by the block) *)
+    set : ST_SelectSet;
+    sts : ST_SelectSts;
+  END_STRUCT;
+END_TYPE

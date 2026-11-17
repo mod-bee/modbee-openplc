@@ -1,0 +1,12 @@
+TYPE
+  ST_PulseMeterSet : STRUCT
+    eSource : E_PulseSource;
+    fPerPulse : REAL := 1.0; (* volume per pulse, in the total's unit *)
+    nRolloverAt : UDINT; (* a counter that wraps here (0 = at 2^32) *)
+    tRateWindow : TIME := T#10s;
+    fBatchTarget : LREAL; (* bBatchDone when the batch reaches it (0 = off) *)
+    eInUnit : E_Unit; (* the volume unit of fPerPulse (None = no conversion) *)
+    eOutUnit : E_Unit; (* the volume unit of the total and the rate (None = no conversion) *)
+    stInputBad : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0);
+  END_STRUCT;
+END_TYPE

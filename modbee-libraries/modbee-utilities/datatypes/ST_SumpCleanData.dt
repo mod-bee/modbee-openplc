@@ -1,0 +1,11 @@
+TYPE
+  ST_SumpCleanData : STRUCT
+    bCmdClean : BOOL; (* clean now (cleared by the block) *)
+    bCmdReset : BOOL; (* clear bFailed (cleared by the block) *)
+    set : ST_SumpCleanSet;
+    bCleaning : BOOL; (* status *)
+    bFailed : BOOL;
+    nCycles : INT; (* since the last clean *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

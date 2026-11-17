@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_PumpRole : USINT (Duty, Jockey, Booster) := Duty;
+END_TYPE

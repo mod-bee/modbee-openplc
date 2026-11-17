@@ -1,0 +1,7 @@
+TYPE
+  ST_ScheduleSet : STRUCT
+    bEnable : BOOL := TRUE;
+    tUtcOffset : TIME; (* added to the clock to give local time (within 24 h) *)
+    tOverrideFor : TIME := T#1h; (* 0 = until the schedule next changes *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,9 @@
+TYPE
+  ST_CmdSet : STRUCT
+    nStopMask : DWORD := 16#00000001; (* the stop / off bits: they win in a scan *)
+    nLocalOnlyMask : DWORD; (* bits only the local master may give (e.g. a reset) *)
+    nRemoteModes : WORD := 16#FFFF; (* mode codes the remote master may ask for (bit n = code n) *)
+    bRemoteStop : BOOL := TRUE; (* remote stop bits and mode 0 still act under local control *)
+    bRemoteSel : BOOL := TRUE; (* the remote master may change the selection *)
+  END_STRUCT;
+END_TYPE

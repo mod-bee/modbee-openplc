@@ -1,0 +1,7 @@
+TYPE
+  ST_RunStyleData : STRUCT
+    set : ST_RunStyleSet;
+    bRun : BOOL; (* status *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

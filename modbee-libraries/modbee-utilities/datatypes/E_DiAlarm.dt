@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_DiAlarm : USINT (None, WhenTrue, WhenFalse) := None;
+END_TYPE

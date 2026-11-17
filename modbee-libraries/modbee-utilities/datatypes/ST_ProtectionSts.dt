@@ -1,0 +1,8 @@
+TYPE
+  ST_ProtectionSts : STRUCT
+    eState : E_ProtState;
+    nRetries : INT;
+    nCount : UDINT; (* trips since the counter was cleared *)
+    tTimeLeft : TIME; (* delay before it acts, or recover wait before it clears *)
+  END_STRUCT;
+END_TYPE

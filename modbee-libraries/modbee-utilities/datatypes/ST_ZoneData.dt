@@ -1,0 +1,6 @@
+TYPE
+  ST_ZoneData : STRUCT
+    set : ST_ZoneSet;
+    sts : ST_ZoneSts;
+  END_STRUCT;
+END_TYPE

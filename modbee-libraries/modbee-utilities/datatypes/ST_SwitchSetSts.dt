@@ -1,0 +1,13 @@
+TYPE
+  ST_SwitchSetSts : STRUCT
+    bLowLow : BOOL;
+    bLow : BOOL;
+    bHigh : BOOL;
+    bHighHigh : BOOL;
+    bContact : BOOL;
+    bGood : BOOL;
+    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    stDisagree : ST_ProtectionSts;
+    stInputBad : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

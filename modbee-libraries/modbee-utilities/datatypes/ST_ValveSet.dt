@@ -1,0 +1,16 @@
+TYPE
+  ST_ValveSet EXTENDS ST_EquipmentSet : STRUCT
+    eType : E_ValveType;
+    eSafe : E_SafePos;
+    tOpenTime : TIME := T#5s; (* travel time (also the end switch timeout base) *)
+    tCloseTime : TIME := T#5s;
+    bUseOpenLs : BOOL;
+    bUseClosedLs : BOOL;
+    stTravel : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Retry, tRecover := T#10s, nMaxRetries := 3);
+    stBothLimits : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#1s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0);
+    stPositionLost : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#2s, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 0);
+    tStrokeWarn : TIME; (* a stroke slower than this warns (0 = off; needs the end switch) *)
+    stSlowStroke : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#0s, eReset := E_ResetMode.Auto, tRecover := T#0s, nMaxRetries := 3);
+    stActLocal : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#2s, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 3);
+  END_STRUCT;
+END_TYPE

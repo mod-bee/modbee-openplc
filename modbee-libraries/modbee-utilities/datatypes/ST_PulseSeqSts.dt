@@ -1,0 +1,12 @@
+TYPE
+  ST_PulseSeqSts : STRUCT
+    ePhase : E_PulsePhase;
+    nChannel : INT; (* pulsing, or next after its channel gap (0 = none) *)
+    nPulse : INT;
+    nCycles : UDINT;
+    nPostLeft : INT;
+    bWaitDemandDrop : BOOL; (* stopped: demand cleaning waits for bDemand / bEnable to drop *)
+    tTimeLeft : TIME; (* in the phase *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

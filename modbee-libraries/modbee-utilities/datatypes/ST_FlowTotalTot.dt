@@ -1,0 +1,8 @@
+TYPE
+  ST_FlowTotalTot : STRUCT
+    fTotal : LREAL;
+    fTotalOut : LREAL; (* reverse flow *)
+    fEstimated : LREAL; (* the part of fTotal that was estimated *)
+    fBatch : LREAL; (* counted like fTotal (forward only) until bCmdResetBatch *)
+  END_STRUCT;
+END_TYPE

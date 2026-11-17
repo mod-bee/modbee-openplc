@@ -1,0 +1,11 @@
+TYPE
+  ST_MotorData EXTENDS ST_EquipmentData : STRUCT
+    bCmdPreset : BOOL; (* set the totals to the preset values (rising edge, cleared) *)
+    fPresetHours : LREAL;
+    nPresetStarts : UDINT;
+    set : ST_MotorSet;
+    sts : ST_MotorSts;
+    det : ST_MotorDet;
+    tot : ST_MotorTot;
+  END_STRUCT;
+END_TYPE

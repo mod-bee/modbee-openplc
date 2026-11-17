@@ -1,6 +1,0 @@
-TYPE
-  UT_VALVE_DET : STRUCT
-    travelElapsed : TIME;
-    timeLeft : TIME;
-  END_STRUCT;
-END_TYPE

@@ -1,0 +1,7 @@
+TYPE
+  ST_PumpDiagData : STRUCT
+    set : ST_PumpDiagSet;
+    eDiagnosis : E_PumpDiag; (* status *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

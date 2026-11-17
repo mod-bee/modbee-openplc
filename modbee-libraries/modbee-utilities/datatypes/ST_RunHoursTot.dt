@@ -1,0 +1,7 @@
+TYPE
+  ST_RunHoursTot : STRUCT
+    nTotalMs : LINT;
+    nServiceMs : LINT;
+    nStarts : UDINT;
+  END_STRUCT;
+END_TYPE

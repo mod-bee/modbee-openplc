@@ -1,0 +1,10 @@
+TYPE
+  ST_SchedWindow : STRUCT
+    bEnable : BOOL := TRUE;
+    nDays : BYTE := 16#7F; (* bit 0 Monday ... bit 6 Sunday *)
+    todStart : TOD := TOD#06:00:00;
+    todStop : TOD := TOD#18:00:00; (* earlier than todStart: crosses midnight *)
+    nEveryDays : INT; (* 2 or more: every N-th day from dStartDate *)
+    dStartDate : DATE := DATE#1970-01-01;
+  END_STRUCT;
+END_TYPE

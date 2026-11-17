@@ -1,0 +1,49 @@
+TYPE
+  ST_SpeedLoopSet : STRUCT
+    fSp : REAL; (* Pv: the Normal setpoint, in the measurement's unit *)
+    fKp : REAL := 10.0; (* % speed per unit of error *)
+    tTi : TIME := T#5s; (* integral time (0 = P only) *)
+    bReverse : BOOL; (* the value falls when the speed rises (a level being emptied) *)
+    fMinSpeed : REAL := 30.0;
+    fMaxSpeed : REAL := 100.0;
+    fSpRamp : REAL; (* setpoint units per eRateUnit (0 = a step) *)
+    bManual : BOOL; (* manual speed (kept) *)
+    fManualSpeed : REAL := 50.0;
+    eOnBad : E_OnBad;
+    fFailSpeed : REAL := 50.0; (* a failed sensor (Fixed) or a hunting trip: the fallback speed *)
+    stPvBad : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0);
+    eControl : E_LoopControl;
+    ePreset : E_LoopPreset; (* the operator's preset (kept); the nPreset pin wins while wired *)
+    eSpSource : E_SpSource;
+    fSpLow : REAL; (* Pv: Low (0 = fSp) *)
+    fSpHigh : REAL; (* Pv: High (0 = fSp) *)
+    fFlowSp : REAL; (* Flow: the Normal flow setpoint *)
+    fFlowSpLow : REAL; (* Flow: Low (0 = fFlowSp) *)
+    fFlowSpHigh : REAL; (* Flow: High (0 = fFlowSp) *)
+    fFixedSpeed : REAL := 100.0; (* Fixed: Normal speed, % *)
+    fFixedSpeedLow : REAL := 50.0; (* Fixed: Low speed, % *)
+    fFixedSpeedHigh : REAL := 100.0; (* Fixed: High speed, % *)
+    eSource : E_LoopSource;
+    tTd : TIME; (* derivative time (0 = none) *)
+    fDeadband : REAL; (* error ignored inside this *)
+    fStartSpeed : REAL; (* speed on start, % (limited to fMinSpeed .. fMaxSpeed: 0 = fMinSpeed) *)
+    fRateLimit : REAL := 5.0; (* max output change, % per eRateUnit (0 = no limit) *)
+    eRateUnit : E_RateUnit; (* fRateLimit, fSpRamp and stFill.fRate: per second, minute, hour or day *)
+    fAtSpBand : REAL := 0.2; (* bAtSetpoint band, +/- *)
+    stFill : ST_LoopFillSet;
+    stSleep : ST_LoopSleepSet;
+    fFlowLimit : REAL; (* the speed is reduced to hold the flow below this (0 = off) *)
+    fHighPv : REAL; (* Pv above this: stHighPv (0 = off) *)
+    fHighPvDeadband : REAL; (* ... clears this far below it *)
+    stHighPv : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 0);
+    fLowAtMax : REAL; (* the value below this at the top speed: stLowAtMax (0 = half the setpoint) *)
+    stLowAtMax : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#60s, eReset := E_ResetMode.Retry, tRecover := T#5m, nMaxRetries := 3);
+    stNotReaching : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#2m, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 0);
+    stHunting : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#0s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 0);
+    nHuntCycles : INT := 6; (* crossings allowed in tHuntWindow (1..15) *)
+    tHuntWindow : TIME := T#60s; (* (0 = the hunting check off) *)
+    fHuntBand : REAL := 0.3; (* a crossing counts when the swing is more than this *)
+    bRestartAfterReset : BOOL; (* after a needed reset, restart without bRun cycling *)
+    tStageDelay : TIME := T#30s; (* bMoreNeeded / bLessNeeded after this long *)
+  END_STRUCT;
+END_TYPE

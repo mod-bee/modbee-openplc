@@ -1,0 +1,17 @@
+TYPE
+  ST_Valve3PosSet EXTENDS ST_EquipmentSet : STRUCT
+    eKind : E_Valve3Kind;
+    bUseLs1 : BOOL;
+    bUseLs2 : BOOL;
+    bUseLs3 : BOOL;
+    tTravel : TIME := T#10s; (* per move: arrival without a switch; the timeout base with one *)
+    tMid : TIME; (* motor without bLs2: end -> mid (0 = half tTravel) *)
+    tReversal : TIME := T#500ms; (* motor: pause between the two directions *)
+    nSafePos : INT := 2;
+    nRestPos : INT := 2; (* when nothing is asked *)
+    nHandPos : INT := 2; (* Hand position (kept) *)
+    stTravel : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Retry, tRecover := T#10s, nMaxRetries := 3);
+    nAutoPos : INT := 3; (* the position asked with no number (src-v2 AutoPos) *)
+    bPosLatch : BOOL; (* the last position asked stays when the request ends (src-v2 posPulse) *)
+  END_STRUCT;
+END_TYPE

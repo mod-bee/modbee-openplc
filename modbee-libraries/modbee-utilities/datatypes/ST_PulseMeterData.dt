@@ -1,0 +1,9 @@
+TYPE
+  ST_PulseMeterData : STRUCT
+    bCmdResetTotal : BOOL; (* the total back to 0 (rising edge, cleared) *)
+    bCmdResetBatch : BOOL; (* the batch back to 0 (cleared) *)
+    set : ST_PulseMeterSet;
+    sts : ST_PulseMeterSts;
+    tot : ST_PulseMeterTot;
+  END_STRUCT;
+END_TYPE

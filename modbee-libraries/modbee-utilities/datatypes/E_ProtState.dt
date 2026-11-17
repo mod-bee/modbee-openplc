@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_ProtState : (Clear, Pending, Warning, Tripped, Locked, Recovering, Signal) := Clear;
+END_TYPE

@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_LoopPhase : (Idle, Filling, Control, Boost, Sleep, Fallback, Manual) := Idle;
+END_TYPE

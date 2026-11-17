@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_SpeedUnit : USINT (Rpm, RevPerSec, MetrePerMin, MetrePerSec) := Rpm;
+END_TYPE

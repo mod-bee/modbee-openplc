@@ -1,0 +1,10 @@
+TYPE
+  ST_ScheduleData : STRUCT
+    bCmdOverrideOn : BOOL; (* HMI commands, once per write, cleared by the block *)
+    bCmdOverrideOff : BOOL;
+    bCmdCancelOverride : BOOL;
+    set : ST_ScheduleSet;
+    sts : ST_ScheduleSts;
+    det : ST_ScheduleDet;
+  END_STRUCT;
+END_TYPE

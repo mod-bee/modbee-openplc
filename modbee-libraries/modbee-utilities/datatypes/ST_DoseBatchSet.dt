@@ -1,0 +1,13 @@
+TYPE
+  ST_DoseBatchSet EXTENDS ST_DoseSet : STRUCT
+    fTarget : REAL; (* the quantity (fTarget pin 0) *)
+    fSlowAt : REAL; (* slow feed for this much left *)
+    fPreact : REAL; (* stop this much early (in flight) *)
+    bLearnPreact : BOOL;
+    fTolerance : REAL; (* 0 = off *)
+    tSettle : TIME := T#2s;
+    bActualIsTotal : BOOL; (* delivered = the rise of ipMeter's total *)
+    stNoFlow : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#30s, eReset := E_ResetMode.Retry, tRecover := T#1m, nMaxRetries := 3);
+    stOutOfTolerance : ST_ProtectionSet := (eResponse := E_Response.Warn, eReset := E_ResetMode.Auto);
+  END_STRUCT;
+END_TYPE

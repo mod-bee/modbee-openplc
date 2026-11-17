@@ -1,0 +1,7 @@
+TYPE
+  ST_EquipmentData : STRUCT
+    bCmdStart : BOOL; (* Hand start (rising edge, cleared by the block) *)
+    bCmdStop : BOOL; (* stop in Hand and Auto (rising edge, cleared) *)
+    bCmdReset : BOOL; (* reset trips whose cause has gone (rising edge, cleared) *)
+  END_STRUCT;
+END_TYPE
