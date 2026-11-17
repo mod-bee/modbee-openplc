@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_GsmPower : (SwitchOff, SwitchOn, Restart) := SwitchOff;
+END_TYPE

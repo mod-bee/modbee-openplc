@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_GsmRegistration : (NotSearching, Home, Searching, Denied, Unknown, Roaming, SmsOnlyHome, SmsOnlyRoaming, EmergencyOnly, CsfbNotPreferredHome, CsfbNotPreferredRoaming) := NotSearching;
+END_TYPE

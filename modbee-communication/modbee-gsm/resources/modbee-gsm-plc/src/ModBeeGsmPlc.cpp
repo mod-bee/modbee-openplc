@@ -7,8 +7,11 @@
 #include "ModBeeGsmPlc.h"
 #include "GsmPlcUart.h"
 
+#include <cstddef>   // std::max_align_t
 #include <new>
+#include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #if defined(GSM_PLATFORM_ARDUINO)
@@ -86,6 +89,31 @@ public:
     }
 };
 
+// --- Memory: PSRAM first on an ESP32 --------------------------------------------
+
+void* allocMemory(size_t size, size_t alignment) {
+#if defined(ARDUINO_ARCH_ESP32)
+    void* memory = heap_caps_aligned_alloc(alignment, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (memory == nullptr) {
+        memory = heap_caps_aligned_alloc(alignment, size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+    return memory;
+#else
+    // malloc's alignment covers every fundamental type, and nothing here needs more.
+    if (alignment > alignof(std::max_align_t)) { return nullptr; }
+    return malloc(size != 0 ? size : 1);
+#endif
+}
+
+void freeMemory(void* memory) {
+    if (memory == nullptr) { return; }
+#if defined(ARDUINO_ARCH_ESP32)
+    heap_caps_free(memory);
+#else
+    free(memory);
+#endif
+}
+
 // --- The SMS pipeline -----------------------------------------------------------
 
 const uint8_t kPendingMax = 16;
@@ -95,9 +123,9 @@ const uint8_t kFetchAttempts = 3;
 struct SmsPipeline {
     bool on = false;
 
-    // serviceSms(), set by the first smsReceive(): a program with no
-    // GSM_SMS_RECEIVE never calls it, so it links none of the fetch and PDU
-    // code. Until then nothing is pending (onModemEvent records only when on).
+    // serviceSms(), set by the first smsReceive(): a program that never
+    // calls Inbox or SmsCommand never calls it, so it links none of the fetch
+    // and PDU code. Until then nothing is pending (onModemEvent records only when on).
     void (*service)() = nullptr;
 
     uint16_t pending[kPendingMax] = {0};
@@ -122,7 +150,11 @@ struct State {
     // might still hold a pointer to it.
     Job* jobs = nullptr;
 
-    GsmDevice device;
+    // Made by the modem block (makeDevice()), holding only its module's
+    // driver; ended by `destroy` before the jobs it may still point at.
+    GsmDevice* device = nullptr;
+    void (*destroy)(GsmDevice*) = nullptr;
+    const char* family = "";
     PlcPower  power;
 
 #if defined(GSM_PLATFORM_HOST)
@@ -140,7 +172,7 @@ struct State {
 
     bool held = false;
 
-    // Whether GSM_MODEM wants the modem (CONNECT, and not held off). While it
+    // Whether the modem block wants the modem (bConnect, and not held off). While it
     // does not, and the modem is quiet, the serial link is given back.
     bool wanted = false;
 
@@ -170,6 +202,8 @@ struct State {
     SmsPipeline sms;
 
     ~State() {
+        if (device != nullptr && destroy != nullptr) { destroy(device); }
+        device = nullptr;
         while (jobs != nullptr) {
             Job* next = jobs->next;
             delete jobs;
@@ -179,9 +213,9 @@ struct State {
 };
 
 // THE STATE IS ON THE HEAP ON AN ESP32, IN PSRAM WHERE THERE IS ANY. It is
-// about 5 kB - the GsmDevice, the SMS pipeline, the APN and band settings -
-// and the sockets' buffers and the AT queue (about 9 kB at the defaults, sized
-// by GSM_MODEM's SOCKETS, SOCKET_BUFFER and AT_QUEUE) are taken the same way
+// about 1.5 kB - the SMS pipeline, the APN and band settings - and the device
+// (about 3.5 kB, makeDevice()) and the sockets' buffers and the AT queue
+// (about 9 kB at the defaults, sized by stCapacityConfig) are taken the same way
 // when the modem is opened (gsm_allocLarge). In .bss it was 14 kB of the
 // internal RAM the PLC program's own variables need. Nothing in it is touched
 // from an interrupt or with the flash cache off, so external RAM costs it
@@ -190,7 +224,7 @@ struct State {
 // BUILT AT THE FIRST CALL, NEVER DURING STATIC INITIALISATION, and that is
 // what puts it in PSRAM: the Arduino core adds PSRAM to the heap in
 // initArduino(), after every static constructor has run. The first call is a
-// GSM block's setup(), which runs in the first scan - long after that. If a
+// modem block's setup(), which runs in the first scan - long after that. If a
 // call ever did come earlier, or the board has no PSRAM, it falls back to
 // internal RAM and still works.
 //
@@ -236,12 +270,12 @@ std::recursive_mutex& theLock() {
 // GsmDevice routes the modem's events to its socket and SMS layers. This
 // replaces that routing with the same call to the socket layer - and, for an
 // arriving SMS, keeps the STORAGE INDEX, which the core's own handler drops.
-// An SMS that arrives while no GSM_SMS_RECEIVE is enabled is left on the SIM,
+// An SMS that arrives while no Inbox or SmsCommand is enabled is left on the SIM,
 // unread, rather than fetched and thrown away.
 void onModemEvent(void* context, GsmUrcKind kind, const GsmUrcInfo& info) {
     (void)context;
     State& s = state();
-    s.device.sockets().handleEvent(kind, info);
+    s.device->sockets().handleEvent(kind, info);
 
     if (kind != GsmUrcKind::SmsReceived || !s.sms.on) { return; }
     const uint16_t index = (uint16_t)info.value;
@@ -281,7 +315,7 @@ void onFetchReply(void* context, const char* line, size_t length) {
 void deleteStored(uint16_t index) {
     // Fire and forget: a delete that fails leaves the message on the SIM,
     // where the next one to arrive at that index replaces it anyway.
-    state().device.deleteSms(index);
+    state().device->deleteSms(index);
 }
 
 void onFetchDone(void* context, GsmResult result) {
@@ -332,17 +366,17 @@ void onFetchDone(void* context, GsmResult result) {
 void serviceSms() {
     State& s = state();
     SmsPipeline& p = s.sms;
-    GsmDriver* driver = s.device.driver();
+    GsmDriver* driver = s.device->driver();
     if (!p.on || driver == nullptr) { return; }
     // Switched off: nothing to configure or fetch, and nothing to hold the
     // serial link for. Configured again when it is wanted.
     if (!s.wanted) { return; }
 
     // PDU mode and new-message reports: idempotent, and a no-op once done.
-    if (!s.device.sms().isReady()) { s.device.sms().configure(); }
+    if (!s.device->sms().isReady()) { s.device->sms().configure(); }
 
     if (p.fetching || p.pendingCount == 0 || p.inboxCount >= kInboxMax) { return; }
-    if (!s.device.isRegistered()) { return; }
+    if (!s.device->isRegistered()) { return; }
 
     GsmCmdBuf command;
     driver->smsReadCommand(p.pending[0], command);
@@ -354,7 +388,7 @@ void serviceSms() {
     p.fetchIndex = p.pending[0];
     p.pduLength = 0;
     p.expectingPdu = false;
-    const GsmResult accepted = s.device.sendAt(command.text(), 10000,
+    const GsmResult accepted = s.device->sendAt(command.text(), 10000,
                                                &onFetchReply, &onFetchDone, nullptr);
     if (accepted.status() == GsmStatus::Queued) { p.fetching = true; }
 }
@@ -411,7 +445,20 @@ bool tryLock() {
 #endif
 }
 
-GsmDevice& device() { return state().device; }
+bool hasDevice() { return state().device != nullptr; }
+GsmDevice& device() { return *state().device; }
+const char* family() { return state().family; }
+
+void* allocate(size_t size, size_t alignment) { return allocMemory(size, alignment); }
+void release(void* memory) { freeMemory(memory); }
+
+void attach(GsmDevice* made, void (*destroy)(GsmDevice*), const char* familyName) {
+    State& s = state();
+    if (s.device != nullptr || made == nullptr) { return; }
+    s.device = made;
+    s.destroy = destroy;
+    s.family = familyName != nullptr ? familyName : "";
+}
 
 #if defined(ARDUINO_ARCH_ESP32)
 // =============================================================================
@@ -473,7 +520,7 @@ void pump(void*) {
             continue;               // a block has it; it is polling anyway
         }
         State& s = state();
-        if (s.open && !p.quit) { s.device.poll(); }
+        if (s.open && !p.quit) { s.device->poll(); }
         xSemaphoreGiveRecursive(theLock());
     }
     // The last thing it touches. The layer frees the rings only after this,
@@ -541,24 +588,53 @@ bool sameLink(const Link& a, const Link& b) {
            strcmp(a.path, b.path) == 0;
 }
 
+const char* checkLink(const Link& link) {
+#if defined(GSM_PLATFORM_ARDUINO)
+    const int32_t rx = link.rxPin, tx = link.txPin, key = link.keyPin, rail = link.railPin;
+    if (link.port < 0 || link.port > 2) { return "stSerialConfig.nUart must be 0, 1 or 2"; }
+    if (rx < -1 || rx > 63 || tx < -1 || tx > 63) {
+        return "stSerialConfig: nRxPin and nTxPin must be -1 to 63";
+    }
+    if (link.rxBuffer < 256 || link.rxBuffer > 32768) {
+        return "stSerialConfig.nRxBufferSize must be 256 to 32768";
+    }
+    if (key < -1 || key > 63 || rail < -1 || rail > 63) {
+        return "stPowerConfig: nPowerKeyPin and nRailPin must be -1 to 63";
+    }
+    if ((key >= 0 && (key == rx || key == tx)) ||
+        (rail >= 0 && (rail == rx || rail == tx || rail == key))) {
+        return "stPowerConfig: a power pin is also a serial pin";
+    }
+#endif
+    if (link.sockets < 0 || link.sockets > 255 || link.socketBuffer < 0 ||
+        link.atQueue < 0 || link.atQueue > 255) {
+        return "stCapacityConfig: nSocketCnt and nAtQueueLen 0 to 255";
+    }
+    return nullptr;
+}
+
 bool open(const Link& link, const char** why) {
     State& s = state();
     *why = nullptr;
     if (s.open) { return true; }
+    if (s.device == nullptr) {
+        *why = "no modem block has made the device";
+        return false;
+    }
 
     const uint32_t baud = link.baud != 0 ? link.baud : 115200;
 
 #if defined(GSM_PLATFORM_ARDUINO)
   #if defined(ARDUINO_ARCH_ESP32)
     if (link.rxBuffer < 256 || link.rxBuffer > 32768) {
-        *why = "RX_BUFFER must be 256 to 32768";
+        *why = "stSerialConfig.nRxBufferSize must be 256 to 32768";
         return false;
     }
 
     // THE UART IS DRIVEN FROM AN IRAM INTERRUPT, NOT BY HardwareSerial - see
     // GsmPlcUart.h. The core's own interrupt cannot run while flash is being
     // erased or written, the HAT header has no RTS or CTS, and the bytes that
-    // arrived then were lost. The receive ring is RX_BUFFER bytes and the
+    // arrived then were lost. The receive ring is nRxBufferSize bytes and the
     // library is told exactly that, because every modem read is capped to it.
     //
     // Taken here and given back while the modem is switched off: see
@@ -583,10 +659,10 @@ bool open(const Link& link, const char** why) {
     if (link.railPin >= 0) { pinMode((uint8_t)link.railPin, OUTPUT); }
     s.power.key = link.keyPin;
     s.power.rail = link.railPin;
-    s.device.powerControl(&s.power);
+    s.device->powerControl(&s.power);
 #else
     if (link.path[0] == '\0') {
-        *why = "set DEVICE to the modem's serial port";
+        *why = "set stSerialConfig.sDevice to the modem's serial port";
         return false;
     }
     s.serial.configure(link.path, baud);
@@ -595,16 +671,16 @@ bool open(const Link& link, const char** why) {
 
     if (link.sockets < 0 || link.sockets > 255 || link.socketBuffer < 0 ||
         link.atQueue < 0 || link.atQueue > 255) {
-        *why = "SOCKETS and AT_QUEUE must be 0 to 255, SOCKET_BUFFER 0 or more";
+        *why = "stCapacityConfig: nSocketCnt and nAtQueueLen 0 to 255";
         return false;
     }
-    s.device.setCapacity((uint8_t)link.sockets, (size_t)link.socketBuffer,
+    s.device->setCapacity((uint8_t)link.sockets, (size_t)link.socketBuffer,
                          (size_t)link.socketBuffer, (size_t)link.atQueue);
 
-    if (!s.device.begin(s.transport)) {
-        if (s.device.beginError() != nullptr) {
+    if (!s.device->begin(s.transport)) {
+        if (s.device->beginError() != nullptr) {
             // Ours, not the link's: the board has no room for what was asked.
-            *why = s.device.beginError();
+            *why = s.device->beginError();
             return false;
         }
 #if defined(GSM_PLATFORM_HOST)
@@ -617,7 +693,7 @@ bool open(const Link& link, const char** why) {
     }
 
     // After begin(), which installs GsmDevice's own routing.
-    s.device.modem().onEvent(&onModemEvent, nullptr);
+    s.device->modem().onEvent(&onModemEvent, nullptr);
 
     s.link = link;
     s.link.baud = baud;
@@ -646,7 +722,7 @@ bool jobsBusy() {
 // Gives the serial link back - the interrupt, the rings, the service task -
 // and with them all the internal RAM the modem holds. True once nothing is
 // held. Called holding the lock.
-bool releaseLink() {
+[[maybe_unused]] bool releaseLink() {
 #if defined(ARDUINO_ARCH_ESP32)
     IramUart& uart = iramUart();
     if (!uart.holdsAnything()) { return true; }
@@ -663,7 +739,7 @@ bool takeLink(const char** why) {
     State& s = state();
     *why = nullptr;
     if (!s.open) {
-        *why = "no GSM_MODEM has opened the modem";
+        *why = "no modem block has opened the modem";
         return false;
     }
 #if defined(ARDUINO_ARCH_ESP32)
@@ -683,6 +759,7 @@ bool takeLink(const char** why) {
 }
 
 void want(bool on) { state().wanted = on; }
+bool wanted() { return state().wanted; }
 
 bool isOpen() { return state().open; }
 const Link& openedWith() { return state().link; }
@@ -697,7 +774,7 @@ bool apn(const char* name, const char* user, const char* password) {
     copyText(s.apnName, sizeof s.apnName, name);
     copyText(s.apnUser, sizeof s.apnUser, user);
     copyText(s.apnPassword, sizeof s.apnPassword, password);
-    s.device.apn(s.apnName, s.apnUser, s.apnPassword);
+    s.device->apn(s.apnName, s.apnUser, s.apnPassword);
     s.apnSet = true;
     return true;
 }
@@ -706,7 +783,7 @@ bool pin(const char* code) {
     State& s = state();
     if (s.pinSet && sameText(s.pinCode, code)) { return false; }
     copyText(s.pinCode, sizeof s.pinCode, code);
-    s.device.pin(s.pinCode);
+    s.device->pin(s.pinCode);
     s.pinSet = true;
     return true;
 }
@@ -733,6 +810,30 @@ bool parseBands(const char* text, uint8_t* out, uint8_t capacity, uint8_t* count
     return true;
 }
 
+const char* checkRadio(int mode, const char* operatorCode,
+                       const char* catMBands, const char* nbIotBands) {
+    if (mode < 0 || mode > (int)GsmRadioPreference::CatMAndNbIot) {
+        return "stRadioConfig.eMode is not a radio mode";
+    }
+    const size_t length = operatorCode != nullptr ? strlen(operatorCode) : 0;
+    if (length != 0) {
+        bool digits = length == 5 || length == 6;
+        for (size_t i = 0; i < length; i++) {
+            if (operatorCode[i] < '0' || operatorCode[i] > '9') { digits = false; }
+        }
+        if (!digits) { return "stRadioConfig.sOperator must be five or six digits"; }
+    }
+    uint8_t bands[32];
+    uint8_t count = 0;
+    if (!parseBands(catMBands, bands, sizeof bands, &count)) {
+        return "stRadioConfig.sCatMBands is not a list of bands 1 to 255";
+    }
+    if (!parseBands(nbIotBands, bands, sizeof bands, &count)) {
+        return "stRadioConfig.sNbIotBands is not a list of bands 1 to 255";
+    }
+    return nullptr;
+}
+
 bool radio(GsmRadioPreference mode, const char* operatorCode,
            const char* catMBands, const char* nbIotBands) {
     State& s = state();
@@ -747,15 +848,15 @@ bool radio(GsmRadioPreference mode, const char* operatorCode,
     if (!parseBands(s.catMText, s.catM, sizeof s.catM, &s.catMCount)) { s.catMCount = 0; }
     if (!parseBands(s.nbIotText, s.nbIot, sizeof s.nbIot, &s.nbIotCount)) { s.nbIotCount = 0; }
 
-    s.device.radioPreference(mode);
-    s.device.operatorCode(s.operatorCode[0] != '\0' ? s.operatorCode : nullptr);
+    s.device->radioPreference(mode);
+    s.device->operatorCode(s.operatorCode[0] != '\0' ? s.operatorCode : nullptr);
     GsmBandList catM;
     catM.bands = s.catMCount > 0 ? s.catM : nullptr;
     catM.count = s.catMCount;
     GsmBandList nbIot;
     nbIot.bands = s.nbIotCount > 0 ? s.nbIot : nullptr;
     nbIot.count = s.nbIotCount;
-    s.device.bands(catM, nbIot);
+    s.device->bands(catM, nbIot);
 
     // The first call only records the defaults; it is not a change anybody
     // made, and must not restart a bring-up.
@@ -773,10 +874,10 @@ void railOff() { state().power.setSupply(false); }
 void service() {
     State& s = state();
     if (!s.open) { return; }
-    s.device.poll();
+    s.device->poll();
     if (s.sms.service != nullptr) { s.sms.service(); }
 
-    const GsmModem::Counters& c = s.device.counters();
+    const GsmModem::Counters& c = s.device->counters();
     if (c.bringUps != s.seenBringUps || c.moduleRestarts != s.seenRestarts ||
         c.recoveries != s.seenRecoveries) {
         s.seenBringUps = c.bringUps;
@@ -787,20 +888,20 @@ void service() {
 
     // NOT IN USE: the link is given back, AT ONCE - a PLC switching to Wi-Fi
     // needs the RAM while Wi-Fi joins, not seconds later. Switched off
-    // (CONNECT FALSE, or held off by GSM_POWER) and stopped (Off, or Failed,
+    // (bConnect FALSE, or held off by Power) and stopped (Off, or Failed,
     // which does nothing while the modem is not wanted).
     //
-    // What a block asked for is answered first - GSM_POWER's power-down
-    // command, a GSM_AT, an SMS - so nothing anyone waits on is cut off. What
+    // What a method asked for is answered first - Power's power-down
+    // command, an At, an SMS - so nothing anyone waits on is cut off. What
     // the library itself still had going (a bring-up step that was on the
     // wire, a status query, a socket's close) is for a modem nobody wants:
     // concluded as cancelled, each caller told once, as the engine promises.
     // The next takeLink() opens the link again. A board only: the Runtime's
     // serial device holds no internal RAM and stays open.
 #if defined(ARDUINO_ARCH_ESP32)
-    const GsmState now = s.device.state();
+    const GsmState now = s.device->state();
     if (!s.wanted && (now == GsmState::Off || now == GsmState::Failed) && !jobsBusy()) {
-        GsmAtEngine& engine = s.device.engine();
+        GsmAtEngine& engine = s.device->engine();
         if (!engine.isIdle()) { engine.abandonAll(GsmStatus::Cancelled); }
         releaseLink();
     }
@@ -847,7 +948,7 @@ GsmResult sendAt(Job& job, const char* command, uint32_t timeoutMs) {
     job.replyLength = 0;
     job.replyTruncated = false;
     job.result = GsmStatus::Queued;
-    const GsmResult accepted = state().device.sendAt(command, timeoutMs, &onJobReply,
+    const GsmResult accepted = state().device->sendAt(command, timeoutMs, &onJobReply,
                                                      &onJobDone, &job);
     job.busy = (accepted.status() == GsmStatus::Queued);
     if (!job.busy) { job.result = accepted; }
@@ -857,10 +958,12 @@ GsmResult sendAt(Job& job, const char* command, uint32_t timeoutMs) {
 GsmResult sendSms(Job& job, const char* number, const char* text) {
     State& s = state();
     if (!s.open) { return GsmStatus::NotInitialised; }
-    if (!s.device.isRegistered()) { return GsmStatus::NotReady; }
+    // Stood down (bConnect FALSE, or switched off by Power): the module may
+    // still say it is registered, and is not to be used.
+    if (!s.wanted || !s.device->isRegistered()) { return GsmStatus::NotReady; }
     job.done = false;
     job.result = GsmStatus::Queued;
-    const GsmResult accepted = s.device.sendSms(number, text, &onJobDone, &job);
+    const GsmResult accepted = s.device->sendSms(number, text, &onJobDone, &job);
     job.busy = (accepted.status() == GsmStatus::Queued);
     if (!job.busy) { job.result = accepted; }
     return accepted;
@@ -868,11 +971,11 @@ GsmResult sendSms(Job& job, const char* number, const char* text) {
 
 const char* describe(const GsmResult& result) {
     if (result.space() == GsmErrorSpace::Cme && result.code() == 16 &&
-        state().device.modem().pinRejected()) {
-        return "the SIM refused SIM_PIN; it is not tried again until it changes";
+        state().device->modem().pinRejected()) {
+        return "the SIM refused sSimPin; it is not tried again until it changes";
     }
     if (result.space() == GsmErrorSpace::Cme && result.code() == 11) {
-        return "the SIM wants a PIN; set SIM_PIN";
+        return "the SIM wants a PIN; set sSimPin";
     }
     if (result.space() == GsmErrorSpace::Cme && result.code() == 12) {
         return "the SIM is PUK-locked; it needs its PUK, on site";
@@ -900,11 +1003,29 @@ int64_t unixSeconds(const GsmParse::GsmDateTime& when) {
 
 #if defined(MODBEE_GSM_PLC_CLIENT)
 
+GsmPlcClient::~GsmPlcClient() {
+    if (_made) {
+        gsmplc::Hold hold;
+        GsmClient* inner = client();
+        inner->stop();
+        inner->~GsmClient();
+        _made = false;
+    }
+}
+
+GsmClient* GsmPlcClient::made() {
+    if (_made) { return client(); }
+    if (!gsmplc::hasDevice()) { return nullptr; }
+    new ((void*)_storage) GsmClient(gsmplc::device().sockets(), _security);
+    _made = true;
+    return client();
+}
+
 int GsmPlcClient::connect(const char* host, uint16_t port) {
     gsmplc::Hold hold;
     _why[0] = '\0';
     if (!gsmplc::isOpen()) {
-        snprintf(_why, sizeof _why, "no GSM_MODEM has opened the modem");
+        snprintf(_why, sizeof _why, "no modem block has opened the modem");
         return 0;
     }
     GsmDevice& gsm = gsmplc::device();
@@ -913,11 +1034,11 @@ int GsmPlcClient::connect(const char* host, uint16_t port) {
                  gsm.stateName());
         return 0;
     }
-    const int opened = _connectSeconds > 0
-        ? GsmClient::connect(host, port, _connectSeconds)
-        : GsmClient::connect(host, port);
+    GsmClient* inner = made();
+    const int opened = _connectSeconds > 0 ? inner->connect(host, port, _connectSeconds)
+                                           : inner->connect(host, port);
     if (opened == 0) {
-        snprintf(_why, sizeof _why, "%s", gsmplc::describe(lastError()));
+        snprintf(_why, sizeof _why, "%s", gsmplc::describe(inner->lastError()));
     }
     return opened;
 }
@@ -929,56 +1050,57 @@ int GsmPlcClient::connect(IPAddress ip, uint16_t port) {
         snprintf(_why, sizeof _why, "the modem has no data connection");
         return 0;
     }
-    const int opened = GsmClient::connect(ip, port);
+    GsmClient* inner = made();
+    const int opened = inner->connect(ip, port);
     if (opened == 0) {
-        snprintf(_why, sizeof _why, "%s", gsmplc::describe(lastError()));
+        snprintf(_why, sizeof _why, "%s", gsmplc::describe(inner->lastError()));
     }
     return opened;
 }
 
 size_t GsmPlcClient::write(uint8_t value) {
     gsmplc::Hold hold;
-    return GsmClient::write(value);
+    return _made ? client()->write(value) : 0;
 }
 
 size_t GsmPlcClient::write(const uint8_t* buffer, size_t size) {
     gsmplc::Hold hold;
-    return GsmClient::write(buffer, size);
+    return _made ? client()->write(buffer, size) : 0;
 }
 
 int GsmPlcClient::available() {
     gsmplc::Hold hold;
-    return GsmClient::available();
+    return _made ? client()->available() : 0;
 }
 
 int GsmPlcClient::read() {
     gsmplc::Hold hold;
-    return GsmClient::read();
+    return _made ? client()->read() : -1;
 }
 
 int GsmPlcClient::read(uint8_t* buffer, size_t size) {
     gsmplc::Hold hold;
-    return GsmClient::read(buffer, size);
+    return _made ? client()->read(buffer, size) : -1;
 }
 
 int GsmPlcClient::peek() {
     gsmplc::Hold hold;
-    return GsmClient::peek();
+    return _made ? client()->peek() : -1;
 }
 
 void GsmPlcClient::flush() {
     gsmplc::Hold hold;
-    GsmClient::flush();
+    if (_made) { client()->flush(); }
 }
 
 void GsmPlcClient::stop() {
     gsmplc::Hold hold;
-    GsmClient::stop();
+    if (_made) { client()->stop(); }
 }
 
 uint8_t GsmPlcClient::connected() {
     gsmplc::Hold hold;
-    return GsmClient::connected();
+    return _made ? client()->connected() : 0;
 }
 
 #endif

@@ -41,7 +41,7 @@
 //
 // And ALL OF IT ONLY WHILE THE MODEM IS IN USE: open() takes the rings and
 // the interrupt, close() gives every byte back. The layer (ModBeeGsmPlc.cpp)
-// opens it when GSM_MODEM wants the modem and closes it once it is switched
+// opens it when the modem block wants the modem and closes it once it is switched
 // off and quiet, so a PLC on Wi-Fi has its RAM back.
 //
 // One modem per PLC, so one instance; it owns its UART completely (the

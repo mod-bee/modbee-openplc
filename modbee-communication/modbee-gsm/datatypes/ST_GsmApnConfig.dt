@@ -1,0 +1,7 @@
+TYPE
+  ST_GsmApnConfig : STRUCT
+    sApn      : STRING(100);   (* the access point the SIM's provider gives: 'internet'; empty asks the network for its default *)
+    sUserName : STRING(127);   (* the APN's user name, when the provider gives one *)
+    sPassword : STRING(127);   (* its password *)
+  END_STRUCT;
+END_TYPE

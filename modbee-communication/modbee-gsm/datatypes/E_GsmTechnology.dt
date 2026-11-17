@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_GsmTechnology : (Unknown, Gsm, Edge, Umts, Hspa, Lte, NbIot, CatM) := Unknown;
+END_TYPE

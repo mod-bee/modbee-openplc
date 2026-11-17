@@ -1,0 +1,6 @@
+TYPE
+  ST_GsmPowerConfig : STRUCT
+    nPowerKeyPin : INT := 10;   (* a board: the GPIO that presses the module's power key, HIGH pressed; -1 none *)
+    nRailPin     : INT := -1;   (* a board: the GPIO that switches the module's supply, HIGH on; -1 none *)
+  END_STRUCT;
+END_TYPE
