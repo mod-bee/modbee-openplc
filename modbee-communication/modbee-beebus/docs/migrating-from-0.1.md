@@ -9,8 +9,11 @@ prefix (`nNodeId`, `bConnect`, `stSerialConfig`).
 
 **You do not have to move.** A project built on 0.1.x stays on 0.1.x and runs
 unchanged: pin it (`openplc-cli library pin <project> modbee-beebus@0.1.1`) and
-it keeps building against the version it was written for. Move when you
-choose. **The wire does not change**: the same topics, ids, names, registers
+build it with the editor it was written with - ModBee OpenPLC Editor
+4.3.4-modbee.2 or earlier, with library collection v0.2.1 or earlier. From
+editor 4.3.4-modbee.3 the compiler builds libraries differently and refuses a
+0.1.x library, so moving that project to a newer editor means moving it to
+0.2. Move when you choose. **The wire does not change**: the same topics, ids, names, registers
 and frames for the same variables, so a 0.1 node and a 0.2 node share a ring,
 and an HMI's firmware needs nothing.
 
