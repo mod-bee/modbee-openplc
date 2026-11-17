@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_BeeBusResult : (Queued, Ok, NotInitialised, InvalidArgument, UnknownNode, DuplicateNodeId, NotMapped, Duplicate, QueueFull, Timeout, NodeLost, Superseded, Cancelled, Refused, TypeMismatch, NotSubscribed, BufferFull, WrongTask) := Ok;
+END_TYPE

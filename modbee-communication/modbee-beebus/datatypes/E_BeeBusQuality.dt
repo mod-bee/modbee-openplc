@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_BeeBusQuality : (Unknown, Good, Uncertain, Bad) := Unknown;
+END_TYPE

@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_BeeBusModbusFailsafe : (HoldLastValue, ResetToValue) := HoldLastValue;
+END_TYPE

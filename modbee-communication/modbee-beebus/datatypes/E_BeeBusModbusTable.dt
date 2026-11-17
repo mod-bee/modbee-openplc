@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_BeeBusModbusTable : (Coil, HoldingRegister, DiscreteInput, InputRegister) := HoldingRegister;
+END_TYPE
