@@ -1,0 +1,14 @@
+TYPE
+  ST_ModbusTimingConfig : STRUCT
+    tTimeout         : TIME;                (* how long to wait for a reply; T#0s = measured per device *)
+    nRetries         : BYTE;                (* attempts after the first; 0 = the library's own *)
+    tReconnect       : TIME;                (* how often to retry a dropped link; T#0s = 2 s *)
+    bAutoReconnect   : BOOL := TRUE;        (* retry a dropped link by itself; FALSE = down until bConnect is cycled *)
+    eFraming         : E_ModbusFraming;     (* Auto (default): RTU on a serial line, MBAP on a socket; Rtu over TCP for a converter; Ascii *)
+    tFailsafe        : TIME;                (* a server: no client write for this long drives Map's eOnLoss; T#0s = never *)
+    tIdle            : TIME;                (* a TCP server: close a connection unused this long; T#0s = 60 s *)
+    nMaxClients      : BYTE;                (* a TCP server: connections held at once; 0 = 8 on the Runtime, 2 on a board *)
+    nMaxPending      : UINT;                (* requests that may wait at once; 0 = 64 on the Runtime, 16 on a board *)
+    nMaxPendingBytes : UINT;                (* bytes the waiting writes share; 0 = 16192 on the Runtime, 1024 on a board *)
+  END_STRUCT;
+END_TYPE

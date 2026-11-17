@@ -1,0 +1,10 @@
+TYPE
+  ST_ModbusNetworkConfig : STRUCT
+    sSsid         : STRING(48);             (* E_ModbusTransport.ArduinoWiFi: the network to join *)
+    sWiFiPassword : STRING(63);             (* its password, up to the 63 characters WPA2 allows *)
+    sMac          : STRING(32);             (* E_ModbusTransport.ArduinoEthernet: the board's MAC, 'DE:AD:BE:EF:FE:ED' *)
+    sIp           : STRING(32);             (* this node's fixed address; 'dhcp' to ask a server. Required *)
+    sGateway      : STRING(32);             (* empty = the address ending .1 *)
+    sSubnet       : STRING(32);             (* empty = 255.255.255.0 *)
+  END_STRUCT;
+END_TYPE

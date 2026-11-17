@@ -6,16 +6,16 @@ and why, because the why is what lets you change it afterwards.
 ## What you need
 
 **An OpenPLC Runtime and something to talk to.** A drive, a meter, a
-temperature controller — anything with an RS-485 port and a manual. Or, with no
+temperature controller - anything with an RS-485 port and a manual. Or, with no
 hardware at all, any Modbus simulator on your own machine over TCP.
 
-Or **a board** — ESP32 or similar — with an RS-485 transceiver. The only
+Or **a board** - ESP32 or similar - with an RS-485 transceiver. The only
 difference is which transport you name.
 
-You also need the library installed in the editor: **Libraries → Install**, and
+You also need the library installed in the editor: **Libraries -> Install**, and
 pick `modbee-modbus.stlib`.
 
-## Step 1 — start a node
+## Step 1 - start a node
 
 Make a project. Add a program called `net`, and in it declare a node and call
 it:
@@ -23,12 +23,11 @@ it:
 ```
 PROGRAM net
 VAR
-    node : MODBUS_NODE;
+    node   : FB_ModbusNode;
+    serial : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200);
 END_VAR
 
-node( TRANSPORT := MODBUS_RUNTIME_SERIAL,
-      SERIAL_DEVICE    := '/dev/ttyUSB0',
-      SERIAL_BAUD      := 19200 );
+node(eTransport := E_ModbusTransport.RuntimeSerial, stSerialConfig := serial);
 
 END_PROGRAM
 ```
@@ -36,177 +35,170 @@ END_PROGRAM
 That is a complete Modbus client. It will open the port and is ready to ask
 anybody anything.
 
-**`BAUD` and the wiring are the only things you must get right.** Parity
-defaults to even, which is the Modbus default and what most devices ship with.
-If your device's manual says 8N1, say so — `SERIAL_PARITY := MODBUS_PARITY_NONE_8N1` —
-and note that `MODBUS_PARITY_NONE` on its own means 8N2, which is what the
-specification actually requires when parity is off.
+**The baud rate and the wiring are the only things you must get right.**
+`eParity` defaults to `E_ModbusParity.Even`, which is the Modbus default and
+what most devices ship with. If your device's manual says 8N1, say so -
+`eParity := E_ModbusParity.None8N1` - and note that `E_ModbusParity.None` on
+its own means 8N2, which is what the specification actually requires when
+parity is off.
+
+Everything about the serial line lives in one structure, `stSerialConfig`:
+give it initial values in the declaration as above, or set its members in the
+program (`serial.nBaudRate := 9600;`) or from an HMI. The node reads it when
+the link opens.
 
 For TCP instead:
 
 ```
-node( TRANSPORT := MODBUS_RUNTIME_TCP,
-      TCP_HOST      := '192.168.1.50' );
+node(eTransport := E_ModbusTransport.RuntimeTcp, sHost := '192.168.1.50');
 ```
 
-## Step 2 — give it a task of its own
+## Step 2 - give it a task of its own
 
 This is the one piece of setup that is not obvious and matters more than
 anything else on this page.
 
-**`MODBUS_NODE` is the only block that touches the wire.** It transmits,
-receives, retries and times out — once per call. So how often it is called is
+**`FB_ModbusNode` is the only block that touches the wire.** It transmits,
+receives, retries and times out - once per call. So how often it is called is
 the floor on how fast anything happens.
 
-Put it, **with every block given it**, in a fast task of their own, and leave
-the rest of your program in a normal one:
+Put it, **with every call of its methods**, in a fast task of its own, and
+leave the rest of your program in a normal one:
 
 | task | interval | priority | holds |
 | --- | --- | --- | --- |
-| `APP_TASK` | `T#20ms` | `0` | the machine - no Modbus block at all |
-| `NET_TASK` | `T#1ms` on the Runtime, `T#50ms` on a board to start | `20` | `MODBUS_NODE` and every block given it |
+| `APP_TASK` | `T#20ms` | `0` | the machine - no Modbus at all |
+| `NET_TASK` | `T#1ms` on the Runtime, `T#50ms` on a board to start | `20` | `FB_ModbusNode` and its method calls |
 
-The two trade values through globals, each written by one task. A Modbus block
-in any other task than its node's says `MODBUS_WRONG_TASK` and does nothing.
+The two trade values through globals, each written by one task. A method
+called from any other task than its node's returns
+`E_ModbusResult.WrongTask` and does nothing.
 
 A node called every 20 ms spends most of the bus waiting for a task to come
 round. [10 - Scan rate](10-scan-rate.md) has the numbers.
 
-## Step 3 — check it opened
+## Step 3 - check it opened
 
-Add a status block so you can see what is happening:
+`node.bLinkUp` is `TRUE` once the port opened. If it is `FALSE`,
+`node.eErrorId` says why in a code and **`node.sLastError` says it in the
+operating system's own words** - *"No such file or directory"* for a wrong
+path, *"Permission denied"* for a user who is not in the `dialout` group. Read
+that one first; it says far more than a code can.
+
+For a TCP client, `node.bConnected` says whether the device at `sHost` is
+actually there. When it is not, `eErrorId` is `LinkDown`, `sLastError` says
+*"not connected"*, and the node keeps trying.
+
+## Step 4 - read something
+
+Now ask a device for some registers, in the same program, after the node:
 
 ```
 VAR
-    node   : MODBUS_NODE;
-    health : MODBUS_STATUS;
+    node    : FB_ModbusNode;
+    serial  : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200);
+    aRegs   : ARRAY [0..3] OF WORD;
+    bRead   : BOOL;
+    eResult : E_ModbusResult;
 END_VAR
 
-node  ( TRANSPORT := MODBUS_RUNTIME_SERIAL,
-        SERIAL_DEVICE    := '/dev/ttyUSB0', SERIAL_BAUD := 19200 );
-health( NODE := node );
+node(eTransport := E_ModbusTransport.RuntimeSerial, stSerialConfig := serial);
+eResult := node.ReadHoldingRegisters(anyData := aRegs, nUnitId := 1,
+                                     nAddress := 40, bExecute := bRead);
 ```
 
-`node.READY` is `TRUE` once the port opened. If it is `FALSE`, `node.STATUS`
-says why in a code and **`node.LAST_ERROR` says it in the operating system's own
-words** — *"No such file or directory"* for a wrong path, *"Permission denied"*
-for a user who is not in the `dialout` group. Read that one first; it says far
-more than a code can.
+A rising edge on `bRead` reads holding registers 40 to 43 from unit 1.
 
-**Note how `node` is passed to `health` on its `NODE` pin.** That is how every
-block gets at the link, and it must be assigned at every call — leaving it out
-is a compile error. That is deliberate: a block with no node is a block that
-silently does nothing.
-
-## Step 4 — read something
-
-Now ask a device for some registers. Put this in your `app` program, in the
-slower task:
-
-```
-PROGRAM app
-VAR
-    node : MODBUS_NODE;     (* the same instance, passed in *)
-    rd   : MODBUS_READ;
-    regs : ARRAY [0..3] OF WORD;
-    go   : BOOL;
-END_VAR
-
-rd( NODE := node, REQ := go, UNIT := 1,
-    FC := MODBUS_FC03_READ_HOLDING_REGISTERS,
-    ADDRESS := 40, VALUE := regs );
-```
-
-A rising edge on `go` reads holding registers 40 to 43 from unit 1.
-
-**You did not type a length.** `regs` is four elements, so four registers are
+**You did not type a length.** `aRegs` is four elements, so four registers are
 read. Resize the array later and the read follows it. Getting a length wrong is
 the commonest mistake anyone makes on a Modbus system and the one that reads
-past the end of a buffer, so the block does not ask for a number it can work
-out. There is a `LENGTH` pin if you genuinely want a partial transfer, and
+past the end of a buffer, so the method does not ask for a number it can work
+out. `nQuantity` is there if you genuinely want a partial transfer, and
 anything larger than the array is refused rather than obeyed.
 
-**The answer does not arrive on this scan.** `rd.BUSY` goes `TRUE`, and some
-scans later `rd.DONE` pulses for exactly one scan with the values in `regs`:
+**The answer does not arrive on this scan.** The method returns
+`E_ModbusResult.Queued` while the request is out, and on a later scan `Ok`,
+with the values in `aRegs`. It keeps returning that outcome until the next
+rising edge of `bRead`, so you can act on it whenever you look:
 
 ```
-IF rd.DONE THEN
-    motorSpeed := regs[0];
+IF eResult = E_ModbusResult.Ok THEN
+    nMotorSpeed := aRegs[0];
 END_IF;
 ```
 
-If it failed, `rd.ERROR` pulses instead and `rd.STATUS` says why.
-`MODBUS_TIMEOUT` means nothing answered. `MODBUS_REFUSED` means the device
-answered and said no — which is progress, because it proves the wiring works.
+If it failed, the result says why. `Timeout` means nothing answered.
+`Refused` means the device answered and said no - which is progress, because
+it proves the wiring works. The node also names the failing call on
+`bError` and `sLastError` - *"ReadHoldingRegisters aRegs: Timeout"* - until it
+succeeds.
 
-**Holding `go` high is safe.** It reads once on the edge, not once a scan.
+**Holding `bRead` high is safe.** It reads once on the edge, not once a scan,
+and changing `nAddress` while it is high does nothing until the next edge.
 
-## Step 5 — a value that keeps itself up to date
+## Step 5 - a value that keeps itself up to date
 
-Most of what a PLC reads, it wants to keep reading. That is `MODBUS_WATCH`:
+Most of what a PLC reads, it wants to keep reading. That is `Watch`:
 
 ```
 VAR
-    level     : MODBUS_WATCH;
-    tankLevel : ARRAY [0..1] OF WORD;
+    aTankLevel : ARRAY [0..1] OF WORD;
+    eLevelQ    : E_ModbusQuality;
 END_VAR
 
-level( NODE := node, UNIT := 1,
-       FC := MODBUS_FC04_READ_INPUT_REGISTERS,
-       ADDRESS := 30, EVERY := T#2s,
-       VALUE := tankLevel );
+node.Watch(anyData := aTankLevel, nUnitId := 1,
+           eTable := E_ModbusTable.InputRegister, nAddress := 30,
+           tPeriod := T#2s, eQuality => eLevelQ);
 ```
 
-No request pin. Every two seconds it decides a read is due, hands it to the
-same queue everything else uses, and the answer lands in `tankLevel`.
+No `bExecute`. Call it every scan; every two seconds it decides a read is due,
+hands it to the same queue everything else uses, and the answer lands in
+`aTankLevel`.
 
 **And it tells you how much to believe it.** This is the part worth
 understanding:
 
 ```
-IF level.QUALITY = MODBUS_QUALITY_GOOD AND tankLevel[0] > 900 THEN
-    closeInletValve := TRUE;
+IF eLevelQ = E_ModbusQuality.Good AND aTankLevel[0] > 900 THEN
+    bCloseInletValve := TRUE;
 END_IF;
 ```
 
-Without that check, a device that quietly failed leaves `tankLevel[0]` holding
-the last number it ever sent — plausible, steady, and wrong. `QUALITY` is what
-separates a live reading from a fossil. See
+Without that check, a device that quietly failed leaves `aTankLevel[0]`
+holding the last number it ever sent - plausible, steady, and wrong.
+`eQuality` is what separates a live reading from a fossil. See
 [05 - Reading and writing](05-reading-and-writing.md).
 
-## Step 6 — be a device yourself
+## Step 6 - be a device yourself
 
 Turn it round: let a SCADA package or an HMI read your PLC. Tell the node to
 answer as well as ask, and say what lives where:
 
 ```
 VAR
-    node    : MODBUS_NODE;
-    pub     : MODBUS_MAP;
-    trend   : ARRAY [0..9] OF WORD;
+    node   : FB_ModbusNode;
+    serial : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200, nUnitId := 7);
+    aTrend : ARRAY [0..9] OF WORD;
 END_VAR
 
-node( TRANSPORT := MODBUS_RUNTIME_SERIAL,
-      SERIAL_DEVICE    := '/dev/ttyUSB0', SERIAL_BAUD := 19200,
-      ROLE      := MODBUS_ROLE_BOTH,
-      SERIAL_UNIT_ID   := 7 );
-
-pub( NODE := node, TABLE := MODBUS_INPUT_REGISTERS,
-     ADDRESS := 100, VALUE := trend );
+node(eTransport := E_ModbusTransport.RuntimeSerial, eRole := E_ModbusRole.Both,
+     stSerialConfig := serial);
+node.Map(anyData := aTrend, eTable := E_ModbusTable.InputRegister, nAddress := 100);
 ```
 
-`SERIAL_UNIT_ID := 7` is the address other devices call your PLC by. `trend` now *is*
-input registers 100 to 109 — a client reading them gets whatever the array
-holds at that instant. Nothing is copied and there is no request pin, because
-once bound the variable **is** the register.
+`nUnitId := 7` is the address other devices call your PLC by. `aTrend` now
+*is* input registers 100 to 109 - a client reading them gets whatever the
+array holds at that instant. Nothing is copied and there is no `bExecute`,
+because once mapped the variable **is** the register.
 
-`MODBUS_INPUT_REGISTERS` is read-only, so nobody can write it. Use
-`MODBUS_HOLDING_REGISTERS` for something you want a client to be able to
+`E_ModbusTable.InputRegister` is read-only, so nobody can write it. Use
+`E_ModbusTable.HoldingRegister` for something you want a client to be able to
 change. See [04 - Being a device](04-being-a-device.md).
 
 ## What you have
 
 A PLC that reads a device on demand, keeps one value permanently fresh with a
-quality you can interlock on, and answers a SCADA package on the same wire.
+quality you can interlock on, and answers a SCADA package on the same wire -
+one block and three method calls.
 
 **Next:** [03 - The node block](03-the-node-block.md)

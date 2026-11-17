@@ -2,7 +2,7 @@
   "resources": {
     "modbee-modbus": {
       "repo": "mod-bee/modbee-modbus",
-      "ref": "v0.1.0",
+      "ref": "7b1b297e944fcc31f6defc584b7b60e8456638b6",
       "path": "",
       "include": [
         "library.properties",

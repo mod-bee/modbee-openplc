@@ -1,0 +1,4 @@
+TYPE
+  {attribute 'qualified_only'}
+  E_ModbusFraming : (Auto, Rtu, Ascii, Tcp) := Auto;
+END_TYPE
