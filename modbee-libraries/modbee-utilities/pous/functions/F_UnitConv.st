@@ -5,13 +5,14 @@ is the one table both read.
 Psi := F_UnitConv(fIn := PressureBar, eFromUnit := E_Unit.Bar, eToUnit := E_Unit.Psi);
 
 Kinds and units (E_Unit):
-pressure     BAR, KPA, PSI, MH2O (metres of water, 9.80665 kPa)
-flow         LPS (L/s), LPM (L/min), M3H (m3/h), GPM (US gal/min), M3D (m3/day), MLD (ML/day)
-volume       L, M3, ML (megalitre), GAL (US gallon)
-temperature  DEGC, DEGF, fK
-length       MM, CM, M, IN, FT
-percent      PCT          current  A
-frequency    HZ           power    KW
+pressure     Bar, KPa, Psi, MetreH2O (metres of water, 9.80665 kPa)
+flow         LitrePerSec, LitrePerMin, M3PerHour, GalPerMin (US gal/min), M3PerDay, MegaLitrePerDay
+volume       Litre, M3, MegaLitre, Gallon (US gallon)
+temperature  DegC, DegF, Kelvin
+length       Mm, Cm, Metre, Inch, Foot
+mass         Kg, Tonne
+percent      Percent      current  Amp
+frequency    Hertz        power    KW
 
 Units of different kinds (bar to L/s), or E_Unit.None on either side,
 can't be converted: the value comes back UNCHANGED (never NaN, which would
