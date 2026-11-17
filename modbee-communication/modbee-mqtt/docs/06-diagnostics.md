@@ -4,8 +4,14 @@ The client's own pins say whether it is connected and why not:
 `mqtt.bConnected`, `mqtt.eConnectionState`, `mqtt.bError`, `mqtt.eErrorId`
 and `mqtt.sLastError`. While the link has nothing to report, they also name
 the last method call that failed, by method and record -
-`Publish DEV.level: InvalidArgument` - until that same call succeeds. The counters are a method, safe to call on any page. It
-reports and changes nothing.
+`Publish DEV.level: InvalidArgument` - while that call keeps failing. It
+clears when the same call succeeds, or 10 seconds after its last failure once
+the program stops making it (a step that is over, a method switched off), so a
+brief failure stays up long enough for a SCADA poll to see it and an old one
+does not sit on a link that is working.
+
+The counters are a method, safe to call on any page. It reports and changes
+nothing.
 
 ```st
 mqtt.Statistics(nVersion => nMqttVersion, nReconnects => nMqttReconnects,
