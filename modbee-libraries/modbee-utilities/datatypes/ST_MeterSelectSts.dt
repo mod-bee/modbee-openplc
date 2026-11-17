@@ -1,0 +1,7 @@
+TYPE
+  ST_MeterSelectSts : STRUCT
+    bUsingB : BOOL; (* the source in use is meter B *)
+    bGood : BOOL;
+    fRate : REAL; (* per hour (the source in use's) *)
+  END_STRUCT;
+END_TYPE

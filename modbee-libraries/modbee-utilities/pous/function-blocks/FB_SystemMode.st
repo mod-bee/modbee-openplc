@@ -6,7 +6,8 @@ through ipSystem resets on its rising edge) -> bIsAuto, bIsManual, bNotOff, bAut
 type), bManualRun, bPowerUpHold (TRUE for set.tPowerOnDelay after power-up: automatic starts wait), plus
 FB_Object's bError / bWarning / eErrorId / eState. refData: its record.
 The mode and the auto type are the record's set.eMode / set.nAutoType (kept over a power cut; set.ePowerUp
-Off forces Off at power-up); a bad write is put back and reported. Manual run: on while Manual and bRun is
+Off forces Off at power-up; the record's command nCmdMode 0 Off / 1 Manual / 2 Auto writes set.eMode once, for SMS
+and SCADA); a bad write is put back and reported. Manual run: on while Manual and bRun is
 held (or bCmdStart latched until bCmdStop), after the power-on delay, for at most set.tManualMaxRun. A Run held
 at power-up, over a mode change or past the maximum must be released and given again before it runs.
 Other blocks read it through I_SystemMode (their ipSystem pin).
@@ -121,6 +122,17 @@ IF bFirstScan THEN
     refData.set.eMode := E_SysMode.Off;
   END_IF;
   eModeWas := refData.set.eMode;
+END_IF;
+(* the mode command (SMS, SCADA): the record's choice, once *)
+IF refData.nCmdMode >= 0 THEN
+  CASE refData.nCmdMode OF
+    0: refData.set.eMode := E_SysMode.Off;
+    1: refData.set.eMode := E_SysMode.Manual;
+    2: refData.set.eMode := E_SysMode.Auto;
+  ELSE
+    refData.sts.bRefused := TRUE;
+  END_CASE;
+  refData.nCmdMode := -1;
 END_IF;
 bOk := SetOk(stS := refData.set);
 IF bOk THEN

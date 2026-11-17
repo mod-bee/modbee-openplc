@@ -35,6 +35,7 @@ Offers `I_SystemMode`: wire this instance to another block's `ip…` pin of that
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
+| `nCmdMode` | `INT` | `-1` | 0 Off, 1 Manual, 2 Auto: writes set.eMode once, then -1 (cleared; SMS, SCADA) |
 | `bCmdStart` | `BOOL` |  | latch the manual run (rising edge, cleared) |
 | `bCmdStop` | `BOOL` |  | Stop (HMI command; acts once, cleared by the block) |
 | `bCmdReset` | `BOOL` |  | the plant reset, as the bReset pin |
@@ -45,7 +46,7 @@ Offers `I_SystemMode`: wire this instance to another block's `ip…` pin of that
 | --- | --- | --- | --- |
 | `eMode` | `E_SysMode` |  | The operator's choice Off / Hand / Auto, kept over a power cut |
 | `ePowerUp` | `E_PowerUp` |  | `Last`: back in the mode it had; `Off`: Off after every power-up |
-| `nAutoType` | `INT` | `1` | kept over a power cut; set.ePowerUp Off forces Off at power-up |
+| `nAutoType` | `INT` | `1` | kept over a power cut; set.ePowerUp Off forces Off at power-up; the record's command nCmdMode 0 Off / 1 Manual / 2 Auto writes set.eMode once, for SMS and SCADA |
 | `nAutoTypes` | `INT` | `1` | 1..8 offered |
 | `tManualMaxRun` | `TIME` |  | 0 = no limit |
 | `tPowerOnDelay` | `TIME` |  |  |
@@ -76,7 +77,7 @@ Offers `I_SystemMode`: wire this instance to another block's `ip…` pin of that
 
 The plant's own mode: Off / Manual / Auto, the auto type (1..nAutoTypes), a manual run, the power-on delay and the plant-wide reset.
 
-The mode and the auto type are the record's `set.eMode` / `set.nAutoType` (kept over a power cut; `set.ePowerUp` Off forces Off at power-up); a bad write is put back and reported. Manual run: on while Manual and `bRun` is held (or `bCmdStart` latched until `bCmdStop`), after the power-on delay, for at most `set.tManualMaxRun`. A Run held at power-up, over a mode change or past the maximum must be released and given again before it runs.
+The mode and the auto type are the record's `set.eMode` / `set.nAutoType` (kept over a power cut; `set.ePowerUp` Off forces Off at power-up; the record's command `nCmdMode` 0 Off / 1 Manual / 2 Auto writes `set.eMode` once, for SMS and SCADA); a bad write is put back and reported. Manual run: on while Manual and `bRun` is held (or `bCmdStart` latched until `bCmdStop`), after the power-on delay, for at most `set.tManualMaxRun`. A Run held at power-up, over a mode change or past the maximum must be released and given again before it runs.
 
 Other blocks read it through `I_SystemMode` (their `ipSystem` pin).
 

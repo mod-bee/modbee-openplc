@@ -1,0 +1,6 @@
+TYPE
+  ST_MeterCycleTot : STRUCT
+    fThis : LREAL; (* this cycle so far, in the meter's total unit *)
+    fLast : LREAL; (* the last cycle *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,5 @@
+TYPE
+  ST_MeterSelectTot : STRUCT
+    fTotal : LREAL;
+  END_STRUCT;
+END_TYPE

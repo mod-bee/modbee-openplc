@@ -1,6 +1,7 @@
 (* FB_Equipment — the engine every equipment block shares (motor, pump, valve): written once.
 
-Modes (the record's set.eMode, kept over a power cut; ePowerUp Off forces Off at power-up):
+Modes (the record's set.eMode, kept over a power cut; ePowerUp Off forces Off at power-up; the record's command
+nCmdMode 0 Off / 1 Hand / 2 Auto / 3 OutOfService writes it once (SMS, SCADA), a Command(ModeOff ...) the same):
 Off   nothing runs; switching to Off resets trips whose cause has gone (set.bResetByOff).
 Hand  bCmdStart / bCmdStop (the panel, or FB_LocalControl): a start while not permitted is dropped; a start
 waits out the restart delay; Hand never resumes after a power cut. No owner reaches it. set.tHandMax
@@ -205,6 +206,18 @@ METHOD PROTECTED FINAL Begin : BOOL
     eModePrev := refSet.eMode;
     tStoppedAt := tNow;           // after a power cut, an automatic start waits out the restart delay
     bHandRun := FALSE;
+  END_IF;
+  (* the record's mode command: once, then -1 *)
+  IF refCmd.nCmdMode >= 0 THEN
+    CASE refCmd.nCmdMode OF
+      0: refSet.eMode := E_Mode.Off;
+      1: refSet.eMode := E_Mode.Hand;
+      2: refSet.eMode := E_Mode.Auto;
+      3: refSet.eMode := E_Mode.OutOfService;   // refused below where the block does not allow it
+    ELSE
+      refSts.bRefused := TRUE;
+    END_CASE;
+    refCmd.nCmdMode := -1;
   END_IF;
   (* commands through Command: as the record's own *)
   CASE eModeIn OF

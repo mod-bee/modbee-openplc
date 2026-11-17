@@ -1,0 +1,7 @@
+TYPE
+  ST_MeterSelectData : STRUCT
+    bCmdResetTotal : BOOL; (* the total back to 0 (cleared) *)
+    sts : ST_MeterSelectSts;
+    tot : ST_MeterSelectTot;
+  END_STRUCT;
+END_TYPE

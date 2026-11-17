@@ -1,5 +1,6 @@
 TYPE
   ST_SystemModeData : STRUCT
+    nCmdMode : INT := -1; (* 0 Off, 1 Manual, 2 Auto: writes set.eMode once, then -1 (cleared; SMS, SCADA) *)
     bCmdStart : BOOL; (* latch the manual run (rising edge, cleared) *)
     bCmdStop : BOOL;
     bCmdReset : BOOL; (* the plant reset, as the bReset pin *)

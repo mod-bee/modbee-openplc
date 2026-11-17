@@ -65,6 +65,7 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
+| `nCmdMode` | `INT` | `-1` | 0 Off, 1 Hand, 2 Auto, 3 OutOfService: once, then -1 (cleared; SMS, SCADA) |
 | `bCmdStart` | `BOOL` |  | Hand start (rising edge, cleared by the block) |
 | `bCmdStop` | `BOOL` |  | stop in Hand and Auto (rising edge, cleared) |
 | `bCmdReset` | `BOOL` |  | reset trips whose cause has gone (rising edge, cleared) |
