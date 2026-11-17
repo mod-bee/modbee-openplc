@@ -1,6 +1,6 @@
 # FB_Run — One run of any equipment
 
-One run of any equipment: a held request or a latched start, ended by its time target, a stop, an abort, its maximum time, the interlock, a part or a power cut. Its `bRunCmd` drives the equipment.
+One run of any equipment: a held request or a latched start, ended by its time target, a stop, an abort, its maximum time, the interlock, a part or a power cut; a restart starts it over from zero with the equipment kept running. Its `bRunCmd` drives the equipment.
 
 Offers `I_Run`: wire this instance to another block's `ip…` pin of that type.
 
@@ -11,6 +11,7 @@ Offers `I_Run`: wire this instance to another block's `ip…` pin of that type.
 | in | `bRun` | `BOOL` | `FALSE` | held request: the run lasts while it is held |
 | in | `bStart` | `BOOL R_EDGE` |  | rising edge: a latched run Acts on its rising edge. |
 | in | `bStop` | `BOOL R_EDGE` |  | rising edge: ends it, wins Acts on its rising edge. |
+| in | `bRestart` | `BOOL R_EDGE` |  | the active run starts over from zero (the equipment keeps running) Acts on its rising edge. |
 | in | `bReset` | `BOOL R_EDGE` |  | Acts on its rising edge. |
 | in | `bInterlock` | `BOOL` | `TRUE` | FALSE ends the run and refuses a start |
 | in | `bPermissive` | `BOOL` | `TRUE` | FALSE: a new run waits |
@@ -38,6 +39,7 @@ Offers `I_Run`: wire this instance to another block's `ip…` pin of that type.
 | `bCmdStart` | `BOOL` |  | Start (HMI command; acts once, cleared by the block) |
 | `bCmdStop` | `BOOL` |  | Stop (HMI command; acts once, cleared by the block) |
 | `bCmdReset` | `BOOL` |  | Reset trips whose cause has gone (HMI command; cleared by the block) |
+| `bCmdRestart` | `BOOL` |  | Restart the active run from zero (HMI command; acts once, cleared by the block) |
 
 **Settings `set`** (`ST_RunSet`)
 
@@ -81,6 +83,8 @@ Offers `I_Run`: wire this instance to another block's `ip…` pin of that type.
 
 One run of any equipment: a held request, or a latched start, ended by its time target, a stop, an abort, its maximum time, the interlock, a part, or a power cut.
 
+Restart (`bRestart` / `bCmdRestart`): the active run ends with stop reason Restart (counted, logged) and a new run starts in the same scan: time from zero, its parts start over ([`FB_RunVolume`](FB_RunVolume.md) takes a new start total), latched as before, `bRunCmd` not dropped. A stop in the same scan wins; no run active: nothing happens. `nActRunId` changes at every start, a restart too: observers and parts see a new run by it.
+
 Power cut: the progress is kept on events and every `set.tProgressSave`. `set.eResume` Resume: a latched run goes on from its progress; a held one goes on if its request is back within `set.tResumeWindow`, else it ends (PowerCut). Restart: the same from zero. None: it ends (PowerCut).
 
 Parts: a trip ends it (Fault); a signal pauses it; Done ends it normally ([`FB_RunVolume`](FB_RunVolume.md)'s target); Cap ends it at a part's safety time cap (stop reason TimeCap, a warning RunCapped until a reset or the next run); a hold makes a new run wait. Its parts: [`FB_RunVolume`](FB_RunVolume.md) (volume target, safety cap), [`FB_RunPause`](FB_RunPause.md) (operator pause / resume), [`FB_RunGate`](FB_RunGate.md) (wait for a permissive), [`FB_LevelCheck`](FB_LevelCheck.md) (source low, destination full); observer [`FB_RunLog`](FB_RunLog.md).
@@ -106,6 +110,7 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `bIsActive : BOOL`
 - property `tActElapsed : TIME`
 - property `eActStopReason : E_StopReason`
+- property `nActRunId : UDINT`
 
 ## See also
 

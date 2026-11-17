@@ -1,5 +1,5 @@
 (* FB_FlowTotal — totals from a flow rate, or from running time at a nominal rate. Offers I_Meter (the total, the
-rate per hour).
+rate per hour; an I_Measurement too: its rate).
 Pins: ipFlow (I_Measurement, the flow in its unit per set.eRateUnit), bActive (Runtime: counting while TRUE;
 Rate / Sample: optional, counting only while TRUE when set.bOnlyActive), bResetBatch (rising edge: the batch to
 0), refData -> bBatchDone.
@@ -78,6 +78,34 @@ PROPERTY PUBLIC bIsGood : BOOL
     IF __ISVALIDREF(refData) THEN bIsGood := refData.sts.bGood; ELSE bIsGood := FALSE; END_IF;
   END_GET
 END_PROPERTY
+(* I_Measurement: the rate (per hour), in set.eOutUnit per hour, no bands *)
+PROPERTY PUBLIC fActValue : REAL
+  GET
+    IF __ISVALIDREF(refData) THEN fActValue := refData.sts.fRate; ELSE fActValue := 0.0; END_IF;
+  END_GET
+END_PROPERTY
+PROPERTY PUBLIC bHasValue : BOOL
+  GET
+    bHasValue := TRUE;
+  END_GET
+END_PROPERTY
+PROPERTY PUBLIC bIsFitted : BOOL
+  GET
+    bIsFitted := TRUE;
+  END_GET
+END_PROPERTY
+PROPERTY PUBLIC eUnit : E_Unit
+  GET
+    eUnit := E_Unit.None;
+    IF __ISVALIDREF(refData) THEN eUnit := F_UnitPerHour(eUnit := refData.set.eOutUnit); END_IF;
+  END_GET
+END_PROPERTY
+METHOD PUBLIC Band : BOOL
+  VAR_INPUT
+    eBand : E_Band;
+  END_VAR
+  Band := FALSE;
+END_METHOD
 
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT

@@ -44,7 +44,7 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 
 A volume target for a run, as a part of it.
 
-When the run starts, the meter's total is the start; the run ends Done when `set.fTarget` has been delivered (0 = no target: it only watches the meter). Meter failed: while the run is running, the meter not good, or its total not rising for `set.stMeterFailed`'s delay, trips the run (MeterFailed). The delivered volume and what is left are in its status.
+When the run starts (a restart too: `ipRun.nActRunId` changes), the meter's total is the start; the run ends Done when `set.fTarget` has been delivered (0 = no target: it only watches the meter). Meter failed: while the run is running, the meter not good, or its total not rising for `set.stMeterFailed`'s delay, trips the run (MeterFailed). The delivered volume and what is left are in its status.
 
 A run with a volume target always has a safety time cap on its counted time: the target at `set.fMinFlow` (the least flow expected, per hour in the meter's unit) takes at most `fTarget` / `fMinFlow` hours; with `fMinFlow` 0 the cap is `set.tDefaultCap` (`sts.bDefaultCap` shows it). When the run's counted time reaches the cap before the target, the run ends with stop reason TimeCap and the warning RunCapped (`E_PartAction.Cap`). The run's own `set.tMaxTime` still applies: whichever is first ends the run. `sts.tCap` shows the cap in use.
 

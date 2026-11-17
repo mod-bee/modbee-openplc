@@ -15,5 +15,9 @@ PROPERTY eActStopReason : E_StopReason   // why the last run ended (None while o
   GET
   END_GET
 END_PROPERTY
+PROPERTY nActRunId : UDINT        // the run's number: it changes at every start, a restart too (a new run)
+  GET
+  END_GET
+END_PROPERTY
 
 END_INTERFACE

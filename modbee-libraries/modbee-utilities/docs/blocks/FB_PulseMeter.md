@@ -71,7 +71,7 @@ Units: `set.eInUnit` (the unit of `fPerPulse`) and `set.eOutUnit` (the unit of t
 
 Batch: `tot.fBatch` counts like `tot.fTotal` until `bResetBatch` (rising edge) / `bCmdResetBatch`; `bBatchDone` is TRUE once it has reached `set.fBatchTarget` (0 = off), until the batch is reset.
 
-Offers `I_Meter`: the total and the rate (per hour, over `set.tRateWindow`). The total and the batch are kept hourly, when `bRunning` falls (the pump stops; optional) and on a reset.
+Offers `I_Meter` (an `I_Measurement` too: its rate): the total and the rate (per hour, over `set.tRateWindow`). The total and the batch are kept hourly, when `bRunning` falls (the pump stops; optional) and on a reset.
 
 ## Example
 
@@ -91,5 +91,10 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `fActTotal : LREAL`
 - property `fActRate : REAL`
 - property `bIsGood : BOOL`
+- property `fActValue : REAL`: I_Measurement: the rate (per hour), in set.eOutUnit per hour, no bands
+- property `bHasValue : BOOL`
+- property `bIsFitted : BOOL`
+- property `eUnit : E_Unit`
+- method `Band(eBand) : BOOL`
 
 **Back to** [the index](../README.md).

@@ -30,7 +30,7 @@ Logs each run's time, volume and end reason, and counts the runs by how they end
 | --- | --- | --- | --- |
 | `nRuns` | `UDINT` |  | Runs counted |
 | `nDone` | `UDINT` |  | Done |
-| `nStopped` | `UDINT` |  | Request, Manual, Off, Hand |
+| `nStopped` | `UDINT` |  | Request, Manual, Off, Hand, Restart |
 | `nFaults` | `UDINT` |  | any other reason: a fault, an interlock, an abort, a maximum |
 | `nPowerCuts` | `UDINT` |  | PowerCut |
 | `tLastRun` | `TIME` |  | the last run's counted time |
@@ -42,7 +42,7 @@ Logs each run's time, volume and end reason, and counts the runs by how they end
 
 The last run's time, volume and end reason, and run counts by how they ended. An observer, not a part: it reads its run (`ipRun`) and changes nothing, so a missing rung never stops a run. Call it every scan after the run.
 
-When the run ends: `tot.tLastRun` (counted run time), `tot.tLastWall` (from start to end, pauses included), `tot.fLastVolume` (from `ipMeter`'s total, optional), `tot.eLastReason`; `tot.nRuns` and one of `nDone` (Done), `nStopped` (Request, Manual, Off, Hand), `nPowerCuts` (PowerCut), `nFaults` (any other reason: a fault, an interlock, an abort, a maximum). tot is kept over a power cut (written once per run end); `bCmdResetCounts` clears the counts.
+When the run ends: `tot.tLastRun` (counted run time), `tot.tLastWall` (from start to end, pauses included), `tot.fLastVolume` (from `ipMeter`'s total, optional), `tot.eLastReason`; `tot.nRuns` and one of `nDone` (Done), `nStopped` (Request, Manual, Off, Hand, Restart), `nPowerCuts` (PowerCut), `nFaults` (any other reason: a fault, an interlock, an abort, a maximum). A restart (`ipRun.nActRunId` changes while it stays active) ends the run (Restart) and starts the next one. tot is kept over a power cut (written once per run end); `bCmdResetCounts` clears the counts.
 
 ## Example
 

@@ -3,6 +3,7 @@ TYPE
     bCmdStart : BOOL;
     bCmdStop : BOOL;
     bCmdReset : BOOL;
+    bCmdRestart : BOOL;
     set : ST_RunSet;
     sts : ST_RunSts;
     det : ST_RunDet;

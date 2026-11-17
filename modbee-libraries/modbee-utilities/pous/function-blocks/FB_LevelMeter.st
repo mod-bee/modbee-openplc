@@ -6,7 +6,7 @@ run, whose rise is added), refData.
 set.bCountFalls (a pump emptying the tank) counts the level's fall, else its rise. During a run the moved volume
 is the change since the run's start plus ipAdd's rise; the total grows only when that passes its highest value
 so far by set.fDeadband (a high-water mark): level noise and waves are never counted twice. A bad level counts
-nothing (the mark is held). Offers I_Meter: the total and the rate (per hour, over set.tRateWindow). *)
+nothing (the mark is held). Offers I_Meter (an I_Measurement too: its rate): the total and the rate (per hour, over set.tRateWindow). *)
 
 FUNCTION_BLOCK FB_LevelMeter EXTENDS FB_Object IMPLEMENTS I_Meter
   VAR_INPUT
@@ -58,6 +58,33 @@ PROPERTY PUBLIC bIsGood : BOOL
     IF __ISVALIDREF(refData) THEN bIsGood := refData.sts.bGood; ELSE bIsGood := FALSE; END_IF;
   END_GET
 END_PROPERTY
+(* I_Measurement: the rate (per hour), unit None (the vessel's volume unit is not known here), no bands *)
+PROPERTY PUBLIC fActValue : REAL
+  GET
+    IF __ISVALIDREF(refData) THEN fActValue := refData.sts.fRate; ELSE fActValue := 0.0; END_IF;
+  END_GET
+END_PROPERTY
+PROPERTY PUBLIC bHasValue : BOOL
+  GET
+    bHasValue := TRUE;
+  END_GET
+END_PROPERTY
+PROPERTY PUBLIC bIsFitted : BOOL
+  GET
+    bIsFitted := TRUE;
+  END_GET
+END_PROPERTY
+PROPERTY PUBLIC eUnit : E_Unit
+  GET
+    eUnit := E_Unit.None;
+  END_GET
+END_PROPERTY
+METHOD PUBLIC Band : BOOL
+  VAR_INPUT
+    eBand : E_Band;
+  END_VAR
+  Band := FALSE;
+END_METHOD
 
 IF NOT __ISVALIDREF(refData) OR ipLevel = NULL THEN
   bError := TRUE;

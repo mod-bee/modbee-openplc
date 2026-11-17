@@ -6,7 +6,8 @@ Psi := F_UnitConv(fIn := PressureBar, eFromUnit := E_Unit.Bar, eToUnit := E_Unit
 
 Kinds and units (E_Unit):
 pressure     Bar, KPa, Psi, MetreH2O (metres of water, 9.80665 kPa)
-flow         LitrePerSec, LitrePerMin, M3PerHour, GalPerMin (US gal/min), M3PerDay, MegaLitrePerDay
+flow         LitrePerSec, LitrePerMin, M3PerHour, GalPerMin (US gal/min), M3PerDay, MegaLitrePerDay,
+LitrePerHour, MegaLitrePerHour, GalPerHour (US gal/h)
 volume       Litre, M3, MegaLitre, Gallon (US gallon)
 temperature  DegC, DegF, Kelvin
 length       Mm, Cm, Metre, Inch, Foot

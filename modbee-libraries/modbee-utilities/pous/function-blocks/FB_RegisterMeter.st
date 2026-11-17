@@ -1,5 +1,5 @@
 (* FB_RegisterMeter — totals from a device's own total register (a Modbus energy / flow meter, a BeeBus counter).
-Offers I_Meter (the total, the rate per hour).
+Offers I_Meter (the total, the rate per hour; an I_Measurement too: its rate).
 Pins: fRegister (the device's running total, in its unit; LREAL so a 32-bit register stays exact), bInGood (the
 read can be trusted), refData.
 Each increase adds (fRegister - the last) x set.fScale. A drop is a device reset or a glitch: nothing is counted,
@@ -61,6 +61,34 @@ PROPERTY PUBLIC bIsGood : BOOL
     IF __ISVALIDREF(refData) THEN bIsGood := refData.sts.bGood; ELSE bIsGood := FALSE; END_IF;
   END_GET
 END_PROPERTY
+(* I_Measurement: the rate (per hour), in set.eOutUnit per hour, no bands *)
+PROPERTY PUBLIC fActValue : REAL
+  GET
+    IF __ISVALIDREF(refData) THEN fActValue := refData.sts.fRate; ELSE fActValue := 0.0; END_IF;
+  END_GET
+END_PROPERTY
+PROPERTY PUBLIC bHasValue : BOOL
+  GET
+    bHasValue := TRUE;
+  END_GET
+END_PROPERTY
+PROPERTY PUBLIC bIsFitted : BOOL
+  GET
+    bIsFitted := TRUE;
+  END_GET
+END_PROPERTY
+PROPERTY PUBLIC eUnit : E_Unit
+  GET
+    eUnit := E_Unit.None;
+    IF __ISVALIDREF(refData) THEN eUnit := F_UnitPerHour(eUnit := refData.set.eOutUnit); END_IF;
+  END_GET
+END_PROPERTY
+METHOD PUBLIC Band : BOOL
+  VAR_INPUT
+    eBand : E_Band;
+  END_VAR
+  Band := FALSE;
+END_METHOD
 
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT

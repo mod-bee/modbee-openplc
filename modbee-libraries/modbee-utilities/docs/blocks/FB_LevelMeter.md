@@ -72,5 +72,10 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `fActTotal : LREAL`
 - property `fActRate : REAL`
 - property `bIsGood : BOOL`
+- property `fActValue : REAL`: I_Measurement: the rate (per hour), unit None (the vessel's volume unit is not known here), no bands
+- property `bHasValue : BOOL`
+- property `bIsFitted : BOOL`
+- property `eUnit : E_Unit`
+- method `Band(eBand) : BOOL`
 
 **Back to** [the index](../README.md).

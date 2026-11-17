@@ -10,7 +10,7 @@ Units: set.eInUnit (the unit of fPerPulse) and set.eOutUnit (the unit of the tot
 that is not a volume, is a bad setting (put back).
 Batch: tot.fBatch counts like tot.fTotal until bResetBatch (rising edge) / bCmdResetBatch; bBatchDone is TRUE once
 it has reached set.fBatchTarget (0 = off), until the batch is reset.
-Offers I_Meter: the total and the rate (per hour, over set.tRateWindow). The total and the batch are kept hourly,
+Offers I_Meter (an I_Measurement too: its rate): the total and the rate (per hour, over set.tRateWindow). The total and the batch are kept hourly,
 when bRunning falls (the pump stops; optional) and on a reset. *)
 
 FUNCTION_BLOCK FB_PulseMeter EXTENDS FB_Object IMPLEMENTS I_Meter
@@ -77,6 +77,34 @@ PROPERTY PUBLIC bIsGood : BOOL
     IF __ISVALIDREF(refData) THEN bIsGood := refData.sts.bGood; ELSE bIsGood := FALSE; END_IF;
   END_GET
 END_PROPERTY
+(* I_Measurement: the rate (per hour), in set.eOutUnit per hour, no bands *)
+PROPERTY PUBLIC fActValue : REAL
+  GET
+    IF __ISVALIDREF(refData) THEN fActValue := refData.sts.fRate; ELSE fActValue := 0.0; END_IF;
+  END_GET
+END_PROPERTY
+PROPERTY PUBLIC bHasValue : BOOL
+  GET
+    bHasValue := TRUE;
+  END_GET
+END_PROPERTY
+PROPERTY PUBLIC bIsFitted : BOOL
+  GET
+    bIsFitted := TRUE;
+  END_GET
+END_PROPERTY
+PROPERTY PUBLIC eUnit : E_Unit
+  GET
+    eUnit := E_Unit.None;
+    IF __ISVALIDREF(refData) THEN eUnit := F_UnitPerHour(eUnit := refData.set.eOutUnit); END_IF;
+  END_GET
+END_PROPERTY
+METHOD PUBLIC Band : BOOL
+  VAR_INPUT
+    eBand : E_Band;
+  END_VAR
+  Band := FALSE;
+END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
   bError := TRUE;

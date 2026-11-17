@@ -2,7 +2,8 @@
 its maximum time, the interlock, a part, or a power cut.
 
 Pins: bRun (held request: the run lasts while it is held), bStart (rising edge: a latched run), bStop
-(rising edge: ends it, wins), bReset, bInterlock (FALSE ends the run and refuses a start), bPermissive (FALSE:
+(rising edge: ends it, wins), bRestart (rising edge: the active run starts over from zero, the equipment kept
+running), bReset, bInterlock (FALSE ends the run and refuses a start), bPermissive (FALSE:
 a new run waits), bPause (held: no run command, no counting), bAbort (rising edge: ends it with eAbortCode),
 eAbortCode, bEquipRunning (the equipment runs: time counts only then) -> bRunCmd. ipTarget (optional): the equipment the run drives directly (a pump, a valve, a group: it is
 requested every scan and its running counts as bEquipRunning); else wire bRunCmd to a
@@ -10,6 +11,10 @@ level control's bDemand), bActive, bPaused, plus FB_Object's outputs. refData: i
 set.bByTime: the run ends after set.tRunTime of running. set.tMaxTime > 0: it ends there, running or not (a
 warning). set.tMaxPause > 0: a pause that long ends it. After a run ends, a new one needs the request to drop
 and come again.
+Restart (bRestart / bCmdRestart): the active run ends with stop reason Restart (counted, logged) and a new run
+starts in the same scan: time from zero, its parts start over (FB_RunVolume takes a new start total), latched as
+before, bRunCmd not dropped. A stop in the same scan wins; no run active: nothing happens. nActRunId changes at
+every start, a restart too: observers and parts see a new run by it.
 Power cut: the progress is kept on events and every set.tProgressSave. set.eResume Resume: a latched run goes
 on from its progress; a held one goes on if its request is back within set.tResumeWindow, else it ends
 (PowerCut). Restart: the same from zero. None: it ends (PowerCut).
@@ -23,6 +28,7 @@ FUNCTION_BLOCK FB_Run EXTENDS FB_Object IMPLEMENTS I_Run
     bRun : BOOL := FALSE;
     bStart : BOOL R_EDGE;
     bStop : BOOL R_EDGE;
+    bRestart : BOOL R_EDGE; (* the active run starts over from zero (the equipment keeps running) *)
     bReset : BOOL R_EDGE;
     bInterlock : BOOL := TRUE;
     bPermissive : BOOL := TRUE;
@@ -60,6 +66,7 @@ FUNCTION_BLOCK FB_Run EXTENDS FB_Object IMPLEMENTS I_Run
     tPowerUp : TIME;
     bMaxWarn : BOOL;
     bCapWarn : BOOL; (* a part's safety time cap ended a run (cleared by a reset or a new run) *)
+    nRunId : UDINT; (* changes at every start *)
   END_VAR
   VAR_TEMP
     bResetNow : BOOL;
@@ -67,6 +74,9 @@ FUNCTION_BLOCK FB_Run EXTENDS FB_Object IMPLEMENTS I_Run
     bPauseNow : BOOL;
     bEqRun : BOOL; (* the equipment runs (bEquipRunning or ipTarget) *)
     eReqErr : E_UtError;
+    bLatchedWas : BOOL;
+    bWaitingWas : BOOL;
+    bResumeWas : BOOL;
   END_VAR
 
 
@@ -87,6 +97,26 @@ PROPERTY PUBLIC eActStopReason : E_StopReason
     IF __ISVALIDREF(refData) THEN eActStopReason := refData.sts.eStopReason; ELSE eActStopReason := E_StopReason.None; END_IF;
   END_GET
 END_PROPERTY
+
+PROPERTY PUBLIC nActRunId : UDINT
+  GET
+    nActRunId := nRunId;
+  END_GET
+END_PROPERTY
+
+(* starts a run from zero (bLatched set by the caller) *)
+METHOD PRIVATE StartRun
+  bActive := TRUE;
+  refData.det.tElapsed := T#0s;
+  refData.sts.eStopReason := E_StopReason.None;
+  bCapWarn := FALSE;
+  tStartedAt := tNow;
+  nRunId := nRunId + 1;
+  stProgress.bActive := TRUE;
+  stProgress.bLatched := bLatched;
+  stProgress.tElapsed := T#0s;
+  tSavedAt := tNow;
+END_METHOD
 
 (* ends the active run *)
 METHOD PRIVATE EndRun
@@ -193,17 +223,9 @@ END_IF;
 bNew := (bRun AND NOT bRunPrev) OR bStart OR refData.bCmdStart;
 IF NOT bActive AND bNew THEN
   IF bInterlock THEN
-    bActive := TRUE;
     bLatched := bStart OR refData.bCmdStart;
     bWaiting := TRUE;
-    refData.det.tElapsed := T#0s;
-    refData.sts.eStopReason := E_StopReason.None;
-    bCapWarn := FALSE;
-    tStartedAt := tNow;
-    stProgress.bActive := TRUE;
-    stProgress.bLatched := bLatched;
-    stProgress.tElapsed := T#0s;
-    tSavedAt := tNow;
+    StartRun();
   END_IF;
 END_IF;
 refData.bCmdStart := FALSE;
@@ -237,6 +259,20 @@ IF bActive THEN
   END_IF;
 END_IF;
 refData.bCmdStop := FALSE;
+
+(* a restart: the run that is still active ends (Restart) and starts over at once, as it was (latched,
+   waiting, waiting for its request after a power cut) *)
+IF bActive AND (bRestart OR refData.bCmdRestart) THEN
+  bLatchedWas := bLatched;
+  bWaitingWas := bWaiting;
+  bResumeWas := bResumeWait;
+  EndRun(eWhy := E_StopReason.Restart);
+  bLatched := bLatchedWas;
+  bWaiting := bWaitingWas;
+  bResumeWait := bResumeWas;
+  StartRun();
+END_IF;
+refData.bCmdRestart := FALSE;
 
 (* waiting, pause *)
 IF bActive AND bWaiting AND bPermissive AND NOT bPartHold THEN

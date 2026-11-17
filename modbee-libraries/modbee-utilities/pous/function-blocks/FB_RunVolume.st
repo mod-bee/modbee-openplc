@@ -1,7 +1,7 @@
 (* FB_RunVolume — a volume target for a run, as a part of it.
 
 Pins: ipRun (the run, required), ipMeter (the meter it counts on, required), refData.
-When the run starts, the meter's total is the start; the run ends Done when set.fTarget has been delivered
+When the run starts (a restart too: ipRun.nActRunId changes), the meter's total is the start; the run ends Done when set.fTarget has been delivered
 (0 = no target: it only watches the meter). Meter failed: while the run is running, the meter not good, or its
 total not rising for set.stMeterFailed's delay, trips the run (MeterFailed). The delivered volume and what is
 left are in its status.
@@ -33,6 +33,7 @@ FUNCTION_BLOCK FB_RunVolume EXTENDS FB_Object IMPLEMENTS I_Part
     bAdded : BOOL;
     bCalled : BOOL;
     bActivePrev : BOOL;
+    nRunSeen : UDINT; (* ipRun.nActRunId when its rung last ran *)
     fLastTotal : LREAL;
     bRose : BOOL; (* the meter's total rose on the last scan *)
     stWork : ST_ProtectionWork;
@@ -68,10 +69,12 @@ METHOD PUBLIC Evaluate : E_PartAction
                      stSet := refData.set.stMeterFailed, stSts := refData.sts.stMeterFailed, stWork := stWork);
   IF stWork.bTrip THEN
     Evaluate := E_PartAction.Trip;
-  ELSIF ipRun.bIsActive AND bActivePrev AND refData.set.fTarget > 0.0 AND refData.sts.fDelivered >= refData.set.fTarget THEN
-    (* bActivePrev: its rung has seen this run start, so fDelivered is this run's *)
+  ELSIF ipRun.bIsActive AND bActivePrev AND nRunSeen = ipRun.nActRunId AND refData.set.fTarget > 0.0
+        AND refData.sts.fDelivered >= refData.set.fTarget THEN
+    (* bActivePrev, nRunSeen: its rung has seen this run start, so fDelivered is this run's *)
     Evaluate := E_PartAction.Done;
-  ELSIF ipRun.bIsActive AND bActivePrev AND refData.set.fTarget > 0.0 AND refData.sts.tCap > T#0s
+  ELSIF ipRun.bIsActive AND bActivePrev AND nRunSeen = ipRun.nActRunId AND refData.set.fTarget > 0.0
+        AND refData.sts.tCap > T#0s
         AND ipRun.tActElapsed >= refData.sts.tCap THEN
     Evaluate := E_PartAction.Cap;
     eErrorId := E_UtError.RunCapped;
@@ -108,6 +111,7 @@ IF bFirstScan THEN
     nKeptLayout := cLayout;
   END_IF;
   bActivePrev := ipRun.bIsActive;
+  nRunSeen := ipRun.nActRunId;
   fLastTotal := ipMeter.fActTotal;
   bFirstScan := FALSE;
 ELSIF refData.set.fTarget >= 0.0 AND refData.set.stMeterFailed.tDelay >= T#0s AND refData.set.fMinFlow >= 0.0
@@ -120,10 +124,11 @@ IF NOT bAdded THEN
   ipRun.AddPart(ipPart := THIS^);
   bAdded := TRUE;
 END_IF;
-IF ipRun.bIsActive AND NOT bActivePrev THEN
-  fStart := ipMeter.fActTotal;    // a new run
+IF ipRun.bIsActive AND (NOT bActivePrev OR ipRun.nActRunId <> nRunSeen) THEN
+  fStart := ipMeter.fActTotal;    // a new run, or a restart
 END_IF;
 bActivePrev := ipRun.bIsActive;
+nRunSeen := ipRun.nActRunId;
 bRose := ipMeter.fActTotal > fLastTotal;
 fLastTotal := ipMeter.fActTotal;
 IF ipRun.bIsActive THEN

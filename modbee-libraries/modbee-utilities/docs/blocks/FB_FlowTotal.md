@@ -72,7 +72,7 @@ Offers `I_Meter`: wire this instance to another block's `ip…` pin of that type
 
 ## How it works
 
-Totals from a flow rate, or from running time at a nominal rate. Offers `I_Meter` (the total, the rate per hour).
+Totals from a flow rate, or from running time at a nominal rate. Offers `I_Meter` (the total, the rate per hour; an `I_Measurement` too: its rate).
 
 Rate / Sample: optional, counting only while TRUE when `set.bOnlyActive`), `bResetBatch` (rising edge: the batch to 0), `refData` -> `bBatchDone`. `set.eSource`:
 
@@ -107,5 +107,10 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `fActTotal : LREAL`
 - property `fActRate : REAL`
 - property `bIsGood : BOOL`
+- property `fActValue : REAL`: I_Measurement: the rate (per hour), in set.eOutUnit per hour, no bands
+- property `bHasValue : BOOL`
+- property `bIsFitted : BOOL`
+- property `eUnit : E_Unit`
+- method `Band(eBand) : BOOL`
 
 **Back to** [the index](../README.md).
