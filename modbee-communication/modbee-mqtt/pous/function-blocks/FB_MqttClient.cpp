@@ -2031,10 +2031,13 @@ struct MqMethods {
     MqProvision provision;
     MqRequestHook hook;
     // The last method call that failed, by method and record: the client's
-    // bError / sLastError name it until that call succeeds.
+    // bError / sLastError name it while that call keeps failing, until it
+    // succeeds, or for MQ_FAIL_HOLD_MS after its last failure once it is no
+    // longer made.
     std::string failKey;
     std::string failText;
     uint8_t failResult = 0;
+    mq_time_t failAt = 0;
     // The client's cycles, one per call of the block: a record called in this
     // cycle or the last is in use where it is.
     uint32_t cycle = 1;
@@ -2110,8 +2113,12 @@ static MqMethods* mq_methodsFor(strucpp::XWORD_t held, strucpp::XWORD_t api) {
 
 // A method call's result, noted on the client. A failing call is named on
 // the client's bError / sLastError ("Publish DEV.level: InvalidArgument") until
-// the same call succeeds. Not connected, queued and not yet built are states,
-// not failures.
+// the same call succeeds, or until it has not failed for MQ_FAIL_HOLD_MS: a
+// call the program stops making (a step that is over, a method switched off)
+// leaves no error behind on a link that is working, and a brief failure stays
+// up long enough for a SCADA poll to see it. Not connected, queued and not yet
+// built are states, not failures.
+static const mq_time_t MQ_FAIL_HOLD_MS = 10000;
 static E_MQTTRESULT mq_noteCall(strucpp::XWORD_t held, const char* method,
                                 const strucpp::IEC_ANY* any, const char* topic,
                                 E_MQTTRESULT result) {
@@ -2130,6 +2137,7 @@ static E_MQTTRESULT mq_noteCall(strucpp::XWORD_t held, const char* method,
     if (failed) {
         m->failKey = key;
         m->failResult = (uint8_t)result;
+        m->failAt = mq_millis();
         m->failText = key + ": " +
                       (result == E_MQTTRESULT::WRONGTASK ? "wrong task"
                                                          : mq_resultName((MqttResult)(int)result));
@@ -3031,7 +3039,12 @@ void loop()
 
     // A method call that failed, by method and record (mq_noteCall), where the
     // link itself has nothing to report.
-    if (const MqMethods* calls = (const MqMethods*)(uintptr_t)(strucpp::XWORD_t)nMethods) {
+    if (MqMethods* calls = (MqMethods*)(uintptr_t)(strucpp::XWORD_t)nMethods) {
+        if (!calls->failKey.empty() &&
+            mq_elapsed(calls->failAt, mq_millis()) >= MQ_FAIL_HOLD_MS) {
+            calls->failKey.clear();
+            calls->failText.clear();
+        }
         if (!calls->failKey.empty() && !(bool)bError) {
             bError = true;
             eErrorId = static_cast<E_MQTTRESULT>(calls->failResult);
