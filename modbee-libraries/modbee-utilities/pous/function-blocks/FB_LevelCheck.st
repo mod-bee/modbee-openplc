@@ -1,11 +1,12 @@
 (* FB_LevelCheck — one alarm level on any measurement, as a part of its owner: low pressure, high pressure, no flow,
 dry run, a high tank level ... one block for each level fitted.
 
-Pins: ipMeas (the measurement: its value against set.fSetpoint, and / or one of its switch bands),
+Pins: bSwitch, ipMeas (the measurement: its value against set.fSetpoint, and / or one of its switch bands),
 ipOwner (the equipment it acts on), refData. The direction (high or low), the setpoint with its deadband,
 the band, "only while running" and "masked at start" are settings.
 bSwitch: a switch wired straight to this rung that backs the value up (TRUE = past the level: a float, a pressure
-switch); it acts like the band, also with a bad or unfitted value.
+switch); it acts like the band, also with a bad or unfitted value. With no ipMeas wired the check is the switch
+alone (a flow switch, a float: no dummy measurement needed).
 A bad measurement is ridden through for set.tBadRide (the state is held), then the value part lets go: the
 sensor raises its own fault, and a switch band still acts. A measurement that is not fitted is no check.
 It acts per its protection settings (off / warn / trip / signal, delay, reset). A signal is a stop without an
@@ -14,10 +15,10 @@ alarm (the owner stops and restarts with it); with set.bDoneWhenReached a signal
 
 FUNCTION_BLOCK FB_LevelCheck EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT
-    ipMeas : I_Measurement; (* required *)
+    bSwitch : BOOL := FALSE; (* optional switch, TRUE = past the level (a backup, or the only signal) *)
+    ipMeas : I_Measurement; (* optional: none wired = the switch alone *)
     ipOwner : I_PartOwner; (* required *)
     refData : REFERENCE TO ST_LevelCheckData;
-    bSwitch : BOOL; (* optional backup switch, TRUE = past the level *)
   END_VAR
   VAR RETAIN
     stKept : ST_LevelCheckSet;
@@ -105,7 +106,7 @@ METHOD PRIVATE SetOk : BOOL
            AND refData.set.fSetpoint = refData.set.fSetpoint;   // not NaN
 END_METHOD
 
-IF NOT __ISVALIDREF(refData) OR ipOwner = NULL OR ipMeas = NULL THEN
+IF NOT __ISVALIDREF(refData) OR ipOwner = NULL THEN
   bError := TRUE;
   IF ipOwner = NULL THEN eErrorId := E_UtError.NoMotor; ELSE eErrorId := E_UtError.NoRecord; END_IF;
   RETURN;
@@ -129,8 +130,12 @@ IF NOT bAdded THEN
   bAdded := TRUE;
 END_IF;
 
-(* sample the measurement on this rung *)
-IF NOT ipMeas.bIsFitted THEN
+(* sample the measurement on this rung (none wired: the switch alone) *)
+IF ipMeas = NULL THEN
+  bBeyond := FALSE;
+  bBand := FALSE;
+  refData.sts.bBadHeld := FALSE;
+ELSIF NOT ipMeas.bIsFitted THEN
   bBeyond := FALSE;
   bBand := FALSE;
   refData.sts.bBadHeld := FALSE;

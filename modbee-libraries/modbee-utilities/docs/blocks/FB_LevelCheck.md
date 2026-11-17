@@ -8,10 +8,10 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `ipMeas` | `I_Measurement` |  | required. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
+| in | `bSwitch` | `BOOL` | `FALSE` | optional switch, TRUE = past the level (a backup, or the only signal) |
+| in | `ipMeas` | `I_Measurement` |  | optional: none wired = the switch alone. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
 | in | `ipOwner` | `I_PartOwner` |  | required. The owner's instance |
 | in | `refData` | `REFERENCE TO ST_LevelCheckData` |  | Its record (a variable of this type) |
-| in | `bSwitch` | `BOOL` |  | optional backup switch, TRUE = past the level |
 | in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
 | out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
