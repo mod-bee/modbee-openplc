@@ -1,7 +1,6 @@
-(* FB_SpeedLoop — constant pressure / flow / level with a speed drive (DESIGN-0.2.md section 5.5; src-v2
-UT_SPEED_CTRL + UT_SPEED_CTRL_RUN, the field-proven loop). It owns its pump: while asked to run it requests the
-pump (an FB_Pump on an FB_MotorVsd, an FB_MotorVsd, or an FB_Group) at the speed that holds the value at the
-setpoint.
+(* FB_SpeedLoop — constant pressure / flow / level with a speed drive. It owns its pump: while asked to run it
+requests the pump (an FB_Pump on an FB_MotorVsd, an FB_MotorVsd, or an FB_Group) at the speed that holds the value
+at the setpoint.
 
 Pins: bRun (control wanted), ipPv (the pressure or level; stHighPv always watches it), ipFlow (the flow: Flow
 control, the flow limit, sleep on low flow; unwired = none), ipTarget (the pump it drives), fSp (the setpoint

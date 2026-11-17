@@ -1,4 +1,4 @@
-(* F_Protect — the protection engine every block is built from (src-v2 UT_PROT_RUN, same rules, 0.2 names).
+(* F_Protect — the protection engine every block is built from.
 A FUNCTION: no instance; the VAR_IN_OUTs are references to the owner's settings, status and private state.
 
 - a condition acts after its delay; Off ignores it; Signal follows it with no alarm (no latch, count, retry,

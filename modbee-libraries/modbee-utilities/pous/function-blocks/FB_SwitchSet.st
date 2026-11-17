@@ -1,7 +1,7 @@
 (* FB_SwitchSet — up to four level switches (LL, L, H, HH) on one vessel or line as switch bands, and one plain
-contact (a float, a pressure or flow switch, a door), each debounced, with a quality per switch
-(DESIGN-0.2.md section 5.4; src-v2 UT_SWITCH_MEAS + UT_DIGITAL_IN). Wire the instance to any I_Measurement pin:
-owners read the bands through Band(E_Band.HighHigh) ...; rungs read bLowLow .. bHighHigh and bQ.
+contact (a float, a pressure or flow switch, a door), each debounced, with a quality per switch. Wire the instance
+to any I_Measurement pin: owners read the bands through Band(E_Band.HighHigh) ...; rungs read bLowLow .. bHighHigh
+and bQ.
 
 Pins: bLL, bL, bH, bHH (TRUE = the level is in that band: wire NOT at the pin for a contact that opens),
 bContact, and their qualities bLLGood .. bContactGood (default TRUE: the IO module / comms are healthy)

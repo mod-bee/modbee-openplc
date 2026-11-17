@@ -1,5 +1,4 @@
-(* FB_LevelControl — keeps a level by driving a pump (DESIGN-0.2.md section 5.5; the core of src-v2
-UT_PUMP_STATION EMPTY / FILL).
+(* FB_LevelControl — keeps a level by driving a pump.
 
 Pins: bRun (the process may run: e.g. the system not Off), bDemand (pump down / fill now, past the start
 level, to set.fDemandStop), bInterlock (FALSE: nothing is requested), ipLevel (the level: a transmitter, a
@@ -10,8 +9,8 @@ EMPTY (sump, wet well): start at or above fStart, stop at or below fStop; bDeman
 at or above fHighHigh it always runs (overflow), also with bDemandOnly; at or below fLowLow it never runs.
 FILL (tank): start at or below fStart, stop at or above fStop; bDemand fills to fDemandStop; at or above
 fHighHigh it never runs (full); fLowLow is an alarm level only.
-TIMED: no level needed (ipLevel may be unwired): on for set.tOnTime, off for set.tOffTime, over and over (on first), while
-bRun (src-v2 station TIMED).
+TIMED: no level needed (ipLevel may be unwired): on for set.tOnTime, off for set.tOffTime, over and over (on first),
+while bRun.
 set.fStartVariation: the start level moves at random by up to this, either way, after each cycle (fat build-up
 in a sump; used only when smaller than the start-stop gap). A held bDemand that reached set.fDemandStop runs
 again when the level is back at set.fDemandRestart (0 = the start level). -> bDemandActive (for FB_Stages'
@@ -143,7 +142,7 @@ IF bFailed AND NOT bFailedWas THEN
 END_IF;
 bFailedWas := bFailed;
 
-(* the start in use: moved at random after each cycle (src-v2 levelVariation) *)
+(* the start in use: moved at random after each cycle *)
 IF bReqWas AND NOT bReq THEN
   nRng := nRng * 1103515245 + 12345;
   IF refData.set.fStartVariation > 0.0 AND refData.set.fStartVariation < ABS(refData.set.fStart - refData.set.fStop) THEN
@@ -209,7 +208,7 @@ IF refData.bCmdStop THEN
   refData.bCmdStop := FALSE;
 END_IF;
 bReached := NOT bTimed AND ((bEmpty AND fLevel <= refData.set.fDemandStop) OR (NOT bEmpty AND fLevel >= refData.set.fDemandStop));
-(* a held demand: runs to its level, then waits for the restart level (src-v2 demandRestart) *)
+(* a held demand: runs to its level, then waits for the restart level *)
 fRestart := refData.set.fDemandRestart;
 IF fRestart = 0.0 THEN
   fRestart := fStartNow;

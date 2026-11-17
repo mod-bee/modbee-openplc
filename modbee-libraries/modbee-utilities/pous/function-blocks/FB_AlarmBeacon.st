@@ -1,5 +1,4 @@
-(* FB_AlarmBeacon — flash alarm numbers on a single lamp, for sites with one fault lamp and no HMI (src-v2
-UT_ALARM_BEACON, the same rules).
+(* FB_AlarmBeacon — flash alarm numbers on a single lamp, for sites with one fault lamp and no HMI.
 aAlarms (the project's array of BOOL, one per alarm; alarm number = index - lower bound + 1; write it with coils).
 The block steps through every active alarm in turn (from the lowest after an idle spell, then round again) and
 flashes its number: Count (that many short flashes) or Binary (set.nBits flashes, most significant bit first:

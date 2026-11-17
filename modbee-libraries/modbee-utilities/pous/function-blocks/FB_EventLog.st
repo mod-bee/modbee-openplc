@@ -1,5 +1,5 @@
 (* FB_EventLog — the last N events (trips, stops, end reasons) with their time, newest first, for "what happened
-overnight"; optionally kept over a power cut (src-v2 UT_EVENT_LOG, the same rules).
+overnight"; optionally kept over a power cut.
 Call it once per source per scan, all calls on the same instance, aBuffer, aSources and refData (one rung each):
   fbLog(nCode := 0, eStop := fbPump1.eStopReason, nSrc := 1, aBuffer := aEvLog, aSources := aEvSrc, refData := stEvLog);
   fbLog(eFault := fbPump1.eErrorId, nCount := stPump1.tot.nTrips, nSrc := 2, ...);

@@ -10,7 +10,7 @@ WRONG  |--[ bAutoRun ]-----------[ FB_Run  EN ]--|     block frozen when bAutoRu
 RIGHT  |-------------------------[ FB_Run  EN ]--|     bRun := bAutoRun  (named pin)
 ```
 
-This matters even more in 0.2: equipment stops when its owner's rung stops calling it
+This matters even more for equipment: it stops when its owner's rung stops calling it
 (`OwnerLost`), and a part whose rung stops while it acts trips its owner (`PartLost`).
 
 ## 2. Wire signals to named pins

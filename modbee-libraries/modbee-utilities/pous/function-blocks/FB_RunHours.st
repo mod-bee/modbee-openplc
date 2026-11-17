@@ -1,5 +1,5 @@
 (* FB_RunHours — a run-hour and start meter with a service interval, for anything that runs (a blower, a heater, a
-drive not driven through FB_Motor) (src-v2 UT_RUN_HOURS). Hours are counted exactly (whole milliseconds, the rest
+drive not driven through FB_Motor). Hours are counted exactly (whole milliseconds, the rest
 carried: F_HoursAdd) into the lifetime and since-service totals, kept hourly and at each stop.
 Pins: bRunning, bResetService (the service is done) -> fHours (lifetime), bServiceDue, plus FB_Object's outputs.
 bServiceDue (a warning, ServiceDue) when the hours since the last service reach set.fServiceInterval (0 = off).

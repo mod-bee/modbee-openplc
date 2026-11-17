@@ -1,6 +1,5 @@
-(* FB_Group — duty / standby / assist over up to four pumps or motors (DESIGN-0.2.md section 5.4; the core of
-src-v2 UT_DUTY on UT_GROUP_RUN). It offers I_Equipment itself, so a level control or a run drives a group as it
-drives one pump.
+(* FB_Group — duty / standby / assist over up to four pumps or motors. It offers I_Equipment itself, so a level
+control or a run drives a group as it drives one pump.
 
 Pins: ipMember1..ipMember4 (the members, any I_Equipment: pumps, motors; unwired = none), nExtra (members wanted
 beyond the first while it is asked to run: assist / staging; -1 = the jockey alone), bRotate (rising edge: the
@@ -11,9 +10,9 @@ Jockey: the first member that is an I_Pump with role Jockey is not a duty member
 swapped or counted in nDuty). With nExtra -1 (FB_Cascade's low demand), or no duty member available, the group
 runs the jockey alone; with nExtra 0 or more it calls the duty members and keeps the jockey on until one of them
 runs (the hand-over). A staged stop releases it last.
-Parts: a part added to the group (e.g. FB_LevelCheck High on the header flow meter for a burst main, as
-src-v2's highFlow) is evaluated every scan: a trip or a stop releases every member at once (bError and the
-part's eErrorId on a trip, stop reason Part), a hold lets none start, a warning shows.
+Parts: a part added to the group (e.g. FB_LevelCheck High on the header flow meter for a burst main) is
+evaluated every scan: a trip or a stop releases every member at once (bError and the part's eErrorId on a trip,
+stop reason Part), a hold lets none start, a warning shows.
 Asked to run: the lead first, then the next available members in rotation order up to 1 + nExtra, one per
 set.tStageDelay; released one per set.tDestageDelay, the most recent first. Failover: a called member that is
 not running after set.tFailover is skipped and the next one is called at once (until a reset or nothing is
@@ -240,7 +239,7 @@ FOR nI := 1 TO cMax DO
   IF ipM <> NULL THEN
     IF __QUERYINTERFACE(ipM, ipP) THEN
       IF ipP.eActRole = E_PumpRole.Booster THEN
-        aMembers[nI] := NULL;     (* a booster is never a group member: FB_Booster runs it (src-v2: not in the rotation) *)
+        aMembers[nI] := NULL;     (* a booster is never a group member: FB_Booster runs it *)
       ELSIF ipP.eActRole = E_PumpRole.Jockey AND nJockey = 0 THEN
         nJockey := nI;
         fJockeyCapacity := MAX(0.0, ipP.fActCapacity);

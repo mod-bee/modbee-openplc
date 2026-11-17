@@ -1,4 +1,4 @@
-(* FB_Motor — a direct-on-line motor or a run relay (DESIGN-0.2.md section 5.1).
+(* FB_Motor — a direct-on-line motor or a run relay.
 
 Pins: bFeedback (run feedback contact), bOverload (TRUE = overload relay tripped) -> bQ (run output),
 bHoldOff (the block wants the output off: holds it off even while forced), plus FB_Equipment's bInterlock,

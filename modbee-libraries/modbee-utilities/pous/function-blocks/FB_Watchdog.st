@@ -1,4 +1,4 @@
-(* FB_Watchdog — comms / heartbeat monitor and generator (src-v2 UT_WATCHDOG).
+(* FB_Watchdog — comms / heartbeat monitor and generator.
 Pins: bBeat (a heartbeat bit from the remote, either edge) or nCounter (a counter / register, any change),
 bEnable, bReset (reset a held failure) -> bOk (remote alive), bCommsFail, bHeartbeatOut, nHeartbeatCount, plus
 FB_Object's bError / bWarning / eErrorId / eState. refData: its record.

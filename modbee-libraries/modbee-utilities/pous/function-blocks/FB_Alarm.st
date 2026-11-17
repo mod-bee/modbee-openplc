@@ -1,6 +1,6 @@
-(* FB_Alarm — one alarm as its own block, the ISA-18.2 way (src-v2 UT_ALARM, the same rules). Optional: alarm lists,
-history and notifications are the HMI / SCADA's. FB_AlarmTable is the lean choice for a panel's alarms; this block
-adds shelving, suppression, out of service, priorities, time stamps and the group annunciator (FB_Annunciator).
+(* FB_Alarm — one alarm as its own block, the ISA-18.2 way. Optional: alarm lists, history and notifications are the
+HMI / SCADA's. FB_AlarmTable is the lean choice for a panel's alarms; this block adds shelving, suppression, out
+of service, priorities, time stamps and the group annunciator (FB_Annunciator).
 The condition is bIn (wire a device's bError or bWarning); eCause names it (wire the device's eErrorId; None =
 set.stRow.eCode). F_AlarmRun does the rest as an FB_AlarmTable row: on / off delays (stRow.tDelay / tRecover),
 Auto / Manual (latched until a reset with the condition gone) / Retry (locks out after stRow.nMaxRetries raises

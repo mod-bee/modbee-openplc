@@ -1,4 +1,4 @@
-(* FB_DoseTimed EXTENDS FB_Dose — timed dosing (src-v2 UT_DOSE TIMED).
+(* FB_DoseTimed EXTENDS FB_Dose — timed dosing.
 While bRun (or a bStart latch): the pump on at set.fRate % for set.tOnTime, off for set.tOffTime, over and over (on first);
 a pause stops the clock. It doses only while bCarrierRunning has been on for set.tCarrierProven (Waiting, not a
 fault). Dosed = set.fPumpCapacity x fRate % while the pump runs.

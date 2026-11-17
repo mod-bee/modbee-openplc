@@ -1,10 +1,9 @@
-(* FB_ReportArray — FB_Report for a list of values (src-v2 UT_REPORT_ARRAY + UT_REPORT_ITEM, rows instead of element
-blocks; the same rules). Tables the project declares (VAR_IN_OUT, the same size): aItemSet (each value's settings,
-ST_ReportSet, at most 16 kept) and aItem (each value's live row: the project writes aItem[i].fIn and
-aItem[i].bInGood; the block writes bReport (one scan: send now), fValue, bGood, eReason in aItem[i].stMem, and
-aItem[i].sts). Each row runs the FB_Report decision (F_ReportRun). bEnable FALSE holds every item; bEnable back
-(link up / born) = every item reports First (with its and set.bReportOnStart); bForce / bCmdForce = every item
-reports now, aItem[i].bCmdForce that item. set.tHeartbeat applies to items whose own is 0.
+(* FB_ReportArray — FB_Report for a list of values. Tables the project declares (VAR_IN_OUT, the same size): aItemSet
+(each value's settings, ST_ReportSet, at most 16 kept) and aItem (each value's live row: the project writes
+aItem[i].fIn and aItem[i].bInGood; the block writes bReport (one scan: send now), fValue, bGood, eReason in
+aItem[i].stMem, and aItem[i].sts). Each row runs the FB_Report decision (F_ReportRun). bEnable FALSE holds every
+item; bEnable back (link up / born) = every item reports First (with its and set.bReportOnStart); bForce /
+bCmdForce = every item reports now, aItem[i].bCmdForce that item. set.tHeartbeat applies to items whose own is 0.
 Pins: bEnable, bForce, refData, aItemSet, aItem -> bAnyReport, nReportCount, plus FB_Object's outputs. Kept (a
 retained last-good copy, restored at power-up, a bad write put back, the row's sts.bRefused): set and the item
 settings. An item with a bad setting and no good copy is left out: warning BadSetting, sts.nBadItem names it.

@@ -1,4 +1,4 @@
-(* A pump: its role in a station and its capacity (DESIGN-0.2.md section 2). *)
+(* A pump: its role in a station and its capacity. *)
 
 INTERFACE I_Pump EXTENDS I_Motor
 

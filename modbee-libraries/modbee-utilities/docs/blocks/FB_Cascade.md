@@ -64,13 +64,16 @@ Decides how many pumps of a group run on one header: staging by speed and pressu
 
 ## How it works
 
-The staging of a pump cascade on one header holding a pressure or a flow. In 0.2 a cascade is built from blocks: [`FB_SpeedLoop`](FB_SpeedLoop.md) (the PID, the setpoint, sleep, the protections) drives an [`FB_Group`](FB_Group.md) of pumps (the group passes the loop's speed to every pump it calls: one shared speed; rotation, failover, swap, staged stop, the jockey) and `FB_Cascade` decides how many: `nExtra` -> `FB_Group.nExtra`. A fixed-speed set uses [`FB_SpeedLoop`](FB_SpeedLoop.md) with Fixed control (its `fError` still compares Pv with the setpoint) and `set.bVsd` FALSE here.
+The staging of a pump cascade on one header holding a pressure or a flow. A cascade is built from blocks: [`FB_SpeedLoop`](FB_SpeedLoop.md) (the PID, the setpoint, sleep, the protections) drives an [`FB_Group`](FB_Group.md) of pumps (the group passes the loop's speed to every pump it calls: one shared speed; rotation, failover, swap, staged stop, the jockey) and
+
+`FB_Cascade` decides how many: `nExtra` -> `FB_Group.nExtra`. A fixed-speed set uses [`FB_SpeedLoop`](FB_SpeedLoop.md) with Fixed control (its `fError` still compares Pv with the setpoint) and `set.bVsd` FALSE here.
 
 Staging, one pump at a time, only while the loop is in Control (Manual speed: none added or dropped); the need must last `set.tStageDelay` (add) or `set.tDestageDelay` (drop); after a change the next one waits the delay again; a pump is added only when the group has settled (`nRunning` has reached 1 + `nExtra`) and `bPermissive` is on. `set.eStageBy`:
 
 ```
   Pressure  set.bVsd: add with the speed at or above set.fStageAt and the value short of the setpoint by more
-            than set.fShortBand; drop at or below set.fDestageAt when not short. No VSD (set.bVsd FALSE): add when the value is
+            than set.fShortBand; drop at or below set.fDestageAt (set it to the loop's
+            minimum for "at the minimum only") when not short. No VSD (set.bVsd FALSE): add when the value is
             set.fAddBand short of the setpoint, drop when it is set.fDropBand past it.
   Flow      add above set.fAddPct % of the running capacity (fCapacity); drop below set.fDropPct % of the
             capacity left after the drop.

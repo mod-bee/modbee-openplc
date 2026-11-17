@@ -1,5 +1,5 @@
-(* FB_MotorSimulate — test equipment without the plant (src-v2 UT_MOTOR's simulate; DESIGN-0.2.md 5.1). Put it
-between the field feedback and the block's feedback pin: bFeedback := bRealFeedback normally; while the record's
+(* FB_MotorSimulate — test equipment without the plant. Put it between the field feedback and the block's feedback
+pin: bFeedback := bRealFeedback normally; while the record's
 bSimulate is on, bFeedback follows bQ (the block's own output, one scan later), as if the contactor / valve
 answered. bSimulate is not kept: it is off after a power cut, and a reset of the system clears it. While it is
 on: a warning (Simulated), so a simulated machine is never mistaken for a real one.

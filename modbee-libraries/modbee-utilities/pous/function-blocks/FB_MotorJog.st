@@ -1,6 +1,6 @@
-(* FB_MotorJog — a held jog (inch) button for a motor in Hand (src-v2 UT_MOTOR's Jog / jogMax; DESIGN-0.2.md 5.1).
+(* FB_MotorJog — a held jog (inch) button for a motor in Hand.
 While bJog is held and the motor is in Hand (and not already running from a Hand start), the motor runs: past its
-trips, restart delay and permissive, as src-v2 did; only Off and the motor's bInterlock stop it. Releasing bJog
+trips, restart delay and permissive; only Off and the motor's bInterlock stop it. Releasing bJog
 stops it at once. set.tJogMax (0 = none) ends a jog that is held too long; bJog must be released before the next.
 A jog is a held button on the panel only: an HMI cannot hold a jog (a lost link would keep it running).
 Pins: bJog (held), ipMotor (the motor, required), refData -> bJogging, plus FB_Object's outputs. *)

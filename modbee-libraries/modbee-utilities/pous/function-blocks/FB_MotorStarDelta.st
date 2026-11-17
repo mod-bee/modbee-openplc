@@ -1,4 +1,4 @@
-(* FB_MotorStarDelta EXTENDS FB_Motor — a star-delta starter (src-v2 UT_MOTOR_SD).
+(* FB_MotorStarDelta EXTENDS FB_Motor — a star-delta starter.
 Everything of FB_Motor (modes, protections, totals, refData) plus the star -> delta sequence. bQ = the main
 contactor; bFeedback = the main contactor's aux.
 Pins added: bFeedbackStar, bFeedbackDelta (the star / delta auxes, used with set.bUseStarDeltaFb), refSd (its

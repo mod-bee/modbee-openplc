@@ -1,5 +1,5 @@
-(* FB_ValveFloat EXTENDS FB_ValvePos — a floating (three-point) valve or damper: raise / lower contacts only (src-v2
-UT_VALVE_FLOAT). Everything of FB_ValvePos (where it goes, the feedback, the protections, Hand) plus the drive.
+(* FB_ValveFloat EXTENDS FB_ValvePos — a floating (three-point) valve or damper: raise / lower contacts only.
+Everything of FB_ValvePos (where it goes, the feedback, the protections, Hand) plus the drive.
 Pins added: refFloat (its record) -> bRaiseOut (open), bLowerOut (close): never together, set.tReversal between
 them (FB_Changeover).
 The position is the feedback when good, else estimated from the drive time (set.tStroke for a full stroke),

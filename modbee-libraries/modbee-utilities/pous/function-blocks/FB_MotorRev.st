@@ -1,4 +1,4 @@
-(* FB_MotorRev EXTENDS FB_Motor — a reversing starter (src-v2 UT_MOTOR_REV).
+(* FB_MotorRev EXTENDS FB_Motor — a reversing starter.
 Everything of FB_Motor (modes, protections, totals, refData) plus the direction. bQ = TRUE while either direction
 is asked to run; the direction auxes confirm running (bFeedback is not used).
 Pins added: bReverse (the Auto direction), bFeedbackFwd / bFeedbackRev (the auxes), bLimitFwd / bLimitRev (end

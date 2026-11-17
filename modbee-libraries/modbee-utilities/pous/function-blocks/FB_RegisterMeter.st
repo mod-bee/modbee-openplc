@@ -1,5 +1,5 @@
-(* FB_RegisterMeter — totals from a device's own total register (a Modbus energy / flow meter, a BeeBus counter)
-(DESIGN-0.2.md section 5.4; src-v2 UT_TOTALISER REGISTER). Offers I_Meter (the total, the rate per hour).
+(* FB_RegisterMeter — totals from a device's own total register (a Modbus energy / flow meter, a BeeBus counter).
+Offers I_Meter (the total, the rate per hour).
 Pins: fRegister (the device's running total, in its unit; LREAL so a 32-bit register stays exact), bInGood (the
 read can be trusted), refData.
 Each increase adds (fRegister - the last) x set.fScale. A drop is a device reset or a glitch: nothing is counted,

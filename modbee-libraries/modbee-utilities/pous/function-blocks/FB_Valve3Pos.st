@@ -1,8 +1,8 @@
 (* FB_Valve3Pos — a three-position valve: a 3-way diverter (A / closed / B), a spring-centred double solenoid, a
-three-coil valve, or a motorised valve with a mid position (src-v2 UT_VALVE_3POS). Positions 1, 2, 3.
+three-coil valve, or a motorised valve with a mid position. Positions 1, 2, 3.
 On FB_Equipment: an owner (a route, a zone) drives it through I_Equipment.Request: bRun = go, fSpeed = the position
 1..3 (none: set.nAutoPos, default 3); its request off = set.nRestPos, or with set.bPosLatch the last position
-asked (it stays there until another is asked; src-v2 posPulse). Hand: set.nHandPos (kept; nCmdPos 1..3, or
+asked (it stays there until another is asked). Hand: set.nHandPos (kept; nCmdPos 1..3, or
 FB_LocalControl's bPos1..bPos3, writes it and starts in Hand); a motorised valve: FB_LocalControl's bHalt stops it
 where it is until the next position or command. Off, the interlock or a trip: set.nSafePos. "Running" is away
 from the rest position. An FB_Exercise part on it moves an idle valve (in Auto) to nAutoPos for its run time.

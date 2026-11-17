@@ -1,4 +1,4 @@
-(* FB_AnalogOut — an engineering demand to an analog output card (src-v2 UT_ANALOG_OUT).
+(* FB_AnalogOut — an engineering demand to an analog output card.
 Pins: fIn (the demand, Auto), bInterlock (FALSE: set.fFailValue at once, or hold with set.bHoldOnInterlock),
 bManual (held: Manual while TRUE, a panel switch, not kept) -> fOut (the engineering value output), nOutRaw (for
 %QW), bLimited (clamped or ramping), plus FB_Object's bError / bWarning / eErrorId / eState. refData: its record.

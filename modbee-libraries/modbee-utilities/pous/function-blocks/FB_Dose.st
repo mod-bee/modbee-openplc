@@ -1,5 +1,4 @@
-(* FB_Dose — the engine every dosing block shares (FB_DoseBatch, FB_DoseFlow, FB_DoseTimed; src-v2 UT_DOSE's common
-part): written once.
+(* FB_Dose — the engine every dosing block shares (FB_DoseBatch, FB_DoseFlow, FB_DoseTimed): written once.
 bRun / bStart / bStop / bReset and the record's commands (bCmdStart, bCmdStop, bCmdHold, bCmdReset: once per
 write); bInterlock FALSE stops the pump in every variant (Flow / Timed resume by themselves, a Batch is held);
 bPermissive FALSE holds back a dose start; bHold and bCmdHold (until the next start) pause; bStop, bCmdStop, bAbort,

@@ -47,7 +47,7 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 
 ## How it works
 
-A series booster pump that runs with a station's duty pumps, as a part of the station's [`FB_LevelControl`](FB_LevelControl.md).
+A series booster pump that runs with a station's duty pumps, as a part of the station's [`FB_LevelControl`](FB_LevelControl.md) (one booster, not in the duty rotation).
 
 While the station runs (its request on and its pumps running): `set.eStartBy` Delay starts the booster `set.tDelay` after the duty pumps run; Pressure starts it while `ipPressure` is at or below `set.fStartAt`, until it is at or above `set.fStopAt` (with a pressure that is not good: as Delay). At a cycle end the booster stops at once; give the duty pumps a stop delay ([`FB_Pump`](FB_Pump.md) `set.tStopDelay` = the gap) so they stop that much later. `set.bRequired`: wanted and not running for `set.stLost`'s delay -> BoosterLost (a trip stops the station).
 

@@ -1,4 +1,4 @@
-(* FB_MotorVsd EXTENDS FB_Motor — a variable speed drive over hard-wired IO (src-v2 UT_MOTOR_VSD).
+(* FB_MotorVsd EXTENDS FB_Motor — a variable speed drive over hard-wired IO.
 Everything of FB_Motor (modes, protections, the plug, totals, refData) plus the speed. bQ = the drive's run
 command; bFeedback = the drive's running relay.
 

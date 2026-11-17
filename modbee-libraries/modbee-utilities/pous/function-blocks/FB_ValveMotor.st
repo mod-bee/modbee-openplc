@@ -1,4 +1,4 @@
-(* FB_ValveMotor EXTENDS FB_Valve — a motorised two-position valve or damper (src-v2 UT_VALVE kind MOTOR).
+(* FB_ValveMotor EXTENDS FB_Valve — a motorised two-position valve or damper.
 Everything of FB_Valve (modes, the safe position, the owner, end switches or travel time, protections, strokes,
 actuator in Local, slow stroke, exercise) plus the drive: bOpenOut drives open, bCloseOut drives closed, never
 together, set.tReversal between them (FB_Changeover); the drive stops at the end (its end switch, or the travel

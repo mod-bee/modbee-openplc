@@ -1,5 +1,5 @@
-(* F_IoForceSlot — one commissioning force slot (src-v2 UT_IO_FORCE_RUN): bCmdForce starts it (or starts its time
-again), bCmdRelease or bRelease ends it, it ends by itself after tForceTime, a wrong address (eWhere not Ok) or
+(* F_IoForceSlot — one commissioning force slot: bCmdForce starts it (or starts its time again), bCmdRelease or
+bRelease ends it, it ends by itself after tForceTime, a wrong address (eWhere not Ok) or
 no permit refuses / ends it. A command held on acts once. Returns TRUE while it forces. *)
 
 FUNCTION F_IoForceSlot : BOOL

@@ -6,17 +6,17 @@ Hand  bCmdStart / bCmdStop (the panel, or FB_LocalControl): a start while not pe
 waits out the restart delay; Hand never resumes after a power cut. No owner reaches it. set.tHandMax
 (0 = none) ends a Hand run after that long (stop reason MaxRun). Jog (Command(Jog) every scan, from
 FB_MotorJog; Hand only, not while a Hand run is latched): runs while held, past trips, delays and the
-permissive (src-v2); only Off and bInterlock stop it.
+permissive; only Off and bInterlock stop it.
 Auto  follows its owner's Request (called every scan); an owner that stops calling = owner lost, stop.
 A start waits for: permissive, the restart delay, the system's power-up hold, no part holding it.
 bCmdStop stops it until the owner's request drops.
 OutOfService (where the child allows it: motors, valves; not pumps): nothing runs, and no protection trips or
-warns (taken out for maintenance; src-v2 OOS); it is not ready, not available.
+warns (taken out for maintenance); it is not ready, not available.
 bInterlock FALSE stops it in every mode (not a fault). bPermissive FALSE blocks a start, never stops it.
 Trips (the block's own protections and its parts') stop it in every mode; the first one is eErrorId. After a
 reset clears a trip it runs again at once while its owner still asks (set.bRestartAfterReset FALSE: the owner's
-request must drop and come back first, src-v2's rule for machines that must not restart unexpectedly). set.bWarnNotAuto: a warning (NotAuto) while it is not in Auto and the plant is
-(ipSystem; unwired: always expected in Auto).
+request must drop and come back first: for machines that must not restart unexpectedly). set.bWarnNotAuto: a
+warning (NotAuto) while it is not in Auto and the plant is (ipSystem; unwired: always expected in Auto).
 
 A child calls, every scan:  bReset := Begin(refData, refData.set, refData.sts);
 (its own protections, with bReset)
@@ -136,7 +136,7 @@ END_PROPERTY
 PROPERTY PUBLIC bIsReady : BOOL
   GET
     bIsReady := eModePrev <> E_Mode.Off AND eModePrev <> E_Mode.OutOfService AND bInterlock AND bPermissive AND NOT bTripNow
-                AND NOT Unavailable();   (* e.g. an actuator in Local, a pump's motor in Hand (src-v2 Ready) *)
+                AND NOT Unavailable();   (* e.g. an actuator in Local, a pump's motor in Hand *)
   END_GET
 END_PROPERTY
 
@@ -292,7 +292,7 @@ METHOD PROTECTED FINAL Finish
 
   bTripNow := (bOwnTrip OR bPartTrip) AND refSet.eMode <> E_Mode.OutOfService;
   bWarnNow := (bOwnWarn OR bPartWarn) AND refSet.eMode <> E_Mode.OutOfService;
-  (* a reset that cleared a trip: the run request cycles first (src-v2 restartAfterReset) *)
+  (* a reset that cleared a trip: the run request cycles first *)
   IF bTripWas AND NOT bTripNow AND bReset AND NOT refSet.bRestartAfterReset AND NOT bRunCmd THEN
     bMustCycle := TRUE;
   END_IF;
@@ -349,7 +349,7 @@ METHOD PROTECTED FINAL Finish
     bHandStartReq := FALSE;
     eStop := E_StopReason.Interlock;
   ELSIF refSet.eMode = E_Mode.Hand AND bJogNow AND NOT bHandRun THEN
-    bRunCmd := TRUE;              (* jog: held, past trips, delays and the permissive (src-v2) *)
+    bRunCmd := TRUE;              (* jog: held, past trips, delays and the permissive *)
     bJogging := TRUE;
   ELSIF bTripNow THEN
     bRunCmd := FALSE;

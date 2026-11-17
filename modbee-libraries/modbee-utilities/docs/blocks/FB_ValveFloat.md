@@ -113,7 +113,9 @@ It is one of the `FB_ValvePos` family: the common part is described under *How i
 
 ## How it works
 
-A floating (three-point) valve or damper: raise / lower contacts only. Everything of `FB_ValvePos` (where it goes, the feedback, the protections, Hand) plus the drive.
+A floating (three-point) valve or damper: raise / lower contacts only.
+
+Everything of `FB_ValvePos` (where it goes, the feedback, the protections, Hand) plus the drive.
 
 The position is the feedback when good, else estimated from the drive time (`set.tStroke` for a full stroke), re-synced at the ends by the end switches or by over-travel (`set.tOverTravel` of extra drive at 0 / 100 %); homed by a full lower at power-up (`set.bHomeOnStart`; until then the position is -1, not known) or on `bCmdHome`.
 

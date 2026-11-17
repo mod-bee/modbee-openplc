@@ -1,5 +1,4 @@
-(* FB_PulseSeq — sequential pulsing: jet-pulse filter cleaning, flush valves, staged outputs (src-v2 UT_PULSE_SEQ, the
-same rules under 0.2 names).
+(* FB_PulseSeq — sequential pulsing: jet-pulse filter cleaning, flush valves, staged outputs.
 aOutputs (the project's row of valves, one element per channel) is pulsed one at a time in order: each channel
 gets set.nPulsesPerChannel pulses of tPulseOn with tPulseOff between them, then tChannelGap before the next channel.
 After the last channel the cycle is done (bCycleDone for one scan) and, while cleaning is still wanted, tCyclePause

@@ -1,5 +1,4 @@
-(* FB_Stats — minimum, maximum and time-weighted average of a value, for the current period and the previous one
-(src-v2 UT_STATS).
+(* FB_Stats — minimum, maximum and time-weighted average of a value, for the current period and the previous one.
 Pins: fIn, bInGood (its health; FALSE: samples skipped), bEnable (collect while TRUE), bRollover (close the
 period), bReset (clear both periods) -> fMinimum, fMaximum, fAverage (the current period), plus FB_Object's
 bError / bWarning / eErrorId / eState. refData: its record.

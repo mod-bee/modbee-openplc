@@ -83,7 +83,7 @@ Weekly time-of-day schedule, a local fallback (the platform holds the real calen
 
 Clock: `dtClock`, local time from [`F_LocalTime`](F_LocalTime.md) (the boards have no real-time clock: unwired = no clock, the schedule is off); `set.tUtcOffset` is added. `bClockOk` is off when the clock is implausible ([`F_ClockOk`](F_ClockOk.md)) or has not moved for 5 s: the schedule is then off (an override still works), warning NoClock. `bHourPulse` / `bDayPulse` give one scan on each new hour / at midnight, never doubled by a clock set back.
 
-Overrides (`bOverrideOn` / `bOverrideOff` pins, `bCmdOverrideOn` / `bCmdOverrideOff` / `bCmdCancelOverride`, each once per write): `bActive` on / off for `set.tOverrideFor` (0 = until the schedule next changes); Off wins, then Cancel, then On. `bEnable` FALSE (pin or `set.bEnable`) cancels an override. `sts.dtNextChange` is the next time the schedule changes.
+Overrides (`bOverrideOn` / `bOverrideOff` pins, `bCmdOverrideOn` / `bCmdOverrideOff` / `bCmdCancelOverride`, each once per write): `bActive` on / off for `set.tOverrideFor` (0 = until the schedule next changes); Off wins, then Cancel, then On. `bEnable` FALSE (pin or `set.bEnable`) cancels an override. `sts.dtNextChange` is the next time the schedule changes (within 8 days; DT#1970-01-01-00:00:00 = none or no clock).
 
 Kept (a retained last-good copy, restored at power-up, a bad write put back): set and the window rows. A window with a bad setting and no good copy is left out: warning BadSetting, `sts.nConfigWindow` names it.
 

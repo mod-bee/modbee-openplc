@@ -1,6 +1,5 @@
 (* FB_AlarmTable — the site's on-panel alarms in one block, with the lamps, the beacon, the siren and the healthy
-relay (src-v2 UT_ALARM_TABLE + UT_AT_ALARM + UT_ALARM_SHARED; rows instead of element blocks, DESIGN-0.2.md
-section 5.6). Optional: alarm lists, history and notifications are the HMI / SCADA's; the blocks detect and act
+relay. Optional: alarm lists, history and notifications are the HMI / SCADA's; the blocks detect and act
 without this.
 Pins: bSilence, bReset (acknowledge everything; clear the latched / locked rows whose condition has gone),
 bLampTest (held: every light and the siren on), refData, and the tables the project declares (VAR_IN_OUT, the

@@ -1,4 +1,4 @@
-(* FB_Annunciator — horn, alarm lamp and first-out for a group of FB_Alarms (src-v2 UT_ANNUNCIATOR, the same rules).
+(* FB_Annunciator — horn, alarm lamp and first-out for a group of FB_Alarms.
 aAlarm is the project's array of the group's alarm records (each FB_Alarm has one element as its refData). The
 lamp follows the standard annunciator sequence: fast flash a new alarm not yet acknowledged; slow flash an alarm
 that cleared before it was acknowledged; steady alarms present, all acknowledged; off nothing (F_Blink: every

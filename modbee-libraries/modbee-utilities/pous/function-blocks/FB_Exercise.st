@@ -1,6 +1,5 @@
 (* FB_Exercise — keeps idle equipment from seizing: after set.tInterval with its owner not running, it asks the owner
-for a run of set.tRun (src-v2 UT_PUMP and UT_VALVE exercise; DESIGN-0.2.md section 5.2). Its owner (ipOwner) is a
-block that honours a part's Request:
+for a run of set.tRun. Its owner (ipOwner) is a block that honours a part's Request:
   FB_LevelControl  the run goes through its pump or group, so the group's rotation exercises each member in turn
                    (a pump always has an owner, so a pump's exercise is its level control's)
   a valve          FB_Valve, FB_ValveLatch, FB_ValveMotor, FB_Valve3Pos (to set.nAutoPos), FB_ValveMod,

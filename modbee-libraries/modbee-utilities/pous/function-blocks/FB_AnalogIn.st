@@ -1,5 +1,5 @@
-(* FB_AnalogIn — a raw analog reading (or a remote / computed value) to an engineering value with its health
-(DESIGN-0.2.md section 5.4; src-v2 UT_ANALOG_IN). Wire the instance to any I_Measurement pin.
+(* FB_AnalogIn — a raw analog reading (or a remote / computed value) to an engineering value with its health. Wire
+the instance to any I_Measurement pin.
 
 Pins: fIn (the raw value, e.g. INT_TO_REAL(%IW0); the value itself with Direct), bInGood (the source is
 healthy: IO module, comms, device) -> fValue (engineering value), fPercent (of the span), bGood, plus
@@ -22,7 +22,8 @@ Second unit: fValueAlt = fValue * set.fAltFactor + set.fAltOffset (bar to psi: f
 sts.fValueAlt; it follows fValue (the held value while the signal has failed). A factor or offset that is not a
 finite number is a bad setting (put back).
 Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
-Moved out (decorators placed after it): filter, low cut-off, clamp, simulate, substitute, frozen check. *)
+Placed after it when needed: FB_MeasFilter (filter, low cut-off, clamp), FB_MeasOverride (simulate,
+substitute), FB_MeasFrozen (frozen check). *)
 
 FUNCTION_BLOCK FB_AnalogIn EXTENDS FB_Object IMPLEMENTS I_Measurement
   VAR_INPUT

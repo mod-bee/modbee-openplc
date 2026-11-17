@@ -1,4 +1,4 @@
-(* FB_Rate — rate of change, with rising-fast and falling-fast warnings (src-v2 UT_RATE).
+(* FB_Rate — rate of change, with rising-fast and falling-fast warnings.
 Pins: fIn (the value), bInGood (its health), bReset (restart the measurement) -> fRate (change per set.eUnit),
 bGood (a full window of good readings, settings valid), bRisingFast, bFallingFast, plus FB_Object's bError /
 bWarning / eErrorId / eState. refData: its record.

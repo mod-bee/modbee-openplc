@@ -1,4 +1,4 @@
-(* FB_Object — the base of every 0.2 block (DESIGN-0.2.md section 3): the error outputs and the system link.
+(* FB_Object — the base of every block: the error outputs and the system link.
 bError: a trip is active now. bWarning: a warning is active now. eErrorId: the first error since the last
 reset (first-out), else the first warning; None when nothing is active. eState: what the block is doing. *)
 

@@ -1,5 +1,5 @@
-(* FB_RunStyle — how a run takes its signal (modular plan UT_RUN_STYLE; src-v2 UT_RUN_INPUT): a front end for FB_Run
-(or any block with a held run pin), in the style the installer picks (set.eStyle):
+(* FB_RunStyle — how a run takes its signal: a front end for FB_Run (or any block with a held run pin), in the style
+the installer picks (set.eStyle):
   Held       bRun follows bIn
   Toggle     each rising edge of bIn flips bRun (a push-on / push-off button)
   KeepAlive  bRun while bIn keeps changing (pulses from a remote unit); off set.tKeepAlive after the last change

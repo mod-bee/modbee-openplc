@@ -1,5 +1,5 @@
-(* FB_MsgQueue — message ticker and site-status board for an HMI (src-v2 UT_MSG_QUEUE, the same rules; 0.2 messages
-are codes: the source's eState and eErrorId, the HMI shows the words).
+(* FB_MsgQueue — message ticker and site-status board for an HMI (messages are codes: the source's eState and
+eErrorId, the HMI shows the words).
 Call it once per source per scan, all calls on the same instance, aBuffer, aSources and refData (one rung each):
   fbMsgs(eSrcState := fbPump1.eState, eSrcError := fbPump1.eErrorId, nSrc := 1, aBuffer := aMsgBuf, aSources := aMsgSrc, refData := stMsgs);
   fbMsgs(eSrcState := fbPump2.eState, eSrcError := fbPump2.eErrorId, nSrc := 2, ...);

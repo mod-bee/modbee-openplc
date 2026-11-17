@@ -1,5 +1,5 @@
 (* FB_Booster — a series booster pump that runs with a station's duty pumps, as a part of the station's
-FB_LevelControl (src-v2 UT_PUMP_STATION booster; one booster, not in the duty rotation).
+FB_LevelControl (one booster, not in the duty rotation).
 While the station runs (its request on and its pumps running): set.eStartBy Delay starts the booster
 set.tDelay after the duty pumps run; Pressure starts it while ipPressure is at or below set.fStartAt, until it
 is at or above set.fStopAt (with a pressure that is not good: as Delay). At a cycle end the booster stops at

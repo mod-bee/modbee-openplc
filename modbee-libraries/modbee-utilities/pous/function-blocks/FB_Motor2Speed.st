@@ -1,4 +1,4 @@
-(* FB_Motor2Speed EXTENDS FB_Motor — a two-speed starter, Dahlander or separate windings (src-v2 UT_MOTOR_2SPD).
+(* FB_Motor2Speed EXTENDS FB_Motor — a two-speed starter, Dahlander or separate windings.
 Everything of FB_Motor (modes, protections, totals, refData) plus the speed choice. bQ = TRUE while either speed
 is asked to run; the per-speed auxes confirm running (bFeedback is not used).
 Pins added: bAutoHigh (the Auto speed when the owner gives none), bFeedbackLow / bFeedbackHigh (the auxes),

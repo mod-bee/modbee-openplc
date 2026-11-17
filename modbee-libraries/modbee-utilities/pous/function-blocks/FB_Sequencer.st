@@ -1,5 +1,4 @@
-(* FB_Sequencer — a start / stop chain: conveyors, crushing, process trains (src-v2 UT_SEQUENCER + UT_SEQ_STEP, rows
-instead of element blocks, DESIGN-0.2.md section 5.6; the same rules).
+(* FB_Sequencer — a start / stop chain: conveyors, crushing, process trains.
 Tables the project declares (VAR_IN_OUT, the same size, at most 32): aStepSet (each machine's settings, in START
 order) and aStep (each machine's live row: the block writes bCmd, the project writes bFeedback and bReady from
 the machine, e.g. m1.Request(bRun := aStep[1].bCmd, bHold := FALSE); aStep[1].bFeedback := m1.bIsRunning;

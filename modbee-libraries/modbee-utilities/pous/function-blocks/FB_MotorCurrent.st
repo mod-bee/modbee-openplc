@@ -1,7 +1,7 @@
-(* FB_MotorCurrent — a motor's current from a CT, as a part of its motor (src-v2 UT_MOTOR's current monitoring;
-DESIGN-0.2.md 5.1). Off until set.fFullLoad (the motor's full-load current, in the CT's unit) is set.
+(* FB_MotorCurrent — a motor's current from a CT, as a part of its motor. Off until set.fFullLoad (the motor's
+full-load current, in the CT's unit) is set.
 - fPercent: the current as % of full load. bProvesRun: at or above set.fRunPercent; wire it to the motor's
-  bFeedback when the CT, not an auxiliary contact, proves the motor runs (src-v2 runByCurrent).
+  bFeedback when the CT, not an auxiliary contact, proves the motor runs.
 - stHigh (overload by current, default Off) and stLow (dry run / broken belt, default Off): % of full load with
   a deadband, checked once the motor runs (bIsRunning) and set.tStartMask has passed.
 - stStartTooLong (a locked rotor, default Off): the current still at or above its % while the motor's run

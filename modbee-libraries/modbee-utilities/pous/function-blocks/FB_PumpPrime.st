@@ -1,5 +1,4 @@
-(* FB_PumpPrime — priming a pump at its start, as a part of its FB_Pump (DESIGN-0.2.md section 5.2;
-src-v2 UT_PUMP's prime).
+(* FB_PumpPrime — priming a pump at its start, as a part of its FB_Pump.
 
 Pins: ipOwner (the pump), ipPressure / ipFlow (optional: the measurement the prime is done by), bPrimeDone
 (the pipe is filled: a contact, for set.eDoneBy Input), refData -> bPriming, plus FB_Object's bError /

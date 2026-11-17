@@ -6,6 +6,6 @@ TYPE
     bResetByOff : BOOL := TRUE; (* switching to Off resets trips whose cause has gone *)
     tHandMax : TIME; (* longest Hand run (0 = no limit) *)
     bRestartAfterReset : BOOL := TRUE; (* after a reset clears a trip, run again at once; FALSE: *)
-    bWarnNotAuto : BOOL; (* warn NotAuto while not in Auto and the plant is in Auto (src-v2 ExpectAuto) *)
+    bWarnNotAuto : BOOL; (* warn NotAuto while not in Auto and the plant is in Auto *)
   END_STRUCT;
 END_TYPE
