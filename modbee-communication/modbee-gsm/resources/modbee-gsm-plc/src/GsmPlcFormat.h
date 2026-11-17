@@ -41,6 +41,7 @@ struct Field {
     const uint8_t* at = nullptr;
     uint32_t bytes = 0;     // the value's width
     uint32_t cap = 0;       // a STRING's declared length
+    const strucpp::EnumDesc* names = nullptr;   // an {attribute 'to_string'} enumeration's names
 };
 
 // One path segment against a descriptor's members: name and optional [n].
@@ -74,6 +75,7 @@ inline bool member(const strucpp::TypeDesc* desc, const uint8_t* base, const cha
         }
         out.at = at;
         out.cap = m.CAP;
+        out.names = strucpp::member_enum_desc(m);
         *nested = m.NESTED;
         return true;
     }
@@ -91,8 +93,11 @@ inline bool resolve(const strucpp::IEC_ANY& any, const char* path, size_t length
         out.at = any.PVALUE;
         out.bytes = (uint32_t)any.DISIZE;
         out.cap = (uint32_t)any.DISIZE;
+        out.names = strucpp::any_enum_desc(any);
         return true;
     }
+    // A path walks a STRUCT; only a STRUCT's descriptor lists members.
+    if (any.TYPECLASS != strucpp::TYPE_USERDEF) { return false; }
     const strucpp::TypeDesc* desc = any.TYPEDESC;
     const uint8_t* base = any.PVALUE;
     const char* p = path;
@@ -274,10 +279,18 @@ inline bool render(const Field& f, const char* spec, size_t specLength, char wor
         snprintf(out, capacity, "%s", *(const uint8_t*)f.at ? "TRUE" : "FALSE");
         return true;
     default: {
-        // Integers and enumerations: the number. The runtime keeps no names
-        // for an enumeration's values; {x|A|B|C} gives them.
+        // Integers: the number. An enumeration declared {attribute 'to_string'}:
+        // its member's name, as TO_STRING gives it; any other enumeration (or
+        // a value no member has): the number. {x|A|B|C} names them in the template.
         int64_t value = 0;
         if (hasSpec || !integerOf(f, &value)) { return false; }
+        if (f.cls == strucpp::TYPE_ENUM) {
+            const char* name = strucpp::enum_value_name(f.names, value);
+            if (name != nullptr) {
+                snprintf(out, capacity, "%s", name);
+                return true;
+            }
+        }
         if (f.cls == strucpp::TYPE_ULINT || f.cls == strucpp::TYPE_LWORD) {
             snprintf(out, capacity, "%llu", (unsigned long long)*(const uint64_t*)f.at);
         } else {
