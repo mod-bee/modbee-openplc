@@ -157,6 +157,11 @@ A metric first declared after the birth makes the node birth again.
      follow later changes of the text, of anyUnits and of fDeadbandPct (units
      and ranges show at the next birth); adding or removing a clause later is
      reported on nBadClause - restart the PLC to change membership.
+     A record is found by where it is, so two instances of one block can
+     each record their own local; give each its own sPrefix, as their metric
+     names would otherwise collide (refused: InvalidArgument, nBadClause -4).
+     nLostCnt counts host writes to cmd and set members dropped because four
+     were already waiting.
      Ok, NotConnected, InvalidArgument (a bad clause, or tLogInterval or
      tLiveInterval T#0s where it is used), QueueFull (out of memory, or a message
      asked for could not be queued: it asks again).
@@ -364,6 +369,7 @@ METHOD PUBLIC Record : E_MqttResult
   VAR_OUTPUT
     nMetricCnt : INT;                       (* metrics the record declared *)
     nBadClause : INT;                       (* the first clause that cannot be used, from 1; 0 none *)
+    nLostCnt   : DINT;                      (* host writes to cmd and set members dropped with four already waiting *)
   END_VAR
 END_METHOD
 
@@ -779,12 +785,14 @@ struct MqSpRecord {
     int16_t bad = 0;                   // the first clause that could not be used
     int16_t declareBad = 0;            // the same, found when the members were declared
     bool lastSend = false;             // bSend at the last call, for onreq's edge
+    uint32_t calledCycle = 0;          // the node cycle of its last call
     bool applied = false;
     bool usesUnits = false;
 };
 
 struct MqSpReport {
     std::vector<MqSpRecord*> records;
+    uint32_t cycle = 1;                // the node's cycles: a record called in this one or the last is in use
     std::vector<std::string> devices;  // 'live', 'cfg-<page>', as first used
     std::vector<std::string> ownDevices;  // dev=<name>: the program's devices
     std::vector<uint8_t> demanded;
@@ -1738,6 +1746,8 @@ static E_MQTTRESULT mq_spRecordFail(MqSpReport& report, const strucpp::IEC_ANY& 
         report.failText += ": tLiveInterval is T#0s";
     } else if (bad == -3) {
         report.failText += ": tLogInterval is T#0s";
+    } else if (bad == -4) {
+        report.failText += ": recorded from another variable with the same sPrefix";
     } else if (bad < 0) {
         report.failText += ": not a STRUCT with a STRING point list";
     } else {
@@ -1785,6 +1795,7 @@ void setup()
 void loop()
 {
     nTask = mq_currentTask();   // every method of this block shares it
+    if (MqSpReport* cycling = mq_spReportOf((strucpp::XWORD_t)nReport)) cycling->cycle++;
 
     // --- THE CONNECTION IS FB_MqttClient'S ---
     //
@@ -2012,6 +2023,7 @@ E_MQTTRESULT Record()
 {
     nMetricCnt = 0;
     nBadClause = 0;
+    nLostCnt = 0;
     if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
     MqttSparkplugNode* node = mq_spNodeOf((strucpp::XWORD_t)nApi);
     MqSpReport* report = mq_spReportOf((strucpp::XWORD_t)nReport);
@@ -2040,6 +2052,13 @@ E_MQTTRESULT Record()
     for (size_t i = 0; i < report->records.size() && record == nullptr; i++) {
         MqSpRecord* r = report->records[i];
         if (r->type == anyData.TYPEDESC && mq_spRecordIs(*r, anyData, prefix)) {
+            // The same name and prefix from another variable still in use
+            // (two instances of one block, one sPrefix): the metrics would
+            // collide, so the second is refused. Moved (an online change): taken.
+            if (r->calledCycle + 1 >= report->cycle && r->address != anyData.PVALUE) {
+                nBadClause = -4;
+                return mq_spRecordFail(*report, anyData, prefix, E_MQTTRESULT::INVALIDARGUMENT, -4);
+            }
             r->address = anyData.PVALUE;
             record = r;
         }
@@ -2089,6 +2108,7 @@ E_MQTTRESULT Record()
             record->unitsSum = report->unitsSum;
         }
     }
+    record->calledCycle = report->cycle;
     nMetricCnt = record->points;
     nBadClause = record->bad;
 
@@ -2116,6 +2136,12 @@ E_MQTTRESULT Record()
             queueFull = true;
         }
     }
+    int32_t lost = 0;
+    for (const MqSpGroup& group : record->groups) {
+        if (!mq_spIsWritableKind(group.kind)) continue;
+        for (const MqSpLeaf& leaf : group.leaves) lost += (int32_t)node->writesLostAt((size_t)leaf.point);
+    }
+    nLostCnt = lost;
 
     if (record->bad != 0) {
         return mq_spRecordFail(*report, anyData, prefix, E_MQTTRESULT::INVALIDARGUMENT,

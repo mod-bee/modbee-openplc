@@ -41,7 +41,7 @@ could explain.
 | `RuntimeTcp` | the Runtime | `sHost`, `nPort` |
 | `ArduinoWiFi` | a board | `sHost`, `nPort`, and `stNetworkConfig.sSsid` - or node-uio's `NETWORK` joins the network |
 | `ArduinoEthernet` | a board | `sHost`, `nPort`, and `stNetworkConfig`'s MAC and address |
-| `Cellular` | a board | `sHost`, `nPort`, and a `GSM_MODEM` from the `modbee-gsm` library |
+| `Cellular` | a board | `sHost`, `nPort`, and a modem block (`FB_GsmModemA7670` or `FB_GsmModemSim7070`) from the `modbee-gsm` library |
 | `External` | either | `nExternalLink`, and nothing else |
 
 | `E_MqttSecurity` | |

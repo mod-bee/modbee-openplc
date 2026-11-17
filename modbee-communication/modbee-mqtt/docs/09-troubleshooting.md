@@ -153,8 +153,8 @@ Page 10. The client's task interval is almost always the answer.
 **Ethernet needs `MQTT_ENABLE_ETHERNET`**, a define in the board package's
 compiler flags. Page 03 explains why it is a define rather than automatic.
 
-**Cellular needs `modbee-gsm`**, which is a separate library, and a `GSM_MODEM` in the
-program. Until the modem has a data connection (`GSM_MODEM`'s `READY`) the
+**Cellular needs `modbee-gsm`**, which is a separate library, and a modem block (`FB_GsmModemA7670` or `FB_GsmModemSim7070`) in the
+program. Until the modem has a data connection (the modem block's `bConnected`) the
 client says why on `sLastError` and keeps retrying.
 
 **TLS on a board** is the same on Wi-Fi, Ethernet and cellular on an ESP32 (page

@@ -17,7 +17,13 @@ eResult := sp.Record(anyData    := PUMP1,
 | `sSettings` | its point list: a `STRING` variable of any length, or a literal |
 | `sPrefix` | put before every metric name, up to 32 characters. Empty for none |
 | `nMetricCnt` | metrics the record declared |
-| `nBadClause` | the first clause that cannot be used, counting from 1; `0` none; `-1` when `anyData` is not a STRUCT or `sSettings` not a STRING |
+| `nBadClause` | the first clause that cannot be used, counting from 1; `0` none; `-1` when `anyData` is not a STRUCT or `sSettings` not a STRING; `-4` when another variable already records with the same name and `sPrefix` |
+| `nLostCnt` | host writes to `cmd` and `set` members dropped because four were already waiting (0.2.1) |
+
+A record is found by where it is, so two instances of one function block can each
+record their own local. Give each its own `sPrefix`: with the same prefix their
+metric names would collide, and the second is refused (`InvalidArgument`,
+`nBadClause` `-4`).
 
 It returns `Ok` while the node is born, `NotConnected` while it is not (the
 record is kept and goes in the next birth), `InvalidArgument` for a bad clause

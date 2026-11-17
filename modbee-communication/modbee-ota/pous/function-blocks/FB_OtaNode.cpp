@@ -72,7 +72,10 @@ install their own firmware. With stSigningConfig.sPublicKey only firmware
 signed by the holder of the private key installs, and an unsigned one is
 refused; the private key never leaves the PC that signs the releases. A key
 that only arrives after the first scan (from retained memory, an HMI) is taken
-when it does; bRequireSigned refuses every update until then. The check takes
+when it does; bRequireSigned refuses every update until then. A key that is
+set but cannot be used (not 128 hex characters, or the board cannot check
+signatures) fails safe: no update is taken until it is fixed, and bError says
+why. The check takes
 about 160 ms on a Node UIO and runs in the background, never in a scan.
 
 OVER SPARKPLUG. The image always travels on sBaseTopic's own topics, at full
@@ -242,6 +245,7 @@ struct OtaNodeContext {
   OtaMqttClientLink* link = nullptr;
   MqttClient* client = nullptr;
   bool enabled = true;
+  bool keyUnusable = false;   // a key is set but cannot be used: no update is taken
   bool begun = false;
   bool signing = false;  // a verifier is attached
   // OtaSettings keeps pointers; these outlive it.
@@ -255,7 +259,8 @@ struct OtaNodeContext {
 // A message for this node arrives inside FB_MqttClient's poll, in the task
 // both blocks share - the loop below refuses to run in any other.
 static bool ota_nodeGate(void* context) {
-  return static_cast<OtaNodeContext*>(context)->enabled;
+  const OtaNodeContext* c = static_cast<OtaNodeContext*>(context);
+  return c->enabled && !c->keyUnusable;
 }
 static void ota_nodeEvent(void*, OtaEvent event, OtaUpdater&) {
   // The boot slot has switched and the reboot is two seconds away: the last
@@ -489,6 +494,10 @@ void loop()
         // when it is set in the declaration, later when it arrives later.
         const OtaResult signedBy = ota_nodeSign(*c, stSigningConfig.SPUBLICKEY.c_str());
         const bool keyError = signedBy != OtaResult::Ok && signedBy != OtaResult::NotReady;
+        // A key that is set but cannot be used fails safe: no update is taken
+        // until it is fixed, whatever bRequireSigned says. Unsigned firmware
+        // must never install because a key was mistyped.
+        c->keyUnusable = keyError;
 
         // The program's commands, on their rising edges.
         const bool accept = (bool)bAccept && !(bool)bLastAccept;
@@ -529,9 +538,9 @@ void loop()
         eErrorId = (E_OTARESULT)(int32_t)(int)(keyError ? signedBy : OtaResult::Ok);
         if (keyError) {
             sLastError = signedBy == OtaResult::InvalidArgument
-                             ? "sPublicKey is not 128 hex characters"
-                         : signedBy == OtaResult::NoMemory ? "no memory for the signature check"
-                                                           : "this board cannot check signatures";
+                             ? "sPublicKey is not 128 hex characters: no update is taken until it is fixed"
+                         : signedBy == OtaResult::NoMemory ? "no memory for the signature check: no update is taken"
+                                                           : "this board cannot check signatures: no update is taken";
         }
     } else {
         bActive = false;
