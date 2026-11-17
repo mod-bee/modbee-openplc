@@ -11,12 +11,6 @@ on the same connection, and a whole STRUCT reports with one call:
 These pages are for the person writing the ST. They assume you know a PLC.
 They do not assume you have ever used MQTT - page 01 starts there.
 
-> **Coming from 0.1.x?** 0.2.0 replaces 28 blocks with 6. A project built on
-> 0.1.x stays on 0.1.x and runs unchanged - pin it with `openplc-cli library
-> pin <project> modbee-mqtt@0.1.2` - and moves when its owner chooses. The wire does not
-> change: the same configuration sends the same topics, metrics and births.
-> [Migrating from 0.1](migrating-from-0.1.md) maps every old block and pin.
-
 ## Quick start: a plain MQTT client
 
 ```st
@@ -130,7 +124,6 @@ to be the broker, one to be a client of it. See [11 Broker](11-broker.md).
 | [13 Provisioning](13-provisioning.md) | a PLC that gets its own login from a modbee broker, by itself |
 | [14 Sparkplug](14-sparkplug.md) | SCADA over Sparkplug B: the node, metrics, writes, Live Demand, time, outage history and daily totals |
 | [15 Record](15-sparkplug-record.md) | `sp.Record`: a whole STRUCT by point list - classes, options, metric names |
-| [Migrating from 0.1](migrating-from-0.1.md) | every 0.1.x block and pin, and where it went |
 
 ## How a method behaves
 

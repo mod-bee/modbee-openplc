@@ -14,9 +14,6 @@ called every scan while it is wanted and returns `Ok` while its record is valid.
 A method's outputs are read with `=>`:
 `r := node.Watch(..., eQuality => q);`. An input left out takes its default.
 
-> Generated from each block's own comment and declarations by
-> `internal/make-block-reference.py`; edit the block, not this page.
-
 | Block | What it does | Methods |
 | --- | --- | --- |
 | [`FB_ModbusBridge`](#fb_modbusbridge) | Puts TCP clients in front of a serial segment, routed by unit id. |  |

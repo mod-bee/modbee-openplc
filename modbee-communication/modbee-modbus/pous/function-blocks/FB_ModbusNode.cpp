@@ -629,8 +629,7 @@ strucpp::IEC_TIME mbb_timeOf(int32_t milliseconds)
 }
 
 // The enumerations the methods cast rather than translate, checked here
-// because every program with this library has a node. internal/check-enums.py
-// checks the whole lists.
+// because every program with this library has a node.
 static_assert((int)strucpp::E_MODBUSRESULT::PROTOCOLERROR + 1 == MB_RESULT_COUNT,
               "E_ModbusResult must mirror ModbusResult member for member");
 static_assert((int)strucpp::E_MODBUSTABLE::COIL == (int)ModbusTable::Coil &&

@@ -103,8 +103,7 @@ it never does:
 ## Publish says NotConnected
 
 The client was not connected at the rising edge of `bExecute`. A request is
-refused at once and never queued for later - the host's `Write` too, which
-in 0.1.x held the command until the link came back.
+refused at once and never queued for later - the host's `Write` too.
 Gate the edge on `mqtt.bConnected`, or raise it again when the link is back.
 
 ## A method says E_MqttResult.NotSupportedByProtocol
@@ -245,7 +244,6 @@ On a board that is most of the heap before the ladder logic gets any.
 
 On the Runtime it refuses three things at start rather than half-applying them
 - no rules, `E_MqttSecurity.TlsPinned` on a block with no key pin, and a mapping that
-would loop. Page 12 says what each means. A 0.1.x bridge that set `ERROR` with
-`STATUS = Queued` and never forwarded is the start fault 0.2.0 fixed.
+would loop. Page 12 says what each means.
 
 **Next:** [10 Scan rate](10-scan-rate.md)

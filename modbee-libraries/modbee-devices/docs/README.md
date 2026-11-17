@@ -4,8 +4,7 @@ One block per field device. Each block knows its device's registers, scaling
 and plausible ranges, so a project never deals with Modbus addresses.
 
 Built on **modbee-modbus** 0.2.0: wire the block's `fbNode` to the `FB_ModbusNode`
-of the device's line (RS485 client, or TCP). Moving from 0.1.x: see
-[migrating-from-0.1](migrating-from-0.1.md).
+of the device's line (RS485 client, or TCP).
 
 | Block | Device |
 | --- | --- |

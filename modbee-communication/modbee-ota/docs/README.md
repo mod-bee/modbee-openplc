@@ -147,29 +147,3 @@ A program that never calls `Sparkplug` carries none of its code.
 | `nJob`, `sOffered` | the server's number for the update, and its version |
 | `eOutcome`, `eResult` | how the last update ended, and why |
 | `bError`, `eErrorId`, `sLastError` | the block cannot run, or the key cannot be used; in words, also a command the updater refused |
-
-## 0.1.x → 0.2.0
-
-0.2.0 follows the naming of the MQTT library 0.2.0 and needs it. A project on
-0.1.x stays on it (`openplc-cli library pin`) until its owner moves it. Topics,
-payloads, Sparkplug metric names and Node Control commands are unchanged.
-
-| 0.1.x | 0.2.0 |
-|---|---|
-| `OTA_NODE` | `FB_OtaNode` |
-| `CLIENT : MQTT_CLIENT` | `fbClient : FB_MqttClient` |
-| `ENABLE`, `BASE`, `BOARD`, `VERSION` | `bEnable`, `sBaseTopic`, `sBoard`, `sVersion` |
-| `AUTO_ACCEPT`, `AUTO_APPLY`, `ALLOW_DOWNGRADE` | `bAutoAccept`, `bAutoApply`, `bAllowDowngrade` |
-| `CONFIRM_MODE`, `CONFIRM_TIME` | `eConfirmMode`, `tConfirmTimeout` |
-| `BUFFER`, `STALL_TIME`, `RESUME_EVERY` | `nBufferSize`, `tStallTimeout`, `nResumeEvery` |
-| `ACCEPT`, `REJECT`, `APPLY`, `ABORT`, `CONFIRM` | `bAccept`, `bReject`, `bApply`, `bAbort`, `bConfirm` |
-| `ACTIVE`, `STATE`, `PROGRESS`, `RECEIVED`, `SIZE`, `JOB`, `OFFERED` | `bActive`, `eState`, `nProgress`, `nReceived`, `nSize`, `nJob`, `sOffered` |
-| `OUTCOME`, `RESULT`, `ERROR`, `LAST_ERROR` | `eOutcome`, `eResult`, `bError`, `sLastError`; new `eErrorId` |
-| `REQUIRE_SIGNED` | `stSigningConfig.bRequireSigned` |
-| `OTA_SIGNING` (`NODE`, `KEY`) | `stSigningConfig.sPublicKey`; its `ACTIVE` is `bSigned`, its `ERROR`/`STATUS` the block's `bError`/`eErrorId` |
-| `OTA_SPARKPLUG` (`NODE`, `SPARKPLUG`) | `ota.Sparkplug(fbNode := sp)`; its `ACTIVE` is the result `Ok`, its `LAST_ERROR` the block's `sLastError` |
-| `OTA_STATE` (`OTA_IDLE`, ...) | `E_OtaState` (`Idle`, ...) |
-| `OTA_RESULT` (`OTA_OK`, ...) | `E_OtaResult` (`Ok`, ...), same order; new last value `WrongTask` |
-| `OTA_OUTCOME` (`OTA_NONE`, ...) | `E_OtaOutcome` (`None`, `Success`, `Failed`) |
-| `OTA_CONFIRM` (`OTA_CONFIRM_LINK`, `_PROGRAM`, `_BOOT`) | `E_OtaConfirmMode` (`OnLinkUp`, `Manual`, `OnBoot`) |
-| a block in the wrong task: `RESULT = OTA_NOT_READY` | `eErrorId = E_OtaResult.WrongTask` (`eResult` still `NotReady`) |

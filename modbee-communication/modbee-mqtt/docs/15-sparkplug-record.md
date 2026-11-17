@@ -244,24 +244,4 @@ while someone views the node. Then `view` sends, `log` speeds up to
 `tLiveInterval`, and the `live` and `cfg-...` devices the host asks for are
 born. Page 14 has the contract - the offer, the demand, the lease.
 
-## Coming from SPARKPLUG_STRUCT
-
-| 0.1.x `SPARKPLUG_STRUCT` | 0.2.0 point list |
-| --- | --- |
-| `MODE := OnChange` | `now` |
-| `WRITABLE := TRUE` | `cmd`, with `stReportConfig.bRemoteControl` |
-| `MODE := ChangedEvery`, `PERIOD := T#15m` | `log` and `tLogInterval` |
-| `MODE := ChangedEvery`, `ENABLE` wired to "someone is viewing" | `view`, or `live`, with Live Demand doing the wiring |
-| `MODE := OnInterval`, `PERIOD := T#1m` | `every:T#1m` |
-| `MODE := OnRequest`, `REQ := bGo` | `onreq`, with `bSend := bGo` |
-| `DEVICE := 'skid2'` | `dev=skid2`, and `sp.Device` for the device |
-| `SETTINGS` entry `NAME` | the clause's members |
-| `UNITS`, `DEADBAND`, `DEADBAND_PCT`, `LOW`, `HIGH` | `u=`, `db=`, `pct=`, `lo=`, `hi=` |
-| `PULSE := T#500ms` | `pulse=500` (milliseconds) |
-| `SKIP := TRUE` | cover the member with no clause |
-| `PREFIX` | `sPrefix` |
-| `BAD_SETTING` | `nBadClause` |
-
-[Migrating from 0.1](migrating-from-0.1.md) has the rest.
-
 **Next:** [07 Block reference](07-block-reference.md) for every pin.

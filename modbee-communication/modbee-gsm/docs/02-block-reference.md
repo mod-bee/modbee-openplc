@@ -13,10 +13,6 @@ every scan while it is wanted and returns `Ok` while its outputs are valid. A
 method's outputs are read with `=>`: `ok := modem.Status(nRssi => rssi);`. An
 input left out takes its default.
 
-> Generated from each block's own comment and declarations by
-> `internal/tools/make-block-reference.py`; edit
-> `internal/tools/modem-block.cpp.in`, not this page.
-
 | Block | What it does | Methods |
 | --- | --- | --- |
 | [`FB_GsmModemA7670`](#fb_gsmmodema7670) | A cellular modem: a SIMCom A7670, A7672, A7678 or A7608 (LTE Cat-1), as on the ModBee GSM HAT. | [`SendSms`](#fb_gsmmodema7670sendsms), [`SendSmsRequest`](#fb_gsmmodema7670sendsmsrequest), [`Format`](#fb_gsmmodema7670format), [`Inbox`](#fb_gsmmodema7670inbox), [`SmsCommand`](#fb_gsmmodema7670smscommand), [`AtCommand`](#fb_gsmmodema7670atcommand), [`Power`](#fb_gsmmodema7670power), [`Socket`](#fb_gsmmodema7670socket), [`Status`](#fb_gsmmodema7670status), [`NetworkTime`](#fb_gsmmodema7670networktime), [`Gnss`](#fb_gsmmodema7670gnss) |

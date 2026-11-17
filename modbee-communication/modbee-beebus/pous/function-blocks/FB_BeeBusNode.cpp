@@ -794,8 +794,7 @@ uint8_t bb_wireTypeOfClass(uint32_t typeClass)
 
 // E_BEEBUSRESULT mirrors BeeBusResult member for member (Immediate is Ok), so
 // a method casts rather than translates. A member added on one side without
-// the other is a build error here, not a wrong reason on a panel; the order is
-// checked by internal/check-enums.py.
+// the other is a build error here, not a wrong reason on a panel.
 static_assert((int)E_BEEBUSRESULT::BUFFERFULL + 1 == BEEBUS_RESULT_COUNT,
               "E_BEEBUSRESULT must mirror BeeBusResult member for member");
 static_assert((int)E_BEEBUSRESULT::QUEUED == (int)BeeBusResult::Queued &&

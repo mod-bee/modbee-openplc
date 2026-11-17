@@ -1538,8 +1538,8 @@ static int mq_spRecordApply(MqttSparkplugNode* node, MqSpRecord& record,
 }
 
 // One group's scan: writes in (or refused while the host may not write),
-// pulses, values into the node, and what is to go. Ported from the 0.1
-// SPARKPLUG_STRUCT, with its mode fixed by the class. Returns QueueFull when a
+// pulses, values into the node, and what is to go, each member's mode fixed
+// by its class. Returns QueueFull when a
 // message asked for could not be queued, else Ok. `request`: Record's bSend
 // rose this scan (onreq).
 static uint8_t mq_spGroupScan(MqttSparkplugNode* node, MqSpReport& report,

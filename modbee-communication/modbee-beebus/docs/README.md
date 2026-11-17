@@ -10,10 +10,6 @@ These pages are for the person writing the ST. They assume you know ladder or
 structured text and, helpfully but not necessarily, a little Modbus. They do
 not assume you have read the protocol source.
 
-**Coming from 0.1?** [Migrating from 0.1](migrating-from-0.1.md) has every 0.1
-block and pin against what replaces it. A project built on 0.1.x stays on 0.1.x
-until you move it, and nothing on the wire changes when you do.
-
 ## Where to start
 
 **Never used BeeBus.** Read [01 - What it is](01-what-it-is.md), then work
@@ -61,7 +57,6 @@ change that fixes it.
 | [09 - Troubleshooting](09-troubleshooting.md) | Symptom, cause, fix |
 | [10 - Scan rate](10-scan-rate.md) | Why the task interval prices the ring, and the node's own task |
 | [11 - Settings both ways](11-bidirectional-binding.md) | `Serve`, `Bind` - a panel changes, the PLC decides, both end the same |
-| [Migrating from 0.1](migrating-from-0.1.md) | Every 0.1 block, pin and value, and what replaces it |
 
 ## The protocol underneath
 

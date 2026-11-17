@@ -152,8 +152,4 @@ another unit on the same node - with answers that take seconds.
 ## The protocol underneath
 
 `ModbusPoint` and `ModbusClient::setUnitTimeout()` in the modbee-modbus
-library. The per-unit timeout fixed a real fault: the client's last expiry pass
-used to judge every outstanding request against the cold-start timeout, so a
-unit with a longer timeout of its own was cut off at about 200 ms anyway.
-
-**Next:** [Migrating from 0.1](migrating-from-0.1.md)
+library.

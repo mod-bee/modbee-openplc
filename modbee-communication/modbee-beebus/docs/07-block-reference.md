@@ -13,9 +13,6 @@ Every method returns an `E_BeeBusResult`. A **request** (`Publish`, `Write`,
 while its record is valid. A method's outputs are read with `=>`:
 `ok := node.Subscribe(..., eQuality => q);`. An input left out takes its default.
 
-> Generated from each block's own comment and declarations by
-> `internal/make-block-reference.py`; edit the block, not this page.
-
 | Block | What it does | Methods |
 | --- | --- | --- |
 | [`FB_BeeBusNode`](#fb_beebusnode) | A BeeBus node: this PLC's place on one segment, serial or UDP. | [`Topic`](#fb_beebusnodetopic), [`Publish`](#fb_beebusnodepublish), [`Subscribe`](#fb_beebusnodesubscribe), [`PublishStruct`](#fb_beebusnodepublishstruct), [`SubscribeStruct`](#fb_beebusnodesubscribestruct), [`Serve`](#fb_beebusnodeserve), [`Bind`](#fb_beebusnodebind), [`Write`](#fb_beebusnodewrite), [`Buffer`](#fb_beebusnodebuffer), [`ModbusMap`](#fb_beebusnodemodbusmap), [`ModbusRead`](#fb_beebusnodemodbusread), [`ModbusWrite`](#fb_beebusnodemodbuswrite), [`Statistics`](#fb_beebusnodestatistics), [`PeerStatus`](#fb_beebusnodepeerstatus) |

@@ -9,8 +9,7 @@ any AT command, and the module's power. `FB_MqttClient` from `modbee-mqtt`
 uses the same modem with `eTransport := E_MqttTransport.Cellular`.
 
 These pages are for the person writing the ST or drawing the ladder. They
-assume you know a PLC, not a modem. Coming from 0.1.x? See
-[migrating from 0.1](migrating-from-0.1.md).
+assume you know a PLC, not a modem.
 
 ## Where to start
 
@@ -28,8 +27,8 @@ you are seeing.
 
 | Block | Module | |
 | --- | --- | --- |
-| `FB_GsmModemA7670` | SIMCom A7670, A7672, A7678, A7608 (LTE Cat-1) - the ModBee GSM HAT | links the A76XX driver only |
-| `FB_GsmModemSim7070` | SIMCom SIM7070, SIM7080, SIM7090 (LTE-M, NB-IoT) | links the SIM707x driver only |
+| `FB_GsmModemA7670` | SIMCom A7670, A7672, A7678, A7608 (LTE Cat-1) - the ModBee GSM HAT |
+| `FB_GsmModemSim7070` | SIMCom SIM7070, SIM7080, SIM7090 (LTE-M, NB-IoT) |
 
 Pick the block for the module on the board: only its driver goes into the
 firmware (about 4 kB less flash than both), and a module of the other family
@@ -43,19 +42,19 @@ operator, bands), `stCapacityConfig` (sockets, buffers, command queue) and
 
 ## The methods
 
-| Method | | Replaces (0.1.x) |
-| --- | --- | --- |
-| `SendSms` | queues a text message to a list of numbers; the block sends them, with an hourly limit and retries | `GSM_SMS_SEND` |
-| `SendSmsRequest` | one text message on a rising edge, followed until the network has it | `GSM_SMS_SEND` |
-| `Format` | a message from a template, `{member}` placeholders filled from a STRUCT | |
-| `Inbox` | text messages arriving, one a call | `GSM_SMS_RECEIVE` |
-| `SmsCommand` | text-message commands from allowed numbers, with PINs, replies and a rate limit | `GSM_SMS_COMMAND` |
-| `AtCommand` | any AT command, and its reply | `GSM_AT` |
-| `Power` | switches the module off, on, or restarts it | `GSM_POWER` |
-| `Socket` | a TCP connection to a server, plain or TLS | `GSM_SOCKET` |
-| `Status` | signal, network, addresses, serial numbers and counters | `GSM_STATUS` |
-| `NetworkTime` | the time, from the network | `GSM_TIME` |
-| `Gnss` | the module's satellite position, where it has a receiver | `GSM_GNSS` |
+| Method | |
+| --- | --- |
+| `SendSms` | queues a text message to a list of numbers; the block sends them, with an hourly limit and retries |
+| `SendSmsRequest` | one text message on a rising edge, followed until the network has it |
+| `Format` | a message from a template, `{member}` placeholders filled from a STRUCT |
+| `Inbox` | text messages arriving, one a call |
+| `SmsCommand` | text-message commands from allowed numbers, with PINs, replies and a rate limit |
+| `AtCommand` | any AT command, and its reply |
+| `Power` | switches the module off, on, or restarts it |
+| `Socket` | a TCP connection to a server, plain or TLS |
+| `Status` | signal, network, addresses, serial numbers and counters |
+| `NetworkTime` | the time, from the network |
+| `Gnss` | the module's satellite position, where it has a receiver |
 
 ## Three things worth knowing first
 

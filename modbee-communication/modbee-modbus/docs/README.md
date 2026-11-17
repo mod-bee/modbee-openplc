@@ -7,10 +7,6 @@ These pages are for the person writing the ST. They assume you know ladder or
 structured text and, helpfully but not necessarily, a little Modbus. They do
 not assume you have read the protocol source.
 
-**Coming from 0.1?** [Migrating from 0.1](migrating-from-0.1.md) maps every
-0.1 block and pin to its 0.2 method or member. A project on 0.1.x can stay on
-it: pin the version and nothing changes.
-
 ## Where to start
 
 **Never used Modbus.** Read [01 - What it is](01-what-it-is.md), then work
@@ -60,7 +56,6 @@ the task interval rather than the bus, and there is one change that fixes it.
 | [09 - Troubleshooting](09-troubleshooting.md) | Symptom, cause, fix |
 | [10 - Scan rate](10-scan-rate.md) | Why the task interval prices the bus, and the node's own task |
 | [11 - Points from settings](11-points-from-settings.md) | `Point`, `Points`: points defined by settings, quality, radio devices |
-| [Migrating from 0.1](migrating-from-0.1.md) | Every 0.1 block and pin, and where it went |
 
 ## Two blocks
 
