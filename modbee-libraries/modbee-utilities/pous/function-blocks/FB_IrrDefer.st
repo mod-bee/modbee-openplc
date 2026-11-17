@@ -1,5 +1,5 @@
 (* FB_IrrDefer — the wet-weather / defer-irrigation inhibit: says when not to irrigate, why, and to send the effluent
-to storage instead (src-v2 UT_IRR_DEFER, the same rules).
+to storage instead.
 Pins: bRain (a rain switch), bSoilWet (a moisture switch), bRainOk / bSoilOk (the sensors' health; FALSE = lost),
 bManual (panel), bRemote (platform), ipSoil (a soil moisture transmitter or switch set, I_Measurement; NULL = the
 switch pins) -> bDefer (do not irrigate: -> FB_ZoneSeq's hold), eReason, bToStorage (-> the route), plus

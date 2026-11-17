@@ -1,4 +1,4 @@
-(* FB_DoseBatch EXTENDS FB_Dose — batching a quantity (src-v2 UT_DOSE BATCH).
+(* FB_DoseBatch EXTENDS FB_Dose — batching a quantity.
 A rising bRun, bStart or bCmdStart delivers the target (fTarget pin, 0 = set.fTarget): bFast until set.fSlowAt is
 left, then bSlow, stopping early by the in-flight quantity (set.fPreact), then set.tSettle and the result.
 set.bLearnPreact corrects the preact by half of each dose's error (doses more than 25 % off are not learned from),

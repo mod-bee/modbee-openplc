@@ -103,7 +103,7 @@ Second unit: `fValueAlt` = `fValue` * `set.fAltFactor` + `set.fAltOffset` (bar t
 
 Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
 
-Moved out (decorators placed after it): filter, low cut-off, clamp, simulate, substitute, frozen check.
+Placed after it when needed: [`FB_MeasFilter`](FB_MeasFilter.md) (filter, low cut-off, clamp), [`FB_MeasOverride`](FB_MeasOverride.md) (simulate, substitute), [`FB_MeasFrozen`](FB_MeasFrozen.md) (frozen check).
 
 ## Example
 

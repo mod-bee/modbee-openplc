@@ -1,5 +1,4 @@
-(* FB_Starts — anti-cycling for a motor or pump, as a part of its owner (FB_Motor, FB_Pump ...)
-(DESIGN-0.2.md section 5.2; src-v2 UT_START_LIMIT / UT_STARTS).
+(* FB_Starts — anti-cycling for a motor or pump, as a part of its owner (FB_Motor, FB_Pump ...).
 
 Pins: ipOwner (the equipment), bStartFailed (a start attempt failed: its rising edge; wire the owner's start
 fault, e.g. a drive's start failure or a no-feedback trip), refData, stConfig (tWindow: the sliding window, T#1h)

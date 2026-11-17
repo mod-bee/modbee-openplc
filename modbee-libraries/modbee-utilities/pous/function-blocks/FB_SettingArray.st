@@ -1,5 +1,4 @@
-(* FB_SettingArray — FB_SettingCheck for a list of project values (src-v2 UT_SETTING_ARRAY + UT_SETTING, rows instead
-of element blocks, DESIGN-0.2.md section 5.6; the same rules).
+(* FB_SettingArray — FB_SettingCheck for a list of project values.
 aItem (the project's table, VAR_IN_OUT, at most 32 kept): each row holds the value in use (fValue: the project
 reads it), its limits fMin / fMax and the items it must be above / below (nAbove / nBelow: their POSITION in the
 table, 1 = the first element, 0 = none), the value wanted (fRequest: the HMI / SCADA writes it) and bCmdCheck.

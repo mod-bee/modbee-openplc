@@ -1,9 +1,9 @@
-(* FB_Rotation — shaft / belt speed monitor from a proximity sensor on the driven shaft, pulley or target wheel
-(src-v2 UT_ROTATION, the same rules): the speed, a stall (no pulse for set.tStallTime while running: the sensor
-stuck on or stuck off, a broken coupling or belt), underspeed (belt slip, overload), overspeed, and pulses while
-the machine is stopped (a faulty sensor, or something else turning it).
-A part of its motor (ipOwner, optional): a trip stops the motor through its part list (src-v2: Healthy wired to
-the motor's Interlock). Without an owner it is a plain monitor: wire bHealthy where it is needed.
+(* FB_Rotation — shaft / belt speed monitor from a proximity sensor on the driven shaft, pulley or target wheel: the
+speed, a stall (no pulse for set.tStallTime while running: the sensor stuck on or stuck off, a broken coupling or
+belt), underspeed (belt slip, overload), overspeed, and pulses while the machine is stopped (a faulty sensor, or
+something else turning it).
+A part of its motor (ipOwner, optional): a trip stops the motor through its part list. Without an owner it is a
+plain monitor: wire bHealthy where it is needed.
 Running: the bMachineRun pin, or with an owner its run command (either).
 
 Speed, in set.eSpeedUnit, from the pulse rate f (pulses per second):

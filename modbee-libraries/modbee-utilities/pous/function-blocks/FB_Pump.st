@@ -1,9 +1,9 @@
-(* FB_Pump — one pump: its owner link, its run decision and the motor it drives (DESIGN-0.2.md section 5.2).
+(* FB_Pump — one pump: its owner link, its run decision and the motor it drives.
 
 Pins: ipMotor (the motor, required: an FB_Motor or a variant), plus FB_Equipment's bInterlock, bPermissive,
 ipSystem and FB_Object's bError / bWarning / eErrorId / eState. refData: the pump's record. Owners (a level
 control, a group, a run) drive it through I_Equipment.Request; others read it through its properties.
-The pump has its own Off / Hand / Auto (decision 55); the motor has its own too and follows the pump only
+The pump has its own Off / Hand / Auto; the motor has its own too and follows the pump only
 while the motor is in Auto: a motor in Hand bypasses the pump ("motor in Hand": not available to the owner).
 Auto: the owner's request after set.tStartDelay (it must last that long), kept for set.tMinRun and until it has
 been gone set.tStopDelay; after a stop, set.tMinOff (a power-up counts as a stop).
@@ -13,7 +13,7 @@ parts that mask at start (low pressure, no flow ...). A faulted motor is a warni
 Parts placed beside it: FB_LevelCheck (pressure, flow, dry run ...), FB_Protection (seal leak, external
 fault, maximum run), FB_PumpPrime, FB_Starts (an idle pump's exercise is a part of its level control or group).
 set.eRole (duty, jockey, booster) and set.fCapacity
-(flow at full speed) are read by stations and cascades through I_Pump (src-v2 role / capacity). *)
+(flow at full speed) are read by stations and cascades through I_Pump. *)
 
 FUNCTION_BLOCK FB_Pump EXTENDS FB_Equipment IMPLEMENTS I_Pump
   VAR_INPUT
@@ -82,7 +82,7 @@ PROPERTY PUBLIC fActCapacity : REAL
   END_GET
 END_PROPERTY
 
-(* a pump is never out of service on its own: its motor is (src-v2 AllowOOS FALSE) *)
+(* a pump is never out of service on its own: its motor is *)
 METHOD PROTECTED OVERRIDE AllowOos : BOOL
   AllowOos := FALSE;
 END_METHOD

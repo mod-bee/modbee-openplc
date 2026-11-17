@@ -1,6 +1,5 @@
 (* FB_Interlock — the conditions that must all be healthy before a device may run, as one bOk signal (-> the
-device's bInterlock or bPermissive), with first-out and maintenance bypasses (src-v2 UT_INTERLOCK + UT_INTLK_COND,
-rows instead of element blocks: DESIGN-0.2.md section 5.6).
+device's bInterlock or bPermissive), with first-out and maintenance bypasses.
 Pins: bBypassEnable (key switch / HMI permission for bypasses), bReset (clear the first-out and the held
 conditions), refData (set, sts), and the tables the project declares (VAR_IN_OUT, the same size, at most 16 rows):
 aCondSet (each condition's settings) and aCond (each condition's live row: the project writes aCond[i].bOk on the

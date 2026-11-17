@@ -109,7 +109,7 @@ It is one of the `FB_Dose` family: the common part is described under *How it wo
 
 ## How it works
 
-Flow-paced dosing.
+Flow-paced dosing (fertigation).
 
 While `bRun` (or a `bStart` latch) the dosing pump runs in proportion to the carrier: the meter's rate (per hour) x the ratio (`fRatio` pin for this run, <= 0 = `set.fRatio`); `fRate` = required / `set.fPumpCapacity` %, capped at `set.fMaxRate` (no capacity: `fMaxRate`, a pulse pump). It injects only while `bCarrierRunning` and the carrier flow has been at / above `set.fMinFlow` for `set.tCarrierProven` (Waiting, not a fault). `bPulse`: one stroke every `set.fPulseVolume` dosed (0 = none), `set.tPulseWidth` on and off. Asked for more than the pump can give: `set.stOverCapacity` (a trip holds the dose).
 

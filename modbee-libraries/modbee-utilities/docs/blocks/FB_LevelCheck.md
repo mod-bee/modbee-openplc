@@ -65,8 +65,6 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 
 One alarm level on any measurement, as a part of its owner: low pressure, high pressure, no flow, dry run, a high tank level ... one block for each level fitted.
 
-Replaces UT_LIMIT, UT_LEVEL_CHECK, UT_MEAS_CHECK and the pump's built-in measurement levels.
-
 A bad measurement is ridden through for `set.tBadRide` (the state is held), then the value part lets go: the sensor raises its own fault, and a switch band still acts. A measurement that is not fitted is no check.
 
 It acts per its protection settings (off / warn / trip / signal, delay, reset). A signal is a stop without an alarm (the owner stops and restarts with it); with `set.bDoneWhenReached` a signal ends the owner's run instead (Done: a full destination ends a latched transfer run; for a held run keep the pause).

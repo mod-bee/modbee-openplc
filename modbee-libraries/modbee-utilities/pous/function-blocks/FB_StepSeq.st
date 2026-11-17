@@ -1,5 +1,4 @@
-(* FB_StepSeq — a timed / conditional step sequence: backwash, CIP, fill-mix-drain, kiln and dryer cycles (src-v2
-UT_STEP_SEQ + UT_STEP, rows instead of element blocks, DESIGN-0.2.md section 5.6; the same rules).
+(* FB_StepSeq — a timed / conditional step sequence: backwash, CIP, fill-mix-drain, kiln and dryer cycles.
 Tables the project declares (VAR_IN_OUT): aStepSet (the recipe, one row per step, at most 16 kept), aStep (each
 step's live row: the project writes aStep[i].bCond, the step's wait condition), aOutputs (the outputs). Each step
 switches on the outputs in its nOutputs pattern (bit n = the n-th element of aOutputs, counted from the first)

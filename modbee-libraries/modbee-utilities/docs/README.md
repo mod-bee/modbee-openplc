@@ -5,9 +5,6 @@ dosing, irrigation, measurements, totals, alarms and sequences. Each block does 
 job the way a good panel builder would wire it, with the protections, modes and fault
 handling already in place.
 
-This is version **0.2**. Its blocks are named `FB_…` and `F_…`. A project built on 0.1
-(the `UT_…` blocks) keeps working on 0.1: see [migrating-from-0.1.md](migrating-from-0.1.md).
-
 **Hardware:** an ESP32-S3 (such as the ModBee Node UIO) or anything more powerful,
 including OpenPLC Runtime v4 on a Raspberry Pi or PC.
 
@@ -27,7 +24,7 @@ including OpenPLC Runtime v4 on a Raspberry Pi or PC.
 
 Each block's page lists its pins first, then its record, how it works and an example.
 
-## How the 0.2 blocks fit together
+## How the blocks fit together
 
 - **Equipment has an owner.** Motors, pumps and valves have no Run / Start / Stop
   pins. In Auto they do what their **owner** asks: the pump asks its motor, a level
@@ -307,5 +304,3 @@ the link stays down.
 - [conventions.md](conventions.md): errors and state, the `E_UtError` codes, records,
   kept settings, equipment and owners, parts, tables, retained data, protections.
 - [ladder-rules.md](ladder-rules.md): using library blocks in Ladder.
-- [migrating-from-0.1.md](migrating-from-0.1.md): moving a project from the `UT_…`
-  blocks of 0.1.

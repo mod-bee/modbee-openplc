@@ -1,5 +1,4 @@
-(* FB_PulseMeter — a pulse flow meter or a hardware pulse counter (DESIGN-0.2.md section 5.4; src-v2 UT_TOTALISER
-PULSE and COUNT).
+(* FB_PulseMeter — a pulse flow meter or a hardware pulse counter.
 
 Pins: bPulse (each rising edge is one pulse: at most one pulse per two scans), nCount (a hardware counter,
 e.g. node-uio PULSE_COUNT: each count is one pulse; a wrap past 2^32 or set.nRolloverAt is counted, a drop of

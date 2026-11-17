@@ -1,5 +1,5 @@
 (* FB_ValveLatch EXTENDS FB_Valve — a latching valve: a DC latching solenoid (3-wire, or 2-wire through an
-H-bridge) moved by a pulse on its open or close coil (src-v2 UT_VALVE kind DOUBLE_PULSE).
+H-bridge) moved by a pulse on its open or close coil.
 Everything of FB_Valve (modes, the safe position, the owner, end switches or travel time, protections, strokes,
 actuator in Local, slow stroke, exercise) plus the pulses: bOpenOut / bCloseOut pulse for set.tPulse when the position commanded changes. The last
 commanded position is kept over a power cut (written only on a move), so nothing is sent at power-up when the

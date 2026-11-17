@@ -1,5 +1,4 @@
-(* FB_DigitalIn — a switch, float or contact, cleaned up: debounce, an alarm on a state, chatter detection
-(src-v2 UT_DIGITAL_IN).
+(* FB_DigitalIn — a switch, float or contact, cleaned up: debounce, an alarm on a state, chatter detection.
 Pins: bIn (the raw input; NC: NOT at the pin), eInQ (its quality from the IO map), bReset (reset a Manual alarm)
 -> bQ (the clean signal), bAlarm, bChatter, bGood, plus FB_Object's bError / bWarning / eErrorId / eState.
 refData: its record.

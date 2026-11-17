@@ -1,5 +1,5 @@
 (* FB_Route — the outlet selector (up to 4 outlet valves): which outlet the pumps deliver to, valve first, the
-wet-weather divert to storage, an irrigator blocked (src-v2 UT_ROUTE, the same rules on 0.2 interfaces).
+wet-weather divert to storage, an irrigator blocked.
 Pins: bLevelRun (level pumping chooses the route), nRunOutlet (the outlet of a run / the zone watering, 1..4; > 0
 also asks for it), bWanted (water wanted: a pump is asked or in Hand), bPumpRunning (never close under it; the
 close delay starts when it drops), bToStorage (wet weather: FB_IrrDefer), bStorageFull, bIrrBlocked (the

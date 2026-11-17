@@ -83,7 +83,7 @@ A member whose `I_Pump` role is Booster is left out ([`FB_Booster`](FB_Booster.m
 
 Jockey: the first member that is an `I_Pump` with role Jockey is not a duty member (never the lead, never staged, swapped or counted in `nDuty`). With `nExtra` -1 ([`FB_Cascade`](FB_Cascade.md)'s low demand), or no duty member available, the group runs the jockey alone; with `nExtra` 0 or more it calls the duty members and keeps the jockey on until one of them runs (the hand-over). A staged stop releases it last.
 
-Parts: a part added to the group is evaluated every scan: a trip or a stop releases every member at once (`bError` and the part's `eErrorId` on a trip, stop reason Part), a hold lets none start, a warning shows.
+Parts: a part added to the group (e.g. [`FB_LevelCheck`](FB_LevelCheck.md) High on the header flow meter for a burst main) is evaluated every scan: a trip or a stop releases every member at once (`bError` and the part's `eErrorId` on a trip, stop reason Part), a hold lets none start, a warning shows.
 
 Asked to run: the lead first, then the next available members in rotation order up to 1 + `nExtra`, one per `set.tStageDelay`; released one per `set.tDestageDelay`, the most recent first. Failover: a called member that is not running after `set.tFailover` is skipped and the next one is called at once (until a reset or nothing is asked); a member that became unavailable is skipped until it is available again. Rotation (`set.eRotate`): EachStart (the lead moves on at each group start), Periodic (every `set.tRotateInterval`), Fixed (`set.nFixedLead`). The lead is kept over a power cut. Nobody available while asked: a warning (NoneAvailable).
 

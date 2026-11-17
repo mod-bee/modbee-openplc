@@ -1,5 +1,5 @@
-(* FB_ValveMod EXTENDS FB_ValvePos — a modulating valve or damper with a positioner (4-20 mA / 0-10 V) (src-v2
-UT_VALVE_MOD). Everything of FB_ValvePos (where it goes, the feedback, the protections, Hand) plus the signal.
+(* FB_ValveMod EXTENDS FB_ValvePos — a modulating valve or damper with a positioner (4-20 mA / 0-10 V). Everything of
+FB_ValvePos (where it goes, the feedback, the protections, Hand) plus the signal.
 Pins added: refMod (its record), stConfig (the signal's raw span) -> fOut (the demand %, 100 - demand when
 set.bReverseActing), nOutRaw (fOut scaled to fRawMin..fRawMax).
 The aim is shaped: set.fTightShutoff (below it: 0 %) and fFullOpenAbove (above it: 100 %) win over the clamp

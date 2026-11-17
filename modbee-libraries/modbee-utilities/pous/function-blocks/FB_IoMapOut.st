@@ -1,6 +1,5 @@
-(* FB_IoMapOut — the output side of the IO map: functions to terminals, from the rows (DESIGN-0.2.md section 5.6;
-src-v2 UT_IO_MAP_OUT). Call it LAST in the scan, after all logic, before your IO code copies the image to the
-hardware.
+(* FB_IoMapOut — the output side of the IO map: functions to terminals, from the rows. Call it LAST in the scan,
+after all logic, before your IO code copies the image to the hardware.
 
 Pins: bForcePermit (outputs may be forced only while TRUE: wire the system Off; dropping it releases every
 output force; unwired: never), bReleaseAll (release every output force now and refuse new ones), refData

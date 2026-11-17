@@ -1,5 +1,5 @@
-(* FB_Report — report by exception: decides when one value is worth sending to SCADA / IoT (src-v2 UT_REPORT, the same
-rules). bReport pulses for one scan when:
+(* FB_Report — report by exception: decides when one value is worth sending to SCADA / IoT. bReport pulses for one
+scan when:
   First      the block starts, or bEnable comes back (link up), with set.bReportOnStart
   Change     fIn moved more than the deadband from the last value sent, or bInGood changed
   Heartbeat  set.tHeartbeat passed since the last report (0 = off, the default)

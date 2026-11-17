@@ -1,12 +1,10 @@
-(* FB_Stages — the extra level stages of a pump station (DESIGN-0.2.md section 5.5; src-v2 UT_STAGE_RUN). Stage 1 is
-FB_LevelControl's own start / stop; this block adds stages 2..4 and tells an FB_Group how many more pumps to call
-(nExtra -> FB_Group.nExtra). Stage n is on from its start point until its stop point: Empty starts above and stops
-below (fStart > fStop), Fill starts below and stops above (fStart < fStop); a stage the wrong way round, not a
-number, or both 0 is not used. Stages 2 and 3 call one pump each; stage 4 calls every remaining pump of a station
-of more than 3 (nMembers). bRun FALSE (the level control not running: off, level not trusted, inhibited) drops
-every stage. A bad level drops them too.
-bDemand (FB_LevelControl.bDemandActive): while a demand runs, at least set.nDemandPumps pumps run (src-v2
-demandPumps, default 1: no extra).
+(* FB_Stages — the extra level stages of a pump station. Stage 1 is FB_LevelControl's own start / stop; this block
+adds stages 2..4 and tells an FB_Group how many more pumps to call (nExtra -> FB_Group.nExtra). Stage n is on from
+its start point until its stop point: Empty starts above and stops below (fStart > fStop), Fill starts below and
+stops above (fStart < fStop); a stage the wrong way round, not a number, or both 0 is not used. Stages 2 and 3
+call one pump each; stage 4 calls every remaining pump of a station of more than 3 (nMembers). bRun FALSE (the
+level control not running: off, level not trusted, inhibited) drops every stage. A bad level drops them too.
+bDemand (FB_LevelControl.bDemandActive): while a demand runs, at least set.nDemandPumps pumps run.
 Pins: ipLevel, eMode (the level control's), bRun, nMembers, bDemand, refData -> nExtra, plus FB_Object's outputs. Its
 settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back. *)
 

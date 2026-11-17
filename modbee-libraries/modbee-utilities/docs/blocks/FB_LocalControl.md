@@ -49,7 +49,7 @@ The panel-door controls of one motor, pump or valve: an Off / Hand / Auto select
 
 ## How it works
 
-The panel-door controls of one piece of equipment: an Off / Hand / Auto selector and the push-buttons.
+The panel-door controls of one piece of equipment: an Off / Hand / Auto selector and the push-buttons of a motor or a valve.
 
 The mode (`set.eModeSource`):
 

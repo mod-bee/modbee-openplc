@@ -57,7 +57,9 @@ Offers `I_Meter`: wire this instance to another block's `ip…` pin of that type
 
 ## How it works
 
-Totals from a device's own total register (a Modbus energy / flow meter, a BeeBus counter). Offers `I_Meter` (the total, the rate per hour).
+Totals from a device's own total register (a Modbus energy / flow meter, a BeeBus counter).
+
+Offers `I_Meter` (the total, the rate per hour).
 
 Each increase adds (`fRegister` - the last) x `set.fScale`. A drop is a device reset or a glitch: nothing is counted, and only the part above the highest reading seen counts again, unless it is a wrap (`set.fRolloverAt` > 0: the register restarts from 0 past it; a fall from the top half to the bottom half counts the wrap). An increase above `set.fMaxStep` (0 = no limit) is a glitch: taken as the new reading, nothing counted. While bad nothing is counted; the register catches up when good again. Bad past `set.stInputBad`'s delay: `bIsGood` FALSE, a warning (SensorBad). Units: `set.eInUnit` (the register's volume unit, with `fScale` applied after) and `set.eOutUnit` (the total's), `E_Unit` volume units, both set convert each addition; both None = no conversion; one set, or a unit that is not a volume, is a bad setting (put back). The total is LREAL, kept hourly, when `bRunning` falls (the pump stops; optional) and on a reset (`bCmdResetTotal`).
 

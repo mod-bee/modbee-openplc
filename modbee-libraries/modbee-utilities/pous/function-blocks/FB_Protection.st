@@ -1,5 +1,5 @@
-(* FB_Protection — one protection on any condition, as a part of its owner (DESIGN-0.2.md section 5.3):
-a thermistor, a drive fault, an external fault, a seal leak, a phase failure, a maximum run time
+(* FB_Protection — one protection on any condition, as a part of its owner: a thermistor, a drive fault, an external
+fault, a seal leak, a phase failure, a maximum run time
 (eCause := Running, a long delay).
 
 Pins: bIn (TRUE = the condition is present), eCause (when it counts: always, only while the owner runs,

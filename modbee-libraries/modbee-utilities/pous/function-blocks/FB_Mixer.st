@@ -1,4 +1,4 @@
-(* FB_Mixer — a stirrer / agitator: when it runs, and the pump's hold for the pre-run (src-v2 UT_MIXER, same rules).
+(* FB_Mixer — a stirrer / agitator: when it runs, and the pump's hold for the pre-run.
 The stirrer is ipMixer (I_Equipment: Request(bRun), bIsReady, bIsAvailable, bIsRunning) or, without one, the
 bMixerReady / bMixerRunning wires and the bRun output.
 bRun is on (while the level is OK) for any of:

@@ -1,4 +1,4 @@
-(* FB_Valve — a two-position valve, cylinder or damper (DESIGN-0.2.md section 5.6; the core of src-v2 UT_VALVE).
+(* FB_Valve — a two-position valve, cylinder or damper.
 On FB_Equipment: "running" is open. An owner (a zone, a route, a level control) drives it through
 I_Equipment.Request (bRun = open); Hand opens / closes it from the record's bCmdStart / bCmdStop (or
 FB_LocalControl). Off, the interlock or a trip put it in its safe position (set.eSafe), not merely closed.

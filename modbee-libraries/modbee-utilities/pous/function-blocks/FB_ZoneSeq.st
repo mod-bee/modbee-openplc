@@ -1,6 +1,6 @@
-(* FB_ZoneSeq — an irrigation / wash-down zone program (DESIGN-0.2.md section 5.8; the core of src-v2
-UT_ZONE_SEQ): the zones (aZones, the project's FB_Zone instances in run order, each with its own valve and
-settings) watered in turn, by time or by volume, in a safe valve and pump order.
+(* FB_ZoneSeq — an irrigation / wash-down zone program: the zones (aZones, the project's FB_Zone instances in run
+order, each with its own valve and settings) watered in turn, by time or by volume, in a safe valve and pump
+order.
 
 Pins: bRun (held: the program runs while held), bStart (rising edge: a latched run), bStop (rising edge: ends it,
 wins), bPause (held: the pump stops and the valves close as at the end; the zone keeps its progress), bSkip

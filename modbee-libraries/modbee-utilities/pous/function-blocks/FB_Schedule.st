@@ -1,5 +1,4 @@
-(* FB_Schedule — weekly time-of-day schedule, a local fallback (the platform holds the real calendar) (src-v2
-UT_SCHEDULE + UT_SCHED_WINDOW, rows instead of element blocks; the same rules).
+(* FB_Schedule — weekly time-of-day schedule, a local fallback (the platform holds the real calendar).
 aWindow (the project's table, one row per time window, at most 16 kept): a window runs from todStart to todStop
 on each day in its nDays bits (bit 0 Monday ... bit 6 Sunday); a todStop earlier than todStart crosses midnight
 (the part after midnight belongs to the day it started); todStart = todStop is empty. nEveryDays N (2 or more)

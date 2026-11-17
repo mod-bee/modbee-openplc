@@ -1,5 +1,5 @@
-(* FB_PumpDiag — the likely cause of a pump's hydraulic trouble from its pressure, flow and suction (src-v2 UT_PUMP's
-built-in diagnosis; modular plan UT_PUMP_DIAG). An observer: it only tells, the pump's FB_LevelCheck parts act.
+(* FB_PumpDiag — the likely cause of a pump's hydraulic trouble from its pressure, flow and suction. An observer: it
+only tells, the pump's FB_LevelCheck parts act.
 While bRunning (the pump runs), after set.tDelay of the same finding:
   Blocked   pressure high and flow low (a closed valve, a blocked line)
   Burst     pressure low and flow high (a burst or open line)

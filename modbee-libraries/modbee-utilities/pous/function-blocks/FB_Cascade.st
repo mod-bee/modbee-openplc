@@ -1,9 +1,8 @@
-(* FB_Cascade — the staging of a pump cascade on one header holding a pressure or a flow (src-v2 UT_PUMP_CASCADE's
-staging; DESIGN-0.2.md section 5.5). In 0.2 a cascade is built from blocks: FB_SpeedLoop (the PID, the setpoint,
-sleep, the protections) drives an FB_Group of pumps (the group passes the loop's speed to every pump it calls:
-one shared speed; rotation, failover, swap, staged stop, the jockey) and FB_Cascade decides how many:
-nExtra -> FB_Group.nExtra. A fixed-speed set uses FB_SpeedLoop with Fixed control (its fError still compares
-Pv with the setpoint) and set.bVsd FALSE here.
+(* FB_Cascade — the staging of a pump cascade on one header holding a pressure or a flow. A cascade is built from
+blocks: FB_SpeedLoop (the PID, the setpoint, sleep, the protections) drives an FB_Group of pumps (the group passes
+the loop's speed to every pump it calls: one shared speed; rotation, failover, swap, staged stop, the jockey) and
+FB_Cascade decides how many: nExtra -> FB_Group.nExtra. A fixed-speed set uses FB_SpeedLoop with Fixed control
+(its fError still compares Pv with the setpoint) and set.bVsd FALSE here.
 Pins: fSpeed (the shared speed %, the loop's fSpeed), bRun (the loop is running), nMembers (duty pumps,
 FB_Group.nDuty), nRunning (duty pumps running, FB_Group.nDutyRunning; -1 = not wired: no settled check),
 bPermissive, fError (the loop's fError: how far the value is short of the setpoint; unwired = the speed alone),
@@ -15,7 +14,7 @@ must last set.tStageDelay (add) or set.tDestageDelay (drop); after a change the 
 a pump is added only when the group has settled (nRunning has reached 1 + nExtra) and bPermissive is on.
 set.eStageBy:
   Pressure  set.bVsd: add with the speed at or above set.fStageAt and the value short of the setpoint by more
-            than set.fShortBand; drop at or below set.fDestageAt (src-v2's dropSpeed; set it to the loop's
+            than set.fShortBand; drop at or below set.fDestageAt (set it to the loop's
             minimum for "at the minimum only") when not short. No VSD (set.bVsd FALSE): add when the value is
             set.fAddBand short of the setpoint, drop when it is set.fDropBand past it.
   Flow      add above set.fAddPct % of the running capacity (fCapacity); drop below set.fDropPct % of the
@@ -31,7 +30,7 @@ flow above fAddPct % of fJockeyCapacity, or the Pressure rule (short of pressure
 jockey is skipped until the next start). With one duty pump left and the demand falling (the flow below
 fDropPct % of fJockeyCapacity, or the Pressure drop rule) the set hands back to the jockey. The group keeps the
 jockey on until the duty pump runs.
-bRun FALSE drops them all (FB_Group's set.eStop decides at once or staged). A burst main (src-v2's highFlow):
+bRun FALSE drops them all (FB_Group's set.eStop decides at once or staged). A burst main:
 an FB_LevelCheck (High) on the header flow meter as a part of the group. Its settings are kept by the block (a
 retained last-good copy): restored at power-up, a bad write put back (bRefused, a warning until a reset). *)
 

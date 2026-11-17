@@ -1,5 +1,5 @@
 (* FB_LocalControl — the panel-door controls of one piece of equipment: an Off / Hand / Auto selector and the
-push-buttons (the src-v2 motor's and valve's selector and local buttons, UT_HOA, UT_MODE_SELECT's source).
+push-buttons of a motor or a valve.
 
 The mode (set.eModeSource):
   Hmi     the selector is not used: the owner's own mode (its record, the HMI)

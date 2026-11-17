@@ -1,6 +1,5 @@
-(* FB_Run — one run of any equipment (DESIGN-0.2.md section 5.5; src-v2 UT_RUN_LIMIT + UT_RUN_CORE): a held
-request, or a latched start, ended by its time target, a stop, an abort, its maximum time, the interlock, a
-part, or a power cut.
+(* FB_Run — one run of any equipment: a held request, or a latched start, ended by its time target, a stop, an abort,
+its maximum time, the interlock, a part, or a power cut.
 
 Pins: bRun (held request: the run lasts while it is held), bStart (rising edge: a latched run), bStop
 (rising edge: ends it, wins), bReset, bInterlock (FALSE ends the run and refuses a start), bPermissive (FALSE:

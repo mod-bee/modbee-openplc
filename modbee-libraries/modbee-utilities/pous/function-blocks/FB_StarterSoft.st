@@ -1,8 +1,8 @@
-(* FB_StarterSoft — a soft starter's top-of-ramp check, as a part of its motor (src-v2 UT_MOTOR's useTopOfRamp /
-startTooLong; DESIGN-0.2.md 5.1). The starter's run relay is the motor's bFeedback, its fault relay an
-FB_Protection (eErrorId DriveFault). This part watches the top-of-ramp relay: the motor's run command on and no
-top of ramp for set.stStartTooLong's delay is a trip (StartTooLong: the ramp never finished, a stalled or
-overloaded start). bTopOfRamp is the starter's top-of-ramp / bypass relay, TRUE = at full speed.
+(* FB_StarterSoft — a soft starter's top-of-ramp check, as a part of its motor. The starter's run relay is the
+motor's bFeedback, its fault relay an FB_Protection (eErrorId DriveFault). This part watches the top-of-ramp
+relay: the motor's run command on and no top of ramp for set.stStartTooLong's delay is a trip (StartTooLong: the
+ramp never finished, a stalled or overloaded start). bTopOfRamp is the starter's top-of-ramp / bypass relay, TRUE
+= at full speed.
 A soft stop: set the motor's stStuck delay longer than the starter's stop ramp (the run relay stays on while
 it ramps down).
 Pins: bTopOfRamp, ipOwner (the motor, required), refData -> bAtSpeed, plus FB_Object's outputs. It adds itself

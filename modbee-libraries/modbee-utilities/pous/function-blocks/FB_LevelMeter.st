@@ -1,5 +1,4 @@
-(* FB_LevelMeter — the volume a pump moves, worked out from the tank's level (DESIGN-0.2.md section 5.7; src-v2
-UT_TOTALISER CHANGE, with the high-water mark proven on site).
+(* FB_LevelMeter — the volume a pump moves, worked out from the tank's level.
 
 Pins: ipLevel (the tank: a vessel gives its volume, any other measurement its value), bActive (the pump
 runs: only then is anything counted), ipAdd (optional: a meter on the tank's other inflow or outflow during the

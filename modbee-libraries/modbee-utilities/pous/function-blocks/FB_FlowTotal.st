@@ -1,5 +1,5 @@
-(* FB_FlowTotal — totals from a flow rate, or from running time at a nominal rate (DESIGN-0.2.md section 5.4;
-src-v2 UT_TOTALISER RATE, RUNTIME and SAMPLE). Offers I_Meter (the total, the rate per hour).
+(* FB_FlowTotal — totals from a flow rate, or from running time at a nominal rate. Offers I_Meter (the total, the
+rate per hour).
 Pins: ipFlow (I_Measurement, the flow in its unit per set.eRateUnit), bActive (Runtime: counting while TRUE;
 Rate / Sample: optional, counting only while TRUE when set.bOnlyActive), bResetBatch (rising edge: the batch to
 0), refData -> bBatchDone.

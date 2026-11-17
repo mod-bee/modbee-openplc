@@ -87,7 +87,7 @@ A message ticker and site-status board for an HMI: each source's state and error
 
 ## How it works
 
-Message ticker and site-status board for an HMI.
+Message ticker and site-status board for an HMI (messages are codes: the source's `eState` and `eErrorId`, the HMI shows the words).
 
 Call it once per source per scan, all calls on the same instance, `aBuffer`, `aSources` and `refData` (one rung each): `fbMsgs`(`eSrcState` := `fbPump1.eState`, `eSrcError` := `fbPump1.eErrorId`, `nSrc` := 1, `aBuffer` := `aMsgBuf`, `aSources` := `aMsgSrc`, `refData` := `stMsgs`); `fbMsgs`(`eSrcState` := `fbPump2.eState`, `eSrcError` := `fbPump2.eErrorId`, `nSrc` := 2, ...); `aSources`[nSrc] keeps the last state and error seen from that source, so a message is taken only when one of them changes. Its kind: Fault (`eSrcState` Fault), Warning (an `eSrcError`, not Fault), Held (Held or Waiting), else Normal; only kinds of `set.eMinKind` or worse are taken (default Held; Normal: every change).
 

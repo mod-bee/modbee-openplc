@@ -1,6 +1,6 @@
-(* FB_Zone — one zone of a zone program (DESIGN-0.2.md section 5.8; src-v2 UT_ZONE): its valve, its water time
-or volume, its progress. The project declares `aZones : ARRAY [1..n] OF FB_Zone` with their records, calls each
-zone once per scan before the program, and passes the array to FB_ZoneSeq.aZones.
+(* FB_Zone — one zone of a zone program: its valve, its water time or volume, its progress. The project declares
+`aZones : ARRAY [1..n] OF FB_Zone` with their records, calls each zone once per scan before the program, and
+passes the array to FB_ZoneSeq.aZones.
 
 Pins: ipValve (its valve: any I_Equipment, an FB_Valve; unwired = no valve: bValveOut drives a plain output),
 refData -> bValveOut, bOpen (its valve is proven open: the valve's state, or, with no valve, after
@@ -16,8 +16,8 @@ acts per its response: Warn = a warning (sts.stFlowCheck, ZoneFlow), Trip = the 
 ZoneFlow; the program ends that zone) until the check resets (Auto / Retry after the recover time, or a reset).
 Pressure: set.fPressure is the zone's pressure setpoint (0 = the program's default); the program passes the
 watering zone's on as fZoneSp (wire it to FB_SpeedLoop's fSp pin, with its set.eSpSource Pin).
-What ends a cycle (set.eEndBy; v2 UT_ZONE's end modes; the cycle's targets are the zone's tRunTime and fVolume
-divided by set.nCycles; a volume target needs the program to have a meter, else it counts as 0 = no target):
+What ends a cycle (set.eEndBy; the cycle's targets are the zone's tRunTime and fVolume divided by set.nCycles; a
+volume target needs the program to have a meter, else it counts as 0 = no target):
   ByTime      the cycle's time; a volume is ignored
   ByVolume    the cycle's volume; the time is no target
   First       the time or the volume, whichever comes first

@@ -1,5 +1,4 @@
-(* FB_Cmd — command arbiter for two masters: the local one (panel HMI) and the remote one (SCADA / IoT)
-(src-v2 UT_CMD).
+(* FB_Cmd — command arbiter for two masters: the local one (panel HMI) and the remote one (SCADA / IoT).
 Pins: nLocalCmd / nRemoteCmd (command bits; a rising edge acts), nLocalMode / nRemoteMode (a mode request, acts on
 a change to 0..15), nLocalSel / nRemoteSel (a selection, acts on a change to 0 or more), bRemoteEnabled (FALSE:
 local control) -> nCmd and bCmd0..bCmd7 (the accepted bits, one scan), nMode / nSel (the accepted request, one

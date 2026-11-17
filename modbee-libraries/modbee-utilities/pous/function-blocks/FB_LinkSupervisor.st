@@ -1,4 +1,4 @@
-(* FB_LinkSupervisor — escalating recovery of a remote site's comms link (src-v2 UT_LINK_SUPERVISOR, the same rules).
+(* FB_LinkSupervisor — escalating recovery of a remote site's comms link.
 bLinkOk comes from whatever checks the link (an FB_Watchdog on the SCADA heartbeat, the modem's connected flag).
 While it is FALSE the supervisor steps up, each step optional (its time 0 = off), timed from when the link went
 down (or from power-up, if it is down then):

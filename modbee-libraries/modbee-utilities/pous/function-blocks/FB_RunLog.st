@@ -1,6 +1,6 @@
-(* FB_RunLog — the last run's time, volume and end reason, and run counts by how they ended (modular plan UT_RUN_LOG;
-the src-v2 run blocks' kept last-run values). An observer, not a part: it reads its run (ipRun) and changes nothing,
-so a missing rung never stops a run. Call it every scan after the run.
+(* FB_RunLog — the last run's time, volume and end reason, and run counts by how they ended. An observer,
+not a part: it reads its run (ipRun) and changes nothing, so a missing rung never stops a run. Call it every scan
+after the run.
 When the run ends: tot.tLastRun (counted run time), tot.tLastWall (from start to end, pauses included),
 tot.fLastVolume (from ipMeter's total, optional), tot.eLastReason; tot.nRuns and one of nDone (Done), nStopped
 (Request, Manual, Off, Hand), nPowerCuts (PowerCut), nFaults (any other reason: a fault, an interlock, an abort, a

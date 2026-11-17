@@ -71,7 +71,7 @@ Flow check: while the program waters it, it tells the zone the meter's flow (Flo
 
 Pressure: `set.fPressure` is the zone's pressure setpoint (0 = the program's default); the program passes the watering zone's on as `fZoneSp` (wire it to [`FB_SpeedLoop`](FB_SpeedLoop.md)'s `fSp` pin, with its `set.eSpSource` Pin).
 
-What ends a cycle (`set.eEndBy`; v2 UT_ZONE's end modes; the cycle's targets are the zone's `tRunTime` and `fVolume` divided by `set.nCycles`; a volume target needs the program to have a meter, else it counts as 0 = no target):
+What ends a cycle (`set.eEndBy`; the cycle's targets are the zone's `tRunTime` and `fVolume` divided by `set.nCycles`; a volume target needs the program to have a meter, else it counts as 0 = no target):
 
 ```
   ByTime      the cycle's time; a volume is ignored

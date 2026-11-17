@@ -1,12 +1,11 @@
-(* FB_LevelCheck — one alarm level on any measurement, as a part of its owner (DESIGN-0.2.md section 5.3):
-low pressure, high pressure, no flow, dry run, a high tank level ... one block for each level fitted.
-Replaces UT_LIMIT, UT_LEVEL_CHECK, UT_MEAS_CHECK and the pump's built-in measurement levels.
+(* FB_LevelCheck — one alarm level on any measurement, as a part of its owner: low pressure, high pressure, no flow,
+dry run, a high tank level ... one block for each level fitted.
 
 Pins: ipMeas (the measurement: its value against set.fSetpoint, and / or one of its switch bands),
 ipOwner (the equipment it acts on), refData. The direction (high or low), the setpoint with its deadband,
 the band, "only while running" and "masked at start" are settings.
-bSwitch: a switch wired straight to this rung that backs the value up (TRUE = past the level: a float, a
-pressure switch; src-v2 HighSwitch / LowSwitch); it acts like the band, also with a bad or unfitted value.
+bSwitch: a switch wired straight to this rung that backs the value up (TRUE = past the level: a float, a pressure
+switch); it acts like the band, also with a bad or unfitted value.
 A bad measurement is ridden through for set.tBadRide (the state is held), then the value part lets go: the
 sensor raises its own fault, and a switch band still acts. A measurement that is not fitted is no check.
 It acts per its protection settings (off / warn / trip / signal, delay, reset). A signal is a stop without an
@@ -79,7 +78,7 @@ METHOD PUBLIC Evaluate : E_PartAction
   IF stWork.bTrip THEN
     Evaluate := E_PartAction.Trip;
   ELSIF stWork.bSignal AND refData.set.bDoneWhenReached THEN
-    Evaluate := E_PartAction.Done;  (* the owner's run ends normally (src-v2 transfer stopAtFull) *)
+    Evaluate := E_PartAction.Done;  (* the owner's run ends normally *)
   ELSIF stWork.bSignal THEN
     Evaluate := E_PartAction.Stop;
   ELSIF stWork.bWarn OR stWork.bBadSetting THEN

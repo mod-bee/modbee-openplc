@@ -1,5 +1,5 @@
-(* FB_SignalSelect — two or three sensors measuring the same thing, voted into one trusted measurement (src-v2
-UT_SIGNAL_SELECT, decision 16). Wire the instance to any I_Measurement pin.
+(* FB_SignalSelect — two or three sensors measuring the same thing, voted into one trusted measurement. Wire the
+instance to any I_Measurement pin.
 Pins: ipSensor1..3 (I_Measurement; NULL = not fitted, never used), bReset -> fOut (the voted value; while not
 good per set.eNoGood), bGood, fSpread (the largest difference between usable sensors), nDeviating (the sensor
 dropped, 1..3; 0 none), nGoodCount, plus FB_Object's bError / bWarning / eErrorId / eState. refData: its record.

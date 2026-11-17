@@ -1,4 +1,4 @@
-(* FB_RunVolume — a volume target for a run, as a part of it (DESIGN-0.2.md section 5.8).
+(* FB_RunVolume — a volume target for a run, as a part of it.
 
 Pins: ipRun (the run, required), ipMeter (the meter it counts on, required), refData.
 When the run starts, the meter's total is the start; the run ends Done when set.fTarget has been delivered

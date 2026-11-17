@@ -1,5 +1,4 @@
-(* FB_LevelFloats — the floats of a sump or wet well, as a part of its FB_LevelControl (EMPTY duty)
-(DESIGN-0.2.md section 5.5; src-v2 UT_PUMP_STATION's floats).
+(* FB_LevelFloats — the floats of a sump or wet well, as a part of its FB_LevelControl (EMPTY duty).
 
 Pins: ipFloats (the float switches, an FB_SwitchSet: Band(High) / Band(HighHigh) / Band(Low) / Band(LowLow)),
 ipLevel (the transducer, to check it; unwired = floats only), ipOwner (the level control), refData

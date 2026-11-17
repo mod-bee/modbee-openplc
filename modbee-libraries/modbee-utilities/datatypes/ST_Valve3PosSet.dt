@@ -11,7 +11,7 @@ TYPE
     nRestPos : INT := 2; (* when nothing is asked *)
     nHandPos : INT := 2; (* Hand position (kept) *)
     stTravel : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Retry, tRecover := T#10s, nMaxRetries := 3);
-    nAutoPos : INT := 3; (* the position asked with no number (src-v2 AutoPos) *)
-    bPosLatch : BOOL; (* the last position asked stays when the request ends (src-v2 posPulse) *)
+    nAutoPos : INT := 3; (* the position asked with no number *)
+    bPosLatch : BOOL; (* the last position asked stays when the request ends *)
   END_STRUCT;
 END_TYPE

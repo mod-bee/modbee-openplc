@@ -1,5 +1,5 @@
-(* FB_SettingCheck — write gate for one project value that belongs to no block (src-v2 UT_SETTING_CHECK). The HMI /
-SCADA writes its own variable (fNew); each time fNew changes, or on bWritten, fNew is checked: a number, fMin..fMax,
+(* FB_SettingCheck — write gate for one project value that belongs to no block. The HMI / SCADA writes its own
+variable (fNew); each time fNew changes, or on bWritten, fNew is checked: a number, fMin..fMax,
 above fAbove and below fBelow for related settings (e.g. high above low). Passed: refValue := fNew, bAccepted for
 one scan. Failed: refValue keeps its old value, bRefused for one scan, eRefusedId says why (ValueBad, LimitsBad,
 BelowMin, AboveMax, NotAbove, NotBelow; None after an accepted write). bError / eErrorId: the value in use fails

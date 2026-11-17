@@ -1,5 +1,5 @@
 (* FB_SystemMode — the plant's own mode: Off / Manual / Auto, the auto type (1..nAutoTypes), a manual run, the
-power-on delay and the plant-wide reset (DESIGN-0.2.md section 5.5; src-v2 UT_SYSTEM_MODE).
+power-on delay and the plant-wide reset.
 
 Pins: bRun (the manual run request, held), bReset (the plant reset button: every block wired to this one
 through ipSystem resets on its rising edge) -> bIsAuto, bIsManual, bNotOff, bAuto1..bAuto4 (Auto with that
@@ -13,7 +13,7 @@ Other blocks read it through I_SystemMode (their ipSystem pin).
 The mode in use (set.eModeSource): Hmi = the record's choice; Switch = the selector bSwManual / bSwAuto (neither:
 Off; both: Off and a SelectorFault warning); Remote = the selector's Off and Manual act here, its Auto hands over
 to the record's choice. With set.ePowerUp Off a selector found out of Off at power-up is held Off until moved.
-bForceOff holds the plant Off (the choice is kept). sts.eMode is the mode in use (src-v2 selector, ForceOff). *)
+bForceOff holds the plant Off (the choice is kept). sts.eMode is the mode in use. *)
 
 FUNCTION_BLOCK FB_SystemMode EXTENDS FB_Object IMPLEMENTS I_SystemMode
   VAR_INPUT

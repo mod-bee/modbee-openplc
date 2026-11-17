@@ -1,6 +1,6 @@
-# Conventions — how every 0.2 block behaves
+# Conventions — how every block behaves
 
-Every block in modbee-utilities 0.2 follows the same rules. Each block's page only
+Every block in modbee-utilities follows the same rules. Each block's page only
 lists what is its own; this page has the rest.
 
 ## Names

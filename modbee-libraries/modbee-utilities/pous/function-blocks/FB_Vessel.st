@@ -1,6 +1,6 @@
 (* FB_Vessel — a tank, sump, silo or pond: its volume, % full, free space, mass and surface area from a level
-measurement (DESIGN-0.2.md section 5.4; src-v2 UT_VESSEL + UT_TANK_CALC). Wire the instance to any I_Vessel
-or I_Measurement pin: its value is the level, its bands are the level's bands.
+measurement. Wire the instance to any I_Vessel or I_Measurement pin: its value is the level, its bands are the
+level's bands.
 
 Pins: ipLevel (the level measurement, e.g. an FB_AnalogIn) -> fVolume, fPercent (of the full working
 volume), bGood, plus FB_Object's bError / bWarning / eErrorId / eState. refData: its record. stConfig: the

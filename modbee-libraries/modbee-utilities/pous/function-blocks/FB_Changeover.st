@@ -1,5 +1,5 @@
 (* FB_Changeover — switch between two contactors A / B that must never be on together (reversing, two-speed, star
--> delta) (src-v2 UT_CHANGEOVER_RUN). The motor variants' shared piece; usable on its own.
+-> delta). The motor variants' shared piece; usable on its own.
 bRun with bWantB FALSE drives A, with bWantB TRUE drives B. Changing over: the energised side drops first, then
 the dead time (tGapAB from A to B, tGapBA from B to A) runs and, with bUseFb, the other contactor's aux must have
 opened, before the new side closes. bQA and bQB are never TRUE together. At the first scan both sides wait one

@@ -29,13 +29,13 @@ A value that is not a number (`fIn` NaN or infinite, a rate NaN) holds `fOut` wh
 
 ## Example
 
-A setpoint that changes at most 0.1 bar per second.
+A setpoint that changes at most 0.2 bar per second.
 
 | Pin | Wire |
 | --- | --- |
 | `fIn` | `fHmiSetpoint` |
-| `fRateUp` | 0.1 |
-| `fRateDown` | 0.1 |
+| `fRateUp` | 0.2 |
+| `fRateDown` | 0.2 |
 | `fOut` | the loop's setpoint |
 
 **Back to** [the index](../README.md).

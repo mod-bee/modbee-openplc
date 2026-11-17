@@ -1,6 +1,5 @@
-(* FB_IoMapIn — the input side of the IO map: terminals to functions, from the rows (DESIGN-0.2.md section 5.6;
-src-v2 UT_IO_MAP_IN). Call it FIRST in the scan, after your IO code has copied the hardware into the image,
-before any logic.
+(* FB_IoMapIn — the input side of the IO map: terminals to functions, from the rows. Call it FIRST in the scan, after
+your IO code has copied the hardware into the image, before any logic.
 
 Pins: bReleaseAll (TRUE releases every input force and refuses new ones: the HMI link lost, the "release all"
 key), bUnusedOff (default TRUE: a function not fitted on this site, eSrc None, reads FALSE / 0.0; FALSE: it

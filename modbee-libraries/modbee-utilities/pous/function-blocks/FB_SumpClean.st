@@ -1,9 +1,8 @@
 (* FB_SumpClean — sump cleaning: every set.nEvery pump cycles (or bClean / bCmdClean) the sump is pumped down past
-its normal stop to set.fCleanLevel and the pump runs on set.tCleanTime there, to clear the settled solids
-(src-v2 UT_PUMP_STATION cleaning; DESIGN-0.2.md section 5.5). A part of an EMPTY FB_LevelControl: it asks for a
-normal run (E_PartAction.Request; the low-low cut-out and start limits still apply). Not reaching fCleanLevel
-within set.tMaxClean gives up: a warning (CleanFailed) until the next good clean or a reset. A cycle is one start
-of the owner's run. A bad level stops a clean. *)
+its normal stop to set.fCleanLevel and the pump runs on set.tCleanTime there, to clear the settled solids. A part
+of an EMPTY FB_LevelControl: it asks for a normal run (E_PartAction.Request; the low-low cut-out and start limits
+still apply). Not reaching fCleanLevel within set.tMaxClean gives up: a warning (CleanFailed) until the next good
+clean or a reset. A cycle is one start of the owner's run. A bad level stops a clean. *)
 
 FUNCTION_BLOCK FB_SumpClean EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT

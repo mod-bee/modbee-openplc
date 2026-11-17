@@ -1,4 +1,4 @@
-(* FB_DoseFlow EXTENDS FB_Dose — flow-paced dosing (fertigation; src-v2 UT_DOSE FLOW).
+(* FB_DoseFlow EXTENDS FB_Dose — flow-paced dosing (fertigation).
 While bRun (or a bStart latch) the dosing pump runs in proportion to the carrier: the meter's rate (per hour) x
 the ratio (fRatio pin for this run, <= 0 = set.fRatio); fRate = required / set.fPumpCapacity %, capped at
 set.fMaxRate (no capacity: fMaxRate, a pulse pump). It injects only while bCarrierRunning and the carrier flow has

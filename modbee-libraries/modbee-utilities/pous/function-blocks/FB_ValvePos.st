@@ -1,6 +1,6 @@
-(* FB_ValvePos — ABSTRACT base of the positioning valves (FB_ValveMod, FB_ValveFloat; src-v2 UT_VALVE core +
-UT_POS_FB_RUN). On FB_Equipment: "running" is open (not closed). An owner (a PID loop such as FB_SpeedLoop, a
-zone, a route) drives it through I_Equipment.Request: bRun = open, fSpeed = the position % (none: 100 %).
+(* FB_ValvePos — ABSTRACT base of the positioning valves (FB_ValveMod, FB_ValveFloat). On FB_Equipment: "running" is
+open (not closed). An owner (a PID loop such as FB_SpeedLoop, a zone, a route) drives it through
+I_Equipment.Request: bRun = open, fSpeed = the position % (none: 100 %).
 
 Pins: ipPosFb (I_Measurement, the position feedback in %; NULL = the variant's travel estimate), bOpenLs /
 bClosedLs (end switches, with set.bUseOpenLs / bUseClosedLs), refData -> fPosition (the position in use: the
