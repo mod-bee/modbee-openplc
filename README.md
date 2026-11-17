@@ -96,10 +96,18 @@ Releases are built by the GitHub workflow `.github/workflows/release.yml` with
 `tools/build-release.mjs`: pushing a `v*` tag builds every library and the
 board package with the ModBee editor's command line tool and publishes them.
 
-Libraries are made to be installed side by side. Every block and type name
-carries its library's prefix (`BEEBUS_`, `MODBUS_`, `MQTT_`, `GSM_`, `OTA_`, `UT_`, `DEV_`),
-because the editor checks a new name against every installed library, not
-only the ones a project uses.
+Libraries are made to be installed side by side, so no two use the same
+block or type name: the editor checks a new name against every installed
+library, not only the ones a project uses.
+
+- The 0.2 libraries (`modbee-beebus`, `modbee-modbus`, `modbee-mqtt`,
+  `modbee-ota`, `modbee-gsm`, `modbee-devices`) use IEC 61131-3 names in the
+  TwinCAT 3 style: `FB_` for function blocks, `ST_` for structures and `E_`
+  for enumerations, with their subject in the name (`FB_ModbusNode`,
+  `ST_MqttTlsConfig`, `E_BeeBusResult`). The work is done by methods on the
+  block: `node.ReadHoldingRegisters(...)`.
+- `modbee-utilities` keeps its `UT_` prefix, and `node-uio` and `node-webUI`
+  keep their board names (`DIGITAL_IN`, `UIO_RESULT`, `WEB_SERVER`).
 
 ## Licence
 
