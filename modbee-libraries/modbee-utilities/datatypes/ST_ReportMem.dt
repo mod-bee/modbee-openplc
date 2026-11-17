@@ -1,0 +1,14 @@
+TYPE
+  ST_ReportMem : STRUCT
+    bReport : BOOL; (* one scan: send now *)
+    fValue : REAL; (* held from the report *)
+    bGood : BOOL;
+    eReason : E_ReportReason;
+    bStarted : BOOL;
+    fGoodV : REAL; (* the last fIn that was a number *)
+    tLastAt : TIME;
+    bForcePend : BOOL; (* a force waiting for tMinInterval *)
+    bChange : BOOL;
+    bHeld : BOOL; (* the wait is counted in nSuppressed *)
+  END_STRUCT;
+END_TYPE

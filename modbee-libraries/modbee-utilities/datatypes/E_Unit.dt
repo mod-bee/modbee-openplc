@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_Unit : (None, Bar, KPa, Psi, MetreH2O, LitrePerSec, LitrePerMin, M3PerHour, GalPerMin, Litre, M3, MegaLitre, Gallon, DegC, DegF, Kelvin, Mm, Cm, Metre, Inch, Foot, Percent, Amp, Hertz, KW, M3PerDay, MegaLitrePerDay, Kg, Tonne) := None;
+END_TYPE

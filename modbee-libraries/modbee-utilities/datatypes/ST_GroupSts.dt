@@ -1,0 +1,13 @@
+TYPE
+  ST_GroupSts : STRUCT
+    eState : E_State;
+    eErrorId : E_UtError;
+    nLead : INT;
+    nRequired : INT;
+    nRunning : INT;
+    nCalled : INT;
+    bRefused : BOOL;
+    nExercising : INT; (* members on an exercise run *)
+    tExerciseIn : TIME; (* until the next exercise run (0: off, or one running) *)
+  END_STRUCT;
+END_TYPE

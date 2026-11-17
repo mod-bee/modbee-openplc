@@ -1,0 +1,14 @@
+TYPE
+  ST_VesselSts : STRUCT
+    fVolume : REAL; (* in eVolumeUnit *)
+    fFullVolume : REAL;
+    fPercent : REAL; (* of fFullVolume *)
+    fFree : REAL; (* space left *)
+    fMass : REAL;
+    fLevelPercent : REAL; (* the level as a % of fPctLow .. fPctHigh *)
+    fArea : REAL; (* water surface, m2 *)
+    bGood : BOOL;
+    bOverfull : BOOL; (* the level is above the top *)
+    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+  END_STRUCT;
+END_TYPE

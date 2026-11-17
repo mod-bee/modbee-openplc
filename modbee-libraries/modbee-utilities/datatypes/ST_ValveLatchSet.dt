@@ -1,0 +1,5 @@
+TYPE
+  ST_ValveLatchSet : STRUCT
+    tPulse : TIME := T#500ms; (* coil pulse length *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,7 @@
+TYPE
+  ST_Step : STRUCT
+    bCond : BOOL;
+    bActive : BOOL;
+    nLoopCount : INT;
+  END_STRUCT;
+END_TYPE

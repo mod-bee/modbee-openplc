@@ -1,0 +1,7 @@
+TYPE
+  ST_ReportData : STRUCT
+    bCmdForce : BOOL; (* report now (cleared by the block; a held write acts once) *)
+    set : ST_ReportSet;
+    sts : ST_ReportSts;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,7 @@
+TYPE
+  ST_ValveFloatData : STRUCT
+    bCmdHome : BOOL; (* home now (cleared by the block) *)
+    set : ST_ValveFloatSet;
+    sts : ST_ValveFloatSts;
+  END_STRUCT;
+END_TYPE

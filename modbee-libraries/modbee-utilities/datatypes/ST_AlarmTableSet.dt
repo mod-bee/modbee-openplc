@@ -1,0 +1,10 @@
+TYPE
+  ST_AlarmTableSet : STRUCT
+    bBeaconWarnings : BOOL := TRUE; (* warnings light the beacon too *)
+    bRelayOnWarning : BOOL; (* warnings drop the healthy relay too *)
+    tSirenTimeout : TIME; (* 0 = until silenced *)
+    tFastFlash : TIME := T#250ms;
+    tSlowFlash : TIME := T#1s;
+    tRetryWindow : TIME := T#1h; (* Retry rows: from the first raise (0 = until a reset) *)
+  END_STRUCT;
+END_TYPE

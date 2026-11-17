@@ -1,0 +1,9 @@
+TYPE
+  ST_MixerSts : STRUCT
+    eActivity : E_MixerActivity;
+    bWanted : BOOL;
+    bLevelOk : BOOL;
+    stLowLevel : ST_ProtectionSts;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

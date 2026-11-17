@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_EquipCmd : (None, Start, Stop, Reset, ModeOff, ModeHand, ModeAuto, Jog) := None;
+END_TYPE

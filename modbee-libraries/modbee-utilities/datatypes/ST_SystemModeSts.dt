@@ -1,0 +1,12 @@
+TYPE
+  ST_SystemModeSts : STRUCT
+    eMode : E_SysMode;
+    nAutoType : INT; (* the type in use (0 = invalid setting) *)
+    bManualRun : BOOL;
+    bPowerUpHold : BOOL;
+    eStopReason : E_StopReason; (* why the last manual run ended *)
+    bRefused : BOOL;
+    bSelectorFault : BOOL; (* both selector contacts made *)
+    bForcedOff : BOOL;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_AiStatus : (Ok, UnderRange, OverRange, FailLow, FailHigh, InputBad, NotFitted) := Ok;
+END_TYPE

@@ -1,0 +1,7 @@
+TYPE
+  ST_MeasFilterData : STRUCT
+    set : ST_MeasFilterSet;
+    fValue : REAL; (* detail: the value out *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

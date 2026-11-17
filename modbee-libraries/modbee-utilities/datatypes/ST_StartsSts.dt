@@ -1,0 +1,9 @@
+TYPE
+  ST_StartsSts : STRUCT
+    nStartsInHour : INT;
+    tWait : TIME; (* until a start is allowed *)
+    bHolding : BOOL; (* a start is waiting *)
+    bFailWaiting : BOOL; (* the wait after a failed start is running *)
+    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+  END_STRUCT;
+END_TYPE

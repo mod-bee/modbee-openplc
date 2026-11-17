@@ -1,0 +1,8 @@
+TYPE
+  ST_IoMapData : STRUCT
+    bCmdReset : BOOL; (* clear the refused report (cleared by the block) *)
+    set : ST_IoMapSet;
+    sts : ST_IoMapSts;
+    det : ST_IoMapDet;
+  END_STRUCT;
+END_TYPE

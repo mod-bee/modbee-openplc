@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_FillMode : (Off, Fixed, Ramp) := Off;
+END_TYPE

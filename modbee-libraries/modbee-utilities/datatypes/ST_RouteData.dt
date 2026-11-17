@@ -1,0 +1,6 @@
+TYPE
+  ST_RouteData : STRUCT
+    set : ST_RouteSet;
+    sts : ST_RouteSts;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,6 @@
+TYPE
+  ST_ValvePosData EXTENDS ST_EquipmentData : STRUCT
+    set : ST_ValvePosSet;
+    sts : ST_ValvePosSts;
+  END_STRUCT;
+END_TYPE

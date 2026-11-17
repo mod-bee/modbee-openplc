@@ -1,0 +1,16 @@
+TYPE
+  ST_LinkSupervisorSts : STRUCT
+    bLinkOk : BOOL;
+    nNextStep : INT; (* 1 modem restart, 2 power cycle, 3 reboot, 0 none *)
+    bRebootPending : BOOL; (* the reboot is due but bRebootAllowed is FALSE *)
+    nRebootsToday : INT; (* kept over a reboot *)
+    nRestarts : UDINT;
+    nPowerCycles : UDINT;
+    nOutages : UDINT;
+    tLastDownFor : TIME;
+    tDownFor : TIME;
+    tTimeLeft : TIME;
+    tCountResetIn : TIME;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,9 @@
+TYPE
+  ST_PumpPrimeData : STRUCT
+    bCmdPrimeNext : BOOL; (* prime on the next start (cleared by the block) *)
+    bCmdPrimeCancel : BOOL; (* withdraw it (cleared by the block) *)
+    bCmdReset : BOOL; (* reset a latched timeout (cleared by the block) *)
+    set : ST_PumpPrimeSet;
+    sts : ST_PumpPrimeSts;
+  END_STRUCT;
+END_TYPE

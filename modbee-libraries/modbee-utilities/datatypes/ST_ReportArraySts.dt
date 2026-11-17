@@ -1,0 +1,7 @@
+TYPE
+  ST_ReportArraySts : STRUCT
+    nReports : UDINT;
+    nBadItem : INT; (* the first item with a bad setting (0 none) *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

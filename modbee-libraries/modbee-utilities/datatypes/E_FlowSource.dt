@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_FlowSource : (Rate, Runtime, Sample) := Rate;
+END_TYPE

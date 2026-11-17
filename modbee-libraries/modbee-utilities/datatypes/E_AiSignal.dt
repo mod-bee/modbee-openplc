@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_AiSignal : (Current4To20, Current0To20, Voltage0To10, Custom, Direct) := Current4To20;
+END_TYPE

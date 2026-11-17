@@ -1,0 +1,6 @@
+TYPE
+  ST_PumpDet : STRUCT
+    tRunTime : TIME; (* this run *)
+    tTimeLeft : TIME; (* of the start delay, minimum run or stop delay now counting *)
+  END_STRUCT;
+END_TYPE

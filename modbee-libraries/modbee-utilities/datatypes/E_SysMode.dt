@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_SysMode : (Off, Manual, Auto) := Off;
+END_TYPE

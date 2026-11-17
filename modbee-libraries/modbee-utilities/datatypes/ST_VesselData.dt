@@ -1,0 +1,7 @@
+TYPE
+  ST_VesselData : STRUCT
+    bCmdReset : BOOL; (* clear the refused report (cleared by the block) *)
+    set : ST_VesselSet;
+    sts : ST_VesselSts;
+  END_STRUCT;
+END_TYPE

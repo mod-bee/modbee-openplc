@@ -1,0 +1,9 @@
+TYPE
+  ST_LoopFillSet : STRUCT
+    eMode : E_FillMode;
+    fSpeed : REAL := 50.0; (* Fixed: the speed while filling, % *)
+    fTarget : REAL; (* the fill is done at this value (0 = 90 % of the setpoint) *)
+    fRate : REAL := 0.1; (* Ramp: setpoint rise, units per eRateUnit *)
+    stTimeout : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#10m, eReset := E_ResetMode.Retry, tRecover := T#10s, nMaxRetries := 2);
+  END_STRUCT;
+END_TYPE

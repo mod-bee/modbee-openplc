@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_AlarmPriority : USINT (Low, Medium, High, Critical) := Low;
+END_TYPE

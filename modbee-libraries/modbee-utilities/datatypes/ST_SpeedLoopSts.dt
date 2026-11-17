@@ -1,0 +1,25 @@
+TYPE
+  ST_SpeedLoopSts : STRUCT
+    eState : E_State;
+    eErrorId : E_UtError;
+    fSpeed : REAL;
+    fPv : REAL; (* the value under control (the flow with Flow control) *)
+    fSpNow : REAL; (* the setpoint in use (ramped, fill ramp, boost) *)
+    bManual : BOOL;
+    bPvBad : BOOL;
+    bRefused : BOOL;
+    stPvBad : ST_ProtectionSts;
+    ePhase : E_LoopPhase;
+    ePresetUsed : E_LoopPreset;
+    bAtSetpoint : BOOL;
+    bFilled : BOOL;
+    bSleeping : BOOL;
+    bFlowLimiting : BOOL;
+    nHuntCount : INT;
+    stHighPv : ST_ProtectionSts;
+    stLowAtMax : ST_ProtectionSts;
+    stFill : ST_ProtectionSts;
+    stNotReaching : ST_ProtectionSts;
+    stHunting : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

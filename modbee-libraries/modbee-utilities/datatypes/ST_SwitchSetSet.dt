@@ -1,0 +1,7 @@
+TYPE
+  ST_SwitchSetSet : STRUCT
+    bFitted : BOOL := TRUE; (* FALSE: not on this site (not good, no fault) *)
+    stDisagree : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#10s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
+    stInputBad : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
+  END_STRUCT;
+END_TYPE

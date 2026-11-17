@@ -1,0 +1,6 @@
+TYPE
+  ST_ValveModConfig : STRUCT
+    fRawMin : REAL; (* nOutRaw at 0 % *)
+    fRawMax : REAL := 65535.0; (* nOutRaw at 100 % *)
+  END_STRUCT;
+END_TYPE

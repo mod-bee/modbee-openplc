@@ -1,0 +1,6 @@
+TYPE
+  ST_ValveLatchData : STRUCT
+    set : ST_ValveLatchSet;
+    sts : ST_ValveLatchSts;
+  END_STRUCT;
+END_TYPE

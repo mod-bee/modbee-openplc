@@ -1,0 +1,6 @@
+TYPE
+  ST_VsdData : STRUCT
+    set : ST_VsdSet;
+    sts : ST_VsdSts;
+  END_STRUCT;
+END_TYPE

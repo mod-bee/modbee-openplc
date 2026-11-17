@@ -1,0 +1,18 @@
+TYPE
+  ST_GroupSet : STRUCT
+    eRotate : E_Rotate;
+    tRotateInterval : TIME := T#24h;
+    nFixedLead : INT := 1;
+    tStageDelay : TIME := T#5s;
+    tDestageDelay : TIME := T#5s;
+    tFailover : TIME := T#10s;
+    nMaxRunning : INT; (* most members running at once, Hand included (0 = no limit) *)
+    bHandCounts : BOOL := TRUE; (* a member running in Hand counts toward the members wanted *)
+    bSwapWhileRunning : BOOL; (* a rotation while running: start the next member, then stop the old one *)
+    eStop : E_GroupStop; (* nothing asked any more: stop all at once, or one per tStopStep *)
+    tStopStep : TIME := T#3s; (* Staged: between member stops *)
+    fHoursBand : REAL := 1.0; (* Hours: members this close in run hours (h) count as equal (rotation order) *)
+    tExerciseEvery : TIME; (* run a member idle this long while nothing is asked (0 = off) *)
+    tExerciseTime : TIME := T#30s; (* for this long *)
+  END_STRUCT;
+END_TYPE

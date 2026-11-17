@@ -1,0 +1,17 @@
+TYPE
+  ST_StepSeqSts : STRUCT
+    nActiveStep : INT;
+    nCycles : UDINT;
+    bBusy : BOOL;
+    bPaused : BOOL;
+    bStopping : BOOL;
+    bStepTimeout : BOOL;
+    nTimedOutStep : INT;
+    bRecipeBad : BOOL;
+    nConfigStep : INT; (* the step the recipe problem is in (0 = the recipe as a whole) *)
+    eLastResult : E_StopReason;
+    tElapsed : TIME;
+    tRemaining : TIME;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

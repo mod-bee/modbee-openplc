@@ -1,0 +1,10 @@
+TYPE
+  ST_PumpDiagSet : STRUCT
+    fPressureHigh : REAL; (* in the pressure's unit (0 = off) *)
+    fPressureLow : REAL;
+    fFlowHigh : REAL; (* in the flow's unit (0 = off) *)
+    fFlowLow : REAL;
+    fSuctionLow : REAL; (* in the suction's unit (0 = off) *)
+    tDelay : TIME := T#10s; (* the finding must stand this long *)
+  END_STRUCT;
+END_TYPE

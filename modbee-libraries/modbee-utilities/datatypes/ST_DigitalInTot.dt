@@ -1,0 +1,6 @@
+TYPE
+  ST_DigitalInTot : STRUCT
+    nChanges : UDINT; (* changes of the input after debounce *)
+    tOnTime : TIME; (* time bQ has been TRUE *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,6 @@
+TYPE
+  ST_ReportArraySet : STRUCT
+    tHeartbeat : TIME; (* for items whose own is 0 (0 = off) *)
+    bReportOnStart : BOOL := TRUE;
+  END_STRUCT;
+END_TYPE

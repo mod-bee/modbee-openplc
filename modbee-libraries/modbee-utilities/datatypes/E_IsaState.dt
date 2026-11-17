@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_IsaState : USINT (Normal, Unacked, Acked, RtnUnacked, Shelved, Suppressed, OutOfService, Latched, Locked) := Normal;
+END_TYPE

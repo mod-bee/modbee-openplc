@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_RainAction : (Pause, Skip, Cancel, Ignore) := Pause;
+END_TYPE

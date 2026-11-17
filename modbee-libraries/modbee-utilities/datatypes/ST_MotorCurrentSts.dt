@@ -1,0 +1,12 @@
+TYPE
+  ST_MotorCurrentSts : STRUCT
+    fCurrent : REAL; (* in the CT's unit *)
+    fPercent : REAL; (* of full load *)
+    bProvesRun : BOOL;
+    stHigh : ST_ProtectionSts;
+    stLow : ST_ProtectionSts;
+    stStartTooLong : ST_ProtectionSts;
+    stBad : ST_ProtectionSts;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

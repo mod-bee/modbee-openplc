@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_MsgMode : USINT (Queue, Active) := Queue;
+END_TYPE

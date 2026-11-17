@@ -1,0 +1,15 @@
+TYPE
+  ST_AnalogOutSet : STRUCT
+    fEngMin : REAL; (* engineering value at fRawMin *)
+    fEngMax : REAL := 100.0; (* engineering value at fRawMax *)
+    fOutMin : REAL; (* lowest output (clamp) *)
+    fOutMax : REAL := 100.0; (* highest output (clamp) *)
+    fRampUp : REAL; (* engineering units per eRateUnit rising (0 = off) *)
+    fRampDown : REAL; (* falling (0 = off) *)
+    eRateUnit : E_RateUnit;
+    fFailValue : REAL; (* output while bInterlock is FALSE *)
+    bHoldOnInterlock : BOOL; (* TRUE: hold the output instead *)
+    bManual : BOOL; (* Manual chosen (kept) *)
+    fManualValue : REAL; (* output in Manual (kept) *)
+  END_STRUCT;
+END_TYPE

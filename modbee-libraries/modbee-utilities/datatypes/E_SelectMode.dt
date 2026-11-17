@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_SelectMode : USINT (Average, Lowest, Highest, Median, Primary) := Average;
+END_TYPE

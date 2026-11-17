@@ -1,0 +1,16 @@
+TYPE
+  ST_ValvePosSet EXTENDS ST_EquipmentSet : STRUCT
+    fSafePos : REAL; (* % on Off / interlock / a trip (< 0 = stays) *)
+    bHoldOnFault : BOOL; (* a trip holds where it is *)
+    fRestPos : REAL; (* % while the owner's open is off *)
+    fHandPos : REAL; (* Hand position (kept) *)
+    fOpenThreshold : REAL := 98.0; (* bIsOpen at or above, % *)
+    fClosedThreshold : REAL := 2.0; (* bIsClosed at or below, % *)
+    fDeadband : REAL := 1.0; (* % error ignored *)
+    fDevLimit : REAL := 5.0; (* deviation above this, % *)
+    bUseOpenLs : BOOL;
+    bUseClosedLs : BOOL;
+    stDeviation : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#10s, eReset := E_ResetMode.Auto, tRecover := T#0s, nMaxRetries := 3);
+    stPosFb : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#500ms, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 3);
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_SeqStepState : USINT (Off, Starting, Running, Stopping, Fault, Bypassed) := Off;
+END_TYPE

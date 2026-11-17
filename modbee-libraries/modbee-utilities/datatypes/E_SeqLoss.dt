@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_SeqLoss : USINT (Cascade, StopAll, DownstreamOnly) := Cascade;
+END_TYPE

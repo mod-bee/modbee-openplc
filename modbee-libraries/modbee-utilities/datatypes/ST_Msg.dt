@@ -1,0 +1,8 @@
+TYPE
+  ST_Msg : STRUCT
+    dtStamp : DT; (* dtClock when it came (or changed) *)
+    nSrc : INT; (* the source (0 = empty) *)
+    eState : E_State;
+    eError : E_UtError;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,11 @@
+TYPE
+  ST_RunSet : STRUCT
+    bByTime : BOOL;
+    tRunTime : TIME := T#1h;
+    tMaxTime : TIME; (* 0 = no cap *)
+    tMaxPause : TIME; (* 0 = no limit *)
+    eResume : E_RunResume;
+    tResumeWindow : TIME := T#1m;
+    tProgressSave : TIME := T#1h;
+  END_STRUCT;
+END_TYPE

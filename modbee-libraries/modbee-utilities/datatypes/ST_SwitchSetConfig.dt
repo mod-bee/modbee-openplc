@@ -1,0 +1,12 @@
+TYPE
+  ST_SwitchSetConfig : STRUCT
+    bUseLL : BOOL; (* the low-low switch is fitted *)
+    bUseL : BOOL;
+    bUseH : BOOL;
+    bUseHH : BOOL;
+    bUseContact : BOOL; (* the plain contact is fitted *)
+    tDebounce : TIME := T#2s; (* level switches *)
+    tContactDebounce : TIME := T#50ms;
+    tRetryWindow : TIME := T#1h; (* a Retry protection counts its trips within this window *)
+  END_STRUCT;
+END_TYPE

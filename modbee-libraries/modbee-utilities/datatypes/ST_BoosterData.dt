@@ -1,0 +1,9 @@
+TYPE
+  ST_BoosterData : STRUCT
+    bCmdReset : BOOL;
+    set : ST_BoosterSet;
+    bWanted : BOOL; (* status *)
+    stLost : ST_ProtectionSts;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,11 @@
+TYPE
+  ST_AnalogInSet : STRUCT
+    bFitted : BOOL := TRUE; (* FALSE: not on this site (not good, no fault) *)
+    fEngMin : REAL; (* engineering value at fRawMin *)
+    fEngMax : REAL := 100.0; (* engineering value at fRawMax *)
+    fTrim : REAL; (* field zero trim, engineering units *)
+    fAltFactor : REAL := 1.0; (* fValueAlt = fValue * fAltFactor + fAltOffset (a second unit) *)
+    fAltOffset : REAL;
+    stFault : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#2s, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 3);
+  END_STRUCT;
+END_TYPE

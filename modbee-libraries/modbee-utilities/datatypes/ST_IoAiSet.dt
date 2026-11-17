@@ -1,0 +1,8 @@
+TYPE
+  ST_IoAiSet : STRUCT
+    eSrc : E_IoSrc;
+    nModule : USINT;
+    nCh : USINT;
+    fFailSafe : REAL; (* fV when the channel is missing, bad or its module not fitted *)
+  END_STRUCT;
+END_TYPE

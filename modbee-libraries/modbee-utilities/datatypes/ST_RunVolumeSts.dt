@@ -1,0 +1,9 @@
+TYPE
+  ST_RunVolumeSts : STRUCT
+    fDelivered : LREAL;
+    fLeft : LREAL;
+    tCap : TIME; (* the safety time cap in use (0 = no volume target) *)
+    bDefaultCap : BOOL; (* the cap is tDefaultCap, not worked out from fMinFlow *)
+    stMeterFailed : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_MixerActivity : USINT (Off, Idle, Rest, Timed, PreRun, WithPump, StartNow, PostRun, LevelLow, NotReady) := Off;
+END_TYPE

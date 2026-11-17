@@ -1,0 +1,6 @@
+TYPE
+  ST_MotorTot : STRUCT
+    fRunHours : LREAL;
+    nStarts : UDINT;
+  END_STRUCT;
+END_TYPE

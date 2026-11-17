@@ -1,0 +1,6 @@
+TYPE
+  ST_PulseMeterTot : STRUCT
+    fTotal : LREAL;
+    fBatch : LREAL; (* counted like fTotal until bCmdResetBatch *)
+  END_STRUCT;
+END_TYPE

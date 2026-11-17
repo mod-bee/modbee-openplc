@@ -1,0 +1,16 @@
+TYPE
+  ST_ZoneSet : STRUCT
+    bEnable : BOOL := TRUE; (* in the program *)
+    tRunTime : TIME := T#10m; (* water time *)
+    fVolume : LREAL; (* water to apply (meter units); > 0: by volume (with tRunTime as its cap) *)
+    tOpenTime : TIME := T#5s; (* no valve: the time a plain output takes to open *)
+    nCycles : INT := 1; (* the water is given in this many cycles (1..100) *)
+    tSoakTime : TIME; (* between cycles the zone soaks this long (0 = the next cycle at once) *)
+    fMinFlow : REAL; (* the flow band while watering, per hour in the meter's unit (0 = not checked) *)
+    fMaxFlow : REAL;
+    stFlowCheck : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#60s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
+    bDose : BOOL := TRUE; (* this zone may be dosed *)
+    fPressure : REAL; (* its pressure setpoint (0 = the program's set.fDefaultSp) *)
+    eEndBy : E_ZoneEnd; (* what ends a cycle: Auto volume if set and metered, else time *)
+  END_STRUCT;
+END_TYPE

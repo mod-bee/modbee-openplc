@@ -1,0 +1,10 @@
+TYPE
+  ST_IntlkSts : STRUCT
+    bOk : BOOL;
+    nFirstOut : INT;
+    bBypassed : BOOL;
+    nNotOk : INT;
+    nTrips : UDINT; (* times bOk went FALSE (not kept) *)
+    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+  END_STRUCT;
+END_TYPE

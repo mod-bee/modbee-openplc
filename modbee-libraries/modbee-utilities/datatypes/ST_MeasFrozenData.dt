@@ -1,0 +1,8 @@
+TYPE
+  ST_MeasFrozenData : STRUCT
+    bCmdReset : BOOL; (* reset a held Manual trip (cleared by the block) *)
+    set : ST_MeasFrozenSet;
+    stFrozen : ST_ProtectionSts;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

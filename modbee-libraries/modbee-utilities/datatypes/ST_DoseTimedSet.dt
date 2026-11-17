@@ -1,0 +1,8 @@
+TYPE
+  ST_DoseTimedSet EXTENDS ST_DoseSet : STRUCT
+    tOnTime : TIME := T#10s;
+    tOffTime : TIME := T#5m;
+    fRate : REAL := 100.0; (* % while on *)
+    tCarrierProven : TIME := T#10s;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_StepTimeout : USINT (Hold, Next, Stop) := Hold;
+END_TYPE

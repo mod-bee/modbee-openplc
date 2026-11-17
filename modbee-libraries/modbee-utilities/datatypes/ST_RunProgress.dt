@@ -1,0 +1,7 @@
+TYPE
+  ST_RunProgress : STRUCT
+    bActive : BOOL;
+    bLatched : BOOL;
+    tElapsed : TIME;
+  END_STRUCT;
+END_TYPE

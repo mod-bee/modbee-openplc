@@ -1,0 +1,15 @@
+TYPE
+  ST_MixerSet : STRUCT
+    bCycle : BOOL := TRUE;
+    tOnTime : TIME := T#5m;
+    tOffTime : TIME := T#1h;
+    bPreRun : BOOL := TRUE;
+    tPreRun : TIME := T#2m;
+    bPostRun : BOOL := TRUE;
+    tPostRun : TIME := T#30s;
+    bWithPump : BOOL := TRUE;
+    fMinLevel : REAL := 0.3; (* in the level's unit *)
+    fMinDeadband : REAL := 0.05;
+    stLowLevel : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#5m, eReset := E_ResetMode.Auto);
+  END_STRUCT;
+END_TYPE

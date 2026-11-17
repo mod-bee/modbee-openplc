@@ -1,0 +1,10 @@
+TYPE
+  ST_StarDeltaSet : STRUCT
+    tStarTime : TIME := T#6s;
+    tTransition : TIME := T#60ms; (* open-transition gap *)
+    bUseStarDeltaFb : BOOL;
+    tChangeover : TIME := T#2s; (* contactors must open / close within this *)
+    stChangeover : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0);
+    fStarCurrentPct : REAL; (* > 0: to delta early once the star current falls below this % of full load *)
+  END_STRUCT;
+END_TYPE

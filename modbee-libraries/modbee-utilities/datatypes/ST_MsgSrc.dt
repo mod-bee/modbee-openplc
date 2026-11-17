@@ -1,0 +1,7 @@
+TYPE
+  ST_MsgSrc : STRUCT
+    eState : E_State;
+    eError : E_UtError;
+    bKnown : BOOL; (* FALSE: nothing seen yet (Active builds again) *)
+  END_STRUCT;
+END_TYPE

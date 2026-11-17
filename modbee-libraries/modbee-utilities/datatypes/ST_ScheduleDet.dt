@@ -1,0 +1,7 @@
+TYPE
+  ST_ScheduleDet : STRUCT
+    tOverrideLeft : TIME;
+    tNextChangeIn : TIME;
+    dtLocal : DT;
+  END_STRUCT;
+END_TYPE

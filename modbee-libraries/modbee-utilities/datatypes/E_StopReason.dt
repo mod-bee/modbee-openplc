@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_StopReason : (None, Off, Interlock, OwnerLost, Fault, Request, Part, PowerCut, Hand, MaxRun, Manual, Done, PauseMax, Abort, MaxQuantity, TimeCap, LevelEnd, IrrigatorStop, PumpFault, Rain) := None;
+END_TYPE

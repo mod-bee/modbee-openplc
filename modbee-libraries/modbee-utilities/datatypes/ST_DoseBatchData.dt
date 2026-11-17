@@ -1,0 +1,6 @@
+TYPE
+  ST_DoseBatchData EXTENDS ST_DoseData : STRUCT
+    set : ST_DoseBatchSet;
+    sts : ST_DoseBatchSts;
+  END_STRUCT;
+END_TYPE

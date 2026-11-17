@@ -1,0 +1,10 @@
+TYPE
+  ST_AnalogInSts : STRUCT
+    fValue : REAL;
+    fValueAlt : REAL; (* the value in the second unit *)
+    bGood : BOOL;
+    eSignal : E_AiStatus;
+    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    stFault : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

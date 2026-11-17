@@ -1,0 +1,7 @@
+TYPE
+  ST_MixerData : STRUCT
+    set : ST_MixerSet;
+    sts : ST_MixerSts;
+    det : ST_MixerDet;
+  END_STRUCT;
+END_TYPE

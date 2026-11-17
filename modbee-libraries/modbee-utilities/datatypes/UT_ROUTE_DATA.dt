@@ -1,7 +1,0 @@
-TYPE
-  UT_ROUTE_DATA : STRUCT
-    set : UT_ROUTE_SET;
-    sts : UT_ROUTE_STS;
-    det : UT_ROUTE_DET;
-  END_STRUCT;
-END_TYPE

@@ -1,0 +1,10 @@
+TYPE
+  ST_RegisterMeterSts : STRUCT
+    bGood : BOOL;
+    fRate : REAL; (* per hour *)
+    fRegister : LREAL; (* the last good reading *)
+    nGlitches : UDINT; (* drops and too-large steps (not kept) *)
+    bRefused : BOOL;
+    stInputBad : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,8 @@
+TYPE
+  ST_SumpCleanSet : STRUCT
+    nEvery : INT; (* pump cycles between cleans (0 = only on command) *)
+    fCleanLevel : REAL := 5.0;
+    tCleanTime : TIME := T#20s; (* run on at the clean level *)
+    tMaxClean : TIME := T#5m; (* give up after this (0 = no limit) *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,17 @@
+TYPE
+  ST_CascadeSet : STRUCT
+    fStageAt : REAL := 95.0; (* speed % at or above which a pump is added *)
+    fDestageAt : REAL := 40.0; (* speed % at or below which one is dropped *)
+    tStageDelay : TIME := T#15s;
+    tDestageDelay : TIME := T#30s;
+    eStageBy : E_StageBy;
+    bVsd : BOOL := TRUE; (* the pumps follow the loop's speed (FALSE: fixed speed, the bands) *)
+    fShortBand : REAL := 0.2; (* VSD: add only when the value is short of the setpoint by more than this *)
+    fAddBand : REAL := 0.3; (* no VSD: add when the value is this far short of the setpoint *)
+    fDropBand : REAL := 0.3; (* no VSD: drop when the value is this far past the setpoint *)
+    fAddPct : REAL := 90.0; (* Flow and the jockey: add above this % of the running capacity *)
+    fDropPct : REAL := 75.0; (* Flow and the jockey: drop below this % of the capacity left *)
+    fBepMin : REAL; (* PerPump: the flow per pump, best efficiency band *)
+    fBepMax : REAL;
+  END_STRUCT;
+END_TYPE

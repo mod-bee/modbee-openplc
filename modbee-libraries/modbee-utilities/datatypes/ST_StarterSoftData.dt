@@ -1,0 +1,9 @@
+TYPE
+  ST_StarterSoftData : STRUCT
+    bCmdReset : BOOL; (* reset its trip once the cause has gone (cleared by the block) *)
+    set : ST_StarterSoftSet;
+    stStartTooLong : ST_ProtectionSts;
+    bAtSpeed : BOOL; (* status: top of ramp *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

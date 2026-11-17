@@ -1,0 +1,11 @@
+TYPE
+  ST_AnalogInConfig : STRUCT
+    eSignal : E_AiSignal;
+    fRawMin : REAL; (* raw value at the bottom of the signal (4 mA, 0 mA, 0 V) *)
+    fRawMax : REAL := 65535.0; (* raw value at the top of the signal (20 mA, 10 V) *)
+    eUnit : E_Unit; (* unit of fValue *)
+    fCustomLowFail : REAL := -5.0; (* Custom / Direct: fail low at or below this % of the span *)
+    fCustomHighFail : REAL := 105.0; (* Custom / Direct: fail high at or above this % of the span *)
+    tRetryWindow : TIME := T#1h; (* a Retry fault counts its trips within this window *)
+  END_STRUCT;
+END_TYPE

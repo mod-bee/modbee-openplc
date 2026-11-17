@@ -1,0 +1,10 @@
+TYPE
+  ST_IoDi : STRUCT
+    bQ : BOOL; (* the value for your logic, TRUE = active *)
+    bOk : BOOL; (* bQ comes from a good channel, or a force *)
+    bFit : BOOL; (* mapped on this site (eSrc not None, module fitted) *)
+    eWhy : E_IoQ; (* the quality and why *)
+    bRaw : BOOL; (* the block's: the last state after NC *)
+    tRawAt : TIME; (* the block's: when bRaw changed *)
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,16 @@
+TYPE
+  ST_IntlkCond : STRUCT
+    bOk : BOOL := TRUE; (* the live condition (the project's rung) *)
+    bBypass : BOOL; (* the bypass request (HMI; never kept) *)
+    bBad : BOOL; (* not OK now (before the delay) *)
+    bTripped : BOOL; (* counts against bOk *)
+    bLatched : BOOL; (* held until a reset *)
+    bBypassed : BOOL;
+    nRetries : INT;
+    tBadSince : TIME;
+    tBypassAt : TIME;
+    tWindowAt : TIME;
+    bBypassOn : BOOL;
+    bWentBad : BOOL; (* went out this scan *)
+  END_STRUCT;
+END_TYPE

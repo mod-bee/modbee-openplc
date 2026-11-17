@@ -1,0 +1,7 @@
+TYPE
+  ST_LevelCheckData : STRUCT
+    bCmdReset : BOOL;
+    set : ST_LevelCheckSet;
+    sts : ST_LevelCheckSts;
+  END_STRUCT;
+END_TYPE

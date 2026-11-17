@@ -1,0 +1,8 @@
+TYPE
+  ST_AlarmTableData : STRUCT
+    bCmdSilence : BOOL; (* cleared by the block *)
+    bCmdReset : BOOL; (* cleared by the block *)
+    set : ST_AlarmTableSet;
+    sts : ST_AlarmTableSts;
+  END_STRUCT;
+END_TYPE

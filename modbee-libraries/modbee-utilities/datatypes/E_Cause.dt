@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_Cause : (Always, Running, Stopped) := Always;
+END_TYPE

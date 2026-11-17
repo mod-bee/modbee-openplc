@@ -1,0 +1,7 @@
+TYPE
+  ST_SystemModeDet : STRUCT
+    tRunTime : TIME;
+    tTimeLeft : TIME;
+    tPowerUpLeft : TIME;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,5 @@
+TYPE
+  ST_ValveTot : STRUCT
+    nStrokes : UDINT;
+  END_STRUCT;
+END_TYPE

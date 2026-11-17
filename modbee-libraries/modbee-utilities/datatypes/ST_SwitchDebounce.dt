@@ -1,0 +1,6 @@
+TYPE
+  ST_SwitchDebounce : STRUCT
+    bState : BOOL;
+    tSince : TIME; (* the input has differed from bState since then *)
+  END_STRUCT;
+END_TYPE

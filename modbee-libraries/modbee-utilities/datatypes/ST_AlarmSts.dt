@@ -1,0 +1,16 @@
+TYPE
+  ST_AlarmSts : STRUCT
+    eIsaState : E_IsaState;
+    bActive : BOOL;
+    bUnacked : BOOL;
+    bQ : BOOL;
+    nCount : UDINT;
+    tLastDuration : TIME;
+    nSequence : UDINT; (* when it was last raised (ms), orders the first-out *)
+    dtRaisedAt : DT;
+    dtAckedAt : DT;
+    dtClearedAt : DT;
+    eCode : E_UtError;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

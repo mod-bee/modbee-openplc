@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_BeaconStyle : USINT (Count, Binary) := Count;
+END_TYPE

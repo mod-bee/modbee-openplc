@@ -1,0 +1,9 @@
+TYPE
+  ST_LocalControlData : STRUCT
+    set : ST_LocalControlSet;
+    bSelectorFault : BOOL; (* both selector contacts made *)
+    bHeldOff : BOOL; (* power-up: held Off until the selector is moved *)
+    bRemote : BOOL; (* the mode comes from the operator's choice now *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

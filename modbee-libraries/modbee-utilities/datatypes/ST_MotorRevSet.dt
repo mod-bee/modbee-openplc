@@ -1,0 +1,9 @@
+TYPE
+  ST_MotorRevSet : STRUCT
+    tReversalDelay : TIME := T#2s;
+    bStopBeforeReverse : BOOL; (* a direction change stops first; a new start needed *)
+    tChangeover : TIME := T#2s;
+    stChangeover : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0);
+    bHandReverse : BOOL; (* Hand direction chosen last (kept) *)
+  END_STRUCT;
+END_TYPE

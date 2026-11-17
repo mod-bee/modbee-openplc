@@ -1,0 +1,6 @@
+TYPE
+  ST_StarDeltaData : STRUCT
+    set : ST_StarDeltaSet;
+    sts : ST_StarDeltaSts;
+  END_STRUCT;
+END_TYPE

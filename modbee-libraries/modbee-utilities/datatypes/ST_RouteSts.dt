@@ -1,0 +1,18 @@
+TYPE
+  ST_RouteSts : STRUCT
+    nOutlet : USINT;
+    nOpenMask : BYTE; (* bit n-1: requested open *)
+    nProvenMask : BYTE; (* bit n-1: open *)
+    nFaultOutlet : USINT;
+    eKind : E_OutletKind;
+    bRouteOk : BOOL;
+    bRouteLost : BOOL;
+    bOpening : BOOL;
+    bClosing : BOOL;
+    bDiverted : BOOL;
+    bNoStorage : BOOL;
+    bBlocked : BOOL;
+    tTimeLeft : TIME;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

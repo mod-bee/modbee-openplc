@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_Response : (Off, Warn, Trip, Signal) := Off;
+END_TYPE

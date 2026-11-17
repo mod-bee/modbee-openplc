@@ -1,0 +1,14 @@
+TYPE
+  ST_SelectSet : STRUCT
+    eSelect : E_SelectMode; (* combine the agreeing sensors *)
+    eTwoDisagree : E_SelectMode := E_SelectMode.Highest; (* two that disagree: Highest or Lowest *)
+    fWarnSpread : REAL := 1.0;
+    fFaultSpread : REAL := 2.0; (* sensors further apart than this do not agree *)
+    stDeviation : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#0s, nMaxRetries := 3);
+    stNoAgree : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#10s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
+    tRetryWindow : TIME := T#1h;
+    tFilter : TIME;
+    eNoGood : E_NoGood; (* fOut while not good *)
+    fSubstitute : REAL;
+  END_STRUCT;
+END_TYPE

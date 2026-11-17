@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_Defer : USINT (None, Manual, Remote, Rain, Soil, RainLost, SoilLost, Setting) := None;
+END_TYPE

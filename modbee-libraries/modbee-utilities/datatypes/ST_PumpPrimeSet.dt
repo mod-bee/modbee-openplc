@@ -1,0 +1,11 @@
+TYPE
+  ST_PumpPrimeSet : STRUCT
+    bEveryStart : BOOL; (* prime at every start *)
+    eDoneBy : E_PrimeDone;
+    fDoneLevel : REAL; (* Pressure / Flow: primed above this *)
+    tHold : TIME := T#2s; (* the primed condition must last this long *)
+    tRunTime : TIME := T#30s; (* RunTime: primed after running this long *)
+    tTimeout : TIME := T#60s; (* priming always ends here *)
+    stTimeout : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Retry, tRecover := T#2m, nMaxRetries := 3);
+  END_STRUCT;
+END_TYPE

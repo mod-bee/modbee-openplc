@@ -1,0 +1,10 @@
+TYPE
+  ST_SystemModeData : STRUCT
+    bCmdStart : BOOL; (* latch the manual run (rising edge, cleared) *)
+    bCmdStop : BOOL;
+    bCmdReset : BOOL; (* the plant reset, as the bReset pin *)
+    set : ST_SystemModeSet;
+    sts : ST_SystemModeSts;
+    det : ST_SystemModeDet;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,9 @@
+TYPE
+  ST_LevelControlData : STRUCT
+    bCmdDemand : BOOL; (* as the bDemand pin, latched until the demand level is reached *)
+    bCmdStop : BOOL; (* ends a latched demand *)
+    bCmdReset : BOOL;
+    set : ST_LevelControlSet;
+    sts : ST_LevelControlSts;
+  END_STRUCT;
+END_TYPE

@@ -1,0 +1,9 @@
+TYPE
+  ST_ExerciseData : STRUCT
+    bCmdExercise : BOOL; (* run one now (cleared by the block) *)
+    set : ST_ExerciseSet;
+    bExercising : BOOL; (* status *)
+    tNextIn : TIME;
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

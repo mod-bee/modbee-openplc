@@ -1,0 +1,10 @@
+TYPE
+  ST_CmdSts : STRUCT
+    eLastSource : E_CmdFrom;
+    nLastCmd : DWORD;
+    nLastMode : INT := -1;
+    nLastSel : INT := -1;
+    nRefusedCount : UDINT; (* remote requests refused (not kept) *)
+    bLocalOnly : BOOL; (* under local control now *)
+  END_STRUCT;
+END_TYPE

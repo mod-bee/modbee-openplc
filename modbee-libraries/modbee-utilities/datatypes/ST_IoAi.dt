@@ -1,0 +1,8 @@
+TYPE
+  ST_IoAi : STRUCT
+    fV : REAL; (* the raw value for your logic *)
+    bOk : BOOL;
+    bFit : BOOL;
+    eWhy : E_IoQ;
+  END_STRUCT;
+END_TYPE

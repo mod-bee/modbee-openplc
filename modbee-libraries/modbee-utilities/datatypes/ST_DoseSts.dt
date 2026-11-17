@@ -1,0 +1,16 @@
+TYPE
+  ST_DoseSts : STRUCT
+    ePhase : E_DosePhase;
+    eStopReason : E_StopReason; (* why the last dose ended *)
+    bHeld : BOOL; (* a dose is paused *)
+    bQuantityHit : BOOL; (* fMaxQuantity ended a dose (until a reset) *)
+    fRate : REAL; (* % *)
+    fDelivered : LREAL; (* this dose so far *)
+    fLastDelivered : LREAL;
+    stMaxTime : ST_ProtectionSts;
+    stStockLow : ST_ProtectionSts;
+    bRefused : BOOL;
+    eMode : E_Mode; (* the mode in use *)
+    bHandRun : BOOL; (* a Hand run is on *)
+  END_STRUCT;
+END_TYPE

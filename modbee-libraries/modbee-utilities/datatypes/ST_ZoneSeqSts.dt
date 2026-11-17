@@ -1,0 +1,17 @@
+TYPE
+  ST_ZoneSeqSts : STRUCT
+    eState : E_State;
+    eErrorId : E_UtError;
+    ePhase : E_ZonePhase;
+    nZone : INT;
+    bActive : BOOL;
+    eStopReason : E_StopReason;
+    nRunZone : INT; (* the one zone of this run (0 = the program) *)
+    nPass : INT; (* the pass running *)
+    bRainHold : BOOL;
+    bMasterWanted : BOOL;
+    bDoseOn : BOOL;
+    tPumpWait : TIME; (* the time with no water for want of the pump *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

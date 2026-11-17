@@ -1,0 +1,11 @@
+TYPE
+  ST_ZoneSeqData : STRUCT
+    bCmdStart : BOOL;
+    bCmdStop : BOOL;
+    bCmdSkip : BOOL;
+    bCmdReset : BOOL;
+    nCmdRunZone : INT := -1; (* run only this zone (index in aZones): a start; then -1 *)
+    set : ST_ZoneSeqSet;
+    sts : ST_ZoneSeqSts;
+  END_STRUCT;
+END_TYPE

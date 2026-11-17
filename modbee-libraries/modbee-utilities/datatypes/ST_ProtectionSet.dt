@@ -1,0 +1,9 @@
+TYPE
+  ST_ProtectionSet : STRUCT
+    eResponse : E_Response := E_Response.Trip;
+    tDelay : TIME := T#1s;
+    eReset : E_ResetMode := E_ResetMode.Retry;
+    tRecover : TIME := T#10s;
+    nMaxRetries : INT := 3;
+  END_STRUCT;
+END_TYPE

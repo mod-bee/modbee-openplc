@@ -1,0 +1,7 @@
+TYPE
+  ST_LinkSupervisorData : STRUCT
+    bCmdResetReboots : BOOL; (* cleared by the block *)
+    set : ST_LinkSupervisorSet;
+    sts : ST_LinkSupervisorSts;
+  END_STRUCT;
+END_TYPE

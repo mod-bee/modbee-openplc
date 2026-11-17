@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_PartAction : (None, Warn, Mask, HoldStart, Stop, Trip, Done, Run, Request, Cap) := None;
+END_TYPE

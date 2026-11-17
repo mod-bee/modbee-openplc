@@ -1,0 +1,12 @@
+TYPE
+  ST_PulseSeqSet : STRUCT
+    nPulsesPerChannel : INT := 1;
+    tPulseOn : TIME := T#100ms; (* valve open time (at least one scan) *)
+    tPulseOff : TIME := T#1s; (* gap between pulses on the same channel *)
+    tChannelGap : TIME := T#10s; (* gap between channels (the air tank recovers) *)
+    tCyclePause : TIME := T#60s; (* pause after a full cycle *)
+    tStartDelay : TIME; (* after bEnable and bDemand come on *)
+    nPostCycles : INT; (* full cycles after bDemand or bEnable drops (post-clean) *)
+    nSkip : DWORD; (* bit n = skip channel n+1 (a faulty valve) *)
+  END_STRUCT;
+END_TYPE

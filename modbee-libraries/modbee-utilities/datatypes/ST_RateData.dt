@@ -1,0 +1,7 @@
+TYPE
+  ST_RateData : STRUCT
+    bCmdReset : BOOL; (* restart the measurement, clear bRefused (cleared by the block) *)
+    set : ST_RateSet;
+    sts : ST_RateSts;
+  END_STRUCT;
+END_TYPE

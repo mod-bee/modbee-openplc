@@ -1,0 +1,13 @@
+TYPE
+  ST_SelectSts : STRUCT
+    fOut : REAL;
+    fSpread : REAL;
+    nSelected : INT; (* the sensor used (1..3), 0 = a combination or none *)
+    nGoodCount : INT;
+    nDeviating : INT; (* the sensor dropped (1..3), 0 none *)
+    bGood : BOOL;
+    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    stDeviation : ST_ProtectionSts;
+    stNoAgree : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE

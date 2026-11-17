@@ -1,0 +1,6 @@
+TYPE
+  ST_StatsTot : STRUCT
+    stCur : ST_StatsCur;
+    stPrev : ST_StatsPrev;
+  END_STRUCT;
+END_TYPE

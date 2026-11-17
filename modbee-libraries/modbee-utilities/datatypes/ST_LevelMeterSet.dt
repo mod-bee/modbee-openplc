@@ -1,0 +1,7 @@
+TYPE
+  ST_LevelMeterSet : STRUCT
+    bCountFalls : BOOL := TRUE;
+    fDeadband : REAL;
+    tRateWindow : TIME := T#1m;
+  END_STRUCT;
+END_TYPE

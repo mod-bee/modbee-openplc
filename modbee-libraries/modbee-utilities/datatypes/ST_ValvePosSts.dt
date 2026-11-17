@@ -1,0 +1,15 @@
+TYPE
+  ST_ValvePosSts EXTENDS ST_EquipmentSts : STRUCT
+    fAim : REAL; (* where it is going, % *)
+    fDemand : REAL; (* the demand now (after shaping and ramp), % *)
+    fPosition : REAL; (* the position in use, % *)
+    fFeedback : REAL; (* the feedback (-1: none) *)
+    fEstimate : REAL;
+    bFbOk : BOOL;
+    bOpen : BOOL;
+    bClosed : BOOL;
+    bMoving : BOOL;
+    stDeviation : ST_ProtectionSts;
+    stPosFb : ST_ProtectionSts;
+  END_STRUCT;
+END_TYPE
