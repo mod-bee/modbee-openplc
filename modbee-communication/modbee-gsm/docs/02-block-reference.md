@@ -569,13 +569,14 @@ give them yet.
      STRUCT anyData, members by name ({irr.left}, {pump[2].hours}, arrays
      from 1):
        {x}            its natural form: 12.4, 42, TRUE, the text, 1h30m,
-                      2026-11-12 10:00:00; an enumeration as its number
+                      2026-11-12 10:00:00; an enumeration as its member's
+                      name when its type is declared {attribute 'to_string'}
+                      (Running), otherwise as its number
        {x:1} {x:0}    a REAL or LREAL with that many decimals
        {x:hm}         a TIME as hours and minutes: '2h00m', '48m'
        {x:16}         a STRING cut to 16 characters
        {x|OFF|MANUAL|AUTO}  the word an integer, BOOL or enumeration
-                      indexes, from 0 - how an enumeration reads as its
-                      value's name (the runtime keeps no names for them)
+                      indexes, from 0 - words of your own for each value
      A placeholder that names nothing stays as written, so the mistake shows
      in the message; everything else passes through, $N line breaks
      included. At most 160 characters: cut there, bTruncated TRUE. Needs no
@@ -966,13 +967,14 @@ give them yet.
      STRUCT anyData, members by name ({irr.left}, {pump[2].hours}, arrays
      from 1):
        {x}            its natural form: 12.4, 42, TRUE, the text, 1h30m,
-                      2026-11-12 10:00:00; an enumeration as its number
+                      2026-11-12 10:00:00; an enumeration as its member's
+                      name when its type is declared {attribute 'to_string'}
+                      (Running), otherwise as its number
        {x:1} {x:0}    a REAL or LREAL with that many decimals
        {x:hm}         a TIME as hours and minutes: '2h00m', '48m'
        {x:16}         a STRING cut to 16 characters
        {x|OFF|MANUAL|AUTO}  the word an integer, BOOL or enumeration
-                      indexes, from 0 - how an enumeration reads as its
-                      value's name (the runtime keeps no names for them)
+                      indexes, from 0 - words of your own for each value
      A placeholder that names nothing stays as written, so the mistake shows
      in the message; everything else passes through, $N line breaks
      included. At most 160 characters: cut there, bTruncated TRUE. Needs no
