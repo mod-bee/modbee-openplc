@@ -29,10 +29,11 @@
 // design, so every touch of the modem is made holding one recursive lock.
 //
 // The blocks TRY the lock and skip a scan when another task holds it, so no
-// block ever waits on the modem. The one thing that holds it for long is
-// GsmClient::connect(), which Arduino's Client interface requires to return a
-// verdict (1.35 s plain, 5.2 s TLS, measured on an A7670G); while it runs it
-// pumps the modem itself, so nothing is lost by the blocks standing back.
+// block ever waits on the modem. Nothing holds it for long: GsmClient's
+// connect(), which Arduino's Client interface requires to return a verdict
+// (1.35 s plain, 5.2 s TLS, measured on an A7670G - and up to its time limit
+// over a poor cellular link), takes it for each check of the dial and never
+// across it, through the GsmService this layer gives the modem's sockets.
 //
 // --- NAMING ---
 //
@@ -295,6 +296,23 @@ inline int64_t nanosOf(uint32_t milliseconds) {
 // MQTT talks to it as it talks to WiFiClient: every call takes the lock and
 // then does exactly what a GsmClient on the modem's sockets does.
 //
+// WHILE THE PUMP SERVICES THE MODEM (a board: see "the modem is serviced
+// between scans" in the .cpp), the data calls - available, read, peek, write,
+// connected, flush - neither wait for the lock nor poll the modem from the
+// caller's task. They were called several times in every scan of the task
+// that polls MQTT, and each one waited for the pump to finish its own poll
+// and then polled the modem again (measured on a Node UIO: an idle TLS
+// connection added about 12 ms to a 50 ms scan). Now a lock the pump holds
+// reads as "nothing now": available() and read() answer 0, peek() and read()
+// of one byte -1, write() takes nothing (a short write, which MQTT retries on
+// its next poll), connected() answers what it last saw, and flush() returns
+// at once - the pump sends what is in the socket's ring. stop() still waits
+// for the lock: a close must happen, and it only queues the module's close.
+// connect() waits for it only to start the dial and for each check of it, and
+// never holds it while the dial waits, so the pump keeps servicing the modem
+// and the blocks keep reading it. With no pump running, every call waits for
+// the lock and polls as it always has, connect() between its checks.
+//
 // It is an Arduino Client that MAKES its GsmClient at the first connect():
 // FB_MqttClient may build its cellular link before the modem block has made
 // the device, and a GsmClient is bound to one device's sockets for life.
@@ -348,6 +366,7 @@ private:
 
     GsmSecurity _security;
     int _connectSeconds = 0;
+    uint8_t _connectedSeen = 0;     // connected() while the pump holds the lock
     bool _made = false;
     alignas(GsmClient) unsigned char _storage[sizeof(GsmClient)];
     char _why[64] = {0};

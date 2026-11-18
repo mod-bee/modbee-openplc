@@ -1003,6 +1003,42 @@ int64_t unixSeconds(const GsmParse::GsmDateTime& when) {
 
 #if defined(MODBEE_GSM_PLC_CLIENT)
 
+namespace gsmplc {
+namespace {
+
+// WHETHER THE PUMP SERVICES THE MODEM. While it does, the client's data calls
+// never wait for the lock and never poll the modem themselves (see the
+// header); while it does not - no pump on this target, or it would not start -
+// they wait and poll, as they always have.
+bool servicedByPump() {
+#if defined(ARDUINO_ARCH_ESP32)
+    return !thePump().gone;
+#elif defined(GSM_PLC_HOST_PUMP)
+    return true;        // the host rig runs a pump thread of its own
+#else
+    return false;
+#endif
+}
+
+// HOW GsmClient's WAITS SHARE THE MODEM - connect() and flush(). Each check
+// of a wait takes this layer's lock and gives it back; the wait between checks
+// holds nothing, so the pump and the blocks keep the modem serviced. While the
+// pump runs the wait only looks; without it the wait polls, holding the lock.
+class Service : public GsmService {
+public:
+    void enter() override { lock(); }
+    void leave() override { unlock(); }
+    bool driven() const override { return servicedByPump(); }
+};
+
+Service& theService() {
+    static Service one;
+    return one;
+}
+
+} // namespace
+} // namespace gsmplc
+
 GsmPlcClient::~GsmPlcClient() {
     if (_made) {
         gsmplc::Hold hold;
@@ -1016,91 +1052,146 @@ GsmPlcClient::~GsmPlcClient() {
 GsmClient* GsmPlcClient::made() {
     if (_made) { return client(); }
     if (!gsmplc::hasDevice()) { return nullptr; }
+    // The device is made once and kept, so its sockets keep the service too.
+    gsmplc::device().sockets().setService(&gsmplc::theService());
     new ((void*)_storage) GsmClient(gsmplc::device().sockets(), _security);
     _made = true;
     return client();
 }
 
+// THE DIAL HOLDS NO LOCK WHILE IT WAITS. The checks are made holding it; the
+// dial is not, because GsmClient takes the lock itself for each of its checks
+// (the service, above) - a dial holding it throughout stopped the pump and the
+// modem block for up to the whole time limit, every attempt.
 int GsmPlcClient::connect(const char* host, uint16_t port) {
-    gsmplc::Hold hold;
-    _why[0] = '\0';
-    if (!gsmplc::isOpen()) {
-        snprintf(_why, sizeof _why, "no modem block has opened the modem");
-        return 0;
+    GsmClient* inner = nullptr;
+    {
+        gsmplc::Hold hold;
+        _why[0] = '\0';
+        _connectedSeen = 0;
+        if (!gsmplc::isOpen()) {
+            snprintf(_why, sizeof _why, "no modem block has opened the modem");
+            return 0;
+        }
+        GsmDevice& gsm = gsmplc::device();
+        if (!gsm.isReady()) {
+            snprintf(_why, sizeof _why, "the modem has no data connection (%s)",
+                     gsm.stateName());
+            return 0;
+        }
+        inner = made();
     }
-    GsmDevice& gsm = gsmplc::device();
-    if (!gsm.isReady()) {
-        snprintf(_why, sizeof _why, "the modem has no data connection (%s)",
-                 gsm.stateName());
-        return 0;
-    }
-    GsmClient* inner = made();
     const int opened = _connectSeconds > 0 ? inner->connect(host, port, _connectSeconds)
                                            : inner->connect(host, port);
+    gsmplc::Hold hold;
     if (opened == 0) {
         snprintf(_why, sizeof _why, "%s", gsmplc::describe(inner->lastError()));
     }
+    _connectedSeen = opened != 0 ? 1 : 0;
     return opened;
 }
 
+// The same dial, to an address: the same checks and reasons, the same time
+// limit, and no lock held while it waits.
 int GsmPlcClient::connect(IPAddress ip, uint16_t port) {
-    gsmplc::Hold hold;
-    _why[0] = '\0';
-    if (!gsmplc::isOpen() || !gsmplc::device().isReady()) {
-        snprintf(_why, sizeof _why, "the modem has no data connection");
-        return 0;
-    }
-    GsmClient* inner = made();
-    const int opened = inner->connect(ip, port);
-    if (opened == 0) {
-        snprintf(_why, sizeof _why, "%s", gsmplc::describe(inner->lastError()));
-    }
-    return opened;
+    char host[16];
+    snprintf(host, sizeof host, "%u.%u.%u.%u", (unsigned)ip[0], (unsigned)ip[1],
+             (unsigned)ip[2], (unsigned)ip[3]);
+    return connect(host, port);
 }
 
 size_t GsmPlcClient::write(uint8_t value) {
-    gsmplc::Hold hold;
-    return _made ? client()->write(value) : 0;
+    return write(&value, 1);
 }
 
+// Pumped: into the socket's send ring, which the pump empties. A busy lock or
+// a full ring takes nothing - a short write, which the caller retries.
 size_t GsmPlcClient::write(const uint8_t* buffer, size_t size) {
+    if (gsmplc::servicedByPump()) {
+        gsmplc::TryHold hold;
+        if (!hold.owned() || !_made) { return 0; }
+        GsmSocket* socket = client()->socket();
+        return socket != nullptr ? socket->write(buffer, size) : 0;
+    }
     gsmplc::Hold hold;
     return _made ? client()->write(buffer, size) : 0;
 }
 
+// Pumped: what the pump has already fetched. The byte peek() holds counts, as
+// GsmClient counts it; taking it here reads the socket, never the modem.
 int GsmPlcClient::available() {
+    if (gsmplc::servicedByPump()) {
+        gsmplc::TryHold hold;
+        if (!hold.owned() || !_made) { return 0; }
+        GsmClient* inner = client();
+        if (inner->peek() < 0) { return 0; }
+        GsmSocket* socket = inner->socket();
+        return 1 + (socket != nullptr ? (int)socket->readable() : 0);
+    }
     gsmplc::Hold hold;
     return _made ? client()->available() : 0;
 }
 
 int GsmPlcClient::read() {
+    if (gsmplc::servicedByPump()) {
+        gsmplc::TryHold hold;
+        if (!hold.owned()) { return -1; }   // nothing now
+        return _made ? client()->read() : -1;
+    }
     gsmplc::Hold hold;
     return _made ? client()->read() : -1;
 }
 
 int GsmPlcClient::read(uint8_t* buffer, size_t size) {
+    if (gsmplc::servicedByPump()) {
+        gsmplc::TryHold hold;
+        if (!hold.owned()) { return 0; }    // nothing now
+        return _made ? client()->read(buffer, size) : -1;
+    }
     gsmplc::Hold hold;
     return _made ? client()->read(buffer, size) : -1;
 }
 
 int GsmPlcClient::peek() {
+    if (gsmplc::servicedByPump()) {
+        gsmplc::TryHold hold;
+        if (!hold.owned()) { return -1; }   // nothing now
+        return _made ? client()->peek() : -1;
+    }
     gsmplc::Hold hold;
     return _made ? client()->peek() : -1;
 }
 
+// Pumped: returns at once. What was written is in the socket's send ring and
+// the pump sends it; waiting here would hold the caller's task for as long as
+// the modem takes, which is what the pump is for.
+// Without the pump it waits, as GsmClient's flush() does - taking the lock
+// for each check of the wait (the service) and never holding it throughout.
 void GsmPlcClient::flush() {
-    gsmplc::Hold hold;
+    if (gsmplc::servicedByPump()) { return; }
     if (_made) { client()->flush(); }
 }
 
+// Waits for the lock, pumped or not: a close must happen, and it only queues
+// the module's close command - it never waits for the modem.
 void GsmPlcClient::stop() {
     gsmplc::Hold hold;
+    _connectedSeen = 0;
     if (_made) { client()->stop(); }
 }
 
+// Pumped: while the pump has the lock, what was last seen. "Closed" because
+// the lock was busy would end a working connection.
 uint8_t GsmPlcClient::connected() {
+    if (gsmplc::servicedByPump()) {
+        gsmplc::TryHold hold;
+        if (!hold.owned()) { return _connectedSeen; }
+        _connectedSeen = _made ? client()->connected() : 0;
+        return _connectedSeen;
+    }
     gsmplc::Hold hold;
-    return _made ? client()->connected() : 0;
+    _connectedSeen = _made ? client()->connected() : 0;
+    return _connectedSeen;
 }
 
 #endif
