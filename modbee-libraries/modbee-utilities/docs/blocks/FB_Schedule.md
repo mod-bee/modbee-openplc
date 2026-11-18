@@ -53,6 +53,7 @@ A weekly time-of-day schedule (a local fallback; the platform holds the real cal
 | `nInMask` | `DWORD` |  | bit per window on now |
 | `nConfigWindow` | `INT` |  | the first window with a bad setting (0 none) |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Details `det`** (`ST_ScheduleDet`)
 

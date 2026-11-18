@@ -13,6 +13,7 @@ Offers `I_LevelControl`: wire this instance to another block's `ip…` pin of th
 | in | `bInterlock` | `BOOL` | `TRUE` | FALSE: nothing is requested |
 | in | `ipLevel` | `I_Measurement` |  | required. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
 | in | `ipTarget` | `I_Equipment` |  | required. The instance it drives (a motor, pump, valve or FB_Group) |
+| in | `fSpeed` | `REAL` | `-1.0` | the speed asked of the target (< 0 = its own) |
 | in | `refData` | `REFERENCE TO ST_LevelControlData` |  | Its record (a variable of this type) |
 | in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
 | out | `bRunning` | `BOOL` |  | it asks and the pump runs |
@@ -69,9 +70,17 @@ Offers `I_LevelControl`: wire this instance to another block's `ip…` pin of th
 | `bLowLow` | `BOOL` |  | The low-low switch / level |
 | `bRequest` | `BOOL` |  | what it asks of the pump |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stLevelBad` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `fStartNow` | `REAL` |  | the start level in use (with its variation) |
 | `bRunOn` | `BOOL` |  | running on a failed level |
+
+**Details `det`** (`ST_LevelControlDet`)
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `tTimeLeft` | `TIME` |  | RunOn: the run-on left; TIMED: the on / off time left |
+| `tPhaseTime` | `TIME` |  | since the request last changed (pumping / idle) |
 
 **Totals `tot`** (`ST_LevelControlTot`)
 
@@ -97,6 +106,8 @@ TIMED: no level needed (`ipLevel` may be unwired): on for `set.tOnTime`, off for
 Parts ([`FB_LevelCheck`](FB_LevelCheck.md), [`FB_Protection`](FB_Protection.md)): a trip stops the request; a signal pauses it (source low, no flow); its parts: float backup ([`FB_LevelFloats`](FB_LevelFloats.md)), cleaning ([`FB_SumpClean`](FB_SumpClean.md)), exercise ([`FB_Exercise`](FB_Exercise.md)), booster ([`FB_Booster`](FB_Booster.md)), level checks ([`FB_LevelCheck`](FB_LevelCheck.md)); beside it: stages ([`FB_Stages`](FB_Stages.md) -> `FB_Group.nExtra`), the inflow estimate ([`FB_VesselFlow`](FB_VesselFlow.md)). `tot.nCycles` counts each new call for pumping (kept over a power cut; `bCmdResetTot` clears it).
 
 No pump: while it asks and its target is neither available nor running (a pump or its motor in Hand or Off, faulted, every group member out), it is in fault: `bError`, `eErrorId` NoneAvailable (a run it serves can end on it, e.g. `bInterlock` := NOT `fbStation.bError`). It clears by itself when the target is available again.
+
+Detail (det): `tTimeLeft` (RunOn: the run-on left under `set.tRunOnMax`; TIMED: the on or off time left; else 0), `tPhaseTime` (since its request last changed: pumping or idle).
 
 ## Example
 

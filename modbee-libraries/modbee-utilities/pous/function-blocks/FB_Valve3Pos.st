@@ -11,10 +11,14 @@ nPosition (1..3 reached, -1 moving / not known), plus FB_Equipment's and FB_Obje
 Kinds (set.eKind): SpringCentre (bOut1 / bOut3 held, none for 2: the springs centre it), ThreeCoil (bOut1..3 held),
 Motor (bOut1 drives toward 1, bOut3 toward 3, set.tReversal between; the mid by bLs2, or timed set.tMid from a
 known end (0 = half tTravel); a position not known goes to 1 first). Arrival: the position's switch when used,
-else set.tTravel after the move started. A switch that does not come within tTravel + 50 %: the travel protection
-(TravelTimeout). Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put
-back; a bad setting with no good copy is a trip (BadSetting) with every output off (a spring-centred valve
-centres). Moves counted (tot.nStrokes: each new target 1..3), kept hourly. *)
+else set.tTravel after the move started. A switch that does not come within tTravel + 50 % of a move: the travel
+protection (TravelTimeout); a switch lost after arrival is set.stPositionLost's. Settings are kept by the block
+(a retained last-good copy): restored at power-up, a bad write put back; a bad setting with no good copy is a trip (BadSetting) with every output off (a spring-centred valve
+centres). Moves counted (tot.nStrokes: each new target 1..3), kept hourly; the record's bCmdPreset sets it to
+nPresetStrokes; sts.tLastStroke is the last move's time. With the switches: set.stBothLimits (two made at once),
+set.stPositionLost (the reached position's switch lost), set.stNoMovement (off by default: moving, and the switch
+of the position it left still made). Simulation (the record's bSimulate, not kept, cleared by a system reset): the
+switches are ignored and the travel times decide, with a warning (Simulated). *)
 
 FUNCTION_BLOCK FB_Valve3Pos EXTENDS FB_Equipment IMPLEMENTS I_LocalChoice
   VAR_INPUT
@@ -35,7 +39,7 @@ FUNCTION_BLOCK FB_Valve3Pos EXTENDS FB_Equipment IMPLEMENTS I_LocalChoice
     nKeptLayout : UINT;
   END_VAR
   VAR CONSTANT
-    cLayout : UINT := 2;
+    cLayout : UINT := 3;
   END_VAR
   VAR
     nTarget : INT; (* 1..3; 0 hold *)
@@ -47,6 +51,11 @@ FUNCTION_BLOCK FB_Valve3Pos EXTENDS FB_Equipment IMPLEMENTS I_LocalChoice
     tMovedAt : TIME;
     fbCo : FB_Changeover;
     stWTravel : ST_ProtectionWork;
+    stWBoth : ST_ProtectionWork;
+    stWLost : ST_ProtectionWork;
+    stWNoMove : ST_ProtectionWork;
+    nLeftPos : INT; (* the position a move left (its switch must go) *)
+    nPosWas : INT;
     bCfgBad : BOOL; (* a bad setting with no good copy to put back *)
     nCountedTarget : INT; (* the last target counted as a stroke *)
     tKeptAt : TIME;
@@ -55,6 +64,11 @@ FUNCTION_BLOCK FB_Valve3Pos EXTENDS FB_Equipment IMPLEMENTS I_LocalChoice
     bHaltReq : BOOL;
   END_VAR
   VAR_TEMP
+    aUse : ARRAY [1..3] OF BOOL; (* a position's switch is used (not while simulated) *)
+    aMade : ARRAY [1..3] OF BOOL;
+    nMade : INT;
+    bLost : BOOL;
+    bNoMove : BOOL;
     bReset : BOOL;
     bTrip : BOOL;
     bWarn : BOOL;
@@ -142,16 +156,54 @@ METHOD PROTECTED FeedbackOk : BOOL
   END_IF;
 END_METHOD
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_Valve3PosSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.eKind = E_Valve3Kind.SpringCentre OR stS.eKind = E_Valve3Kind.ThreeCoil
+          OR stS.eKind = E_Valve3Kind.Motor) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.tTravel > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tMid >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tMid < stS.tTravel) THEN
+    SetWhy := E_UtError.LimitsBad;
+  ELSIF NOT (stS.tReversal >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.nSafePos >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.nSafePos <= 3) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.nRestPos >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.nRestPos <= 3) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.nHandPos >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.nHandPos <= 3) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.tRetryWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.stTravel.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stTravel.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stTravel.nMaxRetries >= 0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.nAutoPos >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.nAutoPos <= 3) THEN
+    SetWhy := E_UtError.AboveMax;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_Valve3PosSet;
   END_VAR
-  SetOk := (stS.eKind = E_Valve3Kind.SpringCentre OR stS.eKind = E_Valve3Kind.ThreeCoil OR stS.eKind = E_Valve3Kind.Motor)
-           AND stS.tTravel > T#0s AND stS.tMid >= T#0s AND stS.tMid < stS.tTravel AND stS.tReversal >= T#0s
-           AND stS.nSafePos >= 1 AND stS.nSafePos <= 3 AND stS.nRestPos >= 1 AND stS.nRestPos <= 3
-           AND stS.nHandPos >= 1 AND stS.nHandPos <= 3 AND stS.tRetryWindow >= T#0s
-           AND stS.stTravel.tDelay >= T#0s AND stS.stTravel.tRecover >= T#0s AND stS.stTravel.nMaxRetries >= 0
-           AND stS.nAutoPos >= 1 AND stS.nAutoPos <= 3;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -176,6 +228,7 @@ IF bFirstScan THEN
 ELSIF SetOk(stS := refData.set) THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
@@ -197,6 +250,18 @@ END_IF;
 refData.nCmdPos := -1;
 
 bReset := Begin(refCmd := refData, refSet := refData.set, refSts := refData.sts);
+IF SystemReset() THEN refData.bSimulate := FALSE; END_IF;
+aUse[1] := refData.set.bUseLs1 AND NOT refData.bSimulate;
+aUse[2] := refData.set.bUseLs2 AND NOT refData.bSimulate;
+aUse[3] := refData.set.bUseLs3 AND NOT refData.bSimulate;
+aMade[1] := aUse[1] AND bLs1;
+aMade[2] := aUse[2] AND bLs2;
+aMade[3] := aUse[3] AND bLs3;
+IF refData.bCmdPreset THEN
+  refData.tot.nStrokes := refData.nPresetStrokes;
+  stKeptTot := refData.tot;
+  refData.bCmdPreset := FALSE;
+END_IF;
 tTrav := refData.set.tTravel;
 tMidT := refData.set.tMid;
 IF tMidT <= T#0s THEN
@@ -229,10 +294,10 @@ IF refData.set.eKind = E_Valve3Kind.Motor THEN
   END_IF;
   IF nLeg <> 0 THEN
     CASE nLeg OF
-      1: bUseSw := refData.set.bUseLs1; bAtSw := bLs1;
-      2: bUseSw := refData.set.bUseLs2; bAtSw := bLs2;
+      1: bUseSw := aUse[1]; bAtSw := bLs1;
+      2: bUseSw := aUse[2]; bAtSw := bLs2;
     ELSE
-      bUseSw := refData.set.bUseLs3; bAtSw := bLs3;
+      bUseSw := aUse[3]; bAtSw := bLs3;
     END_CASE;
     bTimed := nLeg = 2 AND NOT bUseSw;
     IF (bUseSw AND bAtSw) OR (bTimed AND tNow - tMovedAt >= tMidT)
@@ -240,7 +305,7 @@ IF refData.set.eKind = E_Valve3Kind.Motor THEN
       nPos := nLeg;               (* there *)
       nLastEnd := nLeg;
     END_IF;
-    bTravelBad := bUseSw AND NOT bAtSw AND tNow - tMovedAt > tTrav * 3 / 2;
+    bTravelBad := bUseSw AND NOT bAtSw AND nPos <> nLeg AND tNow - tMovedAt > tTrav * 3 / 2;  // moving only
   END_IF;
   (* the drive: B (bOut3) toward 3, A (bOut1) toward 1; the mid moves away from the end it left *)
   fbCo(bRun := nLeg <> 0 AND nPos <> nLeg, bWantB := nLeg = 3 OR (nLeg = 2 AND nLastEnd = 1),
@@ -255,15 +320,15 @@ ELSE
   END_IF;
   IF nTarget >= 1 THEN
     CASE nTarget OF
-      1: bUseSw := refData.set.bUseLs1; bAtSw := bLs1;
-      2: bUseSw := refData.set.bUseLs2; bAtSw := bLs2;
+      1: bUseSw := aUse[1]; bAtSw := bLs1;
+      2: bUseSw := aUse[2]; bAtSw := bLs2;
     ELSE
-      bUseSw := refData.set.bUseLs3; bAtSw := bLs3;
+      bUseSw := aUse[3]; bAtSw := bLs3;
     END_CASE;
     IF (bUseSw AND bAtSw) OR (NOT bUseSw AND tNow - tMovedAt >= tTrav) THEN
       nPos := nTarget;
     END_IF;
-    bTravelBad := bUseSw AND NOT bAtSw AND tNow - tMovedAt > tTrav * 3 / 2;
+    bTravelBad := bUseSw AND NOT bAtSw AND nPos <> nTarget AND tNow - tMovedAt > tTrav * 3 / 2;  // moving only
     bOut1 := nTarget = 1;
     bOut2 := nTarget = 2 AND refData.set.eKind = E_Valve3Kind.ThreeCoil;
     bOut3 := nTarget = 3;
@@ -274,17 +339,53 @@ IF nPos >= 1 THEN
   refData.sts.nActualPos := nPos;
 END_IF;
 
-(* the travel protection *)
+(* a move: its start position and, on arrival, its time *)
+IF nPos = -1 AND nPosWas >= 1 THEN
+  nLeftPos := nPosWas;
+END_IF;
+IF nPos >= 1 AND nPosWas = -1 THEN
+  refData.sts.tLastStroke := tNow - tMovedAt;
+  nLeftPos := 0;
+END_IF;
+nPosWas := nPos;
+nMade := 0;
+IF aMade[1] THEN nMade := nMade + 1; END_IF;
+IF aMade[2] THEN nMade := nMade + 1; END_IF;
+IF aMade[3] THEN nMade := nMade + 1; END_IF;
+bLost := FALSE;
+IF nPos >= 1 AND nPos = nTarget THEN       // at its target: the target's switch, when used, stays made
+  bLost := aUse[nPos] AND NOT aMade[nPos];
+END_IF;
+bNoMove := FALSE;
+IF nPos = -1 AND nLeftPos >= 1 AND nLeftPos <= 3 AND NOT bHalted THEN
+  bNoMove := aMade[nLeftPos];              // moving, and the switch it left still made
+END_IF;
+
+(* the protections *)
 F_Protect(tNow := tNow, bCause := bTravelBad, bResetReq := bReset, tRetryWindow := refData.set.tRetryWindow,
           stSet := refData.set.stTravel, stSts := refData.sts.stTravel, stWork := stWTravel);
-bTrip := stWTravel.bTrip;
-bWarn := stWTravel.bWarn;
+F_Protect(tNow := tNow, bCause := nMade >= 2, bResetReq := bReset, tRetryWindow := refData.set.tRetryWindow,
+          stSet := refData.set.stBothLimits, stSts := refData.sts.stBothLimits, stWork := stWBoth);
+F_Protect(tNow := tNow, bCause := bLost, bResetReq := bReset, tRetryWindow := refData.set.tRetryWindow,
+          stSet := refData.set.stPositionLost, stSts := refData.sts.stPositionLost, stWork := stWLost);
+F_Protect(tNow := tNow, bCause := bNoMove, bResetReq := bReset, tRetryWindow := refData.set.tRetryWindow,
+          stSet := refData.set.stNoMovement, stSts := refData.sts.stNoMovement, stWork := stWNoMove);
+bTrip := stWTravel.bTrip OR stWBoth.bTrip OR stWLost.bTrip OR stWNoMove.bTrip;
+bWarn := stWTravel.bWarn OR stWBoth.bWarn OR stWLost.bWarn OR stWNoMove.bWarn OR refData.bSimulate;
 eOwn := E_UtError.None;
 IF bCfgBad THEN
   bTrip := TRUE;
   eOwn := E_UtError.BadSetting;
-ELSIF bTrip OR bWarn THEN
+ELSIF stWBoth.bTrip OR stWBoth.bWarn THEN
+  eOwn := E_UtError.BothLimits;
+ELSIF stWNoMove.bTrip OR stWNoMove.bWarn THEN
+  eOwn := E_UtError.NoMovement;
+ELSIF stWTravel.bTrip OR stWTravel.bWarn THEN
   eOwn := E_UtError.TravelTimeout;
+ELSIF stWLost.bTrip OR stWLost.bWarn THEN
+  eOwn := E_UtError.PositionLost;
+ELSIF refData.bSimulate THEN
+  eOwn := E_UtError.Simulated;
 END_IF;
 (* strokes: each new target 1..3 *)
 IF nTarget >= 1 AND nTarget <> nCountedTarget THEN

@@ -1,5 +1,5 @@
 TYPE
   {attribute 'qualified_only'}
   {attribute 'strict'}
-  E_EquipCmd : (None, Start, Stop, Reset, ModeOff, ModeHand, ModeAuto, Jog) := None;
+  E_EquipCmd : (None, Start, Stop, Reset, ModeOff, ModeHand, ModeAuto, Jog, JogRev) := None;
 END_TYPE

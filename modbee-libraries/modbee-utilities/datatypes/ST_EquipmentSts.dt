@@ -9,6 +9,7 @@ TYPE
     bLinked : BOOL; (* an owner is driving it *)
     bInterlocked : BOOL;
     bRefused : BOOL; (* a setting write was refused and put back *)
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     bJogging : BOOL; (* jogging (FB_MotorJog, Hand only) *)
     bMustCycle : BOOL; (* a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) *)
   END_STRUCT;

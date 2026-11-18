@@ -46,7 +46,9 @@ All the conditions that must be healthy before a device may run, as one `bOk`, w
 | `bBypassed` | `BOOL` |  | a bypass in effect: show it |
 | `nNotOk` | `INT` |  |  |
 | `nTrips` | `UDINT` |  | times bOk went FALSE (not kept) |
+| `tTimeLeft` | `TIME` |  | the shortest delay left of a condition about to count (0 = none) |
 | `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Rows `ST_IntlkCondSet` (pin `aCondSet`)
 
@@ -80,6 +82,9 @@ All the conditions that must be healthy before a device may run, as one `bOk`, w
 | `tWindowAt` | `TIME` |  |  |
 | `bBypassOn` | `BOOL` |  |  |
 | `bWentBad` | `BOOL` |  | went out this scan |
+| `tDelayLeft` | `TIME` |  | not OK, before tDelay: the time left until it counts (0 otherwise) |
+| `tBypassFor` | `TIME` |  | bypassed so far (0 when not) |
+| `tBypassLeft` | `TIME` |  | bypassed: the time left before it drops out (0: none, or no timeout) |
 
 ## How it works
 
@@ -89,7 +94,9 @@ Each condition: `tDelay` (must be not OK this long to count); `eReset` Auto (OK 
 
 Errors: `bError` for no rows, tables of different sizes or more than 16 rows, or settings that were never good (BadSetting); `bWarning` for a bypass (Bypassed) or a refused write (SettingRefused). Not OK is the block's job, not an error: `eState` Held, `eErrorId` ConditionOut.
 
-Kept settings (a retained last-good copy, restored at power-up, a bad write put back, `sts.bRefused`): set, and each condition row packed into one DWORD: bits 0..1 `eReset`, 2 `bBypassAllowed`, 3..31 `tDelay` in 10 ms steps (0 .. about 62 days; kept rounded down to 10 ms).
+Kept settings (a retained last-good copy, restored at power-up, a bad write put back, `sts.bRefused` / `eRefusedWhy`): set, and each condition row packed into one DWORD: bits 0..1 `eReset`, 2 `bBypassAllowed`, 3..31 `tDelay` in 10 ms steps (0 .. about 62 days; kept rounded down to 10 ms).
+
+Times: each row shows `tDelayLeft` (not OK, until it counts), `tBypassFor` / `tBypassLeft` (a bypass so far / until it drops out); `sts.tTimeLeft` is the shortest delay left.
 
 ## Example
 

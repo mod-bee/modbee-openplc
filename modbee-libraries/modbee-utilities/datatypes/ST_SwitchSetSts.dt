@@ -7,6 +7,7 @@ TYPE
     bContact : BOOL;
     bGood : BOOL;
     bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     stDisagree : ST_ProtectionSts;
     stInputBad : ST_ProtectionSts;
   END_STRUCT;

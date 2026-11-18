@@ -53,6 +53,7 @@ A message ticker and site-status board for an HMI: each source's state and error
 | `bWrnConfig` | `BOOL` |  | no slot or no source |
 | `bWrnSrc` | `BOOL` |  | a call this scan had an nSrc outside aSources (ignored) |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Rows `ST_Msg` (pin `aBuffer`)
 

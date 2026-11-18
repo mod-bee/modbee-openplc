@@ -22,6 +22,8 @@ The panel-door controls of one motor, pump or valve: an Off / Hand / Auto select
 | in | `bHigh` | `BOOL R_EDGE` |  | a two-speed motor: high (Hand) Acts on its rising edge. |
 | in | `bRev` | `BOOL R_EDGE` |  | a reversing motor: reverse (Hand) Acts on its rising edge. |
 | in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
+| out | `bModeChanged` | `BOOL` |  | one scan: the owner's mode changed |
+| out | `bEnteredOff` | `BOOL` |  | one scan: ... to Off |
 | out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
 | out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
@@ -37,6 +39,7 @@ The panel-door controls of one motor, pump or valve: an Off / Hand / Auto select
 | `bHeldOff` | `BOOL` |  | power-up: held Off until the selector is moved |
 | `bRemote` | `BOOL` |  | the mode comes from the operator's choice now |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_LocalControlSet`)
 
@@ -79,7 +82,7 @@ The buttons (rising edges; `bStop` is TRUE = pressed, an NC button inverted with
 
 `bHalt` .. `bRev` go to the owner's `I_LocalChoice` ([`FB_ValveMotor`](FB_ValveMotor.md), [`FB_Valve3Pos`](FB_Valve3Pos.md), [`FB_Motor2Speed`](FB_Motor2Speed.md), [`FB_MotorRev`](FB_MotorRev.md)); an owner without that choice ignores the button. Only the owner starts anything.
 
-Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
+Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back. `bModeChanged` / `bEnteredOff` are TRUE for one scan when the owner's mode changes (to Off).
 
 ## Example
 

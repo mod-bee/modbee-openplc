@@ -8,6 +8,7 @@ TYPE
     bManual : BOOL;
     bPvBad : BOOL;
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     stPvBad : ST_ProtectionSts;
     ePhase : E_LoopPhase;
     ePresetUsed : E_LoopPreset;

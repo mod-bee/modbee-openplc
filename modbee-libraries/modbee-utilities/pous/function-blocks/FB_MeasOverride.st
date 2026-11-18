@@ -19,6 +19,17 @@ FUNCTION_BLOCK FB_MeasOverride EXTENDS FB_Object IMPLEMENTS I_Measurement
   END_VAR
 
 
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (ABS(refData.set.fSubstitute) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (refData.set.eOnBad = E_OnBadValue.Pass OR refData.set.eOnBad = E_OnBadValue.Hold
+             OR refData.set.eOnBad = E_OnBadValue.Substitute) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 PROPERTY PUBLIC fActValue : REAL
   GET
     fActValue := fValue;
@@ -70,13 +81,16 @@ IF bFirstScan THEN
     stKept := refData.set;
     nKeptLayout := cLayout;
   END_IF;
-ELSIF ABS(refData.set.fSubstitute) <= REAL#3.4E38
-      AND (refData.set.eOnBad = E_OnBadValue.Pass OR refData.set.eOnBad = E_OnBadValue.Hold
-           OR refData.set.eOnBad = E_OnBadValue.Substitute) THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.bRefused := TRUE;
+END_IF;
+IF SystemReset() THEN                // the plant reset clears a refused write
+  refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 IF ipIn.bIsGood THEN
   fLastGood := ipIn.fActValue;

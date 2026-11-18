@@ -14,5 +14,6 @@ TYPE
     eMassUnit : E_Unit := E_Unit.Kg; (* Kg or Tonne *)
     fDensity : REAL := 1000.0; (* kg/m3 *)
     fFraction : REAL := 1.0; (* share of the vessel *)
+    fTableFull : REAL; (* Table: the volume when full, in eVolumeUnit (fHeight: the level when full) *)
   END_STRUCT;
 END_TYPE

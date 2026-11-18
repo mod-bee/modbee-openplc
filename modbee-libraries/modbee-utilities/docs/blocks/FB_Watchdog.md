@@ -16,6 +16,7 @@ Watches a heartbeat or counter from the other end of a link, and makes one for i
 | out | `bCommsFail` | `BOOL` |  | no change for tTimeout |
 | out | `bHeartbeatOut` | `BOOL` |  | toggles every tBeatPeriod; send this to the remote |
 | out | `nHeartbeatCount` | `DINT` |  | counts up every tBeatPeriod |
+| out | `bNewBeat` | `BOOL` |  | one scan: the remote's beat changed |
 | out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
 | out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
@@ -46,6 +47,7 @@ Watches a heartbeat or counter from the other end of a link, and makes one for i
 | `bOk` | `BOOL` |  | remote alive |
 | `bCommsFail` | `BOOL` |  |  |
 | `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stFail` | `ST_ProtectionSts` |  | nCount: failures since bCmdResetCount; a protection's status ([protections](../conventions.md#protections)) |
 
 **Details `det`** (`ST_WatchdogDet`)
@@ -67,7 +69,7 @@ Watches a value that should keep changing (a remote PLC's heartbeat, a Modbus re
   Manual  stays until a reset (bReset, bCmdReset) with the link alive; a reset while it is dead is refused
 ```
 
-`bOk` is on while the link is alive and has been for `tRecover` (so it is off at start until the first change). `bHeartbeatOut` toggles and `nHeartbeatCount` counts up every `set.tBeatPeriod`, for the other side to watch; they keep going when `bEnable` is off. `sts.stFail.nCount` (failures) and `det.tDownTime` (time dead, from the timeout to the next change) are not kept over a power cut; `bCmdResetCount` clears both. Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
+`bOk` is on while the link is alive and has been for `tRecover` (so it is off at start until the first change). `bHeartbeatOut` toggles and `nHeartbeatCount` counts up every `set.tBeatPeriod`, for the other side to watch; they keep going when `bEnable` is off. `sts.stFail.nCount` (failures) and `det.tDownTime` (time dead, from the timeout to the next change) are not kept over a power cut; `bCmdResetCount` clears both. Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back. `bNewBeat` is TRUE for one scan at each change of the remote's beat.
 
 ## Example
 

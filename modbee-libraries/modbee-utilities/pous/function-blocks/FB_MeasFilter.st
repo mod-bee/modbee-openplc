@@ -59,14 +59,30 @@ METHOD PUBLIC Band : BOOL
   IF ipIn <> NULL THEN Band := ipIn.Band(eBand := eBand); END_IF;
 END_METHOD
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_MeasFilterSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tFilter >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.fLowCutoff >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fLowCutoff <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF stS.bClamp AND NOT (stS.fClampMin <= stS.fClampMax) THEN
+    SetWhy := E_UtError.LimitsBad;
+  ELSIF NOT (stS.eMode = E_FilterMode.Lowpass OR stS.eMode = E_FilterMode.Average
+             OR stS.eMode = E_FilterMode.BlockAvg) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_MeasFilterSet;
   END_VAR
-  SetOk := stS.tFilter >= T#0s AND stS.fLowCutoff >= 0.0 AND stS.fLowCutoff <= REAL#3.4E38
-           AND (NOT stS.bClamp OR stS.fClampMin <= stS.fClampMax)
-           AND (stS.eMode = E_FilterMode.Lowpass OR stS.eMode = E_FilterMode.Average
-                OR stS.eMode = E_FilterMode.BlockAvg);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) OR ipIn = NULL THEN
@@ -85,8 +101,13 @@ IF bFirstScan THEN
 ELSIF SetOk(stS := refData.set) THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.bRefused := TRUE;
+END_IF;
+IF SystemReset() THEN                // the plant reset clears a refused write
+  refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 bInOk := ipIn.bIsGood;
 fbFilter(fIn := ipIn.fActValue, bInGood := bInOk, tTc := refData.set.tFilter, eMode := refData.set.eMode);

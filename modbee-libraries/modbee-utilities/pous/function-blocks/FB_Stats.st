@@ -50,11 +50,23 @@ FUNCTION_BLOCK FB_Stats EXTENDS FB_Object
 
 
 (* the settings are usable *)
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_StatsSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (ABS(stS.fIgnoreBelow) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (ABS(stS.fIgnoreAbove) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_StatsSet;
   END_VAR
-  SetOk := ABS(stS.fIgnoreBelow) <= REAL#3.4E38 AND ABS(stS.fIgnoreAbove) <= REAL#3.4E38;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* clear the current period *)
@@ -93,6 +105,7 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOkSet := TRUE;
@@ -101,6 +114,7 @@ END_IF;
 bResetReq := bReset OR SystemReset() OR (refData.bCmdResetStats AND NOT bResetSeen);
 IF bResetReq THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 bResetSeen := refData.bCmdResetStats;
 refData.bCmdResetStats := FALSE;

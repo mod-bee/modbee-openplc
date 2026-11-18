@@ -5,6 +5,7 @@ TYPE
     bAtSpeed : BOOL;
     bDriveReady : BOOL;
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     stDriveNotReady : ST_ProtectionSts;
     stSpeedDev : ST_ProtectionSts;
     fSpeedHz : REAL; (* the speed in Hz (set.fRatedHz) *)

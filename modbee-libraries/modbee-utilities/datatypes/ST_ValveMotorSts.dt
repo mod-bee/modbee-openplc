@@ -2,6 +2,7 @@ TYPE
   ST_ValveMotorSts : STRUCT
     bDriving : BOOL;
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     bHalted : BOOL; (* stopped where it is (Halt, or a torque trip) *)
     stTorque : ST_ProtectionSts;
   END_STRUCT;

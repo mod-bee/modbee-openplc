@@ -112,16 +112,47 @@ METHOD PRIVATE ProtOk : BOOL
   ProtOk := stP.tDelay >= T#0s AND stP.tRecover >= T#0s AND stP.nMaxRetries >= 0;
 END_METHOD
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_ValvePosSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tRetryWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (ABS(stS.fSafePos) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (stS.fRestPos >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fRestPos <= 100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fHandPos >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fHandPos <= 100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fDeadband >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fDeadband <= 50.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fDevLimit >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fClosedThreshold >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fOpenThreshold <= 100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fClosedThreshold < stS.fOpenThreshold) THEN
+    SetWhy := E_UtError.LimitsBad;
+  ELSIF NOT (ProtOk(stP := stS.stDeviation)) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (ProtOk(stP := stS.stPosFb)) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_ValvePosSet;
   END_VAR
-  SetOk := stS.tRetryWindow >= T#0s AND ABS(stS.fSafePos) <= REAL#3.4E38
-           AND stS.fRestPos >= 0.0 AND stS.fRestPos <= 100.0 AND stS.fHandPos >= 0.0 AND stS.fHandPos <= 100.0
-           AND stS.fDeadband >= 0.0 AND stS.fDeadband <= 50.0 AND stS.fDevLimit >= 0.0
-           AND stS.fClosedThreshold >= 0.0 AND stS.fOpenThreshold <= 100.0
-           AND stS.fClosedThreshold < stS.fOpenThreshold
-           AND ProtOk(stP := stS.stDeviation) AND ProtOk(stP := stS.stPosFb);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -140,6 +171,7 @@ IF bFirstScan THEN
 ELSIF SetOk(stS := refData.set) THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;

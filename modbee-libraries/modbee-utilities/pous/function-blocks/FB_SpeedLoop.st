@@ -58,8 +58,9 @@ bAtMax (at the top of the speed range, not held by the flow limit) and bAtMin it
 bMoreNeeded: in control at the top speed and short of the setpoint by more than fAtSpBand for set.tStageDelay;
 bLessNeeded: in control at the minimum speed for set.tStageDelay (hints for an owner adding or dropping pumps;
 a highPv warning stops both). bFilled can drive a pump's prime-done input; stLowAtMax is the lost-prime check.
+Detail (det): the PID's parts fP / fI / fD (% speed) and tPhaseTime (time in the present phase).
 Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back
-(sts.bRefused, a warning until a reset). *)
+(sts.bRefused / eRefusedWhy, a warning until a reset). *)
 
 FUNCTION_BLOCK FB_SpeedLoop EXTENDS FB_Object
   VAR_INPUT
@@ -126,6 +127,8 @@ FUNCTION_BLOCK FB_SpeedLoop EXTENDS FB_Object
     nHuntPrev : INT;
     tHuntAt : TIME;
     tHuntLast : TIME;
+    tPhaseSince : TIME;
+    ePhasePrev : E_LoopPhase;
     tMoreSince : TIME;
     tLessSince : TIME;
   END_VAR
@@ -175,33 +178,115 @@ FUNCTION_BLOCK FB_SpeedLoop EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.fMinSpeed >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fMaxSpeed <= REAL#100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.fMinSpeed <= refData.set.fMaxSpeed) THEN
+    SetWhy := E_UtError.LimitsBad;
+  ELSIF NOT (refData.set.fKp >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.tTi >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tTd >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.fSpRamp >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fManualSpeed >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fManualSpeed <= REAL#100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.fFailSpeed >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fFailSpeed <= REAL#100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.fSp = refData.set.fSp) THEN   // NaN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (refData.set.fSpLow = refData.set.fSpLow) THEN   // NaN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (refData.set.fSpHigh = refData.set.fSpHigh) THEN   // NaN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (refData.set.fFlowSp = refData.set.fFlowSp) THEN   // NaN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (refData.set.fFlowSpLow = refData.set.fFlowSpLow) THEN   // NaN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (refData.set.fFlowSpHigh = refData.set.fFlowSpHigh) THEN   // NaN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (refData.set.fFixedSpeed >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fFixedSpeed <= REAL#100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.fFixedSpeedLow >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fFixedSpeedLow <= REAL#100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.fFixedSpeedHigh >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fFixedSpeedHigh <= REAL#100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.fDeadband >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fStartSpeed >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fStartSpeed <= REAL#100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.fRateLimit >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fAtSpBand >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.stFill.fSpeed >= REAL#0.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stFill.fSpeed <= REAL#100.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stFill.fTarget >= REAL#0.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stFill.fRate >= REAL#0.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stSleep.fSpeed >= REAL#0.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stSleep.fSpeed <= REAL#100.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stSleep.fFlow >= REAL#0.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stSleep.fWakeDrop >= REAL#0.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stSleep.fBoost >= REAL#0.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stSleep.fBoost <= REAL#100.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stSleep.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stSleep.tBoostTime >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stSleep.tWakeDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stSleep.tMinSleep >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.fFlowLimit >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fHighPvDeadband >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fHighPv = refData.set.fHighPv) THEN   // NaN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (refData.set.fLowAtMax = refData.set.fLowAtMax) THEN   // NaN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (refData.set.nHuntCycles >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.nHuntCycles <= 15) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.tHuntWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.fHuntBand >= REAL#0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.tStageDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
-  SetOk := refData.set.fMinSpeed >= REAL#0.0 AND refData.set.fMaxSpeed <= REAL#100.0
-           AND refData.set.fMinSpeed <= refData.set.fMaxSpeed AND refData.set.fKp >= REAL#0.0
-           AND refData.set.tTi >= T#0s AND refData.set.tTd >= T#0s AND refData.set.fSpRamp >= REAL#0.0
-           AND refData.set.fManualSpeed >= REAL#0.0 AND refData.set.fManualSpeed <= REAL#100.0
-           AND refData.set.fFailSpeed >= REAL#0.0 AND refData.set.fFailSpeed <= REAL#100.0
-           AND refData.set.fSp = refData.set.fSp                  // not NaN
-           AND refData.set.fSpLow = refData.set.fSpLow AND refData.set.fSpHigh = refData.set.fSpHigh
-           AND refData.set.fFlowSp = refData.set.fFlowSp AND refData.set.fFlowSpLow = refData.set.fFlowSpLow
-           AND refData.set.fFlowSpHigh = refData.set.fFlowSpHigh
-           AND refData.set.fFixedSpeed >= REAL#0.0 AND refData.set.fFixedSpeed <= REAL#100.0
-           AND refData.set.fFixedSpeedLow >= REAL#0.0 AND refData.set.fFixedSpeedLow <= REAL#100.0
-           AND refData.set.fFixedSpeedHigh >= REAL#0.0 AND refData.set.fFixedSpeedHigh <= REAL#100.0
-           AND refData.set.fDeadband >= REAL#0.0 AND refData.set.fStartSpeed >= REAL#0.0
-           AND refData.set.fStartSpeed <= REAL#100.0 AND refData.set.fRateLimit >= REAL#0.0
-           AND refData.set.fAtSpBand >= REAL#0.0
-           AND refData.set.stFill.fSpeed >= REAL#0.0 AND refData.set.stFill.fSpeed <= REAL#100.0
-           AND refData.set.stFill.fTarget >= REAL#0.0 AND refData.set.stFill.fRate >= REAL#0.0
-           AND refData.set.stSleep.fSpeed >= REAL#0.0 AND refData.set.stSleep.fSpeed <= REAL#100.0
-           AND refData.set.stSleep.fFlow >= REAL#0.0 AND refData.set.stSleep.fWakeDrop >= REAL#0.0
-           AND refData.set.stSleep.fBoost >= REAL#0.0 AND refData.set.stSleep.fBoost <= REAL#100.0
-           AND refData.set.stSleep.tDelay >= T#0s AND refData.set.stSleep.tBoostTime >= T#0s
-           AND refData.set.stSleep.tWakeDelay >= T#0s AND refData.set.stSleep.tMinSleep >= T#0s
-           AND refData.set.fFlowLimit >= REAL#0.0 AND refData.set.fHighPvDeadband >= REAL#0.0
-           AND refData.set.fHighPv = refData.set.fHighPv AND refData.set.fLowAtMax = refData.set.fLowAtMax
-           AND refData.set.nHuntCycles >= 1 AND refData.set.nHuntCycles <= 15 AND refData.set.tHuntWindow >= T#0s
-           AND refData.set.fHuntBand >= REAL#0.0 AND refData.set.tStageDelay >= T#0s;
+  SetOk := SetWhy() = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) OR ipTarget = NULL THEN
@@ -227,6 +312,7 @@ IF bFirstScan THEN
 ELSIF SetOk() THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
@@ -725,6 +811,12 @@ refData.sts.ePresetUsed := eUse;
 refData.sts.bAtSetpoint := bAtSetpoint;
 refData.sts.bFilled := bFilled;
 refData.sts.bSleeping := ePhase = E_LoopPhase.Sleep;
+IF ePhase <> ePhasePrev OR bFirstScan THEN tPhaseSince := tNow; END_IF;
+ePhasePrev := ePhase;
+refData.det.tPhaseTime := tNow - tPhaseSince;
+refData.det.fP := LREAL_TO_REAL(fP);
+refData.det.fI := LREAL_TO_REAL(fI);
+refData.det.fD := LREAL_TO_REAL(fD);
 bFirstScan := FALSE;
 
 END_FUNCTION_BLOCK

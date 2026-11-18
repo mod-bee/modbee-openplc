@@ -50,6 +50,7 @@ A switch, float or contact cleaned up: debounce, an alarm on a state, chatter de
 | `bChatter` | `BOOL` |  |  |
 | `bGood` | `BOOL` |  | The value can be trusted |
 | `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Details `det`** (`ST_DigitalInDet`)
 

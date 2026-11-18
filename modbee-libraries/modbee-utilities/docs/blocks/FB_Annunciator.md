@@ -53,6 +53,7 @@ The horn, alarm lamp and first-out for a group of FB_Alarm blocks.
 | `nActive` | `INT` |  |  |
 | `nUnacked` | `INT` |  |  |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Rows `ST_AlarmData` (pin `aAlarm`)
 
@@ -115,6 +116,7 @@ The horn, alarm lamp and first-out for a group of FB_Alarm blocks.
 | `dtClearedAt` | `DT` |  | Clock time the condition cleared |
 | `eCode` | `E_UtError` |  | Which alarm it is (an `E_UtError` code; the HMI shows its words) |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **`det`** (`ST_AlarmDet`)
 

@@ -4,9 +4,11 @@ TYPE
     nExtra : INT; (* status *)
     tTimeLeft : TIME; (* to the next change *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     eStageUsed : E_StageBy; (* the rule in use (Pressure on a fallback) *)
     bJockeyTurn : BOOL; (* the jockey alone *)
     bPvStaging : BOOL; (* the flow rule left the pressure short: the Pressure rule until the next start *)
     bFlowBad : BOOL; (* Flow / PerPump without a good flow *)
+    fPerPump : REAL; (* the flow per running duty pump (0 with no good flow) *)
   END_STRUCT;
 END_TYPE

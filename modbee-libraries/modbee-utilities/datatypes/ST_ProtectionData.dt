@@ -1,6 +1,8 @@
 TYPE
   ST_ProtectionData : STRUCT
     bCmdReset : BOOL;
+    bRefused : BOOL; (* a bad settings write was put back (cleared by its reset) *)
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     set : ST_ProtectionPartSet;
     sts : ST_ProtectionSts;
   END_STRUCT;

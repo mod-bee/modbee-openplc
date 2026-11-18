@@ -16,6 +16,7 @@ acts per its response: Warn = a warning (sts.stFlowCheck, ZoneFlow), Trip = the 
 ZoneFlow; the program ends that zone) until the check resets (Auto / Retry after the recover time, or a reset).
 Pressure: set.fPressure is the zone's pressure setpoint (0 = the program's default); the program passes the
 watering zone's on as fZoneSp (wire it to FB_SpeedLoop's fSp pin, with its set.eSpSource Pin).
+A program can give the zone another water time for one run (its tRunTime pin, 0 = set.tRunTime).
 What ends a cycle (set.eEndBy; the cycle's targets are the zone's tRunTime and fVolume divided by set.nCycles; a
 volume target needs the program to have a meter, else it counts as 0 = no target):
   ByTime      the cycle's time; a volume is ignored
@@ -26,7 +27,9 @@ volume target needs the program to have a meter, else it counts as 0 = no target
 A mode with no target left (a volume mode with no volume or no meter, a time of 0) has none: it waters until a skip
 or stop. A cycle whose only target is a volume has a time cap on its counted time, so a dry meter cannot water for
 ever: the program's set.tMaxTime (divided by the cycles) if set, else the volume at set.fMinFlow (per hour), else
-the program's set.tDefaultCap. When the cap ends the cycle sts.bCapped is TRUE and the program warns RunCapped. *)
+the program's set.tDefaultCap. When the cap ends the cycle sts.bCapped is TRUE and the program warns RunCapped.
+In a program: sts.eResult (how it ended: Done, or the stop reason; None = not yet) and sts.bSkipped (skipped:
+a skip, the rain, its valve not opening, the pump wait), set by the sequence; both clear when a program starts. *)
 
 FUNCTION_BLOCK FB_Zone EXTENDS FB_Object
   VAR_INPUT
@@ -63,8 +66,51 @@ FUNCTION_BLOCK FB_Zone EXTENDS FB_Object
     fCycBase : LREAL;
     tLeftNow : TIME; (* the cycle's time left, worked out by Reached *)
     bCapHit : BOOL;
+    tRunFor : TIME; (* the program's run time for this run (0 = set.tRunTime) *)
   END_VAR
 
+
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tRunTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.fVolume >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.tOpenTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.nCycles >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.nCycles <= 100) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.tSoakTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.fMinFlow >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fMinFlow <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.fMaxFlow >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fMaxFlow <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.fMaxFlow = 0.0 OR refData.set.fMaxFlow > refData.set.fMinFlow) THEN
+    SetWhy := E_UtError.LimitsBad;
+  ELSIF NOT (refData.set.stFlowCheck.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stFlowCheck.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stFlowCheck.nMaxRetries >= 0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.fPressure >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fPressure <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.eEndBy = E_ZoneEnd.Auto OR refData.set.eEndBy = E_ZoneEnd.ByTime
+             OR refData.set.eEndBy = E_ZoneEnd.UntilStop OR refData.set.eEndBy = E_ZoneEnd.ByVolume
+             OR refData.set.eEndBy = E_ZoneEnd.First) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
 
 (* the program: open (TRUE) or close the valve; every scan *)
 METHOD PUBLIC Open
@@ -106,6 +152,8 @@ METHOD PUBLIC SetDone
   IF __ISVALIDREF(refData) THEN
     refData.sts.bDone := bDone;
     IF NOT bDone THEN
+      refData.sts.bSkipped := FALSE;
+      refData.sts.eResult := E_StopReason.None;
       refData.sts.tWatered := T#0s;
       refData.sts.fWatered := 0.0;
       refData.sts.nCycle := 0;
@@ -117,6 +165,47 @@ METHOD PUBLIC SetDone
     stProgress.bDone := bDone;
     stProgress.tBase := tCycBase;
     stProgress.fBase := fCycBase;
+    stProgress.nCycle := refData.sts.nCycle;
+    stProgress.tWatered := refData.sts.tWatered;
+    stProgress.fWatered := refData.sts.fWatered;
+  END_IF;
+END_METHOD
+
+(* the program, at its start: this run's water time (0 = the zone's own set.tRunTime) *)
+METHOD PUBLIC SetRunTime
+  VAR_INPUT
+    tRunTime : TIME;
+  END_VAR
+  tRunFor := MAX(tRunTime, T#0s);
+END_METHOD
+
+(* the water time in use: this run's (SetRunTime) or set.tRunTime *)
+PROPERTY PUBLIC tRunTimeNow : TIME
+  GET
+    tRunTimeNow := T#0s;
+    IF tRunFor > T#0s THEN
+      tRunTimeNow := tRunFor;
+    ELSIF __ISVALIDREF(refData) THEN
+      tRunTimeNow := refData.set.tRunTime;
+    END_IF;
+  END_GET
+END_PROPERTY
+
+(* the program: how the zone ended in this program (sts.eResult, sts.bSkipped) *)
+METHOD PUBLIC SetResult
+  VAR_INPUT
+    eResult : E_StopReason;
+    bSkipped : BOOL;
+  END_VAR
+  IF __ISVALIDREF(refData) THEN
+    refData.sts.eResult := eResult;
+    refData.sts.bSkipped := bSkipped;
+  END_IF;
+END_METHOD
+
+(* the program: keep the progress now (its set.tProgressSave) *)
+METHOD PUBLIC SaveProgress
+  IF __ISVALIDREF(refData) THEN
     stProgress.nCycle := refData.sts.nCycle;
     stProgress.tWatered := refData.sts.tWatered;
     stProgress.fWatered := refData.sts.fWatered;
@@ -184,11 +273,11 @@ METHOD PUBLIC Reached : BOOL
   fTgtV := 0.0;
   CASE refData.set.eEndBy OF
     E_ZoneEnd.ByTime:
-      tTgtT := LINT_TO_TIME(TIME_TO_LINT(refData.set.tRunTime) / DINT_TO_LINT(nN));
+      tTgtT := LINT_TO_TIME(TIME_TO_LINT(tRunTimeNow) / DINT_TO_LINT(nN));
     E_ZoneEnd.ByVolume:
       fTgtV := refData.set.fVolume / DINT_TO_LREAL(nN);
     E_ZoneEnd.First:
-      tTgtT := LINT_TO_TIME(TIME_TO_LINT(refData.set.tRunTime) / DINT_TO_LINT(nN));
+      tTgtT := LINT_TO_TIME(TIME_TO_LINT(tRunTimeNow) / DINT_TO_LINT(nN));
       fTgtV := refData.set.fVolume / DINT_TO_LREAL(nN);
     E_ZoneEnd.UntilStop:
       ;
@@ -196,7 +285,7 @@ METHOD PUBLIC Reached : BOOL
     IF refData.set.fVolume > 0.0 THEN
       fTgtV := refData.set.fVolume / DINT_TO_LREAL(nN);
     ELSE
-      tTgtT := LINT_TO_TIME(TIME_TO_LINT(refData.set.tRunTime) / DINT_TO_LINT(nN));
+      tTgtT := LINT_TO_TIME(TIME_TO_LINT(tRunTimeNow) / DINT_TO_LINT(nN));
     END_IF;
   END_CASE;
   IF NOT bByVolume THEN
@@ -328,6 +417,23 @@ PROPERTY PUBLIC tActTimeLeft : TIME
   END_GET
 END_PROPERTY
 
+(* the time this zone still has to water in this program (its cycles left x the cycle's share of the water
+   time in use, less the running cycle's watered time); 0 for a zone done, not enabled, or watered by volume
+   only *)
+PROPERTY PUBLIC tActRemaining : TIME
+  GET
+    tActRemaining := T#0s;
+    IF __ISVALIDREF(refData) THEN
+      IF refData.set.bEnable AND NOT refData.sts.bDone AND tRunTimeNow > T#0s THEN
+        tActRemaining := LINT_TO_TIME(MAX(LINT#0,
+                           TIME_TO_LINT(tRunTimeNow) / INT_TO_LINT(MAX(refData.set.nCycles, 1))
+                           * INT_TO_LINT(MAX(0, refData.set.nCycles - refData.sts.nCycle))
+                           - TIME_TO_LINT(refData.sts.tWatered - tCycBase)));
+      END_IF;
+    END_IF;
+  END_GET
+END_PROPERTY
+
 IF NOT __ISVALIDREF(refData) THEN
   bValveOut := FALSE;
   bOpen := FALSE;
@@ -350,19 +456,16 @@ IF bFirstScan THEN
     nKeptLayout := cLayout;
   END_IF;
   tSavedAt := tNow;
-ELSIF refData.set.tRunTime >= T#0s AND refData.set.fVolume >= 0.0 AND refData.set.tOpenTime >= T#0s
-      AND refData.set.nCycles >= 1 AND refData.set.nCycles <= 100 AND refData.set.tSoakTime >= T#0s
-      AND refData.set.fMinFlow >= 0.0 AND refData.set.fMinFlow <= REAL#3.4E38 AND refData.set.fMaxFlow >= 0.0
-      AND refData.set.fMaxFlow <= REAL#3.4E38 AND (refData.set.fMaxFlow = 0.0 OR refData.set.fMaxFlow > refData.set.fMinFlow)
-      AND refData.set.stFlowCheck.tDelay >= T#0s AND refData.set.stFlowCheck.tRecover >= T#0s
-      AND refData.set.stFlowCheck.nMaxRetries >= 0 AND refData.set.fPressure >= 0.0 AND refData.set.fPressure <= REAL#3.4E38
-      AND (refData.set.eEndBy = E_ZoneEnd.Auto OR refData.set.eEndBy = E_ZoneEnd.ByTime
-           OR refData.set.eEndBy = E_ZoneEnd.UntilStop OR refData.set.eEndBy = E_ZoneEnd.ByVolume
-           OR refData.set.eEndBy = E_ZoneEnd.First) THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
+END_IF;
+IF SystemReset() THEN                // the plant reset clears a refused write
+  refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the program's command: every scan, else closed *)
@@ -413,8 +516,8 @@ IF tNow - tSavedAt >= T#1h THEN
 END_IF;
 refData.sts.bOpen := bOpen;
 refData.sts.bWatering := bWantOpen;
-IF refData.set.tRunTime > refData.sts.tWatered THEN
-  refData.sts.tTimeLeft := refData.set.tRunTime - refData.sts.tWatered;
+IF tRunTimeNow > refData.sts.tWatered THEN
+  refData.sts.tTimeLeft := tRunTimeNow - refData.sts.tWatered;
 ELSE
   refData.sts.tTimeLeft := T#0s;
 END_IF;

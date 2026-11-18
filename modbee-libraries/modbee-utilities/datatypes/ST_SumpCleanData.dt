@@ -7,5 +7,7 @@ TYPE
     bFailed : BOOL;
     nCycles : INT; (* since the last clean *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    tElapsed : TIME; (* the clean under way (0 when none) *)
   END_STRUCT;
 END_TYPE

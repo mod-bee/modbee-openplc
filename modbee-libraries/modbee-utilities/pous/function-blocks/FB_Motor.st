@@ -7,6 +7,8 @@ bPermissive, ipSystem and FB_Object's bError / bWarning / eErrorId / eState. ref
 Built in: overload, no feedback (never came after a start), feedback lost (went while running), stuck
 (stays after a stop); run hours and starts. Everything else is a part placed beside it (FB_Protection for a
 thermistor / drive fault / external fault, FB_LocalControl for Hand buttons and HOA, ...).
+Detail (det): tRestartIn, tRunTime (this run), tIdleTime (since the last stop, 0 while running), tHandLeft (a
+Hand run's time left under set.tHandMax, 0 = none counting).
 Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back. *)
 
 FUNCTION_BLOCK FB_Motor EXTENDS FB_Equipment IMPLEMENTS I_Motor
@@ -117,10 +119,25 @@ METHOD PRIVATE ProtOk : BOOL
 END_METHOD
 
 (* the settings as a whole are usable *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tRestartDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tRetryWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (ProtOk(stP := refData.set.stOverload)) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (ProtOk(stP := refData.set.stNoFeedback)) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (ProtOk(stP := refData.set.stFeedbackLost)) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (ProtOk(stP := refData.set.stStuck)) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
-  SetOk := refData.set.tRestartDelay >= T#0s AND refData.set.tRetryWindow >= T#0s
-           AND ProtOk(stP := refData.set.stOverload) AND ProtOk(stP := refData.set.stNoFeedback)
-           AND ProtOk(stP := refData.set.stFeedbackLost) AND ProtOk(stP := refData.set.stStuck);
+  SetOk := SetWhy() = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -145,6 +162,7 @@ IF bFirstScan THEN
 ELSIF SetOk() THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
@@ -225,5 +243,7 @@ IF NOT bQ AND tNow - tStoppedAt < refData.set.tRestartDelay THEN
 ELSE
   refData.det.tRestartIn := T#0s;
 END_IF;
+refData.det.tIdleTime := tIdleNow;
+refData.det.tHandLeft := tHandLeftNow;
 
 END_FUNCTION_BLOCK

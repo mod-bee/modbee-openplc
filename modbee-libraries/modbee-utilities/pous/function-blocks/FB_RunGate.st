@@ -23,6 +23,14 @@ FUNCTION_BLOCK FB_RunGate EXTENDS FB_Object IMPLEMENTS I_Part
   END_VAR
 
 
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tMaxWait >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PUBLIC Evaluate : E_PartAction
   VAR_INPUT
     bRunning : BOOL;              // the run's equipment is running (not used: ipRun.bIsActive is the run)
@@ -93,11 +101,16 @@ IF bFirstScan THEN
     stKept := refData.set;
     nKeptLayout := cLayout;
   END_IF;
-ELSIF refData.set.tMaxWait >= T#0s THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.bRefused := TRUE;
+END_IF;
+IF SystemReset() THEN                // the plant reset clears a refused write
+  refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 IF NOT bAdded THEN
   ipRun.AddPart(ipPart := THIS^);

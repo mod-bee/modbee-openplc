@@ -34,6 +34,9 @@ It is **equipment** (it extends `FB_Equipment`): Off / Hand / Auto, an owner tha
 | `bCmdStart` | `BOOL` |  | Hand start (rising edge, cleared by the block) |
 | `bCmdStop` | `BOOL` |  | stop in Hand and Auto (rising edge, cleared) |
 | `bCmdReset` | `BOOL` |  | reset trips whose cause has gone (rising edge, cleared) |
+| `bSimulate` | `BOOL` |  | the end switches follow the command (travel times); not kept |
+| `bCmdPreset` | `BOOL` |  | set tot.nStrokes to nPresetStrokes (cleared by the block) |
+| `nPresetStrokes` | `UDINT` |  |  |
 
 **Settings `set`** (`ST_ValveSet`)
 
@@ -58,6 +61,7 @@ It is **equipment** (it extends `FB_Equipment`): Off / Hand / Auto, an owner tha
 | `tStrokeWarn` | `TIME` |  | a stroke slower than this warns (0 = off; needs the end switch) |
 | `stSlowStroke` | `ST_ProtectionSet` | `(eResponse := E_Response.Warn, tDelay := T#0s, eReset := E_ResetMode.Auto, tRecover := T#0s, nMaxRetries := 3)` | a protection's settings ([protections](../conventions.md#protections)) |
 | `stActLocal` | `ST_ProtectionSet` | `(eResponse := E_Response.Warn, tDelay := T#2s, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 3)` | a protection's settings ([protections](../conventions.md#protections)) |
+| `stNoMovement` | `ST_ProtectionSet` | `(eResponse := E_Response.Off, tDelay := T#2s, eReset := E_ResetMode.Retry, tRecover := T#1m, nMaxRetries := 3)` | a protection's settings ([protections](../conventions.md#protections)) |
 
 **Status `sts`** (`ST_ValveSts`)
 
@@ -72,6 +76,7 @@ It is **equipment** (it extends `FB_Equipment`): Off / Hand / Auto, an owner tha
 | `bLinked` | `BOOL` |  | an owner is driving it |
 | `bInterlocked` | `BOOL` |  | The interlock is holding it off |
 | `bRefused` | `BOOL` |  | a setting write was refused and put back |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `bJogging` | `BOOL` |  | jogging (FB_MotorJog, Hand only) |
 | `bMustCycle` | `BOOL` |  | a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) |
 | `bOpen` | `BOOL` |  | Open (status) |
@@ -84,6 +89,9 @@ It is **equipment** (it extends `FB_Equipment`): Off / Hand / Auto, an owner tha
 | `bActLocal` | `BOOL` |  | the actuator is in Local (bActRemote FALSE) |
 | `stSlowStroke` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `stActLocal` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
+| `stNoMovement` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
+| `tLastOpenStroke` | `TIME` |  | the last open stroke confirmed by its end switch |
+| `tLastCloseStroke` | `TIME` |  | the last close stroke confirmed by its end switch |
 
 **Totals `tot`** (`ST_ValveTot`)
 
@@ -106,7 +114,7 @@ Kinds (`set.eType`): SpringNc (coil = open), SpringNo (coil = closed), DoubleHel
 
 Open / closed: by its end switch when used, else after `set.tOpenTime` / `tCloseTime` from the command.
 
-Protections: open / close timeout (the end switch not made in its travel time + 50 %), both end switches made, position lost (an end switch lost at rest), slow stroke (`set.tStrokeWarn` > 0: a stroke confirmed by its end switch that took longer, a sign of wear; `set.stSlowStroke`, default a warning, until a stroke within the time), actuator in Local (`bActRemote` FALSE: the actuator's own Local / Remote switch; every output off, not available to its owner, the travel checks wait; `set.stActLocal`, default a warning after 2 s). Strokes counted (`tot.nStrokes`).
+Protections: open / close timeout (the end switch not made in its travel time + 50 %), both end switches made, position lost (an end switch lost at rest), slow stroke (`set.tStrokeWarn` > 0: a stroke confirmed by its end switch that took longer, a sign of wear; `set.stSlowStroke`, default a warning, until a stroke within the time), actuator in Local (`bActRemote` FALSE: the actuator's own Local / Remote switch; every output off, not available to its owner, the travel checks wait; `set.stActLocal`, default a warning after 2 s), no movement (`set.stNoMovement`, off by default: commanded away and the end switch of the position it left still made). Strokes counted (`tot.nStrokes`; the record's `bCmdPreset` sets it to `nPresetStrokes`); the last stroke's time per direction (`sts.tLastOpenStroke` / `tLastCloseStroke`, with `sts.tLastStroke` the latest). Simulation (the record's `bSimulate`, not kept, cleared by a system reset): the end switches are ignored and the travel times decide, with a warning (Simulated).
 
 Exercise: an [`FB_Exercise`](FB_Exercise.md) part on the valve (`ipOwner` := the valve) opens an idle valve in Auto for its run time (a part's Request, honoured in Auto like the owner's own: interlock, trips and the permissive still apply).
 
@@ -137,6 +145,8 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `eActMode : E_Mode`
 - property `bIsRunning : BOOL`
 - property `bIsReady : BOOL`
+- property `tActIdleTime : TIME`
+- property `tActHandLeft : TIME`
 - property `bIsAvailable : BOOL`
 - property `bIsAuto : BOOL`
 - property `bIsFaulted : BOOL`

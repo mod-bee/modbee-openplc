@@ -13,7 +13,8 @@ bOk is on while the link is alive and has been for tRecover (so it is off at sta
 bHeartbeatOut toggles and nHeartbeatCount counts up every set.tBeatPeriod, for the other side to watch; they
 keep going when bEnable is off. sts.stFail.nCount (failures) and det.tDownTime (time dead, from the timeout to
 the next change) are not kept over a power cut; bCmdResetCount clears both. Settings are kept by the block (a
-retained last-good copy): restored at power-up, a bad write put back. *)
+retained last-good copy): restored at power-up, a bad write put back.
+bNewBeat is TRUE for one scan at each change of the remote's beat. *)
 
 FUNCTION_BLOCK FB_Watchdog EXTENDS FB_Object
   VAR_INPUT
@@ -28,6 +29,7 @@ FUNCTION_BLOCK FB_Watchdog EXTENDS FB_Object
     bCommsFail : BOOL; (* no change for tTimeout *)
     bHeartbeatOut : BOOL; (* toggles every tBeatPeriod; send this to the remote *)
     nHeartbeatCount : DINT; (* counts up every tBeatPeriod *)
+    bNewBeat : BOOL; (* one scan: the remote's beat changed *)
   END_VAR
   VAR RETAIN
     stKept : ST_WatchdogSet;
@@ -61,13 +63,28 @@ FUNCTION_BLOCK FB_Watchdog EXTENDS FB_Object
 
 
 (* the settings are usable *)
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_WatchdogSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tTimeout > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tBeatPeriod >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.eFailReset = E_ResetMode.Auto OR stS.eFailReset = E_ResetMode.Retry
+             OR stS.eFailReset = E_ResetMode.Manual) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_WatchdogSet;
   END_VAR
-  SetOk := stS.tTimeout > T#0s AND stS.tRecover >= T#0s AND stS.tBeatPeriod >= T#0s
-           AND (stS.eFailReset = E_ResetMode.Auto OR stS.eFailReset = E_ResetMode.Retry
-                OR stS.eFailReset = E_ResetMode.Manual);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -97,6 +114,7 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOkSet := TRUE;
@@ -106,6 +124,7 @@ END_IF;
 bResetReq := bReset OR SystemReset() OR (refData.bCmdReset AND NOT bResetSeen);
 IF refData.bCmdReset AND NOT bResetSeen THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 bResetSeen := refData.bCmdReset;
 refData.bCmdReset := FALSE;
@@ -156,6 +175,7 @@ ELSE
       tDown := tDown + (tSinceNow - refData.set.tTimeout);
     END_IF;
   END_IF;
+  bNewBeat := bChanged;
   IF bChanged THEN
     bSeen := TRUE;
     tLastChangeAt := tNow;

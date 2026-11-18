@@ -30,6 +30,20 @@ FUNCTION_BLOCK FB_ValveMotor EXTENDS FB_Valve IMPLEMENTS I_LocalChoice
   END_VAR
 
 
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE MotorWhy : E_UtError
+  MotorWhy := E_UtError.None;
+  IF NOT (refMotor.set.tReversal >= T#0s) THEN
+    MotorWhy := E_UtError.TimeBad;
+  ELSIF NOT (refMotor.set.stTorque.tDelay >= T#0s) THEN
+    MotorWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refMotor.set.stTorque.tRecover >= T#0s) THEN
+    MotorWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refMotor.set.stTorque.nMaxRetries >= 0) THEN
+    MotorWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 (* a panel choice (FB_LocalControl bHalt): in Hand, stop where it is *)
 METHOD PUBLIC Choose : BOOL
   VAR_INPUT
@@ -61,7 +75,7 @@ METHOD PROTECTED OVERRIDE Drive
     bTorque := F_Protect(tNow := tNow,
                          bCause := refData.set.eMode <> E_Mode.OutOfService
                                    AND (bTorqueOpen OR (bTorqueClose AND NOT (refMotor.set.bCloseOnTorque AND NOT bWantOpen))),
-                         bResetReq := bResetNow, tRetryWindow := refData.set.tRetryWindow,
+                         bResetReq := bResetThisScan, tRetryWindow := refData.set.tRetryWindow,
                          stSet := refMotor.set.stTorque, stSts := refMotor.sts.stTorque, stWork := stWTorque);
   END_IF;
   bVarTrip := stWTorque.bTrip;    (* to the valve's protections (the next scan) *)
@@ -94,12 +108,16 @@ IF __ISVALIDREF(refMotor) THEN
       nKeptMotorLayout := cLayout;
     END_IF;
     bMotorFirst := FALSE;
-  ELSIF refMotor.set.tReversal >= T#0s AND refMotor.set.stTorque.tDelay >= T#0s
-        AND refMotor.set.stTorque.tRecover >= T#0s AND refMotor.set.stTorque.nMaxRetries >= 0 THEN
+  ELSIF MotorWhy() = E_UtError.None THEN
     stKeptMotor := refMotor.set;
   ELSE
+    refMotor.sts.eRefusedWhy := MotorWhy();
     refMotor.set := stKeptMotor;
     refMotor.sts.bRefused := TRUE;
+  END_IF;
+  IF bResetThisScan THEN                  // the equipment's reset clears a refused write
+    refMotor.sts.bRefused := FALSE;
+    refMotor.sts.eRefusedWhy := E_UtError.None;
   END_IF;
   bSeatUse := refMotor.set.bCloseOnTorque;
 ELSE

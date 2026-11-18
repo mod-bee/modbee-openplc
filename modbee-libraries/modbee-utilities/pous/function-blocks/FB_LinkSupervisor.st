@@ -78,13 +78,37 @@ FUNCTION_BLOCK FB_LinkSupervisor EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_LinkSupervisorSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tRestartAfter >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tPowerCycleAfter >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tRebootAfter >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tPulse >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tPowerOff >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tMaxBackoff >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.nMaxRebootsPerDay >= 0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.tRebootSaveWait >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tCountWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_LinkSupervisorSet;
   END_VAR
-  SetOk := stS.tRestartAfter >= T#0s AND stS.tPowerCycleAfter >= T#0s AND stS.tRebootAfter >= T#0s
-           AND stS.tPulse >= T#0s AND stS.tPowerOff >= T#0s AND stS.tMaxBackoff >= T#0s
-           AND stS.nMaxRebootsPerDay >= 0 AND stS.tRebootSaveWait >= T#0s AND stS.tCountWindow >= T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -110,6 +134,7 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
@@ -130,6 +155,7 @@ IF (bCmd AND NOT bCmdPrev) OR bResetReboots THEN
   tSavedWin := T#0s;
   tWinBase := tNow;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 bCmdPrev := bCmd;
 

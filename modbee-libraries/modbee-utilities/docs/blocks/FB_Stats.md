@@ -44,6 +44,7 @@ Minimum, maximum and time-weighted average of a value, for the current period an
 | `fMaximum` | `REAL` |  | Highest value |
 | `fAverage` | `REAL` |  | time-weighted |
 | `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Totals `tot`** (`ST_StatsTot`)
 

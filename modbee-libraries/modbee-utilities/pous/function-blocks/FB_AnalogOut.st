@@ -53,17 +53,42 @@ FUNCTION_BLOCK FB_AnalogOut EXTENDS FB_Object
 
 
 (* the settings are usable: the span, and every limit and ramp a number *)
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_AnalogOutSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (ABS(stS.fEngMax - stS.fEngMin) > 0.0) THEN   // no span
+    SetWhy := E_UtError.LimitsBad;
+  ELSIF NOT (ABS(stS.fEngMax - stS.fEngMin) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (ABS(stS.fOutMin) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (ABS(stS.fOutMax) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (stS.fRampUp >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fRampUp <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fRampDown >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fRampDown <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.eRateUnit = E_RateUnit.PerSec OR stS.eRateUnit = E_RateUnit.PerMin
+             OR stS.eRateUnit = E_RateUnit.PerHour OR stS.eRateUnit = E_RateUnit.PerDay) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (ABS(stS.fFailValue) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (ABS(stS.fManualValue) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_AnalogOutSet;
   END_VAR
-  SetOk := ABS(stS.fEngMax - stS.fEngMin) > 0.0 AND ABS(stS.fEngMax - stS.fEngMin) <= REAL#3.4E38
-           AND ABS(stS.fOutMin) <= REAL#3.4E38 AND ABS(stS.fOutMax) <= REAL#3.4E38
-           AND stS.fRampUp >= 0.0 AND stS.fRampUp <= REAL#3.4E38
-           AND stS.fRampDown >= 0.0 AND stS.fRampDown <= REAL#3.4E38
-           AND (stS.eRateUnit = E_RateUnit.PerSec OR stS.eRateUnit = E_RateUnit.PerMin
-                OR stS.eRateUnit = E_RateUnit.PerHour OR stS.eRateUnit = E_RateUnit.PerDay)
-           AND ABS(stS.fFailValue) <= REAL#3.4E38 AND ABS(stS.fManualValue) <= REAL#3.4E38;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -87,6 +112,7 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOkSet := TRUE;
@@ -94,6 +120,7 @@ END_IF;
 IF refData.bCmdReset OR SystemReset() THEN
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 bCfgBad := NOT (ABS(refData.set.fEngMax - refData.set.fEngMin) > 0.0
                 AND ABS(refData.set.fEngMax - refData.set.fEngMin) <= REAL#3.4E38)

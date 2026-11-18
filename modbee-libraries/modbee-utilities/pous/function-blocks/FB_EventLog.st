@@ -86,11 +86,21 @@ FUNCTION_BLOCK FB_EventLog EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_EventLogSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tSaveEvery >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_EventLogSet;
   END_VAR
-  SetOk := stS.tSaveEvery >= T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 METHOD PRIVATE ClearBuffer : BOOL
@@ -139,12 +149,14 @@ IF bNewScan THEN
   IF bSetOk THEN
     stKept := refData.set;
   ELSIF SetOk(stS := stKept) THEN
+    refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
     refData.set := stKept;
     refData.sts.bRefused := TRUE;
     bSetOk := TRUE;
   END_IF;
   IF SystemReset() THEN
     refData.sts.bRefused := FALSE;
+    refData.sts.eRefusedWhy := E_UtError.None;
   END_IF;
 END_IF;
 bKeep := refData.set.bRetained AND refData.set.tSaveEvery > T#0s;

@@ -3,5 +3,7 @@ TYPE
     bCmdReset : BOOL; (* clear the transducer fault (cleared by the block) *)
     set : ST_LevelFloatsSet;
     sts : ST_LevelFloatsSts;
+    tot : ST_LevelFloatsTot;
+    bCmdResetStats : BOOL; (* zero tot (cleared by the block) *)
   END_STRUCT;
 END_TYPE

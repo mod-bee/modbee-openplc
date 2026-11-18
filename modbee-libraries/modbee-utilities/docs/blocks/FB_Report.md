@@ -52,6 +52,7 @@ Report by exception: decides when one value is worth sending (a change past a de
 | `nSuppressed` | `UDINT` |  | held back by tMinInterval |
 | `tSinceLast` | `TIME` |  | Time since the last report |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Lists
 

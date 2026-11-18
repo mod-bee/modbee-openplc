@@ -50,6 +50,7 @@ It extends [FB_Motor](FB_Motor.md): everything of it (pins, record, protections)
 | `bInDelta` | `BOOL` |  |  |
 | `tStarLeft` | `TIME` |  |  |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stChangeover` | `ST_ProtectionSts` |  | default Manual; a protection's status ([protections](../conventions.md#protections)) |
 | `bCurrentRisen` | `BOOL` |  | the star current has risen to fStarCurrentPct in this start |
 
@@ -96,6 +97,7 @@ It extends [FB_Motor](FB_Motor.md): everything of it (pins, record, protections)
 | `bLinked` | `BOOL` |  | an owner is driving it |
 | `bInterlocked` | `BOOL` |  | The interlock is holding it off |
 | `bRefused` | `BOOL` |  | a setting write was refused and put back |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `bJogging` | `BOOL` |  | jogging (FB_MotorJog, Hand only) |
 | `bMustCycle` | `BOOL` |  | a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) |
 | `stOverload` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
@@ -109,6 +111,8 @@ It extends [FB_Motor](FB_Motor.md): everything of it (pins, record, protections)
 | --- | --- | --- | --- |
 | `tRestartIn` | `TIME` |  | Time left before a start is allowed (restart delay) |
 | `tRunTime` | `TIME` |  | this run |
+| `tIdleTime` | `TIME` |  | since the last stop (0 while running) |
+| `tHandLeft` | `TIME` |  | a Hand run's time left under set.tHandMax (0 = none counting) |
 
 **Totals `tot`** (`ST_MotorTot`)
 
@@ -157,6 +161,8 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `eActMode : E_Mode`
 - property `bIsRunning : BOOL`
 - property `bIsReady : BOOL`
+- property `tActIdleTime : TIME`
+- property `tActHandLeft : TIME`
 - property `bIsAvailable : BOOL`
 - property `bIsAuto : BOOL`
 - property `bIsFaulted : BOOL`

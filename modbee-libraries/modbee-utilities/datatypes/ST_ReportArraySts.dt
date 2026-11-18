@@ -3,5 +3,6 @@ TYPE
     nReports : UDINT;
     nBadItem : INT; (* the first item with a bad setting (0 none) *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

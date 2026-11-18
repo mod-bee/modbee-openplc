@@ -65,6 +65,7 @@ Offers `I_Pump`: wire this instance to another block's `ip…` pin of that type.
 | `bLinked` | `BOOL` |  | an owner is driving it |
 | `bInterlocked` | `BOOL` |  | The interlock is holding it off |
 | `bRefused` | `BOOL` |  | a setting write was refused and put back |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `bJogging` | `BOOL` |  | jogging (FB_MotorJog, Hand only) |
 | `bMustCycle` | `BOOL` |  | a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) |
 | `bMotorInHand` | `BOOL` |  |  |
@@ -79,6 +80,8 @@ Offers `I_Pump`: wire this instance to another block's `ip…` pin of that type.
 | --- | --- | --- | --- |
 | `tRunTime` | `TIME` |  | this run |
 | `tTimeLeft` | `TIME` |  | of the start delay, minimum run or stop delay now counting |
+| `tIdleTime` | `TIME` |  | since the last stop (0 while running) |
+| `tHandLeft` | `TIME` |  | a Hand run's time left under set.tHandMax (0 = none counting) |
 
 ## Lists
 
@@ -93,6 +96,8 @@ The pump has its own Off / Hand / Auto; the motor has its own too and follows th
 Auto: the owner's request after `set.tStartDelay` (it must last that long), kept for `set.tMinRun` and until it has been gone `set.tStopDelay`; after a stop, `set.tMinOff` (a power-up counts as a stop).
 
 Built in: start fail (asked, motor ready, not running) and dropped (stopped by itself while asked: a warning kept until reset, never holding the pump). The start mask (`set.tStartMask` after each start) is offered to parts that mask at start (low pressure, no flow ...). A faulted motor is a warning on the pump.
+
+Detail (det): `tRunTime` (this run), `tIdleTime` (since the last stop, 0 while running: with `tRunTime`, the time in the present phase), `tTimeLeft` (of the start delay, minimum run or stop delay now counting), `tHandLeft` (a Hand run's time left under `set.tHandMax`, 0 = none counting). `set.eRole` (duty, jockey, booster) and `set.fCapacity` (flow at full speed) are read by stations and cascades through `I_Pump`.
 
 ## Example
 
@@ -118,6 +123,8 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `eActMode : E_Mode`
 - property `bIsRunning : BOOL`
 - property `bIsReady : BOOL`
+- property `tActIdleTime : TIME`
+- property `tActHandLeft : TIME`
 - property `bIsAvailable : BOOL`
 - property `bIsAuto : BOOL`
 - property `bIsFaulted : BOOL`

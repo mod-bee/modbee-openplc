@@ -39,7 +39,7 @@ It extends [FB_Motor](FB_Motor.md): everything of it (pins, record, protections)
 | `fMinSpeed` | `REAL` |  |  |
 | `fMaxSpeed` | `REAL` | `100.0` |  |
 | `fAccelRate` | `REAL` |  | % per second (0 = the drive ramps) |
-| `fDecelRate` | `REAL` |  | % per second, 0 = the drive ramps |
+| `fDecelRate` | `REAL` |  | % per set.eRateUnit: second by default, minute, hour or day; 0 = the drive ramps |
 | `fSkipLow` | `REAL` |  | resonance band (equal = off) |
 | `fSkipHigh` | `REAL` |  |  |
 | `fHandSpeed` | `REAL` | `50.0` |  |
@@ -53,6 +53,8 @@ It extends [FB_Motor](FB_Motor.md): everything of it (pins, record, protections)
 | `tDriveRamp` | `TIME` |  | the drive's own 0 -> 100 % time: bAtSpeed / speedDev wait for it |
 | `fRatedHz` | `REAL` |  | the motor's frequency at 100 % (display; 0 = none) |
 | `fRatedRpm` | `REAL` |  | its speed at 100 % (display; 0 = none) |
+| `fJogSpeed` | `REAL` |  | the speed while jogging (FB_MotorJog), % (0 = fHandSpeed) |
+| `eRateUnit` | `E_RateUnit` |  | fAccelRate / fDecelRate: % per second (default), minute, hour or day |
 
 **Status `sts`** (`ST_VsdSts`)
 
@@ -63,6 +65,7 @@ It extends [FB_Motor](FB_Motor.md): everything of it (pins, record, protections)
 | `bAtSpeed` | `BOOL` |  |  |
 | `bDriveReady` | `BOOL` |  | the drive's ready relay: lost while running is a protection; not ready holds a new start |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stDriveNotReady` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `stSpeedDev` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `fSpeedHz` | `REAL` |  | the speed in Hz (set.fRatedHz) |
@@ -111,6 +114,7 @@ It extends [FB_Motor](FB_Motor.md): everything of it (pins, record, protections)
 | `bLinked` | `BOOL` |  | an owner is driving it |
 | `bInterlocked` | `BOOL` |  | The interlock is holding it off |
 | `bRefused` | `BOOL` |  | a setting write was refused and put back |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `bJogging` | `BOOL` |  | jogging (FB_MotorJog, Hand only) |
 | `bMustCycle` | `BOOL` |  | a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) |
 | `stOverload` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
@@ -124,6 +128,8 @@ It extends [FB_Motor](FB_Motor.md): everything of it (pins, record, protections)
 | --- | --- | --- | --- |
 | `tRestartIn` | `TIME` |  | Time left before a start is allowed (restart delay) |
 | `tRunTime` | `TIME` |  | this run |
+| `tIdleTime` | `TIME` |  | since the last stop (0 while running) |
+| `tHandLeft` | `TIME` |  | a Hand run's time left under set.tHandMax (0 = none counting) |
 
 **Totals `tot`** (`ST_MotorTot`)
 
@@ -140,7 +146,7 @@ Everything of [`FB_Motor`](FB_Motor.md) (modes, protections, the plug, totals, `
 
 Speed asked for: Auto -> the owner's speed (Request `fSpeed`, < 0 = `set.fAutoSpeed`); Hand -> `set.fHandSpeed`.
 
-Clamped to `fMinSpeed`..fMaxSpeed; a target inside the skip band holds at its near edge; ramped by `fAccelRate` / `fDecelRate` (% per second, 0 = the drive ramps); a start begins from `fMinSpeed`.
+Clamped to `fMinSpeed`..fMaxSpeed; a target inside the skip band holds at its near edge; ramped by `fAccelRate` / `fDecelRate` (% per `set.eRateUnit`: second by default, minute, hour or day; 0 = the drive ramps); a start begins from `fMinSpeed`. A jog ([`FB_MotorJog`](FB_MotorJog.md)) runs at `set.fJogSpeed` (0 = `fHandSpeed`).
 
 Drive protections: driveNotReady (the ready relay lost while running), speedDev (\|reference - `fSpeedFb`\| past `set.fDevBand` while running with the ramp done and `set.tDriveRamp` passed since the reference stopped changing, `fSpeedFb` wired). `bAtSpeed`: the ramp done, and by `fSpeedFb` within `fDevBand`, or without `fSpeedFb` once `set.tDriveRamp` (the drive's own 0 -> 100 % ramp time, 0 = none) has passed since the reference stopped changing.
 
@@ -175,6 +181,8 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `eActMode : E_Mode`
 - property `bIsRunning : BOOL`
 - property `bIsReady : BOOL`
+- property `tActIdleTime : TIME`
+- property `tActHandLeft : TIME`
 - property `bIsAvailable : BOOL`
 - property `bIsAuto : BOOL`
 - property `bIsFaulted : BOOL`

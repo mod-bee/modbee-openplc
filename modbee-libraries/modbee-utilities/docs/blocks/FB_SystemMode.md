@@ -23,6 +23,7 @@ Offers `I_SystemMode`: wire this instance to another block's `ip…` pin of that
 | out | `bAuto3` | `BOOL` |  | Auto with type 3 |
 | out | `bAuto4` | `BOOL` |  | Auto with that type |
 | out | `bManualRun` | `BOOL` |  | The manual run is on |
+| out | `bModeChanged` | `BOOL` |  | one scan: the mode changed |
 | out | `bPowerUpHold` | `BOOL` |  | TRUE for set.tPowerOnDelay after power-up: automatic starts wait |
 | out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
@@ -51,6 +52,7 @@ Offers `I_SystemMode`: wire this instance to another block's `ip…` pin of that
 | `tManualMaxRun` | `TIME` |  | 0 = no limit |
 | `tPowerOnDelay` | `TIME` |  |  |
 | `eModeSource` | `E_ModeSource` |  | where the mode comes from |
+| `bOfferManual` | `BOOL` | `TRUE` | FALSE: the plant is Off / Auto only (Manual refused, a Manual contact is Off) |
 
 **Status `sts`** (`ST_SystemModeSts`)
 
@@ -62,6 +64,7 @@ Offers `I_SystemMode`: wire this instance to another block's `ip…` pin of that
 | `bPowerUpHold` | `BOOL` |  | TRUE for set.tPowerOnDelay after power-up: automatic starts wait |
 | `eStopReason` | `E_StopReason` |  | why the last manual run ended |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `bSelectorFault` | `BOOL` |  | both selector contacts made |
 | `bForcedOff` | `BOOL` |  |  |
 
@@ -81,7 +84,7 @@ The mode and the auto type are the record's `set.eMode` / `set.nAutoType` (kept 
 
 Other blocks read it through `I_SystemMode` (their `ipSystem` pin).
 
-The mode in use (`set.eModeSource`): Hmi = the record's choice; Switch = the selector `bSwManual` / `bSwAuto` (neither: Off; both: Off and a SelectorFault warning); Remote = the selector's Off and Manual act here, its Auto hands over to the record's choice. With `set.ePowerUp` Off a selector found out of Off at power-up is held Off until moved. `bForceOff` holds the plant Off (the choice is kept). `sts.eMode` is the mode in use.
+The mode in use (`set.eModeSource`): Hmi = the record's choice; Switch = the selector `bSwManual` / `bSwAuto` (neither: Off; both: Off and a SelectorFault warning); Remote = the selector's Off and Manual act here, its Auto hands over to the record's choice. With `set.ePowerUp` Off a selector found out of Off at power-up is held Off until moved. `bForceOff` holds the plant Off (the choice is kept). `sts.eMode` is the mode in use. `set.bOfferManual` FALSE: the plant is Off / Auto only (Off / On): Manual is refused as a bad write (`set.eMode`, `nCmdMode` 1), a selector's Manual contact acts as Off, and there is no manual run. `bModeChanged` is TRUE for one scan when the mode changes.
 
 ## Example
 

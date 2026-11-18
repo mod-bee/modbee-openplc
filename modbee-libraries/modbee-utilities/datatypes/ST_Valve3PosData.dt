@@ -4,5 +4,8 @@ TYPE
     set : ST_Valve3PosSet;
     sts : ST_Valve3PosSts;
     tot : ST_ValveTot;
+    bSimulate : BOOL; (* the switches are ignored, the travel times decide; not kept *)
+    bCmdPreset : BOOL; (* set tot.nStrokes to nPresetStrokes (cleared by the block) *)
+    nPresetStrokes : UDINT;
   END_STRUCT;
 END_TYPE

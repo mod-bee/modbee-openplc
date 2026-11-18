@@ -43,6 +43,16 @@ FUNCTION_BLOCK FB_LevelMeter EXTENDS FB_Object IMPLEMENTS I_Meter
   END_VAR
 
 
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.fDeadband >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.tRateWindow > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 PROPERTY PUBLIC fActTotal : LREAL
   GET
     IF __ISVALIDREF(refData) THEN fActTotal := refData.tot.fTotal; ELSE fActTotal := 0.0; END_IF;
@@ -104,11 +114,16 @@ IF bFirstScan THEN
   tKeptAt := tNow;
   tWindowAt := tNow;
   fWindowTotal := refData.tot.fTotal;
-ELSIF refData.set.fDeadband >= 0.0 AND refData.set.tRateWindow > T#0s THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
+END_IF;
+IF SystemReset() THEN                // the plant reset clears a refused write
+  refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the level as a volume when it is a vessel *)

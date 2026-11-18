@@ -63,6 +63,7 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 | `stOverspeed` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `stSensor` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Details `det`** (`ST_RotationDet`)
 

@@ -13,5 +13,8 @@ TYPE
     stTravel : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Retry, tRecover := T#10s, nMaxRetries := 3);
     nAutoPos : INT := 3; (* the position asked with no number *)
     bPosLatch : BOOL; (* the last position asked stays when the request ends *)
+    stBothLimits : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#1s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0);
+    stPositionLost : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#2s, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 0);
+    stNoMovement : ST_ProtectionSet := (eResponse := E_Response.Off, tDelay := T#2s, eReset := E_ResetMode.Retry, tRecover := T#1m, nMaxRetries := 3);
   END_STRUCT;
 END_TYPE

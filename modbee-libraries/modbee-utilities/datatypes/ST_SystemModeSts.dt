@@ -6,6 +6,7 @@ TYPE
     bPowerUpHold : BOOL;
     eStopReason : E_StopReason; (* why the last manual run ended *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     bSelectorFault : BOOL; (* both selector contacts made *)
     bForcedOff : BOOL;
   END_STRUCT;

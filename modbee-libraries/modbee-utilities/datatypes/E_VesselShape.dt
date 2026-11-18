@@ -1,5 +1,5 @@
 TYPE
   {attribute 'qualified_only'}
   {attribute 'strict'}
-  E_VesselShape : (Vertical, Cone, Horizontal, Rect, Sphere, Pond) := Vertical;
+  E_VesselShape : (Vertical, Cone, Horizontal, Rect, Sphere, Pond, Table) := Vertical;
 END_TYPE

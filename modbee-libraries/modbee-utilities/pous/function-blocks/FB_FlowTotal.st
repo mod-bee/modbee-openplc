@@ -18,7 +18,9 @@ bBatchDone is TRUE once it has reached set.fBatchTarget (0 = off), until the bat
 A failed meter (ipFlow not good or not wired) does not count; with set.bBadEstimate the nominal rate is counted
 instead while bActive, into tot.fEstimated too (a warning). Bad past set.stInputBad's delay: bIsGood FALSE and
 a warning (SensorBad). Totals and batch are LREAL, kept hourly, when bActive falls (the pump stops) and on a
-reset (bCmdResetTotal, bCmdResetBatch). *)
+reset (bCmdResetTotal, bCmdResetBatch).
+Total commands: bCmdResetTotal (with set.bConfirmReset, only together with bCmdConfirm in the same write) and
+bCmdPreset (the total to fPresetTotal, 0 .. 1E12). *)
 
 FUNCTION_BLOCK FB_FlowTotal EXTENDS FB_Object IMPLEMENTS I_Meter
   VAR_INPUT
@@ -36,7 +38,7 @@ FUNCTION_BLOCK FB_FlowTotal EXTENDS FB_Object IMPLEMENTS I_Meter
     stKeptTot : ST_FlowTotalTot;
   END_VAR
   VAR CONSTANT
-    cLayout : UINT := 2;
+    cLayout : UINT := 3;
   END_VAR
   VAR
     stWInputBad : ST_ProtectionWork;
@@ -107,7 +109,7 @@ METHOD PUBLIC Band : BOOL
   Band := FALSE;
 END_METHOD
 
-METHOD PRIVATE SetOk : BOOL
+METHOD PRIVATE SetWhy : E_UtError
   VAR_INPUT
     stS : REFERENCE TO ST_FlowTotalSet;
   END_VAR
@@ -116,13 +118,43 @@ METHOD PRIVATE SetOk : BOOL
     fU : LREAL;
   END_VAR
   fU := F_UnitFactor(eFromUnit := stS.eInUnit, eToUnit := stS.eOutUnit, bOk => bU);
-  SetOk := (stS.eSource = E_FlowSource.Rate OR stS.eSource = E_FlowSource.Runtime OR stS.eSource = E_FlowSource.Sample)
-           AND bU AND stS.tSampleTime > T#0s AND stS.fBatchTarget >= 0.0 AND stS.fBatchTarget <= 1.0E15
-           AND (stS.eRateUnit = E_RateUnit.PerSec OR stS.eRateUnit = E_RateUnit.PerMin
-                OR stS.eRateUnit = E_RateUnit.PerHour OR stS.eRateUnit = E_RateUnit.PerDay)
-           AND stS.fLowCutoff >= 0.0 AND stS.fLowCutoff <= REAL#3.4E38
-           AND stS.fNominalRate >= 0.0 AND stS.fNominalRate <= REAL#3.4E38 AND stS.tRateWindow > T#0s
-           AND stS.stInputBad.tDelay >= T#0s AND stS.stInputBad.tRecover >= T#0s;
+  SetWhy := E_UtError.None;
+  IF NOT (stS.eSource = E_FlowSource.Rate OR stS.eSource = E_FlowSource.Runtime
+          OR stS.eSource = E_FlowSource.Sample) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (bU) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.tSampleTime > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.fBatchTarget >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fBatchTarget <= 1.0E15) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.eRateUnit = E_RateUnit.PerSec OR stS.eRateUnit = E_RateUnit.PerMin
+             OR stS.eRateUnit = E_RateUnit.PerHour OR stS.eRateUnit = E_RateUnit.PerDay) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.fLowCutoff >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fLowCutoff <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fNominalRate >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fNominalRate <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.tRateWindow > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.stInputBad.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stInputBad.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
+METHOD PRIVATE SetOk : BOOL
+  VAR_INPUT
+    stS : REFERENCE TO ST_FlowTotalSet;
+  END_VAR
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -149,9 +181,14 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
+END_IF;
+IF SystemReset() THEN                // the plant reset clears a refused write
+  refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the time this scan stands for, in whole ms (the rest carries on) *)
@@ -239,13 +276,23 @@ IF tWin >= refData.set.tRateWindow THEN
 END_IF;
 
 (* reset, keep *)
-IF refData.bCmdResetTotal THEN
+IF refData.bCmdResetTotal AND (refData.bCmdConfirm OR NOT refData.set.bConfirmReset) THEN
   refData.bCmdResetTotal := FALSE;
   refData.tot.fTotal := 0.0;
   refData.tot.fTotalOut := 0.0;
   refData.tot.fEstimated := 0.0;
   fWindowTotal := 0.0;
   stKeptTot := refData.tot;
+END_IF;
+refData.bCmdResetTotal := FALSE;
+refData.bCmdConfirm := FALSE;
+IF refData.bCmdPreset THEN
+  IF refData.fPresetTotal >= 0.0 AND refData.fPresetTotal <= 1.0E12 THEN
+    refData.tot.fTotal := refData.fPresetTotal;
+    fWindowTotal := refData.fPresetTotal;
+    stKeptTot := refData.tot;
+  END_IF;
+  refData.bCmdPreset := FALSE;
 END_IF;
 IF bResetBatch OR refData.bCmdResetBatch THEN
   refData.bCmdResetBatch := FALSE;

@@ -46,6 +46,7 @@ It is one of the `FB_Dose` family: the common part is described under *How it wo
 | `bCmdStop` | `BOOL` |  | end the dose (cleared) |
 | `bCmdHold` | `BOOL` |  | pause until the next start (cleared) |
 | `bCmdReset` | `BOOL` |  | reset trips whose cause has gone (cleared) |
+| `bCmdAbort` | `BOOL` |  | end the dose now, stop reason Abort (cleared) |
 
 **Details `det`** (`ST_DoseDet`)
 
@@ -100,6 +101,7 @@ It is one of the `FB_Dose` family: the common part is described under *How it wo
 | `stMaxTime` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `stStockLow` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `eMode` | `E_Mode` |  | the mode in use |
 | `bHandRun` | `BOOL` |  | a Hand run is on |
 | `fTargetActive` | `REAL` |  |  |
@@ -120,7 +122,7 @@ A rising `bRun`, `bStart` or `bCmdStart` delivers the target (`fTarget` pin, 0 =
 
 ### Common to the FB_Dose family
 
-`bRun` / `bStart` / `bStop` / `bReset` and the record's commands (`bCmdStart`, `bCmdStop`, `bCmdHold`, `bCmdReset`: once per write); `bInterlock` FALSE stops the pump in every variant (Flow / Timed resume by themselves, a Batch is held); `bPermissive` FALSE holds back a dose start; `bHold` and `bCmdHold` (until the next start) pause; `bStop`, `bCmdStop`, `bAbort`, `set.bEnabled` FALSE end a dose (a held `bRun` must drop before it doses again); `bStockLow` -> `set.stStockLow`; `set.stMaxTime` and `set.fMaxQuantity` cap a dose. `ipPump` (optional): the dosing pump, asked to run at `fRate` while dosing and held while `bInterlock` is FALSE; dosing counts only while it runs.
+`bRun` / `bStart` / `bStop` / `bReset` and the record's commands (`bCmdStart`, `bCmdStop`, `bCmdHold`, `bCmdReset`: once per write); `bInterlock` FALSE stops the pump in every variant (Flow / Timed resume by themselves, a Batch is held); `bPermissive` FALSE holds back a dose start; `bHold` and `bCmdHold` (until the next start) pause; `bStop`, `bCmdStop`, `bAbort`, the record's `bCmdAbort` (stop reason Abort), `set.bEnabled` FALSE end a dose (a held `bRun` must drop before it doses again); `bStockLow` -> `set.stStockLow`; `set.stMaxTime` and `set.fMaxQuantity` cap a dose. `ipPump` (optional): the dosing pump, asked to run at `fRate` while dosing and held while `bInterlock` is FALSE; dosing counts only while it runs.
 
 Modes (`set.eMode`, kept; the record's `nCmdMode` 0 Off / 1 Hand / 2 Auto, once, or a Command from [`FB_LocalControl`](FB_LocalControl.md), which drives a dose like a pump: IMPLEMENTS `I_Equipment`): Auto doses as above; Hand: a start (`bStart`, `bCmdStart`, the panel's start button) runs the pump at `set.fHandRate` % until a stop, `set.tHandMax` (0 = no limit), the interlock FALSE, an abort, `set.bEnabled` FALSE, a stop-trip or the mode left; with `set.bHandNeedsCarrier` the carrier must be proven (Flow / Timed; a Batch has none), else the pump waits (Held); a Hand run counts into the totals but is no dose (`nDoses`); Off: nothing doses. Hand never resumes after a power cut. An owner's Request(`bRun`) is a `bRun` (`bHold` = not asked); a variant's own pins and records work in Auto only. tot (millionths of a unit, and the doses) is kept at each dose end and every hour.
 

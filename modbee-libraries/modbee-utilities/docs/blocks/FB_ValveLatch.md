@@ -34,6 +34,8 @@ It extends [FB_Valve](FB_Valve.md): everything of it (pins, record, protections)
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `tPulse` | `TIME` | `T#500ms` | coil pulse length |
+| `tOpenPulse` | `TIME` |  | the open pulse (0 = tPulse) |
+| `tClosePulse` | `TIME` |  | the close pulse (0 = tPulse) |
 
 **Status `sts`** (`ST_ValveLatchSts`)
 
@@ -42,6 +44,7 @@ It extends [FB_Valve](FB_Valve.md): everything of it (pins, record, protections)
 | `bPulsing` | `BOOL` |  |  |
 | `nLastPos` | `USINT` |  | the kept position: 0 unknown, 1 closed, 2 open |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Record `ST_ValveData` (pin `refData`)
 
@@ -51,6 +54,9 @@ It extends [FB_Valve](FB_Valve.md): everything of it (pins, record, protections)
 | `bCmdStart` | `BOOL` |  | Hand start (rising edge, cleared by the block) |
 | `bCmdStop` | `BOOL` |  | stop in Hand and Auto (rising edge, cleared) |
 | `bCmdReset` | `BOOL` |  | reset trips whose cause has gone (rising edge, cleared) |
+| `bSimulate` | `BOOL` |  | the end switches follow the command (travel times); not kept |
+| `bCmdPreset` | `BOOL` |  | set tot.nStrokes to nPresetStrokes (cleared by the block) |
+| `nPresetStrokes` | `UDINT` |  |  |
 
 **Settings `set`** (`ST_ValveSet`)
 
@@ -75,6 +81,7 @@ It extends [FB_Valve](FB_Valve.md): everything of it (pins, record, protections)
 | `tStrokeWarn` | `TIME` |  | a stroke slower than this warns (0 = off; needs the end switch) |
 | `stSlowStroke` | `ST_ProtectionSet` | `(eResponse := E_Response.Warn, tDelay := T#0s, eReset := E_ResetMode.Auto, tRecover := T#0s, nMaxRetries := 3)` | a protection's settings ([protections](../conventions.md#protections)) |
 | `stActLocal` | `ST_ProtectionSet` | `(eResponse := E_Response.Warn, tDelay := T#2s, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 3)` | a protection's settings ([protections](../conventions.md#protections)) |
+| `stNoMovement` | `ST_ProtectionSet` | `(eResponse := E_Response.Off, tDelay := T#2s, eReset := E_ResetMode.Retry, tRecover := T#1m, nMaxRetries := 3)` | a protection's settings ([protections](../conventions.md#protections)) |
 
 **Status `sts`** (`ST_ValveSts`)
 
@@ -89,6 +96,7 @@ It extends [FB_Valve](FB_Valve.md): everything of it (pins, record, protections)
 | `bLinked` | `BOOL` |  | an owner is driving it |
 | `bInterlocked` | `BOOL` |  | The interlock is holding it off |
 | `bRefused` | `BOOL` |  | a setting write was refused and put back |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `bJogging` | `BOOL` |  | jogging (FB_MotorJog, Hand only) |
 | `bMustCycle` | `BOOL` |  | a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) |
 | `bOpen` | `BOOL` |  | Open (status) |
@@ -101,6 +109,9 @@ It extends [FB_Valve](FB_Valve.md): everything of it (pins, record, protections)
 | `bActLocal` | `BOOL` |  | the actuator is in Local (bActRemote FALSE) |
 | `stSlowStroke` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `stActLocal` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
+| `stNoMovement` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
+| `tLastOpenStroke` | `TIME` |  | the last open stroke confirmed by its end switch |
+| `tLastCloseStroke` | `TIME` |  | the last close stroke confirmed by its end switch |
 
 **Totals `tot`** (`ST_ValveTot`)
 
@@ -117,7 +128,7 @@ It extends [FB_Valve](FB_Valve.md): everything of it (pins, record, protections)
 
 A latching valve: a DC latching solenoid (3-wire, or 2-wire through an H-bridge) moved by a pulse on its open or close coil.
 
-Everything of [`FB_Valve`](FB_Valve.md) (modes, the safe position, the owner, end switches or travel time, protections, strokes, actuator in Local, slow stroke, exercise) plus the pulses: `bOpenOut` / `bCloseOut` pulse for `set.tPulse` when the position commanded changes. The last commanded position is kept over a power cut (written only on a move), so nothing is sent at power-up when the wanted position is the kept one; a valve whose kept position is unknown gets its pulse. `set.eType` is not used. With the actuator in Local no pulse is sent; a change of position is sent once it is back in Remote.
+Everything of [`FB_Valve`](FB_Valve.md) (modes, the safe position, the owner, end switches or travel time, protections, strokes, actuator in Local, slow stroke, exercise) plus the pulses: `bOpenOut` / `bCloseOut` pulse for `set.tPulse` (`set.tOpenPulse` / `tClosePulse` when above 0) when the position commanded changes. The last commanded position is kept over a power cut (written only on a move), so nothing is sent at power-up when the wanted position is the kept one; a valve whose kept position is unknown gets its pulse. `set.eType` is not used. With the actuator in Local no pulse is sent; a change of position is sent once it is back in Remote.
 
 ## Example
 
@@ -139,6 +150,8 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `eActMode : E_Mode`
 - property `bIsRunning : BOOL`
 - property `bIsReady : BOOL`
+- property `tActIdleTime : TIME`
+- property `tActHandLeft : TIME`
 - property `bIsAvailable : BOOL`
 - property `bIsAuto : BOOL`
 - property `bIsFaulted : BOOL`

@@ -58,6 +58,7 @@ Offers `I_Measurement`: wire this instance to another block's `ip…` pin of tha
 | `nDeviating` | `INT` |  | the sensor dropped (1..3), 0 none |
 | `bGood` | `BOOL` |  | The value can be trusted |
 | `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stDeviation` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `stNoAgree` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 

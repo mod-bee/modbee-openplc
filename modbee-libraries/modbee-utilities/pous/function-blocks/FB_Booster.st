@@ -5,8 +5,9 @@ set.tDelay after the duty pumps run; Pressure starts it while ipPressure is at o
 is at or above set.fStopAt (with a pressure that is not good: as Delay). At a cycle end the booster stops at
 once; give the duty pumps a stop delay (FB_Pump set.tStopDelay = the gap) so they stop that much later.
 set.bRequired: wanted and not running for set.stLost's delay -> BoosterLost (a trip stops the station).
+bPermit FALSE (default TRUE) keeps the booster off whatever the rule says (it stops at once).
 Pins: ipBooster (the booster pump, required), ipPressure (optional), ipOwner (the station's level control,
-required), refData -> bWanted, plus FB_Object's outputs. It adds itself to the station on its first call; a check
+required), bPermit, refData -> bWanted, plus FB_Object's outputs. It adds itself to the station on its first call; a check
 that is acting when its rung stops being called raises PartLost. *)
 
 FUNCTION_BLOCK FB_Booster EXTENDS FB_Object IMPLEMENTS I_Part
@@ -14,6 +15,7 @@ FUNCTION_BLOCK FB_Booster EXTENDS FB_Object IMPLEMENTS I_Part
     ipBooster : I_Equipment; (* the booster pump (required) *)
     ipPressure : I_Measurement; (* Pressure start (optional) *)
     ipOwner : I_PartOwner; (* the station's level control (required) *)
+    bPermit : BOOL := TRUE; (* FALSE: the booster does not run now (it stops at once) *)
     refData : REFERENCE TO ST_BoosterData;
   END_VAR
   VAR_OUTPUT
@@ -37,14 +39,33 @@ FUNCTION_BLOCK FB_Booster EXTENDS FB_Object IMPLEMENTS I_Part
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_BoosterSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.eStartBy = E_BoostStart.Delay OR stS.eStartBy = E_BoostStart.Pressure) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (ABS(stS.fStartAt) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (ABS(stS.fStopAt) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (stS.eStartBy <> E_BoostStart.Pressure OR stS.fStartAt < stS.fStopAt) THEN
+    SetWhy := E_UtError.LimitsBad;
+  ELSIF NOT (stS.stLost.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stLost.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_BoosterSet;
   END_VAR
-  SetOk := stS.tDelay >= T#0s AND (stS.eStartBy = E_BoostStart.Delay OR stS.eStartBy = E_BoostStart.Pressure)
-           AND ABS(stS.fStartAt) <= REAL#3.4E38 AND ABS(stS.fStopAt) <= REAL#3.4E38
-           AND (stS.eStartBy <> E_BoostStart.Pressure OR stS.fStartAt < stS.fStopAt)
-           AND stS.stLost.tDelay >= T#0s AND stS.stLost.tRecover >= T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 METHOD PUBLIC Evaluate : E_PartAction
@@ -100,6 +121,7 @@ METHOD PUBLIC Evaluate : E_PartAction
   ELSE
     bWanted := tN - tRunAt >= refData.set.tDelay;   (* Delay, or a pressure that cannot be trusted *)
   END_IF;
+  bWanted := bWanted AND bPermit;
   eReqErr := ipBooster.Request(bRun := bWanted, bHold := FALSE);
   bTrip := F_Protect(tNow := tN, bCause := refData.set.bRequired AND bWanted AND NOT ipBooster.bIsRunning,
                      bResetReq := bReset, tRetryWindow := T#1h, stSet := refData.set.stLost,
@@ -151,11 +173,13 @@ IF bFirstScan THEN
 ELSIF SetOk(stS := refData.set) THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.bRefused := TRUE;
 END_IF;
 IF SystemReset() THEN
   refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 IF NOT bAdded THEN
   ipOwner.AddPart(ipPart := THIS^);

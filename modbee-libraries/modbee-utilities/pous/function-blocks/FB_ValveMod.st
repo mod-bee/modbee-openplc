@@ -35,16 +35,42 @@ FUNCTION_BLOCK FB_ValveMod EXTENDS FB_ValvePos
   END_VAR
 
 
+METHOD PRIVATE ModWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_ValveModSet;
+  END_VAR
+  ModWhy := E_UtError.None;
+  IF NOT (stS.fOutMin >= 0.0) THEN
+    ModWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fOutMax <= 100.0) THEN
+    ModWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fOutMin <= stS.fOutMax) THEN
+    ModWhy := E_UtError.LimitsBad;
+  ELSIF NOT (stS.fRampRate >= 0.0) THEN
+    ModWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fRampRate <= REAL#3.4E38) THEN
+    ModWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.eRateUnit = E_RateUnit.PerSec OR stS.eRateUnit = E_RateUnit.PerMin
+             OR stS.eRateUnit = E_RateUnit.PerHour OR stS.eRateUnit = E_RateUnit.PerDay) THEN
+    ModWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.fTightShutoff >= 0.0) THEN
+    ModWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fTightShutoff <= 100.0) THEN
+    ModWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fFullOpenAbove >= 0.0) THEN
+    ModWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fFullOpenAbove <= 100.0) THEN
+    ModWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.tStroke >= T#0s) THEN
+    ModWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE ModOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_ValveModSet;
   END_VAR
-  ModOk := stS.fOutMin >= 0.0 AND stS.fOutMax <= 100.0 AND stS.fOutMin <= stS.fOutMax
-           AND stS.fRampRate >= 0.0 AND stS.fRampRate <= REAL#3.4E38
-           AND (stS.eRateUnit = E_RateUnit.PerSec OR stS.eRateUnit = E_RateUnit.PerMin
-                OR stS.eRateUnit = E_RateUnit.PerHour OR stS.eRateUnit = E_RateUnit.PerDay)
-           AND stS.fTightShutoff >= 0.0 AND stS.fTightShutoff <= 100.0
-           AND stS.fFullOpenAbove >= 0.0 AND stS.fFullOpenAbove <= 100.0 AND stS.tStroke >= T#0s;
+  ModOk := ModWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 SUPER^();                         // the valve: modes, the aim, the feedback, protections
@@ -67,8 +93,13 @@ IF bModFirst THEN
 ELSIF ModOk(stS := refMod.set) THEN
   stKeptMod := refMod.set;
 ELSIF ModOk(stS := stKeptMod) THEN
+  refMod.sts.eRefusedWhy := ModWhy(stS := refMod.set);
   refMod.set := stKeptMod;
   refMod.sts.bRefused := TRUE;
+END_IF;
+IF bResetThisScan THEN                  // the equipment's reset clears a refused write
+  refMod.sts.bRefused := FALSE;
+  refMod.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the demand: the aim shaped (tight shut-off and full open win over the clamp), then ramped *)

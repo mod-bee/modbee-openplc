@@ -5,5 +5,6 @@ TYPE
     stStartTooLong : ST_ProtectionSts;
     bAtSpeed : BOOL; (* status: top of ramp *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

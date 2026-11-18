@@ -28,6 +28,7 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 | `stStartTooLong` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `bAtSpeed` | `BOOL` |  | status: top of ramp |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_StarterSoftSet`)
 

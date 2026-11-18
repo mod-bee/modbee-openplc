@@ -5,5 +5,6 @@ TYPE
     bWanted : BOOL; (* status *)
     stLost : ST_ProtectionSts;
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

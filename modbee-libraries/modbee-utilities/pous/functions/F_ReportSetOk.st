@@ -5,10 +5,6 @@ FUNCTION F_ReportSetOk : BOOL
     stS : ST_ReportSet;
   END_VAR
 
-F_ReportSetOk := stS.fDeadband >= 0.0 AND stS.fDeadband <= REAL#3.4E38 AND stS.fSpan >= 0.0 AND stS.fSpan <= REAL#3.4E38
-                 AND stS.fResolution >= 0.0 AND stS.fResolution <= REAL#3.4E38 AND stS.tMinInterval >= T#0s
-                 AND stS.tHeartbeat >= T#0s
-                 AND (stS.eDeadbandMode = E_DeadbandMode.Abs OR stS.eDeadbandMode = E_DeadbandMode.PctValue
-                      OR (stS.eDeadbandMode = E_DeadbandMode.PctSpan AND stS.fSpan > 0.0));
+F_ReportSetOk := F_ReportSetWhy(stS := stS) = E_UtError.None;
 
 END_FUNCTION

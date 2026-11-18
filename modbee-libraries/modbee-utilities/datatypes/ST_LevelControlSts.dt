@@ -9,6 +9,7 @@ TYPE
     bLowLow : BOOL;
     bRequest : BOOL; (* what it asks of the pump *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     stLevelBad : ST_ProtectionSts;
     fStartNow : REAL; (* the start level in use (with its variation) *)
     bRunOn : BOOL; (* running on a failed level *)

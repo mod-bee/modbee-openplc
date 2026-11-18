@@ -4,5 +4,6 @@ TYPE
     fRate : REAL; (* per hour *)
     fRunMoved : LREAL; (* this run so far *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

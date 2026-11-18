@@ -5,5 +5,8 @@ TYPE
     set : ST_PulseMeterSet;
     sts : ST_PulseMeterSts;
     tot : ST_PulseMeterTot;
+    bCmdConfirm : BOOL; (* confirms bCmdResetTotal (set.bConfirmReset); cleared by the block *)
+    bCmdPreset : BOOL; (* the total to fPresetTotal (cleared by the block) *)
+    fPresetTotal : LREAL;
   END_STRUCT;
 END_TYPE

@@ -29,12 +29,31 @@ FUNCTION_BLOCK FB_DoseTimed EXTENDS FB_Dose
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_DoseTimedSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF BaseSetWhy(refSet := stS) <> E_UtError.None THEN
+    SetWhy := BaseSetWhy(refSet := stS);
+  ELSIF NOT (stS.tOnTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tOffTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.fRate >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fRate <= 100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.tCarrierProven >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_DoseTimedSet;
   END_VAR
-  SetOk := BaseSetOk(refSet := stS) AND stS.tOnTime >= T#0s AND stS.tOffTime >= T#0s
-           AND stS.fRate >= 0.0 AND stS.fRate <= 100.0 AND stS.tCarrierProven >= T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -59,6 +78,7 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;

@@ -17,5 +17,7 @@ TYPE
     tDriveRamp : TIME; (* the drive's own 0 -> 100 % time: bAtSpeed / speedDev wait for it *)
     fRatedHz : REAL; (* the motor's frequency at 100 % (display; 0 = none) *)
     fRatedRpm : REAL; (* its speed at 100 % (display; 0 = none) *)
+    fJogSpeed : REAL; (* the speed while jogging (FB_MotorJog), % (0 = fHandSpeed) *)
+    eRateUnit : E_RateUnit; (* fAccelRate / fDecelRate: % per second (default), minute, hour or day *)
   END_STRUCT;
 END_TYPE

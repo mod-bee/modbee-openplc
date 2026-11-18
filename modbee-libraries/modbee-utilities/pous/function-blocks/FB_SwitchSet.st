@@ -141,11 +141,23 @@ METHOD PRIVATE ProtOk : BOOL
   ProtOk := stP.tDelay >= T#0s AND stP.tRecover >= T#0s AND stP.nMaxRetries >= 0;
 END_METHOD
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_SwitchSetSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (ProtOk(stP := stS.stDisagree)) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (ProtOk(stP := stS.stInputBad)) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_SwitchSetSet;
   END_VAR
-  SetOk := ProtOk(stP := stS.stDisagree) AND ProtOk(stP := stS.stInputBad);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -176,6 +188,7 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
@@ -188,6 +201,7 @@ IF refData.bCmdReset THEN
   bReset := TRUE;
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 bFittedNow := refData.set.bFitted AND (stConfig.bUseLL OR stConfig.bUseL OR stConfig.bUseH OR stConfig.bUseHH
                                        OR stConfig.bUseContact);

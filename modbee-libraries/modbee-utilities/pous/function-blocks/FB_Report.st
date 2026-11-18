@@ -44,11 +44,22 @@ FUNCTION_BLOCK FB_Report EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_ReportSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF F_ReportSetWhy(stS := stS) <> E_UtError.None THEN
+
+    SetWhy := F_ReportSetWhy(stS := stS);
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_ReportSet;
   END_VAR
-  SetOk := F_ReportSetOk(stS := stS);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -71,6 +82,7 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
@@ -80,6 +92,7 @@ bCmdSeen := refData.bCmdForce;
 refData.bCmdForce := FALSE;
 IF bForceReq OR SystemReset() THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 bReport := F_ReportRun(tNow := tNow, fIn := fIn, bInGood := bInGood, bForceReq := bForceReq, bEnable := bEnable,

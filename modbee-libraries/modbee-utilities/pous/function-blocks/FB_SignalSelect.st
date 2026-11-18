@@ -114,20 +114,46 @@ METHOD PRIVATE ProtOk : BOOL
 END_METHOD
 
 (* the settings are usable *)
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_SelectSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.fWarnSpread >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fWarnSpread <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fFaultSpread >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fFaultSpread <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.tFilter >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tRetryWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (ABS(stS.fSubstitute) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (ProtOk(stP := stS.stDeviation)) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (ProtOk(stP := stS.stNoAgree)) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.eTwoDisagree = E_SelectMode.Highest OR stS.eTwoDisagree = E_SelectMode.Lowest) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.eSelect = E_SelectMode.Average OR stS.eSelect = E_SelectMode.Lowest
+             OR stS.eSelect = E_SelectMode.Highest OR stS.eSelect = E_SelectMode.Median
+             OR stS.eSelect = E_SelectMode.Primary) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.eNoGood = E_NoGood.Hold OR stS.eNoGood = E_NoGood.Lowest OR stS.eNoGood = E_NoGood.Highest
+             OR stS.eNoGood = E_NoGood.Substitute OR stS.eNoGood = E_NoGood.Midpoint) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_SelectSet;
   END_VAR
-  SetOk := stS.fWarnSpread >= 0.0 AND stS.fWarnSpread <= REAL#3.4E38
-           AND stS.fFaultSpread >= 0.0 AND stS.fFaultSpread <= REAL#3.4E38
-           AND stS.tFilter >= T#0s AND stS.tRetryWindow >= T#0s AND ABS(stS.fSubstitute) <= REAL#3.4E38
-           AND ProtOk(stP := stS.stDeviation) AND ProtOk(stP := stS.stNoAgree)
-           AND (stS.eTwoDisagree = E_SelectMode.Highest OR stS.eTwoDisagree = E_SelectMode.Lowest)
-           AND (stS.eSelect = E_SelectMode.Average OR stS.eSelect = E_SelectMode.Lowest
-                OR stS.eSelect = E_SelectMode.Highest OR stS.eSelect = E_SelectMode.Median
-                OR stS.eSelect = E_SelectMode.Primary)
-           AND (stS.eNoGood = E_NoGood.Hold OR stS.eNoGood = E_NoGood.Lowest OR stS.eNoGood = E_NoGood.Highest
-                OR stS.eNoGood = E_NoGood.Substitute OR stS.eNoGood = E_NoGood.Midpoint);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -152,6 +178,7 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOkSet := TRUE;
@@ -161,6 +188,7 @@ IF refData.bCmdReset THEN
   bResetReq := TRUE;
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the sensors; IEC AND does not short-circuit, so NULL is tested on its own *)

@@ -53,6 +53,7 @@ The input side of the IO map: terminals to functions, from a table, with fail-sa
 | `nBad` | `INT` |  | fitted functions whose channel is not good |
 | `nMissing` | `INT` |  | fitted modules not answering |
 | `bRefused` | `BOOL` |  | a bad settings write (record or rows) was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Details `det`** (`ST_IoMapDet`)
 
@@ -203,7 +204,7 @@ Forcing (commissioning): a slot names a channel (`eKind` DigitalIn or AnalogIn, 
 
 Errors: `bError` for a configuration fault (IoArraySize, IoAddress, IoNotFitted) or rows that were never good (BadSetting); `bWarning` for IoForced, IoMissing, IoBad, SettingRefused.
 
-Kept settings (a retained last-good copy, restored at power-up, a bad write put back, `sts.bRefused`): the rows are packed so each row is one retained value: a digital row: one DWORD, bits 0..2 `eSrc` (None 0, Board 1, I2c 2, Field 3, Remote 4), 3..9 `nModule` (0..127), 10..17 `nCh`, 18 `bNc`, 19 `bFailSafe`, 20..31 `tDebounce` in 10 ms steps (0..40.95 s); an analog row: `ST_IoAiKept` (the address DWORD as above, `fFailSafe` REAL); plus `set.tForceTime` and the layout number. The first 32 digital and 8 analog rows are kept: 32 + 2 x 8 + 2 = 50 retained values. A row the packing cannot hold exactly (`nModule` over 127, a debounce over 40.95 s or not in 10 ms steps, a fail-safe that is not a number, an unknown source) is a bad write and put back.
+Kept settings (a retained last-good copy, restored at power-up, a bad write put back, `sts.bRefused` / `eRefusedWhy`): the rows are packed so each row is one retained value: a digital row: one DWORD, bits 0..2 `eSrc` (None 0, Board 1, I2c 2, Field 3, Remote 4), 3..9 `nModule` (0..127), 10..17 `nCh`, 18 `bNc`, 19 `bFailSafe`, 20..31 `tDebounce` in 10 ms steps (0..40.95 s); an analog row: `ST_IoAiKept` (the address DWORD as above, `fFailSafe` REAL); plus `set.tForceTime` and the layout number. The first 32 digital and 8 analog rows are kept: 32 + 2 x 8 + 2 = 50 retained values. A row the packing cannot hold exactly (`nModule` over 127, a debounce over 40.95 s or not in 10 ms steps, a fail-safe that is not a number, an unknown source) is a bad write and put back.
 
 ## Example
 

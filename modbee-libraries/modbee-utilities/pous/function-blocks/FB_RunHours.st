@@ -35,6 +35,16 @@ FUNCTION_BLOCK FB_RunHours EXTENDS FB_Object
   END_VAR
 
 
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.fServiceInterval >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fServiceInterval <= LREAL#1.0E7) THEN
+    SetWhy := E_UtError.AboveMax;
+  END_IF;
+END_METHOD
+
 IF NOT __ISVALIDREF(refData) THEN
   bError := TRUE;
   eErrorId := E_UtError.NoRecord;
@@ -52,9 +62,10 @@ IF bFirstScan THEN
     nKeptLayout := cLayout;
   END_IF;
   tKeptAt := tNow;
-ELSIF refData.set.fServiceInterval >= 0.0 AND refData.set.fServiceInterval <= LREAL#1.0E7 THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
@@ -79,6 +90,7 @@ IF bResetService OR refData.bCmdResetService THEN
   refData.bCmdResetService := FALSE;
   refData.tot.nServiceMs := 0;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
   stKeptTot := refData.tot;
 END_IF;
 IF refData.bCmdPreset THEN

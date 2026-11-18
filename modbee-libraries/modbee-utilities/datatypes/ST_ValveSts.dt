@@ -10,5 +10,8 @@ TYPE
     bActLocal : BOOL; (* the actuator is in Local (bActRemote FALSE) *)
     stSlowStroke : ST_ProtectionSts;
     stActLocal : ST_ProtectionSts;
+    stNoMovement : ST_ProtectionSts;
+    tLastOpenStroke : TIME; (* the last open stroke confirmed by its end switch *)
+    tLastCloseStroke : TIME; (* the last close stroke confirmed by its end switch *)
   END_STRUCT;
 END_TYPE

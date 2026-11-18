@@ -11,7 +11,10 @@ that is not a volume, is a bad setting (put back).
 Batch: tot.fBatch counts like tot.fTotal until bResetBatch (rising edge) / bCmdResetBatch; bBatchDone is TRUE once
 it has reached set.fBatchTarget (0 = off), until the batch is reset.
 Offers I_Meter (an I_Measurement too: its rate): the total and the rate (per hour, over set.tRateWindow). The total and the batch are kept hourly,
-when bRunning falls (the pump stops; optional) and on a reset. *)
+when bRunning falls (the pump stops; optional) and on a reset. sts.nPulses counts pulses since power-up;
+pulses at the input's limit (a pulse every second scan) warn (PulsesTooFast, sts.bTooFast, held 5 s).
+Total commands: bCmdResetTotal (with set.bConfirmReset, only together with bCmdConfirm in the same write) and
+bCmdPreset (the total to fPresetTotal, 0 .. 1E12). *)
 
 FUNCTION_BLOCK FB_PulseMeter EXTENDS FB_Object IMPLEMENTS I_Meter
   VAR_INPUT
@@ -31,11 +34,14 @@ FUNCTION_BLOCK FB_PulseMeter EXTENDS FB_Object IMPLEMENTS I_Meter
     stKeptTot : ST_PulseMeterTot;
   END_VAR
   VAR CONSTANT
-    cLayout : UINT := 2;
+    cLayout : UINT := 3;
   END_VAR
   VAR
     stWInputBad : ST_ProtectionWork;
     bPulsePrev : BOOL;
+    nScansSince : INT; (* scans since the last pulse *)
+    tFastAt : TIME;
+    bFastSeen : BOOL;
     nPrev : UDINT;
     bCountValid : BOOL;
     tKeptAt : TIME;
@@ -52,6 +58,26 @@ FUNCTION_BLOCK FB_PulseMeter EXTENDS FB_Object IMPLEMENTS I_Meter
     fBefore : LREAL;
   END_VAR
 
+
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.fPerPulse >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.tRateWindow > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (UnitsOk()) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (refData.set.fBatchTarget >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fBatchTarget <= 1.0E15) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.stInputBad.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stInputBad.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
 
 METHOD PRIVATE UnitsOk : BOOL
   VAR
@@ -125,13 +151,16 @@ IF bFirstScan THEN
   tWindowAt := tNow;
   fWindowTotal := refData.tot.fTotal;
   bPulsePrev := bPulse;
-ELSIF refData.set.fPerPulse >= 0.0 AND refData.set.tRateWindow > T#0s AND UnitsOk() AND refData.set.fBatchTarget >= 0.0
-      AND refData.set.fBatchTarget <= 1.0E15
-      AND refData.set.stInputBad.tDelay >= T#0s AND refData.set.stInputBad.tRecover >= T#0s THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
+END_IF;
+IF SystemReset() THEN                // the plant reset clears a refused write
+  refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* count *)
@@ -156,12 +185,22 @@ IF bInGood THEN
       END_IF;
       nPrev := nCount;
       refData.tot.fTotal := refData.tot.fTotal + UDINT_TO_LREAL(nD) * REAL_TO_LREAL(refData.set.fPerPulse) * fMult;
+      refData.sts.nPulses := refData.sts.nPulses + nD;
     END_IF;
   ELSIF bPulse AND NOT bPulsePrev THEN
     refData.tot.fTotal := refData.tot.fTotal + REAL_TO_LREAL(refData.set.fPerPulse) * fMult;
+    refData.sts.nPulses := refData.sts.nPulses + 1;
+    IF nScansSince <= 2 THEN      (* a pulse every second scan: the most the input can count *)
+      tFastAt := tNow;
+      bFastSeen := TRUE;
+    END_IF;
+    nScansSince := 0;
   END_IF;
 END_IF;
 bPulsePrev := bPulse;
+IF nScansSince < 32767 THEN nScansSince := nScansSince + 1; END_IF;
+IF bFastSeen AND tNow - tFastAt >= T#5s THEN bFastSeen := FALSE; END_IF;
+refData.sts.bTooFast := bFastSeen;
 refData.tot.fBatch := refData.tot.fBatch + (refData.tot.fTotal - fBefore);
 
 (* the input bad *)
@@ -178,11 +217,21 @@ IF tWin >= refData.set.tRateWindow THEN
 END_IF;
 
 (* reset, keep *)
-IF refData.bCmdResetTotal THEN
+IF refData.bCmdResetTotal AND (refData.bCmdConfirm OR NOT refData.set.bConfirmReset) THEN
   refData.tot.fTotal := 0.0;
   fWindowTotal := 0.0;
   stKeptTot := refData.tot;
   refData.bCmdResetTotal := FALSE;
+END_IF;
+refData.bCmdResetTotal := FALSE;
+refData.bCmdConfirm := FALSE;
+IF refData.bCmdPreset THEN
+  IF refData.fPresetTotal >= 0.0 AND refData.fPresetTotal <= 1.0E12 THEN
+    refData.tot.fTotal := refData.fPresetTotal;
+    fWindowTotal := refData.fPresetTotal;
+    stKeptTot := refData.tot;
+  END_IF;
+  refData.bCmdPreset := FALSE;
 END_IF;
 IF bResetBatch OR refData.bCmdResetBatch THEN
   refData.bCmdResetBatch := FALSE;
@@ -197,9 +246,11 @@ END_IF;
 bRunningWas := bRunning;
 
 bError := stWInputBad.bTrip;
-bWarning := stWInputBad.bWarn OR refData.sts.bRefused;
+bWarning := stWInputBad.bWarn OR refData.sts.bRefused OR bFastSeen;
 IF stWInputBad.bTrip OR stWInputBad.bWarn THEN
   eErrorId := E_UtError.SensorBad;
+ELSIF bFastSeen THEN
+  eErrorId := E_UtError.PulsesTooFast;
 ELSIF refData.sts.bRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE

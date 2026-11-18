@@ -74,15 +74,36 @@ FUNCTION_BLOCK FB_Rate EXTENDS FB_Object
 
 
 (* the settings are usable *)
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_RateSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tFilter >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tAlarmDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.fRiseLimit >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fRiseLimit <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fFallLimit >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fFallLimit <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.eUnit = E_RateUnit.PerSec OR stS.eUnit = E_RateUnit.PerMin OR stS.eUnit = E_RateUnit.PerHour
+             OR stS.eUnit = E_RateUnit.PerDay) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_RateSet;
   END_VAR
-  SetOk := stS.tWindow >= T#0s AND stS.tFilter >= T#0s AND stS.tAlarmDelay >= T#0s
-           AND stS.fRiseLimit >= 0.0 AND stS.fRiseLimit <= REAL#3.4E38
-           AND stS.fFallLimit >= 0.0 AND stS.fFallLimit <= REAL#3.4E38
-           AND (stS.eUnit = E_RateUnit.PerSec OR stS.eUnit = E_RateUnit.PerMin OR stS.eUnit = E_RateUnit.PerHour
-                OR stS.eUnit = E_RateUnit.PerDay);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* the trend slope (per second) through the nine newest whole slices and the slice being filled: a weighted
@@ -153,6 +174,7 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
@@ -163,6 +185,7 @@ IF refData.bCmdReset THEN
   bRestart := TRUE;
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 bBad := NOT bInGood OR NOT (ABS(fIn) <= REAL#3.4E38);

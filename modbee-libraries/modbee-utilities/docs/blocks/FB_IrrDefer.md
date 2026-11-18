@@ -50,6 +50,7 @@ The wet-weather inhibit: says when not to irrigate (rain, wet soil, a lost senso
 | `bSoilIsWet` | `BOOL` |  |  |
 | `tTimeLeft` | `TIME` |  | Time left in the delay or phase running now |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Lists
 

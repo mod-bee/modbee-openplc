@@ -64,14 +64,16 @@ Offers `I_Run`: wire this instance to another block's `ip…` pin of that type.
 | `bPaused` | `BOOL` |  | Paused (status) |
 | `bWaiting` | `BOOL` |  | a new run waits for the permissive |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Details `det`** (`ST_RunDet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `tElapsed` | `TIME` |  | run time counted (while the equipment runs) |
-| `tTimeLeft` | `TIME` |  | Time left in the delay or phase running now |
+| `tTimeLeft` | `TIME` |  | set.bByTime |
 | `tPaused` | `TIME` |  | how long the current pause has lasted (0 while not paused) |
+| `tPhaseTime` | `TIME` |  | since the run started (active) or ended (idle); a restart starts it over |
 
 **Totals `tot`** (`ST_RunTot`)
 
@@ -83,6 +85,8 @@ Offers `I_Run`: wire this instance to another block's `ip…` pin of that type.
 ## How it works
 
 One run of any equipment: a held request, or a latched start, ended by its time target, a stop, an abort, its maximum time, the interlock, a part, or a power cut.
+
+Detail (det): `tElapsed` (time counted), `tTimeLeft` (`set.bByTime`), `tPaused` (the current pause), `tPhaseTime` (since the run started or ended; a restart starts it over).
 
 Restart (`bRestart` / `bCmdRestart`): the active run ends with stop reason Restart (counted, logged) and a new run starts in the same scan: time from zero, its parts start over ([`FB_RunVolume`](FB_RunVolume.md) takes a new start total), latched as before, `bRunCmd` not dropped. A stop in the same scan wins; no run active: nothing happens. `nActRunId` changes at every start, a restart too: observers and parts see a new run by it.
 

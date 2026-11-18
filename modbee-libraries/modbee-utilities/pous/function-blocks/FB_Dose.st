@@ -2,7 +2,7 @@
 bRun / bStart / bStop / bReset and the record's commands (bCmdStart, bCmdStop, bCmdHold, bCmdReset: once per
 write); bInterlock FALSE stops the pump in every variant (Flow / Timed resume by themselves, a Batch is held);
 bPermissive FALSE holds back a dose start; bHold and bCmdHold (until the next start) pause; bStop, bCmdStop, bAbort,
-set.bEnabled FALSE end a dose (a held bRun must drop before it doses again); bStockLow -> set.stStockLow;
+the record's bCmdAbort (stop reason Abort), set.bEnabled FALSE end a dose (a held bRun must drop before it doses again); bStockLow -> set.stStockLow;
 set.stMaxTime and set.fMaxQuantity cap a dose. ipPump (optional): Request(bRun := bPumpRun, bHold := NOT bInterlock,
 fSpeed := fRate); dosing counts only while it runs.
 Modes (set.eMode, kept; the record's nCmdMode 0 Off / 1 Hand / 2 Auto, once, or a Command from FB_LocalControl,
@@ -46,6 +46,7 @@ FUNCTION_BLOCK ABSTRACT FB_Dose EXTENDS FB_Object IMPLEMENTS I_Equipment
     cTotLayout : UINT := 1;
   END_VAR
   VAR
+    bAbortNow : BOOL; (* bAbort or the record's bCmdAbort, this scan *)
     tPrevAt : TIME;
     tStepT : TIME; (* this scan's time step *)
     fStepS : LREAL; (* the same in seconds *)
@@ -166,14 +167,37 @@ PROPERTY PUBLIC fActRunHours : REAL   // a dose counts no hours
 END_PROPERTY
 
 (* the shared settings are good *)
+METHOD PROTECTED FINAL BaseSetWhy : E_UtError
+  VAR_INPUT
+    refSet : REFERENCE TO ST_DoseSet;
+  END_VAR
+  BaseSetWhy := E_UtError.None;
+  IF NOT (refSet.fPumpCapacity >= 0.0) THEN
+    BaseSetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refSet.fPumpCapacity <= REAL#3.4E38) THEN
+    BaseSetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refSet.fMaxQuantity >= 0.0) THEN
+    BaseSetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refSet.fMaxQuantity <= 1.0E15) THEN
+    BaseSetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refSet.tRetryWindow >= T#0s) THEN
+    BaseSetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refSet.eMode = E_Mode.Off OR refSet.eMode = E_Mode.Hand OR refSet.eMode = E_Mode.Auto) THEN
+    BaseSetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (refSet.fHandRate >= 0.0) THEN
+    BaseSetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refSet.fHandRate <= 100.0) THEN
+    BaseSetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refSet.tHandMax >= T#0s) THEN
+    BaseSetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PROTECTED FINAL BaseSetOk : BOOL
   VAR_INPUT
     refSet : REFERENCE TO ST_DoseSet;
   END_VAR
-  BaseSetOk := refSet.fPumpCapacity >= 0.0 AND refSet.fPumpCapacity <= REAL#3.4E38
-               AND refSet.fMaxQuantity >= 0.0 AND refSet.fMaxQuantity <= 1.0E15 AND refSet.tRetryWindow >= T#0s
-               AND (refSet.eMode = E_Mode.Off OR refSet.eMode = E_Mode.Hand OR refSet.eMode = E_Mode.Auto)
-               AND refSet.fHandRate >= 0.0 AND refSet.fHandRate <= 100.0 AND refSet.tHandMax >= T#0s;
+  BaseSetOk := BaseSetWhy(refSet := refSet) = E_UtError.None;
 END_METHOD
 
 (* why the dose ends now (bEndReq, or the run request gone) *)
@@ -185,7 +209,7 @@ METHOD PROTECTED FINAL EndWhy : E_StopReason
     EndWhy := E_StopReason.MaxRun;
   ELSIF bQtyEnd THEN
     EndWhy := E_StopReason.MaxQuantity;
-  ELSIF bAbort THEN
+  ELSIF bAbortNow THEN
     EndWhy := E_StopReason.Abort;
   ELSIF NOT refSet.bEnabled THEN
     EndWhy := E_StopReason.Off;
@@ -241,6 +265,8 @@ METHOD PROTECTED FINAL Begin : BOOL
   bStopPrev := bStop;
   bStopSeen := refCmd.bCmdStop;
   refCmd.bCmdStop := FALSE;
+  bAbortNow := bAbort OR refCmd.bCmdAbort;
+  refCmd.bCmdAbort := FALSE;
   IF refCmd.bCmdHold AND NOT bHoldSeen THEN
     bHoldLatch := TRUE;
   END_IF;
@@ -265,6 +291,7 @@ METHOD PROTECTED FINAL Begin : BOOL
       2: refSet.eMode := E_Mode.Auto;
     ELSE
       refSts.bRefused := TRUE;    (* a dose has no other mode *)
+      refSts.eRefusedWhy := E_UtError.ChoiceBad;
     END_CASE;
     refCmd.nCmdMode := -1;
   END_IF;
@@ -287,12 +314,13 @@ METHOD PROTECTED FINAL Begin : BOOL
   IF bResetReq THEN
     refSts.bQuantityHit := FALSE;
     refSts.bRefused := FALSE;
+    refSts.eRefusedWhy := E_UtError.None;
   END_IF;
   bRunEdge := bRunIn AND NOT bRunPrev AND refSet.eMode = E_Mode.Auto;
   bRunPrev := bRunIn;
 
   (* the end of a dose, and the Flow / Timed run request (a held bRun must drop after a stop) *)
-  bEndReq := bStopReq OR bAbort OR bMaxTrip OR bQtyEnd OR NOT refSet.bEnabled;
+  bEndReq := bStopReq OR bAbortNow OR bMaxTrip OR bQtyEnd OR NOT refSet.bEnabled;
   IF bStartReq AND NOT bEndReq THEN
     bStartLatch := TRUE;
   END_IF;
@@ -314,7 +342,7 @@ METHOD PROTECTED FINAL Begin : BOOL
     IF bHandRun THEN
       IF bEndReq THEN
         bHandRun := FALSE;
-        IF bAbort THEN
+        IF bAbortNow THEN
           eHandEnd := E_StopReason.Abort;
         ELSIF bMaxTrip THEN
           eHandEnd := E_StopReason.MaxRun;

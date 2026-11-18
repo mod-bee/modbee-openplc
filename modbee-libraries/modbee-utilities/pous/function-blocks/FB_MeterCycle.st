@@ -2,16 +2,19 @@
 observer that reads its meter and changes nothing.
 
 Pins: bRollover (rising edge: closes the cycle, e.g. the pump's start command), ipMeter (required), bRunning
-(optional: the pump runs; its fall keeps the totals), refData -> FB_Object's outputs.
+(optional: the pump runs; its fall keeps the totals), dtClock (optional), refData -> FB_Object's outputs.
 tot.fThis counts every rise of the meter's total since the last rollover (a fall, e.g. the meter's total reset,
 is not counted). A rollover (bRollover or the record's bCmdRollover) moves tot.fThis to tot.fLast and starts the
-next cycle from zero. tot is kept over a power cut: at each rollover, when bRunning falls and hourly. *)
+next cycle from zero, counts it (tot.nCycles) and stamps it (tot.dtLastEnd from dtClock: blank when unwired, the
+boards have no real-time clock). A rollover from a timer (every 15 min ...) gives interval quantities. tot is kept
+over a power cut: at each rollover, when bRunning falls and hourly. *)
 
 FUNCTION_BLOCK FB_MeterCycle EXTENDS FB_Object
   VAR_INPUT
     bRollover : BOOL := FALSE; (* rising edge: close the cycle *)
     ipMeter : I_Meter; (* required *)
     bRunning : BOOL := FALSE; (* optional: the pump runs; its fall keeps the totals *)
+    dtClock : DT; (* optional: the local time, for tot.dtLastEnd *)
     refData : REFERENCE TO ST_MeterCycleData;
   END_VAR
   VAR RETAIN
@@ -19,7 +22,7 @@ FUNCTION_BLOCK FB_MeterCycle EXTENDS FB_Object
     nKeptLayout : UINT;
   END_VAR
   VAR CONSTANT
-    cLayout : UINT := 1;
+    cLayout : UINT := 2;
   END_VAR
   VAR
     fLastTotal : LREAL; (* the meter's total last scan *)
@@ -64,6 +67,8 @@ fLastTotal := fTotal;
 IF (bRollover AND NOT bRolloverPrev) OR refData.bCmdRollover THEN
   refData.tot.fLast := refData.tot.fThis;
   refData.tot.fThis := 0.0;
+  refData.tot.nCycles := refData.tot.nCycles + 1;
+  refData.tot.dtLastEnd := dtClock;
   stKeptTot := refData.tot;
   tKeptAt := tNow;
 END_IF;

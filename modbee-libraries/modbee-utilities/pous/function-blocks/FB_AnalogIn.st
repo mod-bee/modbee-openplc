@@ -110,13 +110,31 @@ PROPERTY PUBLIC fActValue : REAL
  END_METHOD
 
  (* the settings are usable *)
+ METHOD PRIVATE SetWhy : E_UtError
+   VAR_INPUT
+     stS : REFERENCE TO ST_AnalogInSet;
+   END_VAR
+   SetWhy := E_UtError.None;
+   IF NOT (ABS(stS.fEngMax - stS.fEngMin) > 0.0) THEN   // no span
+     SetWhy := E_UtError.LimitsBad;
+   ELSIF NOT (ABS(stS.fEngMax - stS.fEngMin) <= 3.4E38) THEN
+     SetWhy := E_UtError.ValueBad;
+   ELSIF NOT (ABS(stS.fTrim) <= 3.4E38) THEN
+     SetWhy := E_UtError.ValueBad;
+   ELSIF NOT (ABS(stS.fAltFactor) <= 3.4E38) THEN
+     SetWhy := E_UtError.ValueBad;
+   ELSIF NOT (ABS(stS.fAltOffset) <= 3.4E38) THEN
+     SetWhy := E_UtError.ValueBad;
+   ELSIF NOT (ProtOk(stP := stS.stFault)) THEN
+     SetWhy := E_UtError.ProtectionBad;
+   END_IF;
+ END_METHOD
+
  METHOD PRIVATE SetOk : BOOL
    VAR_INPUT
      stS : REFERENCE TO ST_AnalogInSet;
    END_VAR
-   SetOk := ABS(stS.fEngMax - stS.fEngMin) > 0.0 AND ABS(stS.fEngMax - stS.fEngMin) <= 3.4E38
-            AND ABS(stS.fTrim) <= 3.4E38 AND ABS(stS.fAltFactor) <= 3.4E38 AND ABS(stS.fAltOffset) <= 3.4E38
-            AND ProtOk(stP := stS.stFault);
+   SetOk := SetWhy(stS := stS) = E_UtError.None;
  END_METHOD
 
  (* the engineering constants are usable *)
@@ -159,6 +177,7 @@ PROPERTY PUBLIC fActValue : REAL
  IF bOk THEN
    stKept := refData.set;
  ELSIF SetOk(stS := stKept) THEN
+   refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
    refData.set := stKept;
    refData.sts.bRefused := TRUE;
    bOk := TRUE;
@@ -171,6 +190,7 @@ PROPERTY PUBLIC fActValue : REAL
    bReset := TRUE;
    refData.bCmdReset := FALSE;
    refData.sts.bRefused := FALSE;
+   refData.sts.eRefusedWhy := E_UtError.None;
  END_IF;
  bFittedNow := refData.set.bFitted;
 

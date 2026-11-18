@@ -59,6 +59,7 @@ Offers `I_Measurement`: wire this instance to another block's `ip…` pin of tha
 | `bContact` | `BOOL` |  |  |
 | `bGood` | `BOOL` |  | The value can be trusted |
 | `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stDisagree` | `ST_ProtectionSts` |  | default a warning; a protection's status ([protections](../conventions.md#protections)) |
 | `stInputBad` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 

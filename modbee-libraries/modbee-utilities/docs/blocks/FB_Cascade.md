@@ -34,10 +34,12 @@ Decides how many pumps of a group run on one header: staging by speed and pressu
 | `nExtra` | `INT` |  | status |
 | `tTimeLeft` | `TIME` |  | to the next change |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `eStageUsed` | `E_StageBy` |  | the rule in use (Pressure on a fallback) |
 | `bJockeyTurn` | `BOOL` |  | the jockey alone |
 | `bPvStaging` | `BOOL` |  | the flow rule left the pressure short: the Pressure rule until the next start |
 | `bFlowBad` | `BOOL` |  | Flow / PerPump without a good flow |
+| `fPerPump` | `REAL` |  | the flow per running duty pump (0 with no good flow) |
 
 **Settings `set`** (`ST_CascadeSet`)
 
@@ -83,7 +85,7 @@ Staging, one pump at a time, only while the loop is in Control (Manual speed: no
 
 Flow / PerPump also add on the Pressure rule (the pressure is never left short: a warning PvStaging and the Pressure rule until the set next starts from none) and fall back to Pressure with a bad or missing meter (warning SensorBad) or unusable settings (no capacity known, `fBepMax` not above `fBepMin`: warning BadSetting).
 
-Jockey (an [`FB_Group`](FB_Group.md) member with `I_Pump` role Jockey, `bJockeyReady`): a start from none begins with the jockey alone (`nExtra` -1; not while the loop fills the pipe). It hands over to a duty pump when it cannot keep up: the flow above `fAddPct` % of `fJockeyCapacity`, or the Pressure rule (short of pressure below its capacity: the jockey is skipped until the next start). With one duty pump left and the demand falling (the flow below `fDropPct` % of `fJockeyCapacity`, or the Pressure drop rule) the set hands back to the jockey. The group keeps the jockey on until the duty pump runs. `bRun` FALSE drops them all ([`FB_Group`](FB_Group.md)'s `set.eStop` decides at once or staged). A burst main: an [`FB_LevelCheck`](FB_LevelCheck.md) (High) on the header flow meter as a part of the group. Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back (`bRefused`, a warning until a reset).
+Jockey (an [`FB_Group`](FB_Group.md) member with `I_Pump` role Jockey, `bJockeyReady`): a start from none begins with the jockey alone (`nExtra` -1; not while the loop fills the pipe). It hands over to a duty pump when it cannot keep up: the flow above `fAddPct` % of `fJockeyCapacity`, or the Pressure rule (short of pressure below its capacity: the jockey is skipped until the next start). With one duty pump left and the demand falling (the flow below `fDropPct` % of `fJockeyCapacity`, or the Pressure drop rule) the set hands back to the jockey. The group keeps the jockey on until the duty pump runs. `bRun` FALSE drops them all ([`FB_Group`](FB_Group.md)'s `set.eStop` decides at once or staged). A burst main: an [`FB_LevelCheck`](FB_LevelCheck.md) (High) on the header flow meter as a part of the group. Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back (`bRefused` / `eRefusedWhy`, a warning until a reset).
 
 ## Example
 

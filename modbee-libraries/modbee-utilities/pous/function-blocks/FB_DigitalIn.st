@@ -60,16 +60,35 @@ FUNCTION_BLOCK FB_DigitalIn EXTENDS FB_Object
 
 
 (* the settings are usable *)
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_DigitalInSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tOnDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tOffDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tAlarmDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.nChatterCount >= 0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.tChatterTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.eAlarmOn = E_DiAlarm.None OR stS.eAlarmOn = E_DiAlarm.WhenTrue
+             OR stS.eAlarmOn = E_DiAlarm.WhenFalse) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.eAlarmReset = E_ResetMode.Auto OR stS.eAlarmReset = E_ResetMode.Retry
+             OR stS.eAlarmReset = E_ResetMode.Manual) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_DigitalInSet;
   END_VAR
-  SetOk := stS.tOnDelay >= T#0s AND stS.tOffDelay >= T#0s AND stS.tAlarmDelay >= T#0s
-           AND stS.nChatterCount >= 0 AND stS.tChatterTime >= T#0s
-           AND (stS.eAlarmOn = E_DiAlarm.None OR stS.eAlarmOn = E_DiAlarm.WhenTrue
-                OR stS.eAlarmOn = E_DiAlarm.WhenFalse)
-           AND (stS.eAlarmReset = E_ResetMode.Auto OR stS.eAlarmReset = E_ResetMode.Retry
-                OR stS.eAlarmReset = E_ResetMode.Manual);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -107,6 +126,7 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOkSet := TRUE;
@@ -116,6 +136,7 @@ IF refData.bCmdReset THEN
   bResetReq := TRUE;
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* debounce, and chatter: more than nChatterCount clean changes in a window *)

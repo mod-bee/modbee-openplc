@@ -4,5 +4,6 @@ TYPE
     bManual : BOOL; (* in Manual now (pin or kept choice) *)
     bBadInput : BOOL; (* the demand is not a number: output held *)
     bRefused : BOOL; (* a bad settings write was put back (cleared by bCmdReset) *)
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

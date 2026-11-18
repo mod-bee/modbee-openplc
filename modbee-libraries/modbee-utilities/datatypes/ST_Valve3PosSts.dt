@@ -3,5 +3,9 @@ TYPE
     nTargetPos : INT; (* going to (0 = hold) *)
     nActualPos : INT; (* reached (-1 not known) *)
     stTravel : ST_ProtectionSts;
+    stBothLimits : ST_ProtectionSts;
+    stPositionLost : ST_ProtectionSts;
+    stNoMovement : ST_ProtectionSts;
+    tLastStroke : TIME; (* the last move's time (start to arrival) *)
   END_STRUCT;
 END_TYPE

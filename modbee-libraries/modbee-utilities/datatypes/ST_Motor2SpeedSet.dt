@@ -9,5 +9,6 @@ TYPE
     bHandHigh : BOOL; (* Hand speed chosen last (kept) *)
     tChangeover : TIME := T#2s;
     stChangeover : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0);
+    bJogHigh : BOOL; (* a jog (FB_MotorJog) runs at high speed (FALSE: low) *)
   END_STRUCT;
 END_TYPE

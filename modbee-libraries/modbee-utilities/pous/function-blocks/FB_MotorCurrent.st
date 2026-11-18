@@ -3,7 +3,8 @@ full-load current, in the CT's unit) is set.
 - fPercent: the current as % of full load. bProvesRun: at or above set.fRunPercent; wire it to the motor's
   bFeedback when the CT, not an auxiliary contact, proves the motor runs.
 - stHigh (overload by current, default Off) and stLow (dry run / broken belt, default Off): % of full load with
-  a deadband, checked once the motor runs (bIsRunning) and set.tStartMask has passed.
+  a deadband, checked once the motor runs (bIsRunning) and set.tStartMask has passed (sts.tMaskLeft: the time
+  left of the mask).
 - stStartTooLong (a locked rotor, default Off): the current still at or above its % while the motor's run
   command is on, for its delay.
 - stBad (default a warning): the current is not good while monitoring is wanted; high / low / start checks
@@ -51,14 +52,39 @@ FUNCTION_BLOCK FB_MotorCurrent EXTENDS FB_Object IMPLEMENTS I_Part
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_MotorCurrentSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.fFullLoad >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fFullLoad <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fRunPercent >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fRunPercent <= 1000.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.tStartMask >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.stHigh.fPercent >= 0.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stHigh.fDeadband >= 0.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stLow.fPercent >= 0.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stLow.fDeadband >= 0.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stStartTooLong.fPercent >= 0.0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_MotorCurrentSet;
   END_VAR
-  SetOk := stS.fFullLoad >= 0.0 AND stS.fFullLoad <= REAL#3.4E38 AND stS.fRunPercent >= 0.0
-           AND stS.fRunPercent <= 1000.0 AND stS.tStartMask >= T#0s
-           AND stS.stHigh.fPercent >= 0.0 AND stS.stHigh.fDeadband >= 0.0 AND stS.stLow.fPercent >= 0.0
-           AND stS.stLow.fDeadband >= 0.0 AND stS.stStartTooLong.fPercent >= 0.0;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 METHOD PUBLIC Evaluate : E_PartAction
@@ -97,6 +123,11 @@ METHOD PUBLIC Evaluate : E_PartAction
     tRunSince := tN;
   END_IF;
   bRunWas := bRunOk;
+  IF bRunOk AND tN - tRunSince < refData.set.tStartMask THEN
+    refData.sts.tMaskLeft := refData.set.tStartMask - (tN - tRunSince);
+  ELSE
+    refData.sts.tMaskLeft := T#0s;
+  END_IF;
   bAnyLevel := refData.set.stHigh.eResponse <> E_Response.Off OR refData.set.stLow.eResponse <> E_Response.Off
                OR refData.set.stStartTooLong.eResponse <> E_Response.Off;
   bTrip := F_Protect(tNow := tN, bCause := bMon AND bAnyLevel AND NOT bGoodNow, bResetReq := bReset,
@@ -179,11 +210,13 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
 IF SystemReset() THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 IF NOT bAdded THEN
   ipOwner.AddPart(ipPart := THIS^);

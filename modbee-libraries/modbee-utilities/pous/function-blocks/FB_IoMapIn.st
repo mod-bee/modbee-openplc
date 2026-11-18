@@ -30,7 +30,8 @@ real terminal value. A forced channel on a missing module reads good while force
 Errors: bError for a configuration fault (IoArraySize, IoAddress, IoNotFitted) or rows that were never good
 (BadSetting); bWarning for IoForced, IoMissing, IoBad, SettingRefused.
 
-Kept settings (a retained last-good copy, restored at power-up, a bad write put back, sts.bRefused): the rows
+Kept settings (a retained last-good copy, restored at power-up, a bad write put back, sts.bRefused / eRefusedWhy):
+the rows
 are packed so each row is one retained value:
 a digital row: one DWORD, bits 0..2 eSrc (None 0, Board 1, I2c 2, Field 3, Remote 4), 3..9 nModule (0..127),
 10..17 nCh, 18 bNc, 19 bFailSafe, 20..31 tDebounce in 10 ms steps (0..40.95 s);
@@ -85,6 +86,7 @@ FUNCTION_BLOCK FB_IoMapIn EXTENDS FB_Object
   VAR_TEMP
     bSizeBad : BOOL;
     bSetOk : BOOL;
+    eWhy : E_UtError; (* the first bad setting of this write *)
     bRestore : BOOL;
     nD : DINT;
     nA : DINT;
@@ -137,30 +139,43 @@ bSizeBad := bSizeBad OR nD > cDiKept OR nA > cAiKept;
 IF refData.bCmdReset THEN
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* 0. the rows: the kept copy at power-up, a bad write put back *)
 bRestore := bFirstScan AND nKeptLayout = cLayout;
 IF NOT bRestore THEN
   bSetOk := refData.set.tForceTime >= T#1ms AND refData.set.tForceTime <= T#10m;
+  eWhy := E_UtError.None;
+  IF NOT bSetOk THEN
+    eWhy := E_UtError.TimeBad;
+  END_IF;
   FOR nI := 1 TO nD DO
     nSj := LOWER_BOUND(aDiSet, 1) + nI - 1;
     nDeb := TIME_TO_DINT(aDiSet[nSj].tDebounce);
-    IF NOT F_IoAddrOk(eSrc := aDiSet[nSj].eSrc, nModule := aDiSet[nSj].nModule)
-       OR nDeb < 0 OR nDeb > 40950 OR nDeb MOD 10 <> 0 THEN
+    IF NOT F_IoAddrOk(eSrc := aDiSet[nSj].eSrc, nModule := aDiSet[nSj].nModule) THEN
       bSetOk := FALSE;
+      IF eWhy = E_UtError.None THEN eWhy := E_UtError.IoAddress; END_IF;
+    ELSIF nDeb < 0 OR nDeb > 40950 OR nDeb MOD 10 <> 0 THEN
+      bSetOk := FALSE;
+      IF eWhy = E_UtError.None THEN eWhy := E_UtError.TimeBad; END_IF;
     END_IF;
   END_FOR;
   FOR nI := 1 TO nA DO
     nSj := LOWER_BOUND(aAiSet, 1) + nI - 1;
     fFs := aAiSet[nSj].fFailSafe;
-    IF NOT F_IoAddrOk(eSrc := aAiSet[nSj].eSrc, nModule := aAiSet[nSj].nModule) OR NOT (ABS(fFs) <= REAL#3.4E38) THEN
+    IF NOT F_IoAddrOk(eSrc := aAiSet[nSj].eSrc, nModule := aAiSet[nSj].nModule) THEN
       bSetOk := FALSE;
+      IF eWhy = E_UtError.None THEN eWhy := E_UtError.IoAddress; END_IF;
+    ELSIF NOT (ABS(fFs) <= REAL#3.4E38) THEN
+      bSetOk := FALSE;
+      IF eWhy = E_UtError.None THEN eWhy := E_UtError.ValueBad; END_IF;
     END_IF;
   END_FOR;
   IF NOT bSetOk AND nKeptLayout = cLayout THEN
     bRestore := TRUE;
     refData.sts.bRefused := TRUE;
+    refData.sts.eRefusedWhy := eWhy;
   END_IF;
 END_IF;
 IF bRestore THEN

@@ -80,23 +80,43 @@ FUNCTION_BLOCK FB_Route EXTENDS FB_Object
   END_VAR
 
 
-METHOD PRIVATE SetOk : BOOL
+METHOD PRIVATE SetWhy : E_UtError
   VAR_INPUT
     stS : REFERENCE TO ST_RouteSet;
   END_VAR
   VAR
     nI : INT;
   END_VAR
-  SetOk := stS.nLevelOutlet <= 4 AND stS.nRunOutlet <= 4 AND stS.nStorageOutlet <= 4
-           AND stS.tCloseDelay >= T#0s AND stS.tCloseDelay <= T#10m;
-  FOR nI := 1 TO 4 DO
-    SetOk := SetOk AND (stS.aOutlet[nI].eKind = E_OutletKind.None OR stS.aOutlet[nI].eKind = E_OutletKind.Irrigation
-                        OR stS.aOutlet[nI].eKind = E_OutletKind.Storage OR stS.aOutlet[nI].eKind = E_OutletKind.Other)
-             AND stS.aOutlet[nI].nPreset >= -1 AND stS.aOutlet[nI].nPreset <= 2;
-  END_FOR;
-  IF stS.nStorageOutlet >= 1 AND stS.nStorageOutlet <= 4 THEN
-    SetOk := SetOk AND stS.aOutlet[stS.nStorageOutlet].eKind = E_OutletKind.Storage;
+  SetWhy := E_UtError.None;
+  IF stS.nLevelOutlet > 4 OR stS.nRunOutlet > 4 OR stS.nStorageOutlet > 4 THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF stS.tCloseDelay < T#0s OR stS.tCloseDelay > T#10m THEN
+    SetWhy := E_UtError.TimeBad;
   END_IF;
+  FOR nI := 1 TO 4 DO
+    IF SetWhy <> E_UtError.None THEN
+      ;
+    ELSIF NOT (stS.aOutlet[nI].eKind = E_OutletKind.None OR stS.aOutlet[nI].eKind = E_OutletKind.Irrigation
+               OR stS.aOutlet[nI].eKind = E_OutletKind.Storage OR stS.aOutlet[nI].eKind = E_OutletKind.Other) THEN
+      SetWhy := E_UtError.ChoiceBad;
+    ELSIF stS.aOutlet[nI].nPreset < -1 THEN
+      SetWhy := E_UtError.BelowMin;
+    ELSIF stS.aOutlet[nI].nPreset > 2 THEN
+      SetWhy := E_UtError.AboveMax;
+    END_IF;
+  END_FOR;
+  IF SetWhy = E_UtError.None AND stS.nStorageOutlet >= 1 AND stS.nStorageOutlet <= 4 THEN
+    IF stS.aOutlet[stS.nStorageOutlet].eKind <> E_OutletKind.Storage THEN
+      SetWhy := E_UtError.ChoiceBad;       // the storage outlet is not of kind Storage
+    END_IF;
+  END_IF;
+END_METHOD
+
+METHOD PRIVATE SetOk : BOOL
+  VAR_INPUT
+    stS : REFERENCE TO ST_RouteSet;
+  END_VAR
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -119,12 +139,14 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF SystemReset() THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the outlets *)

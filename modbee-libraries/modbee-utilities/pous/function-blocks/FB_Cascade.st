@@ -8,7 +8,8 @@ FB_Group.nDuty), nRunning (duty pumps running, FB_Group.nDutyRunning; -1 = not w
 bPermissive, fError (the loop's fError: how far the value is short of the setpoint; unwired = the speed alone),
 ePhase (the loop's ePhase; unwired = Control), ipFlow (the header flow: Flow / PerPump staging and the jockey;
 unwired = none), fCapacity (FB_Group.fRunCapacity), fJockeyCapacity (FB_Group.fJockeyCapacity), bJockeyReady
-(FB_Group.bJockeyReady), refData -> nExtra (-1 = the jockey alone), plus FB_Object's outputs.
+(FB_Group.bJockeyReady), refData -> nExtra (-1 = the jockey alone), plus FB_Object's outputs. The record shows
+the rule in use (eStageUsed), the jockey's turn, bPvStaging, bFlowBad and fPerPump (the flow per running pump).
 Staging, one pump at a time, only while the loop is in Control (Manual speed: none added or dropped); the need
 must last set.tStageDelay (add) or set.tDestageDelay (drop); after a change the next one waits the delay again;
 a pump is added only when the group has settled (nRunning has reached 1 + nExtra) and bPermissive is on.
@@ -32,7 +33,8 @@ fDropPct % of fJockeyCapacity, or the Pressure drop rule) the set hands back to 
 jockey on until the duty pump runs.
 bRun FALSE drops them all (FB_Group's set.eStop decides at once or staged). A burst main:
 an FB_LevelCheck (High) on the header flow meter as a part of the group. Its settings are kept by the block (a
-retained last-good copy): restored at power-up, a bad write put back (bRefused, a warning until a reset). *)
+retained last-good copy): restored at power-up, a bad write put back (bRefused / eRefusedWhy, a warning until a
+reset). *)
 
 FUNCTION_BLOCK FB_Cascade EXTENDS FB_Object
   VAR_INPUT
@@ -87,16 +89,50 @@ FUNCTION_BLOCK FB_Cascade EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_CascadeSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.fDestageAt >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fStageAt <= 100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fDestageAt < stS.fStageAt) THEN
+    SetWhy := E_UtError.LimitsBad;
+  ELSIF NOT (stS.tStageDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tDestageDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.fShortBand >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fAddBand >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fDropBand >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fDropPct >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fAddPct > stS.fDropPct) THEN
+    SetWhy := E_UtError.LimitsBad;
+  ELSIF NOT (stS.fAddPct <= 1000.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fBepMin >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fBepMax >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fBepMax <= 3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.eStageBy = E_StageBy.Pressure OR stS.eStageBy = E_StageBy.Flow
+             OR stS.eStageBy = E_StageBy.PerPump) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_CascadeSet;
   END_VAR
-  SetOk := stS.fDestageAt >= 0.0 AND stS.fStageAt <= 100.0 AND stS.fDestageAt < stS.fStageAt
-           AND stS.tStageDelay >= T#0s AND stS.tDestageDelay >= T#0s
-           AND stS.fShortBand >= 0.0 AND stS.fAddBand >= 0.0 AND stS.fDropBand >= 0.0
-           AND stS.fDropPct >= 0.0 AND stS.fAddPct > stS.fDropPct AND stS.fAddPct <= 1000.0
-           AND stS.fBepMin >= 0.0 AND stS.fBepMax >= 0.0 AND stS.fBepMax <= 3.4E38
-           AND (stS.eStageBy = E_StageBy.Pressure OR stS.eStageBy = E_StageBy.Flow OR stS.eStageBy = E_StageBy.PerPump);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -121,12 +157,14 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.bRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF SystemReset() THEN
   refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the flow, the rule in use *)
@@ -258,6 +296,7 @@ refData.nExtra := nExtra;
 refData.eStageUsed := eCrit;
 refData.bJockeyTurn := nExtra < 0;
 refData.bPvStaging := bPvForced;
+IF bFlowOk THEN refData.fPerPump := fPerPump; ELSE refData.fPerPump := 0.0; END_IF;
 bError := NOT bOk;
 bWarning := NOT bError AND (refData.bRefused OR bCfgWarn OR refData.bFlowBad OR bPvForced);
 IF NOT bOk THEN

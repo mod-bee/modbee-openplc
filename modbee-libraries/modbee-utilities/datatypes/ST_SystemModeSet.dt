@@ -7,5 +7,6 @@ TYPE
     tManualMaxRun : TIME; (* 0 = no limit *)
     tPowerOnDelay : TIME;
     eModeSource : E_ModeSource; (* where the mode comes from *)
+    bOfferManual : BOOL := TRUE; (* FALSE: the plant is Off / Auto only (Manual refused, a Manual contact is Off) *)
   END_STRUCT;
 END_TYPE

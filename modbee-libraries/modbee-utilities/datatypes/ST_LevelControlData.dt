@@ -6,6 +6,7 @@ TYPE
     bCmdResetTot : BOOL; (* the cycle count back to 0 (cleared) *)
     set : ST_LevelControlSet;
     sts : ST_LevelControlSts;
+    det : ST_LevelControlDet;
     tot : ST_LevelControlTot;
   END_STRUCT;
 END_TYPE

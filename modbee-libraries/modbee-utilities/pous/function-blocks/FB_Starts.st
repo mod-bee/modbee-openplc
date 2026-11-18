@@ -163,9 +163,21 @@ METHOD PUBLIC GetNext : I_Part
   GetNext := ipNext;
 END_METHOD
 
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.nMaxPerHour >= 0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.nMaxPerHour <= 60) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.tMinBetween >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tFailWait >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
-  SetOk := refData.set.nMaxPerHour >= 0 AND refData.set.nMaxPerHour <= 60 AND refData.set.tMinBetween >= T#0s
-           AND refData.set.tFailWait >= T#0s;
+  SetOk := SetWhy() = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) OR ipOwner = NULL THEN
@@ -192,6 +204,7 @@ IF bFirstScan THEN
 ELSIF SetOk() THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
@@ -203,6 +216,7 @@ IF refData.bCmdReset THEN
   bCmdSeen := TRUE;
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 bCalled := TRUE;
 

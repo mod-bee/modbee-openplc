@@ -21,7 +21,8 @@ The buttons (rising edges; bStop is TRUE = pressed, an NC button inverted with N
   bRev            a reversing motor in Hand: reverse (and start); bStart starts in the last direction
 bHalt .. bRev go to the owner's I_LocalChoice (FB_ValveMotor, FB_Valve3Pos, FB_Motor2Speed, FB_MotorRev); an
 owner without that choice ignores the button. Only the owner starts anything.
-Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back. *)
+Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
+bModeChanged / bEnteredOff are TRUE for one scan when the owner's mode changes (to Off). *)
 
 FUNCTION_BLOCK FB_LocalControl EXTENDS FB_Object
   VAR_INPUT
@@ -41,6 +42,10 @@ FUNCTION_BLOCK FB_LocalControl EXTENDS FB_Object
     bHigh : BOOL R_EDGE; (* a two-speed motor: high (Hand) *)
     bRev : BOOL R_EDGE; (* a reversing motor: reverse (Hand) *)
   END_VAR
+  VAR_OUTPUT
+    bModeChanged : BOOL; (* one scan: the owner's mode changed *)
+    bEnteredOff : BOOL; (* one scan: ... to Off *)
+  END_VAR
   VAR RETAIN
     stKept : ST_LocalControlSet;
     nKeptLayout : UINT;
@@ -49,6 +54,7 @@ FUNCTION_BLOCK FB_LocalControl EXTENDS FB_Object
     cLayout : UINT := 2;
   END_VAR
   VAR
+    eModeWas : E_Mode;
     bStopPrev : BOOL;
     eSelWas : E_Mode;
     bHeld : BOOL;
@@ -66,14 +72,26 @@ FUNCTION_BLOCK FB_LocalControl EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_LocalControlSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.eModeSource = E_ModeSource.Hmi OR stS.eModeSource = E_ModeSource.Switch
+          OR stS.eModeSource = E_ModeSource.Remote) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.ePowerUp = E_PowerUp.Last OR stS.ePowerUp = E_PowerUp.Off) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.eHmiMode = E_Mode.Off OR stS.eHmiMode = E_Mode.Hand OR stS.eHmiMode = E_Mode.Auto) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_LocalControlSet;
   END_VAR
-  SetOk := (stS.eModeSource = E_ModeSource.Hmi OR stS.eModeSource = E_ModeSource.Switch
-            OR stS.eModeSource = E_ModeSource.Remote)
-           AND (stS.ePowerUp = E_PowerUp.Last OR stS.ePowerUp = E_PowerUp.Off)
-           AND (stS.eHmiMode = E_Mode.Off OR stS.eHmiMode = E_Mode.Hand OR stS.eHmiMode = E_Mode.Auto);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* the owner to this mode *)
@@ -110,12 +128,14 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.bRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF SystemReset() THEN
   refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the selector *)
@@ -227,6 +247,9 @@ ELSIF refData.bRefused THEN
 ELSE
   eErrorId := E_UtError.None;
 END_IF;
+bModeChanged := NOT bFirstScan AND ipOwner.eActMode <> eModeWas;
+bEnteredOff := bModeChanged AND ipOwner.eActMode = E_Mode.Off;
+eModeWas := ipOwner.eActMode;
 IF bError THEN
   eState := E_State.Fault;
 ELSIF refData.bHeldOff THEN

@@ -1,6 +1,11 @@
 (* FB_Object — the base of every block: the error outputs and the system link.
 bError: a trip is active now. bWarning: a warning is active now. eErrorId: the first error since the last
-reset (first-out), else the first warning; None when nothing is active. eState: what the block is doing. *)
+reset (first-out), else the first warning; None when nothing is active. eState: what the block is doing.
+Kept settings (every block that keeps a last-good copy): a bad write is put back and shown by bRefused and
+eRefusedWhy, the kind of the first bad setting: TimeBad (a time), ProtectionBad (a protection's settings),
+ChoiceBad (a choice the block does not have), LimitsBad (two settings in the wrong order), BelowMin / AboveMax (a
+number below / above its range), ValueBad (a number that is not valid), IoAddress (an IO address). Both clear
+with the block's reset (its record's bCmdReset, the equipment's reset, or the plant reset). *)
 
 FUNCTION_BLOCK ABSTRACT FB_Object IMPLEMENTS I_PartOwner
   VAR_INPUT

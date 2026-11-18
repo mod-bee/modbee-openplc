@@ -36,7 +36,9 @@ Exercise (set.tExerciseEvery, 0 = off): while nothing is asked, a member that ha
 setting off ends it; sts.nExercising, sts.tExerciseIn (until the next one). Idle time counts power-on time only
 (no clock). A member that exercises itself, or an owner exercise (FB_Exercise on the level control: it asks the
 group, so the lead runs), leaves this off.
-An invalid setting is refused and put back (sts.bRefused, a warning until a reset). *)
+Status: sts.nAvailable (duty members available), sts.bShortfall (asked for more members than can run: none left to
+call, or nMaxRunning reached), sts.tRotateIn (Periodic: until the next rotation), sts.bStopping (a staged stop).
+An invalid setting is refused and put back (sts.bRefused / eRefusedWhy, a warning until a reset). *)
 
 FUNCTION_BLOCK FB_Group EXTENDS FB_Object IMPLEMENTS I_Equipment
   VAR_INPUT
@@ -120,6 +122,38 @@ FUNCTION_BLOCK FB_Group EXTENDS FB_Object IMPLEMENTS I_Equipment
     fCap : REAL;
   END_VAR
 
+
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tStageDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tDestageDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tFailover >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tRotateInterval >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.nFixedLead >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.nFixedLead <= cMax) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.nMaxRunning >= 0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.nMaxRunning <= cMax) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.tStopStep >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.fHoursBand >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.tExerciseEvery >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tExerciseTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.eStop = E_GroupStop.AllAtOnce OR refData.set.eStop = E_GroupStop.Staged) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
 
 (* ---- I_Equipment ---- *)
 METHOD PUBLIC Request : E_UtError
@@ -216,14 +250,10 @@ IF bFirstScan THEN
   tRotatedAt := tNow;
   IF nLead < 1 OR nLead > cMax THEN nLead := 1; END_IF;
   FOR nI := 1 TO cMax DO aIdleSince[nI] := tNow; END_FOR;
-ELSIF refData.set.tStageDelay >= T#0s AND refData.set.tDestageDelay >= T#0s AND refData.set.tFailover >= T#0s
-      AND refData.set.tRotateInterval >= T#0s AND refData.set.nFixedLead >= 1 AND refData.set.nFixedLead <= cMax
-      AND refData.set.nMaxRunning >= 0 AND refData.set.nMaxRunning <= cMax AND refData.set.tStopStep >= T#0s
-      AND refData.set.fHoursBand >= 0.0
-      AND refData.set.tExerciseEvery >= T#0s AND refData.set.tExerciseTime >= T#0s
-      AND (refData.set.eStop = E_GroupStop.AllAtOnce OR refData.set.eStop = E_GroupStop.Staged) THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
@@ -260,6 +290,7 @@ bReset := refData.bCmdReset OR SystemReset();
 IF refData.bCmdReset THEN
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* rotation *)
@@ -555,6 +586,14 @@ refData.sts.nRunning := nRunning;
 refData.sts.nCalled := nCalled;
 refData.sts.nExercising := nExercising;
 refData.sts.tExerciseIn := tExIn;
+refData.sts.nAvailable := nAvail;
+refData.sts.bShortfall := bReq AND NOT bPartOff AND nCalled < nRequired AND (nAvail <= nCalled OR NOT bLimitOk);
+IF refData.set.eRotate = E_Rotate.Periodic AND refData.set.tRotateInterval > T#0s THEN
+  refData.sts.tRotateIn := MAX(T#0s, refData.set.tRotateInterval - (tNow - tRotatedAt));
+ELSE
+  refData.sts.tRotateIn := T#0s;
+END_IF;
+refData.sts.bStopping := bStopping;
 bFirstScan := FALSE;
 
 END_FUNCTION_BLOCK

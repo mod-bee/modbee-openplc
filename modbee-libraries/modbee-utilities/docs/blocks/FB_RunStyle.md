@@ -26,6 +26,7 @@ The way a run takes its signal: held, toggle (push-on / push-off), keep-alive pu
 | --- | --- | --- | --- |
 | `bRun` | `BOOL` |  | status |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_RunStyleSet`)
 

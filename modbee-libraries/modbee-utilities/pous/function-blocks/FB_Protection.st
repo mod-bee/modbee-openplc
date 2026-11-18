@@ -8,7 +8,9 @@ the error it raises, status). It adds itself to its owner on its first call; the
 own cycle and stops on a trip. Its own rung samples bIn.
 A protection that is not Clear and whose rung stops being called raises PartLost on its owner until reset.
 A thermistor: set.eErrorId := E_UtError.Thermistor; while it is tripped, a motor holds its coil off (bHoldOff),
-even against an IO-page force. *)
+even against an IO-page force.
+A bad settings write is put back (bRefused / eRefusedWhy) and warns its owner (SettingRefused) until its reset
+(bCmdReset) or the owner's. *)
 
 FUNCTION_BLOCK FB_Protection EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT
@@ -32,6 +34,18 @@ FUNCTION_BLOCK FB_Protection EXTENDS FB_Object IMPLEMENTS I_Part
     stWork : ST_ProtectionWork;
   END_VAR
 
+
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.nMaxRetries >= 0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
 
 METHOD PUBLIC Evaluate : E_PartAction
   VAR_INPUT
@@ -67,6 +81,10 @@ METHOD PUBLIC Evaluate : E_PartAction
   END_CASE;
   bOwnReset := refData.bCmdReset;
   refData.bCmdReset := FALSE;
+  IF bResetWanted OR bOwnReset THEN
+    refData.bRefused := FALSE;
+    refData.eRefusedWhy := E_UtError.None;
+  END_IF;
   bTrip := F_Protect(tNow := TIME(), bCause := bCause, bResetReq := bResetWanted OR bOwnReset,
                      tRetryWindow := T#1h, stSet := refData.set, stSts := refData.sts, stWork := stWork);
   IF stWork.bTrip THEN
@@ -74,6 +92,9 @@ METHOD PUBLIC Evaluate : E_PartAction
   ELSIF stWork.bSignal THEN
     Evaluate := E_PartAction.Stop;
   ELSIF stWork.bWarn OR stWork.bBadSetting THEN
+    Evaluate := E_PartAction.Warn;
+  ELSIF refData.bRefused THEN
+    eErrorId := E_UtError.SettingRefused;
     Evaluate := E_PartAction.Warn;
   ELSE
     Evaluate := E_PartAction.None;
@@ -104,10 +125,12 @@ IF bFirstScan THEN
     nKeptLayout := cLayout;
   END_IF;
   bFirstScan := FALSE;
-ELSIF refData.set.tDelay >= T#0s AND refData.set.tRecover >= T#0s AND refData.set.nMaxRetries >= 0 THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.eRefusedWhy := SetWhy();
   refData.set := stKept;
+  refData.bRefused := TRUE;
 END_IF;
 IF NOT bAdded AND ipOwner <> NULL THEN
   ipOwner.AddPart(ipPart := THIS^);
@@ -116,12 +139,14 @@ END_IF;
 bInNow := bIn;
 bCalled := TRUE;
 bError := stWork.bTrip;
-bWarning := stWork.bWarn;
+bWarning := stWork.bWarn OR refData.bRefused;
 IF ipOwner = NULL THEN
   bError := TRUE;
   eErrorId := E_UtError.NoMotor;              // a part without an owner protects nothing
-ELSIF bError OR bWarning THEN
+ELSIF bError OR stWork.bWarn THEN
   eErrorId := refData.set.eErrorId;
+ELSIF refData.bRefused THEN
+  eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;
 END_IF;

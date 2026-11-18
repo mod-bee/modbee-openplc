@@ -157,11 +157,27 @@ METHOD PUBLIC GetNext : I_Part
   GetNext := ipNext;
 END_METHOD
 
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tHold >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tTimeout >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.stTimeout.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stTimeout.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stTimeout.nMaxRetries >= 0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.fDoneLevel = refData.set.fDoneLevel) THEN   // NaN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (refData.set.eDoneBy <> E_PrimeDone.RunTime OR refData.set.tRunTime > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
-  SetOk := refData.set.tHold >= T#0s AND refData.set.tTimeout >= T#0s
-           AND refData.set.stTimeout.tDelay >= T#0s AND refData.set.stTimeout.tRecover >= T#0s
-           AND refData.set.stTimeout.nMaxRetries >= 0 AND refData.set.fDoneLevel = refData.set.fDoneLevel
-           AND (refData.set.eDoneBy <> E_PrimeDone.RunTime OR refData.set.tRunTime > T#0s);
+  SetOk := SetWhy() = E_UtError.None;
 END_METHOD
 
 (* the done condition from one measurement: good and above the done level (a switch: its Low band clear) *)
@@ -197,6 +213,7 @@ IF bFirstScan THEN
 ELSIF SetOk() THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
@@ -218,6 +235,7 @@ IF refData.bCmdReset THEN
   bOwnReset := TRUE;
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* sample the done condition on this rung *)

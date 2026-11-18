@@ -8,7 +8,7 @@ Direction: Hand -> set.bHandReverse (kept; bCmdFwd / bCmdRev, or FB_LocalControl
 A change waits set.tReversalDelay (FB_Changeover); with set.bStopBeforeReverse a direction change stops and needs
 a new start (the run request going away). An aux that does not follow its coil within set.tChangeover trips
 set.stChangeover (default Manual): bError Changeover. A planned gap never counts as feedback lost.
-Jog: FB_MotorJog. Its settings are kept by the block (a retained last-good copy): restored at
+Jog: FB_MotorJog, in reverse with its bJogRev. Its settings are kept by the block (a retained last-good copy): restored at
 power-up, a bad write put back. *)
 
 FUNCTION_BLOCK FB_MotorRev EXTENDS FB_Motor IMPLEMENTS I_LocalChoice
@@ -24,6 +24,9 @@ FUNCTION_BLOCK FB_MotorRev EXTENDS FB_Motor IMPLEMENTS I_LocalChoice
     bQFwd : BOOL;
     bQRev : BOOL; (* never with bQFwd *)
     bReversed : BOOL;
+  END_VAR
+  VAR CONSTANT
+    cRevLayout : UINT := 2; (* the layout of its own kept settings *)
   END_VAR
   VAR RETAIN
     stKeptRev : ST_MotorRevSet;
@@ -54,13 +57,29 @@ METHOD PUBLIC Choose : BOOL
   END_IF;
 END_METHOD
 
+METHOD PRIVATE RevWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_MotorRevSet;
+  END_VAR
+  RevWhy := E_UtError.None;
+  IF NOT (stS.tReversalDelay >= T#0s) THEN
+    RevWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tChangeover > T#0s) THEN
+    RevWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.stChangeover.tDelay >= T#0s) THEN
+    RevWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stChangeover.tRecover >= T#0s) THEN
+    RevWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stChangeover.nMaxRetries >= 0) THEN
+    RevWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE RevOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_MotorRevSet;
   END_VAR
-  RevOk := stS.tReversalDelay >= T#0s AND stS.tChangeover > T#0s
-           AND stS.stChangeover.tDelay >= T#0s AND stS.stChangeover.tRecover >= T#0s
-           AND stS.stChangeover.nMaxRetries >= 0;
+  RevOk := RevWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* running is the aux of the direction that runs; a planned gap in a confirmed run counts as running *)
@@ -116,18 +135,23 @@ END_METHOD
 (* the direction wanted, before the motor runs its scan *)
 IF __ISVALIDREF(refRev) THEN
   IF bRevFirst THEN
-    IF nKeptRevLayout = cLayout THEN
+    IF nKeptRevLayout = cRevLayout THEN
       refRev.set := stKeptRev;
     ELSE
       stKeptRev := refRev.set;
-      nKeptRevLayout := cLayout;
+      nKeptRevLayout := cRevLayout;
     END_IF;
     bRevFirst := FALSE;
   ELSIF RevOk(stS := refRev.set) THEN
     stKeptRev := refRev.set;
   ELSIF RevOk(stS := stKeptRev) THEN
+    refRev.sts.eRefusedWhy := RevWhy(stS := refRev.set);
     refRev.set := stKeptRev;
     refRev.sts.bRefused := TRUE;
+  END_IF;
+  IF bResetThisScan THEN                  // the equipment's reset clears a refused write
+    refRev.sts.bRefused := FALSE;
+    refRev.sts.eRefusedWhy := E_UtError.None;
   END_IF;
   IF refRev.bCmdFwd OR refRev.bCmdRev THEN
     refRev.set.bHandReverse := refRev.bCmdRev;
@@ -143,6 +167,7 @@ IF __ISVALIDREF(refRev) THEN
   IF __ISVALIDREF(refData) THEN
     IF refData.set.eMode = E_Mode.Hand THEN
       bWantRev := refRev.set.bHandReverse;
+      IF bJogIn THEN bWantRev := bJogRevIn; END_IF;   // a jog (FB_MotorJog): its bJogRev
     END_IF;
   END_IF;
   IF bQ AND bWantRev <> bRunRev AND refRev.set.bStopBeforeReverse THEN

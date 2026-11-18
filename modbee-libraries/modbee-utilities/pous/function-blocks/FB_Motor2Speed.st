@@ -9,7 +9,7 @@ Speed: Hand -> set.bHandHigh (kept; bCmdLow / bCmdHigh, or FB_LocalControl's bLo
 runs low for set.tLowStart first. Low -> high waits set.tSpeedChange, high -> low set.tDownChange (0 = the same)
 (FB_Changeover). An aux that does not follow its coil within set.tChangeover trips set.stChangeover (default
 Manual): bError Changeover. A planned gap never counts as feedback lost. fActSpeed: fLowSpeedPct or 100.
-Jog: FB_MotorJog. Its settings are kept by the block (a retained last-good copy): restored at
+Jog: FB_MotorJog, at set.bJogHigh's speed. Its settings are kept by the block (a retained last-good copy): restored at
 power-up, a bad write put back. *)
 
 FUNCTION_BLOCK FB_Motor2Speed EXTENDS FB_Motor IMPLEMENTS I_LocalChoice
@@ -24,6 +24,9 @@ FUNCTION_BLOCK FB_Motor2Speed EXTENDS FB_Motor IMPLEMENTS I_LocalChoice
     bQHigh : BOOL; (* never with bQLow *)
     bQBridge : BOOL; (* Dahlander: the star point, with high only *)
     bHighSpeed : BOOL;
+  END_VAR
+  VAR CONSTANT
+    cTwoLayout : UINT := 2; (* the layout of its own kept settings *)
   END_VAR
   VAR RETAIN
     stKeptTwo : ST_Motor2SpeedSet;
@@ -57,14 +60,37 @@ METHOD PUBLIC Choose : BOOL
   END_IF;
 END_METHOD
 
+METHOD PRIVATE TwoWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_Motor2SpeedSet;
+  END_VAR
+  TwoWhy := E_UtError.None;
+  IF NOT (stS.tSpeedChange >= T#0s) THEN
+    TwoWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tDownChange >= T#0s) THEN
+    TwoWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tLowStart >= T#0s) THEN
+    TwoWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.fLowSpeedPct >= 0.0) THEN
+    TwoWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fLowSpeedPct <= 100.0) THEN
+    TwoWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.tChangeover > T#0s) THEN
+    TwoWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.stChangeover.tDelay >= T#0s) THEN
+    TwoWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stChangeover.tRecover >= T#0s) THEN
+    TwoWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stChangeover.nMaxRetries >= 0) THEN
+    TwoWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE TwoOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_Motor2SpeedSet;
   END_VAR
-  TwoOk := stS.tSpeedChange >= T#0s AND stS.tDownChange >= T#0s AND stS.tLowStart >= T#0s
-           AND stS.fLowSpeedPct >= 0.0 AND stS.fLowSpeedPct <= 100.0 AND stS.tChangeover > T#0s
-           AND stS.stChangeover.tDelay >= T#0s AND stS.stChangeover.tRecover >= T#0s
-           AND stS.stChangeover.nMaxRetries >= 0;
+  TwoOk := TwoWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* running is the aux of the speed that runs; a planned gap in a confirmed run counts as running *)
@@ -120,18 +146,23 @@ END_METHOD
 (* Hand speed commands, before the motor runs its scan *)
 IF __ISVALIDREF(refTwo) THEN
   IF bTwoFirst THEN
-    IF nKeptTwoLayout = cLayout THEN
+    IF nKeptTwoLayout = cTwoLayout THEN
       refTwo.set := stKeptTwo;
     ELSE
       stKeptTwo := refTwo.set;
-      nKeptTwoLayout := cLayout;
+      nKeptTwoLayout := cTwoLayout;
     END_IF;
     bTwoFirst := FALSE;
   ELSIF TwoOk(stS := refTwo.set) THEN
     stKeptTwo := refTwo.set;
   ELSIF TwoOk(stS := stKeptTwo) THEN
+    refTwo.sts.eRefusedWhy := TwoWhy(stS := refTwo.set);
     refTwo.set := stKeptTwo;
     refTwo.sts.bRefused := TRUE;
+  END_IF;
+  IF bResetThisScan THEN                  // the equipment's reset clears a refused write
+    refTwo.sts.bRefused := FALSE;
+    refTwo.sts.eRefusedWhy := E_UtError.None;
   END_IF;
   IF refTwo.bCmdLow OR refTwo.bCmdHigh THEN
     refTwo.set.bHandHigh := refTwo.bCmdHigh;
@@ -162,6 +193,7 @@ END_IF;
 IF __ISVALIDREF(refData) THEN     (* IEC AND does not short-circuit *)
   IF refData.set.eMode = E_Mode.Hand THEN
     bWantHigh := refTwo.set.bHandHigh;
+    IF bJogIn THEN bWantHigh := refTwo.set.bJogHigh; END_IF;   // a jog (FB_MotorJog) at its own speed
   END_IF;
 END_IF;
 IF bQ AND NOT bQWas THEN

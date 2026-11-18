@@ -5,6 +5,7 @@ TYPE
     fRegister : LREAL; (* the last good reading *)
     nGlitches : UDINT; (* drops and too-large steps (not kept) *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     stInputBad : ST_ProtectionSts;
   END_STRUCT;
 END_TYPE

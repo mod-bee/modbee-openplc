@@ -51,6 +51,7 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 | `bPrimed` | `BOOL` |  | the last prime was done (FALSE: it timed out) |
 | `tTimeLeft` | `TIME` |  | until the timeout (or the run time with RunTime) |
 | `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stTimeout` | `ST_ProtectionSts` |  | default Trip, Retry after 2 min, 3 tries; a protection's status ([protections](../conventions.md#protections)) |
 
 ## Lists

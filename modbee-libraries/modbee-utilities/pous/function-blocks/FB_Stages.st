@@ -5,7 +5,8 @@ stops above (fStart < fStop); a stage the wrong way round, not a number, or both
 call one pump each; stage 4 calls every remaining pump of a station of more than 3 (nMembers). bRun FALSE (the
 level control not running: off, level not trusted, inhibited) drops every stage. A bad level drops them too.
 bDemand (FB_LevelControl.bDemandActive): while a demand runs, at least set.nDemandPumps pumps run.
-Pins: ipLevel, eMode (the level control's), bRun, nMembers, bDemand, refData -> nExtra, plus FB_Object's outputs. Its
+Pins: ipLevel, eMode (the level control's), bRun, nMembers, bRunAll (every pump: FB_LevelFloats.bRunAll, the
+overflow backup), bDemand, refData -> nExtra, plus FB_Object's outputs. Its
 settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back. *)
 
 FUNCTION_BLOCK FB_Stages EXTENDS FB_Object
@@ -14,6 +15,7 @@ FUNCTION_BLOCK FB_Stages EXTENDS FB_Object
     eMode : E_LevelMode; (* Empty (sump) or Fill (tank): the level control's *)
     bRun : BOOL; (* the stages may act (the level control is running) *)
     nMembers : INT := 2; (* pumps in the station *)
+    bRunAll : BOOL; (* every pump (FB_LevelFloats.bRunAll: the overflow backup) *)
     bDemand : BOOL; (* a demand runs (FB_LevelControl.bDemandActive) *)
     refData : REFERENCE TO ST_StagesData;
   END_VAR
@@ -40,17 +42,32 @@ FUNCTION_BLOCK FB_Stages EXTENDS FB_Object
   END_VAR
 
 
-METHOD PRIVATE SetOk : BOOL
+METHOD PRIVATE SetWhy : E_UtError
   VAR_INPUT
     stS : REFERENCE TO ST_StagesSet;
   END_VAR
   VAR
     nI : INT;
   END_VAR
-  SetOk := stS.nDemandPumps >= 1 AND stS.nDemandPumps <= 32;
+  SetWhy := E_UtError.None;
+  IF stS.nDemandPumps < 1 THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF stS.nDemandPumps > 32 THEN
+    SetWhy := E_UtError.AboveMax;
+  END_IF;
   FOR nI := 2 TO 4 DO
-    SetOk := SetOk AND ABS(stS.aStage[nI].fStart) <= REAL#3.4E38 AND ABS(stS.aStage[nI].fStop) <= REAL#3.4E38;
+    IF SetWhy = E_UtError.None
+       AND NOT (ABS(stS.aStage[nI].fStart) <= REAL#3.4E38 AND ABS(stS.aStage[nI].fStop) <= REAL#3.4E38) THEN
+      SetWhy := E_UtError.ValueBad;
+    END_IF;
   END_FOR;
+END_METHOD
+
+METHOD PRIVATE SetOk : BOOL
+  VAR_INPUT
+    stS : REFERENCE TO ST_StagesSet;
+  END_VAR
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) OR ipLevel = NULL THEN
@@ -72,9 +89,14 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.bRefused := TRUE;
   bOkSet := TRUE;
+END_IF;
+IF SystemReset() THEN                // the plant reset clears a refused write
+  refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 bEmpty := eMode = E_LevelMode.Empty;
 bGood := ipLevel.bIsGood;
@@ -102,6 +124,9 @@ IF aLatch[4] AND nMembers > 3 THEN
 END_IF;
 IF bRun AND bDemand AND nExtra < refData.set.nDemandPumps - 1 THEN
   nExtra := refData.set.nDemandPumps - 1;   (* a demand runs at least nDemandPumps *)
+END_IF;
+IF bRunAll THEN
+  nExtra := nMembers - 1;         (* the overflow backup: every pump *)
 END_IF;
 nExtra := LIMIT(0, nExtra, MAX(0, nMembers - 1));
 refData.nExtra := nExtra;

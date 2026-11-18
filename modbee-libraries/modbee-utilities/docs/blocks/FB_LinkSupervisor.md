@@ -60,6 +60,7 @@ Escalating recovery of a remote site's comms link: restart the modem, power cycl
 | `tTimeLeft` | `TIME` |  | Time left in the delay or phase running now |
 | `tCountResetIn` | `TIME` |  |  |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## How it works
 

@@ -66,6 +66,7 @@ A timed or conditional step sequence (backwash, CIP, fill-mix-drain): each step 
 | `tElapsed` | `TIME` |  | Time in the step or run so far |
 | `tRemaining` | `TIME` |  |  |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Rows `ST_StepSet` (pin `aStepSet`)
 

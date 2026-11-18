@@ -13,6 +13,9 @@ kept until reset, never holding the pump). The start mask (set.tStartMask after 
 parts that mask at start (low pressure, no flow ...). A faulted motor is a warning on the pump.
 Parts placed beside it: FB_LevelCheck (pressure, flow, dry run ...), FB_Protection (seal leak, external
 fault, maximum run), FB_PumpPrime, FB_Starts (an idle pump's exercise is a part of its level control or group).
+Detail (det): tRunTime (this run), tIdleTime (since the last stop, 0 while running: with tRunTime, the time in
+the present phase), tTimeLeft (of the start delay, minimum run or stop delay now counting), tHandLeft (a Hand
+run's time left under set.tHandMax, 0 = none counting).
 set.eRole (duty, jockey, booster) and set.fCapacity
 (flow at full speed) are read by stations and cascades through I_Pump. *)
 
@@ -149,15 +152,40 @@ PROPERTY PUBLIC fActSpeed : REAL
   END_GET
 END_PROPERTY
 
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tMinOff >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tRetryWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tStartDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tStopDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tMinRun >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tStartMask >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.stStartFail.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stStartFail.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stDropped.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stDropped.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.fCapacity >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fCapacity <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.eRole = E_PumpRole.Duty OR refData.set.eRole = E_PumpRole.Jockey
+             OR refData.set.eRole = E_PumpRole.Booster) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
-  SetOk := refData.set.tMinOff >= T#0s AND refData.set.tRetryWindow >= T#0s
-           AND refData.set.tStartDelay >= T#0s AND refData.set.tStopDelay >= T#0s
-           AND refData.set.tMinRun >= T#0s AND refData.set.tStartMask >= T#0s
-           AND refData.set.stStartFail.tDelay >= T#0s AND refData.set.stStartFail.tRecover >= T#0s
-           AND refData.set.stDropped.tDelay >= T#0s AND refData.set.stDropped.tRecover >= T#0s
-           AND refData.set.fCapacity >= 0.0 AND refData.set.fCapacity <= REAL#3.4E38
-           AND (refData.set.eRole = E_PumpRole.Duty OR refData.set.eRole = E_PumpRole.Jockey
-                OR refData.set.eRole = E_PumpRole.Booster);
+  SetOk := SetWhy() = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) OR ipMotor = NULL THEN
@@ -177,6 +205,7 @@ IF bFirstScan THEN
 ELSIF SetOk() THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
@@ -220,5 +249,7 @@ IF bRunCmd THEN
   refData.det.tRunTime := tNow - tRunStart;
 END_IF;
 refData.det.tTimeLeft := tLeft;
+refData.det.tIdleTime := tIdleNow;
+refData.det.tHandLeft := tHandLeftNow;
 
 END_FUNCTION_BLOCK

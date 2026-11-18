@@ -9,6 +9,7 @@ This cycle's and the last cycle's quantity on any meter (a pump run, a fill): a 
 | in | `bRollover` | `BOOL` | `FALSE` | rising edge: close the cycle |
 | in | `ipMeter` | `I_Meter` |  | required. A meter block's instance (FB_PulseMeter, FB_FlowTotal, FB_RegisterMeter, FB_LevelMeter) |
 | in | `bRunning` | `BOOL` | `FALSE` | optional: the pump runs; its fall keeps the totals |
+| in | `dtClock` | `DT` |  | optional: the local time, for tot.dtLastEnd |
 | in | `refData` | `REFERENCE TO ST_MeterCycleData` |  | Its record (a variable of this type) |
 | in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
 | out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
@@ -30,6 +31,8 @@ This cycle's and the last cycle's quantity on any meter (a pump run, a fill): a 
 | --- | --- | --- | --- |
 | `fThis` | `LREAL` |  | this cycle so far, in the meter's total unit |
 | `fLast` | `LREAL` |  | the last cycle |
+| `nCycles` | `UDINT` |  | cycles closed (a sequence number for the last one) |
+| `dtLastEnd` | `DT` |  | when the last cycle closed (dtClock; blank when unwired) |
 
 ## How it works
 
