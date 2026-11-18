@@ -21,7 +21,7 @@ The protection engine every block is built from.
 
 A FUNCTION: no instance; the VAR_IN_OUTs are references to the owner's settings, status and private state.
 
-- a condition acts after its delay; Off ignores it; Signal follows it with no alarm (no latch, count, retry, warning or trip);
+- a condition acts after its delay; Off ignores it; Signal follows it with no alarm (no latch, count, retry, warning or trip) and lets go once the cause has been gone `tRecover` (a restart delay: a source refills before its pump starts again; 0 = at once);
 - Auto clears once the cause has been gone `tRecover`; Retry does the same but locks out after `nMaxRetries` trips in the window; Manual needs a reset;
 - the recover wait counts from the raw cause gone; a cause back inside the wait starts it again; a reset is taken only while the cause is gone;
 - an operator reset clearing an Auto / Retry latch early sets `bCleared`, not `bReset`;

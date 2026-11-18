@@ -182,6 +182,14 @@ METHOD PROTECTED AllowOos : BOOL
   AllowOos := TRUE;
 END_METHOD
 
+(* not in Auto, for the NotAuto warning (here: its own mode; a pump adds its motor's) *)
+METHOD PROTECTED NotAuto : BOOL
+  VAR_INPUT
+    eMode : E_Mode;
+  END_VAR
+  NotAuto := eMode <> E_Mode.Auto;
+END_METHOD
+
 (* the run hours a child counts (0 here) *)
 METHOD PROTECTED RunHours : REAL
   RunHours := 0.0;
@@ -310,7 +318,7 @@ METHOD PROTECTED FINAL Finish
     bMustCycle := TRUE;
   END_IF;
   bTripWas := bTripNow;
-  IF refSet.bWarnNotAuto AND refSet.eMode <> E_Mode.Auto AND NOT bTripNow THEN
+  IF refSet.bWarnNotAuto AND NotAuto(eMode := refSet.eMode) AND NOT bTripNow THEN
     IF ipSystem = NULL THEN
       bWarnNow := TRUE;
       IF eFirstWarn = E_UtError.None THEN eFirstWarn := E_UtError.NotAuto; END_IF;

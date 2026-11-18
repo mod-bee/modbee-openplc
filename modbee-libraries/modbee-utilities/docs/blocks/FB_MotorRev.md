@@ -26,7 +26,7 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 | out | `bQRev` | `BOOL` |  | never with bQFwd |
 | out | `bReversed` | `BOOL` |  | running in reverse |
 | out | `bQ` | `BOOL` |  | run output *(from FB_Motor)* |
-| out | `bHoldOff` | `BOOL` |  | TRUE: the block wants the output off *(from FB_Motor)* |
+| out | `bHoldOff` | `BOOL` |  | TRUE: the overload or the thermistor is tripped: hold the output off, even forced *(from FB_Motor)* |
 | out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
 | out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |

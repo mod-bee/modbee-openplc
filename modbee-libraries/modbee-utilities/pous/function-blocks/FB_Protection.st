@@ -6,7 +6,9 @@ Pins: bIn (TRUE = the condition is present), eCause (when it counts: always, onl
 only while it is stopped), ipOwner (the motor / pump / valve it protects), refData (its record: settings with
 the error it raises, status). It adds itself to its owner on its first call; the owner evaluates it in its
 own cycle and stops on a trip. Its own rung samples bIn.
-A protection that is not Clear and whose rung stops being called raises PartLost on its owner until reset. *)
+A protection that is not Clear and whose rung stops being called raises PartLost on its owner until reset.
+A thermistor: set.eErrorId := E_UtError.Thermistor; while it is tripped, a motor holds its coil off (bHoldOff),
+even against an IO-page force. *)
 
 FUNCTION_BLOCK FB_Protection EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT

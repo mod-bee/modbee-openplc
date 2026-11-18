@@ -1,0 +1,9 @@
+TYPE
+  ST_VesselFlowSts : STRUCT
+    bGood : BOOL;
+    fInflow : REAL; (* per hour: fRise + fOutflow *)
+    fRise : REAL; (* the volume's change per hour *)
+    fOutflow : REAL; (* the outflow meter's rate per hour *)
+    bRefused : BOOL;
+  END_STRUCT;
+END_TYPE

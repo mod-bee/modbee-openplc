@@ -5,6 +5,7 @@ ipSystem and FB_Object's bError / bWarning / eErrorId / eState. refData: the pum
 control, a group, a run) drive it through I_Equipment.Request; others read it through its properties.
 The pump has its own Off / Hand / Auto; the motor has its own too and follows the pump only
 while the motor is in Auto: a motor in Hand bypasses the pump ("motor in Hand": not available to the owner).
+set.bWarnNotAuto warns NotAuto while the pump or its motor is not in Auto (and the plant is).
 Auto: the owner's request after set.tStartDelay (it must last that long), kept for set.tMinRun and until it has
 been gone set.tStopDelay; after a stop, set.tMinOff (a power-up counts as a stop).
 Built in: start fail (asked, motor ready, not running) and dropped (stopped by itself while asked: a warning
@@ -121,6 +122,17 @@ END_METHOD
 
 METHOD PROTECTED OVERRIDE PartMasked : BOOL
   PartMasked := bRunCmd AND tNow - tRunStart < refData.set.tStartMask;
+END_METHOD
+
+(* the NotAuto warning: the pump or its motor not in Auto (a motor left in Hand after a test) *)
+METHOD PROTECTED OVERRIDE NotAuto : BOOL
+  VAR_INPUT
+    eMode : E_Mode;
+  END_VAR
+  NotAuto := eMode <> E_Mode.Auto;
+  IF ipMotor <> NULL THEN
+    NotAuto := NotAuto OR ipMotor.eActMode <> E_Mode.Auto;
+  END_IF;
 END_METHOD
 
 METHOD PROTECTED OVERRIDE Unavailable : BOOL

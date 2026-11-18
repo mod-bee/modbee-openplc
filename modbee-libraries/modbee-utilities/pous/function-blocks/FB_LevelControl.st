@@ -20,7 +20,11 @@ EMPTY). A bad level is ridden through for its protection delay (the request held
 Stop or RunOn (keeps the request as it was, for at most set.tRunOnMax, then stops).
 Parts (FB_LevelCheck, FB_Protection): a trip stops the request; a signal pauses it (source low, no flow);
 its parts: float backup (FB_LevelFloats), cleaning (FB_SumpClean), exercise (FB_Exercise), booster (FB_Booster),
-level checks (FB_LevelCheck); beside it: stages (FB_Stages -> FB_Group.nExtra). *)
+level checks (FB_LevelCheck); beside it: stages (FB_Stages -> FB_Group.nExtra), the inflow estimate
+(FB_VesselFlow). tot.nCycles counts each new call for pumping (kept over a power cut; bCmdResetTot clears it).
+No pump: while it asks and its target is neither available nor running (a pump or its motor in Hand or Off,
+faulted, every group member out), it is in fault: bError, eErrorId NoneAvailable (a run it serves can end on
+it, e.g. bInterlock := NOT fbStation.bError). It clears by itself when the target is available again. *)
 
 FUNCTION_BLOCK FB_LevelControl EXTENDS FB_Object IMPLEMENTS I_LevelControl
   VAR_INPUT
@@ -42,6 +46,7 @@ FUNCTION_BLOCK FB_LevelControl EXTENDS FB_Object IMPLEMENTS I_LevelControl
   VAR RETAIN
     stKept : ST_LevelControlSet;
     nKeptLayout : UINT;
+    stKeptTot : ST_LevelControlTot; (* kept at each cycle and reset *)
   END_VAR
   VAR CONSTANT
     cLayout : UINT := 2;
@@ -51,6 +56,7 @@ FUNCTION_BLOCK FB_LevelControl EXTENDS FB_Object IMPLEMENTS I_LevelControl
     bDemandLatch : BOOL; (* a demand runs until its level *)
     bDemandPrev : BOOL;
     bReq : BOOL;
+    bCycleWas : BOOL; (* the request last scan, for the cycle count *)
     fLevel : REAL;
     nRng : UDINT; (* the start variation's random numbers *)
     fOffset : REAL;
@@ -63,6 +69,7 @@ FUNCTION_BLOCK FB_LevelControl EXTENDS FB_Object IMPLEMENTS I_LevelControl
   END_VAR
   VAR_TEMP
     bReset : BOOL;
+    bNoneAvail : BOOL; (* asked, and the target is neither available nor running *)
     bGood : BOOL;
     bFailed : BOOL;
     bEmpty : BOOL;
@@ -109,8 +116,10 @@ IF bFirstScan THEN
   nRng := DWORD_TO_UDINT(DWORD#16#2545F491 XOR UDINT_TO_DWORD(LINT_TO_UDINT(TIME_TO_LINT(tNow))));
   IF nKeptLayout = cLayout THEN
     refData.set := stKept;
+    refData.tot := stKeptTot;
   ELSE
     stKept := refData.set;
+    stKeptTot := refData.tot;
     nKeptLayout := cLayout;
   END_IF;
 ELSIF SetOk() THEN
@@ -258,14 +267,31 @@ IF bPartHold AND NOT ipTarget.bIsRunning THEN
   bReq := FALSE;                  // no new start
 END_IF;
 ipTarget.Request(bRun := bReq, bHold := FALSE, bUrgent := bReq AND ((bEmpty AND bHighHigh) OR bPartRun));
+
+(* the cycle count: each new call for pumping *)
+IF bReq AND NOT bCycleWas THEN
+  refData.tot.nCycles := refData.tot.nCycles + 1;
+  stKeptTot := refData.tot;
+END_IF;
+bCycleWas := bReq;
+IF refData.bCmdResetTot THEN
+  refData.tot.nCycles := 0;
+  stKeptTot := refData.tot;
+  refData.bCmdResetTot := FALSE;
+END_IF;
 bRunning := bReq AND ipTarget.bIsRunning;
 
 (* status *)
-bError := bPartTrip OR stWLevelBad.bTrip;
+bNoneAvail := bReq AND NOT ipTarget.bIsAvailable AND NOT ipTarget.bIsRunning;
+bError := bPartTrip OR stWLevelBad.bTrip OR bNoneAvail;
 bWarning := bPartWarn OR stWLevelBad.bWarn OR refData.sts.bRefused;
 IF bPartTrip THEN
   eErrorId := ePartTrip;
-ELSIF stWLevelBad.bTrip OR stWLevelBad.bWarn THEN
+ELSIF stWLevelBad.bTrip THEN
+  eErrorId := E_UtError.SensorBad;
+ELSIF bNoneAvail THEN
+  eErrorId := E_UtError.NoneAvailable;
+ELSIF stWLevelBad.bWarn THEN
   eErrorId := E_UtError.SensorBad;
 ELSIF bPartWarn THEN
   eErrorId := ePartWarn;

@@ -1,7 +1,7 @@
 {
   "name": "modbee-utilities",
   "displayName": "ModBee Utilities",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "namespace": "modbee_utilities",
   "description": "Ready-made blocks for pump stations, motors, valves, dosing, irrigation and remote sites, in Beckhoff TwinCAT 3 style: motor starters (DOL, VSD, reversing, star-delta, two-speed) with jog, CT current, soft starter and shaft speed checks, pumps, duty / standby groups with a jockey, level control (empty, fill, timed, booster pump), speed loops and cascades, valves (two-position, latching, motorised, three-position, modulating, floating), measurements and meters, runs, irrigation zones and schedules, dosing and mixing, alarms, interlocks, sequences, an IO map, and the timers and helpers behind them. Equipment is driven by its owner; protections and add-ons are parts placed only where fitted; every block reports bError, bWarning, eErrorId and eState, and keeps its own settings and totals over a power cut.",
   "build": {

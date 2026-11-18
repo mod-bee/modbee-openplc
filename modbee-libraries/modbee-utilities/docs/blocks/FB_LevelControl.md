@@ -35,6 +35,7 @@ Offers `I_LevelControl`: wire this instance to another block's `ip…` pin of th
 | `bCmdDemand` | `BOOL` |  | as the bDemand pin, latched until the demand level is reached |
 | `bCmdStop` | `BOOL` |  | ends a latched demand |
 | `bCmdReset` | `BOOL` |  | Reset trips whose cause has gone (HMI command; cleared by the block) |
+| `bCmdResetTot` | `BOOL` |  | the cycle count back to 0 (cleared) |
 
 **Settings `set`** (`ST_LevelControlSet`)
 
@@ -72,6 +73,12 @@ Offers `I_LevelControl`: wire this instance to another block's `ip…` pin of th
 | `fStartNow` | `REAL` |  | the start level in use (with its variation) |
 | `bRunOn` | `BOOL` |  | running on a failed level |
 
+**Totals `tot`** (`ST_LevelControlTot`)
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `nCycles` | `UDINT` |  | pumping cycles: each new call (pump-down / fill) |
+
 ## Lists
 
 - `E_LevelFail`: `Stop`, `RunOn` (default `Stop`)
@@ -87,7 +94,9 @@ FILL (tank): start at or below `fStart`, stop at or above `fStop`; `bDemand` fil
 
 TIMED: no level needed (`ipLevel` may be unwired): on for `set.tOnTime`, off for `set.tOffTime`, over and over (on first), while `bRun`. `set.fStartVariation`: the start level moves at random by up to this, either way, after each cycle (fat build-up in a sump; used only when smaller than the start-stop gap). A held `bDemand` that reached `set.fDemandStop` runs again when the level is back at `set.fDemandRestart` (0 = the start level). -> `bDemandActive` (for [`FB_Stages`](FB_Stages.md)' demand pumps). `bDemandOnly`: the start / stop levels are not used, it runs on `bDemand` only (the high-high still acts in EMPTY). A bad level is ridden through for its protection delay (the request held), then `set.eLevelFail`: Stop or RunOn (keeps the request as it was, for at most `set.tRunOnMax`, then stops).
 
-Parts ([`FB_LevelCheck`](FB_LevelCheck.md), [`FB_Protection`](FB_Protection.md)): a trip stops the request; a signal pauses it (source low, no flow); its parts: float backup ([`FB_LevelFloats`](FB_LevelFloats.md)), cleaning ([`FB_SumpClean`](FB_SumpClean.md)), exercise ([`FB_Exercise`](FB_Exercise.md)), booster ([`FB_Booster`](FB_Booster.md)), level checks ([`FB_LevelCheck`](FB_LevelCheck.md)); beside it: stages ([`FB_Stages`](FB_Stages.md) -> `FB_Group.nExtra`).
+Parts ([`FB_LevelCheck`](FB_LevelCheck.md), [`FB_Protection`](FB_Protection.md)): a trip stops the request; a signal pauses it (source low, no flow); its parts: float backup ([`FB_LevelFloats`](FB_LevelFloats.md)), cleaning ([`FB_SumpClean`](FB_SumpClean.md)), exercise ([`FB_Exercise`](FB_Exercise.md)), booster ([`FB_Booster`](FB_Booster.md)), level checks ([`FB_LevelCheck`](FB_LevelCheck.md)); beside it: stages ([`FB_Stages`](FB_Stages.md) -> `FB_Group.nExtra`), the inflow estimate ([`FB_VesselFlow`](FB_VesselFlow.md)). `tot.nCycles` counts each new call for pumping (kept over a power cut; `bCmdResetTot` clears it).
+
+No pump: while it asks and its target is neither available nor running (a pump or its motor in Hand or Off, faulted, every group member out), it is in fault: `bError`, `eErrorId` NoneAvailable (a run it serves can end on it, e.g. `bInterlock` := NOT `fbStation.bError`). It clears by itself when the target is available again.
 
 ## Example
 
