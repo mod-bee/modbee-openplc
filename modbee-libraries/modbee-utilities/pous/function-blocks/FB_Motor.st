@@ -1,7 +1,8 @@
 (* FB_Motor — a direct-on-line motor or a run relay.
 
 Pins: bFeedback (run feedback contact), bOverload (TRUE = overload relay tripped) -> bQ (run output),
-bHoldOff (the block wants the output off: holds it off even while forced), plus FB_Equipment's bInterlock,
+bHoldOff (TRUE while the overload, or a part tripped as Thermistor, is tripped: wire it to the IO map's hold-off,
+so a commissioning force can run the motor in Off, but never past a tripped overload or thermistor), plus FB_Equipment's bInterlock,
 bPermissive, ipSystem and FB_Object's bError / bWarning / eErrorId / eState. refData: the motor's record.
 Built in: overload, no feedback (never came after a start), feedback lost (went while running), stuck
 (stays after a stop); run hours and starts. Everything else is a part placed beside it (FB_Protection for a
@@ -16,7 +17,7 @@ FUNCTION_BLOCK FB_Motor EXTENDS FB_Equipment IMPLEMENTS I_Motor
   END_VAR
   VAR_OUTPUT
     bQ : BOOL; (* run output *)
-    bHoldOff : BOOL; (* TRUE: the block wants the output off *)
+    bHoldOff : BOOL; (* TRUE: the overload or the thermistor is tripped: hold the output off, even forced *)
   END_VAR
   VAR RETAIN
     stKept : ST_MotorSet; (* last good settings *)
@@ -55,7 +56,7 @@ METHOD PROTECTED Drive
     bRun : BOOL;
   END_VAR
   bQ := bRun;
-  bHoldOff := NOT bRun;
+  bHoldOff := stWOverload.bTrip OR bPartHoldOff;
 END_METHOD
 
 METHOD PROTECTED FeedbackOk : BOOL

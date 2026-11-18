@@ -24,6 +24,7 @@ FUNCTION_BLOCK ABSTRACT FB_Object IMPLEMENTS I_PartOwner
     bPartDone : BOOL;
     bPartRun : BOOL;
     bPartCap : BOOL; (* a part's safety time cap is reached *)
+    bPartHoldOff : BOOL; (* a part tripped on a cause that holds a motor's coil off (Thermistor) *)
     bPartRequest : BOOL; (* a part asks for a normal run (not urgent) *)
     ePartTrip : E_UtError;
     ePartWarn : E_UtError;
@@ -63,6 +64,7 @@ METHOD PROTECTED FINAL EvaluateParts
   bPartRun := FALSE;
   bPartRequest := FALSE;
   bPartCap := FALSE;
+  bPartHoldOff := FALSE;
   ePartTrip := E_UtError.None;
   ePartWarn := E_UtError.None;
   ipCur := ipFirstPart;
@@ -75,6 +77,7 @@ METHOD PROTECTED FINAL EvaluateParts
       E_PartAction.Trip:
         IF NOT bPartTrip THEN ePartTrip := ePart; END_IF;
         bPartTrip := TRUE;
+        IF ePart = E_UtError.Thermistor THEN bPartHoldOff := TRUE; END_IF;
       E_PartAction.Stop:
         bPartStop := TRUE;
       E_PartAction.HoldStart:

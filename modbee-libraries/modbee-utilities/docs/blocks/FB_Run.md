@@ -71,6 +71,7 @@ Offers `I_Run`: wire this instance to another block's `ip…` pin of that type.
 | --- | --- | --- | --- |
 | `tElapsed` | `TIME` |  | run time counted (while the equipment runs) |
 | `tTimeLeft` | `TIME` |  | Time left in the delay or phase running now |
+| `tPaused` | `TIME` |  | how long the current pause has lasted (0 while not paused) |
 
 **Totals `tot`** (`ST_RunTot`)
 

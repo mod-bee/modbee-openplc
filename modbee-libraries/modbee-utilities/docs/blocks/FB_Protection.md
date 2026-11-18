@@ -52,6 +52,8 @@ One protection on any condition, as a part of its owner: a thermistor, a drive f
 
 A protection that is not Clear and whose rung stops being called raises PartLost on its owner until reset.
 
+A thermistor: `set.eErrorId` := `E_UtError.Thermistor`; while it is tripped, a motor holds its coil off (`bHoldOff`), even against an IO-page force.
+
 ## Example
 
 A motor thermistor relay.

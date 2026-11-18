@@ -17,7 +17,7 @@ Offers `I_Motor`: wire this instance to another block's `ip…` pin of that type
 | in | `bPermissive` | `BOOL` | `TRUE` | FALSE blocks a start *(from FB_Equipment)* |
 | in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
 | out | `bQ` | `BOOL` |  | run output |
-| out | `bHoldOff` | `BOOL` |  | TRUE: the block wants the output off |
+| out | `bHoldOff` | `BOOL` |  | TRUE: the overload or the thermistor is tripped: hold the output off, even forced |
 | out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
 | out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |

@@ -2,7 +2,8 @@
 A FUNCTION: no instance; the VAR_IN_OUTs are references to the owner's settings, status and private state.
 
 - a condition acts after its delay; Off ignores it; Signal follows it with no alarm (no latch, count, retry,
-warning or trip);
+warning or trip) and lets go once the cause has been gone tRecover (a restart delay: a source refills before
+its pump starts again; 0 = at once);
 - Auto clears once the cause has been gone tRecover; Retry does the same but locks out after nMaxRetries
 trips in the window; Manual needs a reset;
 - the recover wait counts from the raw cause gone; a cause back inside the wait starts it again; a reset is
@@ -92,8 +93,14 @@ IF bCause THEN
 END_IF;
 
 IF eResp = E_Response.Signal THEN
-  (* a control point: follows the condition, no alarm, nothing latched *)
-  stWork.bSignal := stWork.bActive;
+  (* a control point: follows the condition, no alarm, nothing latched; lets go tRecover after the cause *)
+  IF stWork.bActive THEN
+    stWork.bSignal := TRUE;
+  ELSIF stWork.bSignal AND tNow - stWork.tGoneSince < tRecover THEN
+    stWork.bSignal := TRUE;       // the restart delay
+  ELSE
+    stWork.bSignal := FALSE;
+  END_IF;
   stWork.bLatched := FALSE;
   stWork.bNeedsReset := FALSE;
   stWork.bActivePrev := stWork.bActive;
@@ -103,6 +110,9 @@ IF eResp = E_Response.Signal THEN
   stSts.tTimeLeft := T#0s;
   IF stWork.bActive THEN
     stSts.eState := E_ProtState.Signal;
+  ELSIF stWork.bSignal THEN
+    stSts.eState := E_ProtState.Recovering;
+    stSts.tTimeLeft := tRecover - (tNow - stWork.tGoneSince);
   ELSIF bCause THEN
     stSts.eState := E_ProtState.Pending;
     stSts.tTimeLeft := tDelay - (tNow - stWork.tCauseSince);

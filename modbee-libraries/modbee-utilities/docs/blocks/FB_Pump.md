@@ -88,7 +88,7 @@ Offers `I_Pump`: wire this instance to another block's `ip…` pin of that type.
 
 One pump: its owner link, its run decision and the motor it drives.
 
-The pump has its own Off / Hand / Auto; the motor has its own too and follows the pump only while the motor is in Auto: a motor in Hand bypasses the pump ("motor in Hand": not available to the owner).
+The pump has its own Off / Hand / Auto; the motor has its own too and follows the pump only while the motor is in Auto: a motor in Hand bypasses the pump ("motor in Hand": not available to the owner). `set.bWarnNotAuto` warns NotAuto while the pump or its motor is not in Auto (and the plant is).
 
 Auto: the owner's request after `set.tStartDelay` (it must last that long), kept for `set.tMinRun` and until it has been gone `set.tStopDelay`; after a stop, `set.tMinOff` (a power-up counts as a stop).
 

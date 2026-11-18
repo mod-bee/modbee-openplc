@@ -3,7 +3,9 @@ TYPE
     bCmdDemand : BOOL; (* as the bDemand pin, latched until the demand level is reached *)
     bCmdStop : BOOL; (* ends a latched demand *)
     bCmdReset : BOOL;
+    bCmdResetTot : BOOL; (* the cycle count back to 0 (cleared) *)
     set : ST_LevelControlSet;
     sts : ST_LevelControlSts;
+    tot : ST_LevelControlTot;
   END_STRUCT;
 END_TYPE

@@ -67,6 +67,7 @@ FUNCTION_BLOCK FB_Group EXTENDS FB_Object IMPLEMENTS I_Equipment
     cMax : INT := 4;
   END_VAR
   VAR
+    bAnyAvail : BOOL; (* a member was available on the last scan *)
     aMembers : ARRAY [1..4] OF I_EQUIPMENT;
     aCalled : ARRAY [1..4] OF BOOL;
     aSkipped : ARRAY [1..4] OF BOOL;
@@ -161,7 +162,7 @@ PROPERTY PUBLIC bIsReady : BOOL
 END_PROPERTY
 PROPERTY PUBLIC bIsAvailable : BOOL
   GET
-    bIsAvailable := NOT bWarning OR bAnyRunning;
+    bIsAvailable := (bAnyAvail AND NOT bError) OR bAnyRunning;   // a member can run (a warning is not "unavailable")
   END_GET
 END_PROPERTY
 PROPERTY PUBLIC bIsAuto : BOOL
@@ -513,6 +514,7 @@ FOR nI := 1 TO cMax DO
   END_IF;
 END_FOR;
 bAnyRunning := nRunning > 0;
+bAnyAvail := nAvail > 0;
 nDutyRunning := nDutyRun;
 
 (* status *)

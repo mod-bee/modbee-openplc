@@ -2,5 +2,6 @@ TYPE
   ST_RunDet : STRUCT
     tElapsed : TIME; (* run time counted (while the equipment runs) *)
     tTimeLeft : TIME;
+    tPaused : TIME; (* how long the current pause has lasted (0 while not paused) *)
   END_STRUCT;
 END_TYPE

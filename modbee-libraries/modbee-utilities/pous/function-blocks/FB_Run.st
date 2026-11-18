@@ -10,7 +10,9 @@ requested every scan and its running counts as bEquipRunning); else wire bRunCmd
 level control's bDemand), bActive, bPaused, plus FB_Object's outputs. refData: its record.
 set.bByTime: the run ends after set.tRunTime of running. set.tMaxTime > 0: it ends there, running or not (a
 warning). set.tMaxPause > 0: a pause that long ends it. After a run ends, a new one needs the request to drop
-and come again.
+and come again. A held request (bRun) refused by the interlock waits: it starts when the interlock comes back
+while it is still held (a remote start held while the pump is off starts when the pump is back in Auto); a
+latched start (bStart, bCmdStart) refused by the interlock is dropped.
 Restart (bRestart / bCmdRestart): the active run ends with stop reason Restart (counted, logged) and a new run
 starts in the same scan: time from zero, its parts start over (FB_RunVolume takes a new start total), latched as
 before, bRunCmd not dropped. A stop in the same scan wins; no run active: nothing happens. nActRunId changes at
@@ -67,6 +69,7 @@ FUNCTION_BLOCK FB_Run EXTENDS FB_Object IMPLEMENTS I_Run
     bMaxWarn : BOOL;
     bCapWarn : BOOL; (* a part's safety time cap ended a run (cleared by a reset or a new run) *)
     nRunId : UDINT; (* changes at every start *)
+    bHeldWait : BOOL; (* a held request refused by the interlock: starts when it comes back *)
   END_VAR
   VAR_TEMP
     bResetNow : BOOL;
@@ -221,6 +224,13 @@ END_IF;
 
 (* a new run *)
 bNew := (bRun AND NOT bRunPrev) OR bStart OR refData.bCmdStart;
+IF bRun AND NOT bRunPrev AND NOT bActive AND NOT bInterlock THEN
+  bHeldWait := TRUE;              // refused for now: it waits while held
+END_IF;
+IF NOT bRun OR bActive THEN
+  bHeldWait := FALSE;
+END_IF;
+bNew := bNew OR bHeldWait;
 IF NOT bActive AND bNew THEN
   IF bInterlock THEN
     bLatched := bStart OR refData.bCmdStart;
@@ -288,6 +298,11 @@ IF bPauseNow AND refData.set.tMaxPause > T#0s AND tNow - tPausedAt >= refData.se
   bPauseNow := FALSE;
 END_IF;
 bPaused := bPauseNow;
+IF bPauseNow THEN
+  refData.det.tPaused := tNow - tPausedAt;
+ELSE
+  refData.det.tPaused := T#0s;
+END_IF;
 bRunCmd := bActive AND NOT bWaiting AND NOT bPauseNow AND bInterlock;
 
 (* counting: only while the equipment runs *)
