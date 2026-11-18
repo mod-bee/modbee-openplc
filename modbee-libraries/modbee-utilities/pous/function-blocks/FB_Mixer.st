@@ -80,13 +80,31 @@ FUNCTION_BLOCK FB_Mixer EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_MixerSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF stS.bCycle AND (stS.tOnTime <= T#0s OR stS.tOffTime <= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tPreRun >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tPostRun >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (ABS(stS.fMinLevel) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (stS.fMinDeadband >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fMinDeadband <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_MixerSet;
   END_VAR
-  SetOk := NOT (stS.bCycle AND (stS.tOnTime <= T#0s OR stS.tOffTime <= T#0s))
-           AND stS.tPreRun >= T#0s AND stS.tPostRun >= T#0s
-           AND ABS(stS.fMinLevel) <= REAL#3.4E38 AND stS.fMinDeadband >= 0.0 AND stS.fMinDeadband <= REAL#3.4E38;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -117,6 +135,7 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
@@ -124,6 +143,7 @@ END_IF;
 bResetReq := SystemReset();
 IF bResetReq THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 tPre := T#0s;

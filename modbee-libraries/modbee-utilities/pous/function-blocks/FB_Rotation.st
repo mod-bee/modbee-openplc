@@ -98,19 +98,61 @@ FUNCTION_BLOCK FB_Rotation EXTENDS FB_Object IMPLEMENTS I_Part
 
 
 (* the settings are usable *)
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_RotationSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.nPulsesPerRev >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.tStartDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tStallTime > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.fMinSpeed >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fMaxSpeed >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.tSpeedDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tFilterTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tCoastDown >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tRetryWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.stStall.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stStall.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stStall.nMaxRetries >= 0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stUnderspeed.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stUnderspeed.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stUnderspeed.nMaxRetries >= 0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stOverspeed.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stOverspeed.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stOverspeed.nMaxRetries >= 0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stSensor.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stSensor.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stSensor.nMaxRetries >= 0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_RotationSet;
   END_VAR
-  SetOk := stS.nPulsesPerRev >= 1 AND stS.tStartDelay >= T#0s AND stS.tStallTime > T#0s
-           AND stS.fMinSpeed >= 0.0 AND stS.fMaxSpeed >= 0.0 AND stS.tSpeedDelay >= T#0s
-           AND stS.tFilterTime >= T#0s AND stS.tCoastDown >= T#0s AND stS.tRetryWindow >= T#0s
-           AND stS.stStall.tDelay >= T#0s AND stS.stStall.tRecover >= T#0s AND stS.stStall.nMaxRetries >= 0
-           AND stS.stUnderspeed.tDelay >= T#0s AND stS.stUnderspeed.tRecover >= T#0s
-           AND stS.stUnderspeed.nMaxRetries >= 0
-           AND stS.stOverspeed.tDelay >= T#0s AND stS.stOverspeed.tRecover >= T#0s
-           AND stS.stOverspeed.nMaxRetries >= 0
-           AND stS.stSensor.tDelay >= T#0s AND stS.stSensor.tRecover >= T#0s AND stS.stSensor.nMaxRetries >= 0;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* the first acting protection: its error, stall > overspeed > underspeed > sensor *)
@@ -211,6 +253,7 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
@@ -308,6 +351,7 @@ refData.bCmdReset := FALSE;
 bOwnerReset := FALSE;
 IF bResetReq THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 F_Protect(tNow := tNow, bCause := bPastStart AND (NOT bEdgeSeen OR tNow - tLastEdge >= refData.set.tStallTime)

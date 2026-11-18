@@ -2,5 +2,7 @@ TYPE
   ST_LevelCheckSts EXTENDS ST_ProtectionSts : STRUCT
     bBeyond : BOOL; (* the value is past the level (with its deadband) *)
     bBadHeld : BOOL; (* the measurement is bad, its state held *)
+    bRefused : BOOL; (* a bad settings write was put back (cleared by its reset) *)
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

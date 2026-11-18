@@ -48,14 +48,41 @@ FUNCTION_BLOCK FB_DoseFlow EXTENDS FB_Dose
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_DoseFlowSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF BaseSetWhy(refSet := stS) <> E_UtError.None THEN
+    SetWhy := BaseSetWhy(refSet := stS);
+  ELSIF NOT (stS.fRatio >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fRatio <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fMinFlow >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fMinFlow <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.tCarrierProven >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.fMaxRate >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fMaxRate <= 100.0) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fPulseVolume >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fPulseVolume <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.tPulseWidth >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_DoseFlowSet;
   END_VAR
-  SetOk := BaseSetOk(refSet := stS)
-           AND stS.fRatio >= 0.0 AND stS.fRatio <= REAL#3.4E38 AND stS.fMinFlow >= 0.0 AND stS.fMinFlow <= REAL#3.4E38
-           AND stS.tCarrierProven >= T#0s AND stS.fMaxRate >= 0.0 AND stS.fMaxRate <= 100.0
-           AND stS.fPulseVolume >= 0.0 AND stS.fPulseVolume <= REAL#3.4E38 AND stS.tPulseWidth >= T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -80,6 +107,7 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;

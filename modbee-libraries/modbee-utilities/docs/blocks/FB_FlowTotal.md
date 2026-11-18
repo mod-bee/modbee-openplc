@@ -27,6 +27,9 @@ Offers `I_Meter`: wire this instance to another block's `ip…` pin of that type
 | --- | --- | --- | --- |
 | `bCmdResetTotal` | `BOOL` |  | the totals back to 0 (cleared by the block) |
 | `bCmdResetBatch` | `BOOL` |  | the batch back to 0 (cleared by the block) |
+| `bCmdConfirm` | `BOOL` |  | confirms bCmdResetTotal (set.bConfirmReset); cleared by the block |
+| `bCmdPreset` | `BOOL` |  | the total to fPresetTotal (cleared by the block) |
+| `fPresetTotal` | `LREAL` |  |  |
 
 **Settings `set`** (`ST_FlowTotalSet`)
 
@@ -46,6 +49,7 @@ Offers `I_Meter`: wire this instance to another block's `ip…` pin of that type
 | `eInUnit` | `E_Unit` |  | the volume unit of the flow (None = no conversion) |
 | `eOutUnit` | `E_Unit` |  | the volume unit of every total and of the rate (None = no conversion) |
 | `stInputBad` | `ST_ProtectionSet` | `(eResponse := E_Response.Warn, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0)` | a protection's settings ([protections](../conventions.md#protections)) |
+| `bConfirmReset` | `BOOL` |  | a total reset needs the record's bCmdConfirm in the same write |
 
 **Status `sts`** (`ST_FlowTotalSts`)
 
@@ -55,6 +59,7 @@ Offers `I_Meter`: wire this instance to another block's `ip…` pin of that type
 | `bEstimating` | `BOOL` |  |  |
 | `fRate` | `REAL` |  | per hour |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stInputBad` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 
 **Totals `tot`** (`ST_FlowTotalTot`)
@@ -90,6 +95,8 @@ Units: `set.eInUnit` and `set.eOutUnit` (`E_Unit`, volume units: litre, m3, mega
 Batch: `tot.fBatch` counts like `tot.fTotal` (forward flow, estimates included) until `bResetBatch` / `bCmdResetBatch`; `bBatchDone` is TRUE once it has reached `set.fBatchTarget` (0 = off), until the batch is reset.
 
 A failed meter (`ipFlow` not good or not wired) does not count; with `set.bBadEstimate` the nominal rate is counted instead while `bActive`, into `tot.fEstimated` too (a warning). Bad past `set.stInputBad`'s delay: `bIsGood` FALSE and a warning (SensorBad). Totals and batch are LREAL, kept hourly, when `bActive` falls (the pump stops) and on a reset (`bCmdResetTotal`, `bCmdResetBatch`).
+
+Total commands: `bCmdResetTotal` (with `set.bConfirmReset`, only together with `bCmdConfirm` in the same write) and `bCmdPreset` (the total to `fPresetTotal`, 0 .. 1E12).
 
 ## Example
 

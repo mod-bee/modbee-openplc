@@ -44,13 +44,25 @@ FUNCTION_BLOCK FB_PumpDiag EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_PumpDiagSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.fPressureHigh <= 0.0 OR stS.fPressureLow <= 0.0 OR stS.fPressureLow < stS.fPressureHigh) THEN
+    SetWhy := E_UtError.LimitsBad;
+  ELSIF NOT (stS.fFlowHigh <= 0.0 OR stS.fFlowLow <= 0.0 OR stS.fFlowLow < stS.fFlowHigh) THEN
+    SetWhy := E_UtError.LimitsBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_PumpDiagSet;
   END_VAR
-  SetOk := stS.tDelay >= T#0s
-           AND (stS.fPressureHigh <= 0.0 OR stS.fPressureLow <= 0.0 OR stS.fPressureLow < stS.fPressureHigh)
-           AND (stS.fFlowHigh <= 0.0 OR stS.fFlowLow <= 0.0 OR stS.fFlowLow < stS.fFlowHigh);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* the measurement can be used: wired, fitted, good *)
@@ -86,12 +98,14 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.bRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF SystemReset() THEN
   refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the findings now *)

@@ -9,7 +9,9 @@ A run with a volume target always has a safety time cap on its counted time: the
 least flow expected, per hour in the meter's unit) takes at most fTarget / fMinFlow hours; with fMinFlow 0 the
 cap is set.tDefaultCap (sts.bDefaultCap shows it). When the run's counted time reaches the cap before the
 target, the run ends with stop reason TimeCap and the warning RunCapped (E_PartAction.Cap). The run's own
-set.tMaxTime still applies: whichever is first ends the run. sts.tCap shows the cap in use. *)
+set.tMaxTime still applies: whichever is first ends the run. sts.tCap shows the cap in use.
+A bad settings write is put back (sts.bRefused / sts.eRefusedWhy) and warns its owner (SettingRefused) until the
+run's reset. *)
 
 FUNCTION_BLOCK FB_RunVolume EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT
@@ -40,6 +42,22 @@ FUNCTION_BLOCK FB_RunVolume EXTENDS FB_Object IMPLEMENTS I_Part
   END_VAR
 
 
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.fTarget >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.stMeterFailed.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.fMinFlow >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fMinFlow <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.tDefaultCap > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PUBLIC Evaluate : E_PartAction
   VAR_INPUT
     bRunning : BOOL;
@@ -63,6 +81,10 @@ METHOD PUBLIC Evaluate : E_PartAction
     RETURN;
   END_IF;
   bCalled := FALSE;
+  IF bResetWanted THEN
+    refData.sts.bRefused := FALSE;
+    refData.sts.eRefusedWhy := E_UtError.None;
+  END_IF;
   (* each rise restarts the delay: meter failed = not good, or no rise, for the whole delay while running *)
   bTrip := F_Protect(tNow := TIME(), bCause := bRunning AND (NOT ipMeter.bIsGood OR NOT bRose),
                      bResetReq := bResetWanted, tRetryWindow := T#1h,
@@ -79,6 +101,9 @@ METHOD PUBLIC Evaluate : E_PartAction
     Evaluate := E_PartAction.Cap;
     eErrorId := E_UtError.RunCapped;
   ELSIF stWork.bWarn THEN
+    Evaluate := E_PartAction.Warn;
+  ELSIF refData.sts.bRefused THEN
+    eErrorId := E_UtError.SettingRefused;
     Evaluate := E_PartAction.Warn;
   ELSE
     Evaluate := E_PartAction.None;
@@ -114,11 +139,12 @@ IF bFirstScan THEN
   nRunSeen := ipRun.nActRunId;
   fLastTotal := ipMeter.fActTotal;
   bFirstScan := FALSE;
-ELSIF refData.set.fTarget >= 0.0 AND refData.set.stMeterFailed.tDelay >= T#0s AND refData.set.fMinFlow >= 0.0
-      AND refData.set.fMinFlow <= REAL#3.4E38 AND refData.set.tDefaultCap > T#0s THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
+  refData.sts.bRefused := TRUE;
 END_IF;
 IF NOT bAdded THEN
   ipRun.AddPart(ipPart := THIS^);
@@ -155,7 +181,13 @@ IF refData.set.fTarget > 0.0 THEN
 END_IF;
 bCalled := TRUE;
 bError := stWork.bTrip;
-bWarning := stWork.bWarn;
-IF bError OR bWarning THEN eErrorId := E_UtError.MeterFailed; ELSE eErrorId := E_UtError.None; END_IF;
+bWarning := stWork.bWarn OR refData.sts.bRefused;
+IF bError OR stWork.bWarn THEN
+  eErrorId := E_UtError.MeterFailed;
+ELSIF refData.sts.bRefused THEN
+  eErrorId := E_UtError.SettingRefused;
+ELSE
+  eErrorId := E_UtError.None;
+END_IF;
 
 END_FUNCTION_BLOCK

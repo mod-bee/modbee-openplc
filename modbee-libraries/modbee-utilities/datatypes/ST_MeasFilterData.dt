@@ -3,5 +3,6 @@ TYPE
     set : ST_MeasFilterSet;
     fValue : REAL; (* detail: the value out *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

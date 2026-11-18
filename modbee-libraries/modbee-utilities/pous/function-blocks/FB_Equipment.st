@@ -18,6 +18,8 @@ Trips (the block's own protections and its parts') stop it in every mode; the fi
 reset clears a trip it runs again at once while its owner still asks (set.bRestartAfterReset FALSE: the owner's
 request must drop and come back first: for machines that must not restart unexpectedly). set.bWarnNotAuto: a
 warning (NotAuto) while it is not in Auto and the plant is (ipSystem; unwired: always expected in Auto).
+tActIdleTime: the time since it last stopped (0 while running; power-on time only, from power-up);
+tActHandLeft: a Hand run's time left under set.tHandMax (0 = none counting). A child shows both in its det.
 
 A child calls, every scan:  bReset := Begin(refData, refData.set, refData.sts);
 (its own protections, with bReset)
@@ -55,10 +57,14 @@ FUNCTION_BLOCK ABSTRACT FB_Equipment EXTENDS FB_Object IMPLEMENTS I_Equipment
     bCmdResetIn : BOOL;
     eModeIn : E_EquipCmd;
     bJogIn : BOOL; (* Command(Jog) since the last cycle *)
+    bJogRevIn : BOOL; (* Command(JogRev) since the last cycle (a reversing variant reads it) *)
     bJogging : BOOL;
     tHandSince : TIME; (* the Hand run started *)
     bTripWas : BOOL; (* a trip stood last cycle *)
     bMustCycle : BOOL; (* a reset cleared a trip: the request must drop first *)
+    bResetThisScan : BOOL; (* a reset this scan (Begin's result), for a variant's own record *)
+    tIdleNow : TIME; (* since the last stop (0 while running) *)
+    tHandLeftNow : TIME; (* a Hand run's time left under set.tHandMax (0 = none counting) *)
   END_VAR
 
 
@@ -117,6 +123,7 @@ METHOD PUBLIC FINAL Command
     E_EquipCmd.Reset: bCmdResetIn := TRUE;
     E_EquipCmd.ModeOff, E_EquipCmd.ModeHand, E_EquipCmd.ModeAuto: eModeIn := eCmd;
     E_EquipCmd.Jog: bJogIn := TRUE;
+    E_EquipCmd.JogRev: bJogIn := TRUE; bJogRevIn := TRUE;
   ELSE
     ;
   END_CASE;
@@ -138,6 +145,18 @@ PROPERTY PUBLIC bIsReady : BOOL
   GET
     bIsReady := eModePrev <> E_Mode.Off AND eModePrev <> E_Mode.OutOfService AND bInterlock AND bPermissive AND NOT bTripNow
                 AND NOT Unavailable();   (* e.g. an actuator in Local, a pump's motor in Hand *)
+  END_GET
+END_PROPERTY
+
+PROPERTY PUBLIC tActIdleTime : TIME
+  GET
+    tActIdleTime := tIdleNow;
+  END_GET
+END_PROPERTY
+
+PROPERTY PUBLIC tActHandLeft : TIME
+  GET
+    tActHandLeft := tHandLeftNow;
   END_GET
 END_PROPERTY
 
@@ -224,6 +243,7 @@ METHOD PROTECTED FINAL Begin : BOOL
       3: refSet.eMode := E_Mode.OutOfService;   // refused below where the block does not allow it
     ELSE
       refSts.bRefused := TRUE;
+      refSts.eRefusedWhy := E_UtError.ChoiceBad;
     END_CASE;
     refCmd.nCmdMode := -1;
   END_IF;
@@ -247,10 +267,12 @@ METHOD PROTECTED FINAL Begin : BOOL
       IF NOT AllowOos() THEN
         refSet.eMode := eModePrev;
         refSts.bRefused := TRUE;
+        refSts.eRefusedWhy := E_UtError.ChoiceBad;
       END_IF;
   ELSE
     refSet.eMode := eModePrev;
     refSts.bRefused := TRUE;
+    refSts.eRefusedWhy := E_UtError.ChoiceBad;
   END_CASE;
   IF refSet.eMode <> eModePrev THEN
     bHandRun := FALSE;
@@ -265,6 +287,7 @@ METHOD PROTECTED FINAL Begin : BOOL
     bReset := TRUE;
     refCmd.bCmdReset := FALSE;
     refSts.bRefused := FALSE;
+    refSts.eRefusedWhy := E_UtError.None;
   END_IF;
   IF SystemReset() THEN
     bReset := TRUE;
@@ -283,6 +306,7 @@ METHOD PROTECTED FINAL Begin : BOOL
     END_IF;
     refCmd.bCmdStop := FALSE;
   END_IF;
+  bResetThisScan := bReset;
   Begin := bReset;
 END_METHOD
 
@@ -305,6 +329,7 @@ METHOD PROTECTED FINAL Finish
   END_VAR
   bJogNow := bJogIn;              (* a jog is held only while Command(Jog) keeps coming *)
   bJogIn := FALSE;
+  bJogRevIn := FALSE;
   bJogging := FALSE;
   (* parts: the owner calls them, in its own cycle *)
   (* a part's Mask (priming) masks the others from the next scan, with the child's own start mask *)
@@ -416,6 +441,16 @@ METHOD PROTECTED FINAL Finish
     tStoppedAt := tNow;
   END_IF;
   bRunCmdPrev := bRunCmd;
+  IF bRunCmd THEN
+    tIdleNow := T#0s;
+  ELSE
+    tIdleNow := tNow - tStoppedAt;
+  END_IF;
+  IF bHandRun AND refSet.tHandMax > T#0s THEN
+    tHandLeftNow := MAX(T#0s, refSet.tHandMax - (tNow - tHandSince));
+  ELSE
+    tHandLeftNow := T#0s;
+  END_IF;
 
   Drive(bRun := bRunCmd);
 

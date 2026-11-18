@@ -5,5 +5,7 @@ TYPE
     tCap : TIME; (* the safety time cap in use (0 = no volume target) *)
     bDefaultCap : BOOL; (* the cap is tDefaultCap, not worked out from fMinFlow *)
     stMeterFailed : ST_ProtectionSts;
+    bRefused : BOOL; (* a bad settings write was put back (cleared by the run's reset) *)
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

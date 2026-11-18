@@ -38,14 +38,35 @@ FUNCTION_BLOCK FB_MotorStarDelta EXTENDS FB_Motor
   END_VAR
 
 
+METHOD PRIVATE SdWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_StarDeltaSet;
+  END_VAR
+  SdWhy := E_UtError.None;
+  IF NOT (stS.tStarTime > T#0s) THEN
+    SdWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tTransition >= T#0s) THEN
+    SdWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tChangeover > T#0s) THEN
+    SdWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.stChangeover.tDelay >= T#0s) THEN
+    SdWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stChangeover.tRecover >= T#0s) THEN
+    SdWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stChangeover.nMaxRetries >= 0) THEN
+    SdWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.fStarCurrentPct >= 0.0) THEN
+    SdWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fStarCurrentPct <= REAL#3.4E38) THEN
+    SdWhy := E_UtError.AboveMax;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SdOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_StarDeltaSet;
   END_VAR
-  SdOk := stS.tStarTime > T#0s AND stS.tTransition >= T#0s AND stS.tChangeover > T#0s
-          AND stS.stChangeover.tDelay >= T#0s AND stS.stChangeover.tRecover >= T#0s
-          AND stS.stChangeover.nMaxRetries >= 0
-          AND stS.fStarCurrentPct >= 0.0 AND stS.fStarCurrentPct <= REAL#3.4E38;
+  SdOk := SdWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* the changeover supervision, with the motor's own protections; a dead time holds a new start *)
@@ -95,8 +116,13 @@ IF bSdFirst THEN
 ELSIF SdOk(stS := refSd.set) THEN
   stKeptSd := refSd.set;
 ELSIF SdOk(stS := stKeptSd) THEN
+  refSd.sts.eRefusedWhy := SdWhy(stS := refSd.set);
   refSd.set := stKeptSd;
   refSd.sts.bRefused := TRUE;
+END_IF;
+IF bResetThisScan THEN                  // the equipment's reset clears a refused write
+  refSd.sts.bRefused := FALSE;
+  refSd.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the star time, or the star current risen and fallen, with the main confirmed *)

@@ -32,6 +32,14 @@ FUNCTION_BLOCK FB_VesselFlow EXTENDS FB_Object
   END_VAR
 
 
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tRateWindow > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 IF ipVessel = NULL OR NOT __ISVALIDREF(refData) THEN
   bError := TRUE;
   IF ipVessel = NULL THEN eErrorId := E_UtError.NoMeasurement; ELSE eErrorId := E_UtError.NoRecord; END_IF;
@@ -47,11 +55,16 @@ IF bFirstScan THEN
     nKeptLayout := cLayout;
   END_IF;
   bFirstScan := FALSE;
-ELSIF refData.set.tRateWindow > T#0s THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
+END_IF;
+IF SystemReset() THEN                // the plant reset clears a refused write
+  refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 bVesGood := ipVessel.bIsGood AND ipVessel.bIsFitted;

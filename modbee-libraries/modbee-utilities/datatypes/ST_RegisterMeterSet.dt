@@ -7,5 +7,6 @@ TYPE
     fMaxStep : LREAL; (* a larger increase in one read is a glitch (0 = no limit) *)
     tRateWindow : TIME := T#60s;
     stInputBad : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#30s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0);
+    bConfirmReset : BOOL; (* a total reset needs the record's bCmdConfirm in the same write *)
   END_STRUCT;
 END_TYPE

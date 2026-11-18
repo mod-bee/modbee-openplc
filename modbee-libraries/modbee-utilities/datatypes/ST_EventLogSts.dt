@@ -7,5 +7,6 @@ TYPE
     bWrnConfig : BOOL; (* aBuffer has no element, or more than 16 while kept *)
     bWrnSrc : BOOL; (* a call this scan had an nSrc outside aSources (ignored) *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

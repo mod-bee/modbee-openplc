@@ -15,9 +15,12 @@ conditions still out, the lowest of those. A reset acts in the same scan.
 Errors: bError for no rows, tables of different sizes or more than 16 rows, or settings that were never good
 (BadSetting); bWarning for a bypass (Bypassed) or a refused write (SettingRefused). Not OK is the block's job, not
 an error: eState Held, eErrorId ConditionOut.
-Kept settings (a retained last-good copy, restored at power-up, a bad write put back, sts.bRefused): set, and
+Kept settings (a retained last-good copy, restored at power-up, a bad write put back, sts.bRefused / eRefusedWhy):
+set, and
 each condition row packed into one DWORD: bits 0..1 eReset, 2 bBypassAllowed, 3..31 tDelay in 10 ms steps
-(0 .. about 62 days; kept rounded down to 10 ms). *)
+(0 .. about 62 days; kept rounded down to 10 ms).
+Times: each row shows tDelayLeft (not OK, until it counts), tBypassFor / tBypassLeft (a bypass so far / until it
+drops out); sts.tTimeLeft is the shortest delay left. *)
 
 FUNCTION_BLOCK FB_Interlock EXTENDS FB_Object
   VAR_INPUT
@@ -50,6 +53,7 @@ FUNCTION_BLOCK FB_Interlock EXTENDS FB_Object
     bResetSeen : BOOL;
   END_VAR
   VAR_TEMP
+    tLeftMin : TIME;
     bOkSet : BOOL;
     bRowsOk : BOOL;
     bCfgBad : BOOL;
@@ -68,21 +72,47 @@ FUNCTION_BLOCK FB_Interlock EXTENDS FB_Object
 
 
 (* the block's settings are usable *)
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_IntlkSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tBypassTimeout >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.nMaxRetries >= 0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.tRetryWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_IntlkSet;
   END_VAR
-  SetOk := stS.tBypassTimeout >= T#0s AND stS.nMaxRetries >= 0 AND stS.tRetryWindow >= T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* one condition's settings are usable (and fit the kept form) *)
+METHOD PRIVATE CondWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_IntlkCondSet;
+  END_VAR
+  CondWhy := E_UtError.None;
+  IF NOT (stS.tDelay >= T#0s) THEN
+    CondWhy := E_UtError.TimeBad;
+  ELSIF NOT (TIME_TO_LINT(stS.tDelay) / 10 <= 16#1FFFFFFF) THEN
+    CondWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.eReset = E_ResetMode.Auto OR stS.eReset = E_ResetMode.Retry OR stS.eReset = E_ResetMode.Manual) THEN
+    CondWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE CondOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_IntlkCondSet;
   END_VAR
-  CondOk := stS.tDelay >= T#0s AND TIME_TO_LINT(stS.tDelay) / 10 <= 16#1FFFFFFF
-            AND (stS.eReset = E_ResetMode.Auto OR stS.eReset = E_ResetMode.Retry
-                 OR stS.eReset = E_ResetMode.Manual);
+  CondOk := CondWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* one condition's settings as its kept DWORD, and back *)
@@ -145,6 +175,7 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOkSet := TRUE;
@@ -155,6 +186,7 @@ FOR nI := 1 TO nRows DO
   IF CondOk(stS := aCondSet[nS]) THEN
     aKeptCond[nI] := Pack(stS := aCondSet[nS]);
   ELSIF nI <= nKeptRows THEN
+    refData.sts.eRefusedWhy := CondWhy(stS := aCondSet[nS]);
     Unpack(nW := aKeptCond[nI], stS := aCondSet[nS]);
     refData.sts.bRefused := TRUE;
   ELSE
@@ -172,6 +204,7 @@ refData.bCmdReset := FALSE;
 IF bResetReq THEN
   nFirstOut := 0;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* each condition *)
@@ -214,6 +247,12 @@ FOR nI := 1 TO nRows DO
   IF bResetReq AND aCond[nR].bOk THEN
     aCond[nR].nRetries := 0;
   END_IF;
+  IF aCond[nR].bBad AND NOT bActive AND aCondSet[nS].tDelay > T#0s THEN
+    aCond[nR].tDelayLeft := aCondSet[nS].tDelay - (tNow - aCond[nR].tBadSince);
+    IF tLeftMin = T#0s OR aCond[nR].tDelayLeft < tLeftMin THEN tLeftMin := aCond[nR].tDelayLeft; END_IF;
+  ELSE
+    aCond[nR].tDelayLeft := T#0s;
+  END_IF;
   aCond[nR].bWentBad := (bActive OR aCond[nR].bLatched) AND NOT aCond[nR].bTripped;
   aCond[nR].bTripped := bActive OR aCond[nR].bLatched;
   (* the bypass: allowed, asked, permitted, within the timeout *)
@@ -228,6 +267,17 @@ FOR nI := 1 TO nRows DO
     END_IF;
     aCond[nR].bBypassed := refData.set.tBypassTimeout <= T#0s
                            OR tNow - aCond[nR].tBypassAt < refData.set.tBypassTimeout;
+  END_IF;
+  IF aCond[nR].bBypassed THEN
+    aCond[nR].tBypassFor := tNow - aCond[nR].tBypassAt;
+    IF refData.set.tBypassTimeout > T#0s THEN
+      aCond[nR].tBypassLeft := refData.set.tBypassTimeout - aCond[nR].tBypassFor;
+    ELSE
+      aCond[nR].tBypassLeft := T#0s;
+    END_IF;
+  ELSE
+    aCond[nR].tBypassFor := T#0s;
+    aCond[nR].tBypassLeft := T#0s;
   END_IF;
   (* into the whole *)
   IF aCond[nR].bBypassed THEN
@@ -282,6 +332,7 @@ refData.sts.bOk := bOk;
 refData.sts.nFirstOut := nFirstOut;
 refData.sts.bBypassed := bBypassed;
 refData.sts.nNotOk := nNotOk;
+refData.sts.tTimeLeft := tLeftMin;
 bFirstScan := FALSE;
 
 END_FUNCTION_BLOCK

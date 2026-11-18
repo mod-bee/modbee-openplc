@@ -1,5 +1,7 @@
 TYPE
   ST_ValveLatchSet : STRUCT
     tPulse : TIME := T#500ms; (* coil pulse length *)
+    tOpenPulse : TIME; (* the open pulse (0 = tPulse) *)
+    tClosePulse : TIME; (* the close pulse (0 = tPulse) *)
   END_STRUCT;
 END_TYPE

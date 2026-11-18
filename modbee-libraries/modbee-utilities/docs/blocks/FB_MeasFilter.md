@@ -25,6 +25,7 @@ Offers `I_Measurement`: wire this instance to another block's `ip…` pin of tha
 | --- | --- | --- | --- |
 | `fValue` | `REAL` |  | detail: the value out |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_MeasFilterSet`)
 

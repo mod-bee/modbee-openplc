@@ -37,6 +37,9 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 | `bCmdStop` | `BOOL` |  | stop in Hand and Auto (rising edge, cleared) |
 | `bCmdReset` | `BOOL` |  | reset trips whose cause has gone (rising edge, cleared) |
 | `nCmdPos` | `INT` | `-1` | Hand position 1..3 (set back to -1) |
+| `bSimulate` | `BOOL` |  | the switches are ignored, the travel times decide; not kept |
+| `bCmdPreset` | `BOOL` |  | set tot.nStrokes to nPresetStrokes (cleared by the block) |
+| `nPresetStrokes` | `UDINT` |  |  |
 
 **Settings `set`** (`ST_Valve3PosSet`)
 
@@ -62,6 +65,9 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 | `stTravel` | `ST_ProtectionSet` | `(eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Retry, tRecover := T#10s, nMaxRetries := 3)` | a protection's settings ([protections](../conventions.md#protections)) |
 | `nAutoPos` | `INT` | `3` | the position asked with no number |
 | `bPosLatch` | `BOOL` |  | the last position asked stays when the request ends |
+| `stBothLimits` | `ST_ProtectionSet` | `(eResponse := E_Response.Trip, tDelay := T#1s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0)` | two made at once; a protection's settings ([protections](../conventions.md#protections)) |
+| `stPositionLost` | `ST_ProtectionSet` | `(eResponse := E_Response.Warn, tDelay := T#2s, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 0)` | the reached position's switch lost; a protection's settings ([protections](../conventions.md#protections)) |
+| `stNoMovement` | `ST_ProtectionSet` | `(eResponse := E_Response.Off, tDelay := T#2s, eReset := E_ResetMode.Retry, tRecover := T#1m, nMaxRetries := 3)` | off by default: moving, and the switch of the position it left still made; a protection's settings ([protections](../conventions.md#protections)) |
 
 **Status `sts`** (`ST_Valve3PosSts`)
 
@@ -76,11 +82,16 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 | `bLinked` | `BOOL` |  | an owner is driving it |
 | `bInterlocked` | `BOOL` |  | The interlock is holding it off |
 | `bRefused` | `BOOL` |  | a setting write was refused and put back |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `bJogging` | `BOOL` |  | jogging (FB_MotorJog, Hand only) |
 | `bMustCycle` | `BOOL` |  | a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) |
 | `nTargetPos` | `INT` |  | going to (0 = hold) |
 | `nActualPos` | `INT` |  | reached (-1 not known) |
 | `stTravel` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
+| `stBothLimits` | `ST_ProtectionSts` |  | two made at once; a protection's status ([protections](../conventions.md#protections)) |
+| `stPositionLost` | `ST_ProtectionSts` |  | the reached position's switch lost; a protection's status ([protections](../conventions.md#protections)) |
+| `stNoMovement` | `ST_ProtectionSts` |  | off by default: moving, and the switch of the position it left still made; a protection's status ([protections](../conventions.md#protections)) |
+| `tLastStroke` | `TIME` |  | the last move's time (start to arrival) |
 
 **Totals `tot`** (`ST_ValveTot`)
 
@@ -98,7 +109,7 @@ A three-position valve: a 3-way diverter (A / closed / B), a spring-centred doub
 
 On `FB_Equipment`: an owner (a route, a zone) drives it through `I_Equipment.Request`: `bRun` = go, `fSpeed` = the position 1..3 (none: `set.nAutoPos`, default 3); its request off = `set.nRestPos`, or with `set.bPosLatch` the last position asked (it stays there until another is asked). Hand: `set.nHandPos` (kept; `nCmdPos` 1..3, or [`FB_LocalControl`](FB_LocalControl.md)'s `bPos1`..bPos3, writes it and starts in Hand); a motorised valve: [`FB_LocalControl`](FB_LocalControl.md)'s `bHalt` stops it where it is until the next position or command. Off, the interlock or a trip: `set.nSafePos`. "Running" is away from the rest position. An [`FB_Exercise`](FB_Exercise.md) part on it moves an idle valve (in Auto) to `nAutoPos` for its run time.
 
-Kinds (`set.eKind`): SpringCentre (`bOut1` / `bOut3` held, none for 2: the springs centre it), ThreeCoil (`bOut1`..3 held), Motor (`bOut1` drives toward 1, `bOut3` toward 3, `set.tReversal` between; the mid by `bLs2`, or timed `set.tMid` from a known end (0 = half `tTravel`); a position not known goes to 1 first). Arrival: the position's switch when used, else `set.tTravel` after the move started. A switch that does not come within `tTravel` + 50 %: the travel protection (TravelTimeout). Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back; a bad setting with no good copy is a trip (BadSetting) with every output off (a spring-centred valve centres). Moves counted (`tot.nStrokes`: each new target 1..3), kept hourly.
+Kinds (`set.eKind`): SpringCentre (`bOut1` / `bOut3` held, none for 2: the springs centre it), ThreeCoil (`bOut1`..3 held), Motor (`bOut1` drives toward 1, `bOut3` toward 3, `set.tReversal` between; the mid by `bLs2`, or timed `set.tMid` from a known end (0 = half `tTravel`); a position not known goes to 1 first). Arrival: the position's switch when used, else `set.tTravel` after the move started. A switch that does not come within `tTravel` + 50 % of a move: the travel protection (TravelTimeout); a switch lost after arrival is `set.stPositionLost`'s. Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back; a bad setting with no good copy is a trip (BadSetting) with every output off (a spring-centred valve centres). Moves counted (`tot.nStrokes`: each new target 1..3), kept hourly; the record's `bCmdPreset` sets it to `nPresetStrokes`; `sts.tLastStroke` is the last move's time. With the switches: `set.stBothLimits` (two made at once), `set.stPositionLost` (the reached position's switch lost), `set.stNoMovement` (off by default: moving, and the switch of the position it left still made). Simulation (the record's `bSimulate`, not kept, cleared by a system reset): the switches are ignored and the travel times decide, with a warning (Simulated).
 
 ## Example
 
@@ -124,6 +135,8 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `eActMode : E_Mode`
 - property `bIsRunning : BOOL`
 - property `bIsReady : BOOL`
+- property `tActIdleTime : TIME`
+- property `tActHandLeft : TIME`
 - property `bIsAvailable : BOOL`
 - property `bIsAuto : BOOL`
 - property `bIsFaulted : BOOL`

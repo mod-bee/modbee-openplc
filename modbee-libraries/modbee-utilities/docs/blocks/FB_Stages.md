@@ -10,6 +10,7 @@ The extra level stages 2 to 4 of a pump station: tells an FB_Group how many more
 | in | `eMode` | `E_LevelMode` |  | Empty (sump) or Fill (tank): the level control's |
 | in | `bRun` | `BOOL` |  | the stages may act (the level control is running) |
 | in | `nMembers` | `INT` | `2` | pumps in the station |
+| in | `bRunAll` | `BOOL` |  | every pump (FB_LevelFloats.bRunAll: the overflow backup) |
 | in | `bDemand` | `BOOL` |  | a demand runs (FB_LevelControl.bDemandActive) |
 | in | `refData` | `REFERENCE TO ST_StagesData` |  | Its record (a variable of this type) |
 | in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
@@ -27,6 +28,7 @@ The extra level stages 2 to 4 of a pump station: tells an FB_Group how many more
 | --- | --- | --- | --- |
 | `nExtra` | `INT` |  | status |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_StagesSet`)
 

@@ -84,18 +84,46 @@ FUNCTION_BLOCK FB_Schedule EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_ScheduleSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tOverrideFor >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tUtcOffset >= -T#24h) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tUtcOffset <= T#24h) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_ScheduleSet;
   END_VAR
-  SetOk := stS.tOverrideFor >= T#0s AND stS.tUtcOffset >= -T#24h AND stS.tUtcOffset <= T#24h;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
+END_METHOD
+
+METHOD PRIVATE WindowWhy : E_UtError
+  VAR_INPUT
+    stW : REFERENCE TO ST_SchedWindow;
+  END_VAR
+  WindowWhy := E_UtError.None;
+  IF NOT (stW.nEveryDays >= 0) THEN
+    WindowWhy := E_UtError.BelowMin;
+  ELSIF NOT (stW.nEveryDays <= 366) THEN
+    WindowWhy := E_UtError.AboveMax;
+  ELSIF NOT (stW.nDays <= 16#7F) THEN
+    WindowWhy := E_UtError.AboveMax;
+  END_IF;
 END_METHOD
 
 METHOD PRIVATE WindowOk : BOOL
   VAR_INPUT
     stW : REFERENCE TO ST_SchedWindow;
   END_VAR
-  WindowOk := stW.nEveryDays >= 0 AND stW.nEveryDays <= 366 AND stW.nDays <= 16#7F;
+  WindowOk := WindowWhy(stW := stW) = E_UtError.None;
 END_METHOD
 
 (* the window is on at this local time (seconds since 1970) *)
@@ -189,6 +217,7 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOkSet := TRUE;
@@ -206,6 +235,7 @@ FOR nI := 1 TO nHi - nLo + 1 DO
       nKeptMask := nKeptMask OR nBit;
     END_IF;
   ELSIF nBit <> 0 AND (nKeptMask AND nBit) <> 0 THEN
+    refData.sts.eRefusedWhy := WindowWhy(stW := aWindow[nJ]);
     aWindow[nJ] := aKeptWindow[nI];
     refData.sts.bRefused := TRUE;
   ELSIF refData.sts.nConfigWindow = 0 THEN
@@ -359,6 +389,7 @@ ELSE
 END_IF;
 IF SystemReset() THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 refData.sts.bActive := bActive;
 refData.sts.bOverridden := bOverridden;

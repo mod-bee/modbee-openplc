@@ -56,11 +56,27 @@ FUNCTION_BLOCK FB_ValveFloat EXTENDS FB_ValvePos
   END_VAR
 
 
+METHOD PRIVATE FloatWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_ValveFloatSet;
+  END_VAR
+  FloatWhy := E_UtError.None;
+  IF NOT (stS.tStroke > T#0s) THEN
+    FloatWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tMinPulse >= T#0s) THEN
+    FloatWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tOverTravel >= T#0s) THEN
+    FloatWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tReversal >= T#0s) THEN
+    FloatWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE FloatOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_ValveFloatSet;
   END_VAR
-  FloatOk := stS.tStroke > T#0s AND stS.tMinPulse >= T#0s AND stS.tOverTravel >= T#0s AND stS.tReversal >= T#0s;
+  FloatOk := FloatWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* before the valve's scan: the estimate from last scan's drive, the end switches *)
@@ -77,8 +93,13 @@ IF __ISVALIDREF(refFloat) AND __ISVALIDREF(refData) THEN
   ELSIF FloatOk(stS := refFloat.set) THEN
     stKeptFloat := refFloat.set;
   ELSIF FloatOk(stS := stKeptFloat) THEN
+    refFloat.sts.eRefusedWhy := FloatWhy(stS := refFloat.set);
     refFloat.set := stKeptFloat;
     refFloat.sts.bRefused := TRUE;
+  END_IF;
+  IF bResetThisScan THEN                  // the equipment's reset clears a refused write
+    refFloat.sts.bRefused := FALSE;
+    refFloat.sts.eRefusedWhy := E_UtError.None;
   END_IF;
   fStrokeMs := LINT_TO_REAL(TIME_TO_LINT(refFloat.set.tStroke));
   IF fStrokeMs < 1.0 THEN

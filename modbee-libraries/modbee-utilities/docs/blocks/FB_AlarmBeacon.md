@@ -27,6 +27,7 @@ Flashes alarm numbers on a single lamp, for sites with one fault lamp and no HMI
 | `nActive` | `INT` |  | status |
 | `nCode` | `INT` |  | the number being shown, 0 = none |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_BeaconSet`)
 

@@ -2,6 +2,7 @@ TYPE
   ST_Motor2SpeedSts : STRUCT
     bHighSpeed : BOOL;
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     stChangeover : ST_ProtectionSts;
   END_STRUCT;
 END_TYPE

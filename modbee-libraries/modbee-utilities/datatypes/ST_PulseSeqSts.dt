@@ -8,5 +8,6 @@ TYPE
     bWaitDemandDrop : BOOL; (* stopped: demand cleaning waits for bDemand / bEnable to drop *)
     tTimeLeft : TIME; (* in the phase *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

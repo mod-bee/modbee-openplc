@@ -27,6 +27,7 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 | `bWaiting` | `BOOL` |  | status |
 | `tWaited` | `TIME` |  |  |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_RunGateSet`)
 

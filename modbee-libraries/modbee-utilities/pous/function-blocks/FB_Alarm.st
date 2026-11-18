@@ -70,18 +70,40 @@ FUNCTION_BLOCK FB_Alarm EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_AlarmSettings;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.stRow.eResponse = E_Response.Off OR stS.stRow.eResponse = E_Response.Warn
+          OR stS.stRow.eResponse = E_Response.Trip OR stS.stRow.eResponse = E_Response.Signal) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stRow.eReset = E_ResetMode.Auto OR stS.stRow.eReset = E_ResetMode.Manual
+             OR stS.stRow.eReset = E_ResetMode.Retry) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stRow.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stRow.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stRow.tRearm >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.tRetryWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tMaxShelve >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tShelveFor >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.ePriority = E_AlarmPriority.Low OR stS.ePriority = E_AlarmPriority.Medium
+             OR stS.ePriority = E_AlarmPriority.High OR stS.ePriority = E_AlarmPriority.Critical) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_AlarmSettings;
   END_VAR
-  SetOk := (stS.stRow.eResponse = E_Response.Off OR stS.stRow.eResponse = E_Response.Warn
-            OR stS.stRow.eResponse = E_Response.Trip OR stS.stRow.eResponse = E_Response.Signal)
-           AND (stS.stRow.eReset = E_ResetMode.Auto OR stS.stRow.eReset = E_ResetMode.Manual
-                OR stS.stRow.eReset = E_ResetMode.Retry)
-           AND stS.stRow.tDelay >= T#0s AND stS.stRow.tRecover >= T#0s AND stS.stRow.tRearm >= T#0s
-           AND stS.tRetryWindow >= T#0s AND stS.tMaxShelve >= T#0s AND stS.tShelveFor >= T#0s
-           AND (stS.ePriority = E_AlarmPriority.Low OR stS.ePriority = E_AlarmPriority.Medium
-                OR stS.ePriority = E_AlarmPriority.High OR stS.ePriority = E_AlarmPriority.Critical);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -104,6 +126,7 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
@@ -136,6 +159,7 @@ bCountSeen := refData.bCmdResetCount;
 refData.bCmdResetCount := FALSE;
 IF bRstReq THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* out of service and shelving; together, the alarm stays live *)

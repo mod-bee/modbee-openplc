@@ -2,7 +2,8 @@
 
 Pins: bRun (the process may run: e.g. the system not Off), bDemand (pump down / fill now, past the start
 level, to set.fDemandStop), bInterlock (FALSE: nothing is requested), ipLevel (the level: a transmitter, a
-vessel), ipTarget (the pump it drives), plus FB_Object's outputs. refData: its record.
+vessel), ipTarget (the pump it drives), fSpeed (the speed asked of the target while it asks, e.g. for VSD pumps;
+< 0 = the target's own), plus FB_Object's outputs. refData: its record.
 -> bRunning (it asks and the pump runs), bCall (the level calls for pumping), bAtStop (at or past the stop
 level), bHighHigh, bLowLow.
 EMPTY (sump, wet well): start at or above fStart, stop at or below fStop; bDemand runs it down to fDemandStop;
@@ -24,7 +25,9 @@ level checks (FB_LevelCheck); beside it: stages (FB_Stages -> FB_Group.nExtra), 
 (FB_VesselFlow). tot.nCycles counts each new call for pumping (kept over a power cut; bCmdResetTot clears it).
 No pump: while it asks and its target is neither available nor running (a pump or its motor in Hand or Off,
 faulted, every group member out), it is in fault: bError, eErrorId NoneAvailable (a run it serves can end on
-it, e.g. bInterlock := NOT fbStation.bError). It clears by itself when the target is available again. *)
+it, e.g. bInterlock := NOT fbStation.bError). It clears by itself when the target is available again.
+Detail (det): tTimeLeft (RunOn: the run-on left under set.tRunOnMax; TIMED: the on or off time left; else 0),
+tPhaseTime (since its request last changed: pumping or idle). *)
 
 FUNCTION_BLOCK FB_LevelControl EXTENDS FB_Object IMPLEMENTS I_LevelControl
   VAR_INPUT
@@ -33,6 +36,7 @@ FUNCTION_BLOCK FB_LevelControl EXTENDS FB_Object IMPLEMENTS I_LevelControl
     bInterlock : BOOL := TRUE;
     ipLevel : I_Measurement; (* required *)
     ipTarget : I_Equipment; (* required *)
+    fSpeed : REAL := -1.0; (* the speed asked of the target (< 0 = its own) *)
     refData : REFERENCE TO ST_LevelControlData;
   END_VAR
   VAR_OUTPUT
@@ -66,6 +70,7 @@ FUNCTION_BLOCK FB_LevelControl EXTENDS FB_Object IMPLEMENTS I_LevelControl
     bDemandWait : BOOL; (* a held demand reached its level: waits for the restart level *)
     bCycOn : BOOL; (* TIMED *)
     tCycAt : TIME;
+    tPhaseSince : TIME; (* the request last changed *)
   END_VAR
   VAR_TEMP
     bReset : BOOL;
@@ -89,14 +94,32 @@ PROPERTY PUBLIC fActHighHigh : REAL
   END_GET
 END_PROPERTY
 
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.stLevelBad.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stLevelBad.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.tRunOnMax >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.fStartVariation >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fStartVariation <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (ABS(refData.set.fDemandRestart) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (refData.set.eMode <> E_LevelMode.Timed
+             OR (refData.set.tOnTime > T#0s AND refData.set.tOffTime >= T#0s)) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.bDemandOnly OR refData.set.eMode = E_LevelMode.Timed
+             OR (refData.set.eMode = E_LevelMode.Empty AND refData.set.fStart > refData.set.fStop)
+             OR (refData.set.eMode = E_LevelMode.Fill AND refData.set.fStart < refData.set.fStop)) THEN
+    SetWhy := E_UtError.LimitsBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
-  SetOk := refData.set.stLevelBad.tDelay >= T#0s AND refData.set.stLevelBad.tRecover >= T#0s
-           AND refData.set.tRunOnMax >= T#0s AND refData.set.fStartVariation >= 0.0
-           AND refData.set.fStartVariation <= REAL#3.4E38 AND ABS(refData.set.fDemandRestart) <= REAL#3.4E38
-           AND (refData.set.eMode <> E_LevelMode.Timed OR (refData.set.tOnTime > T#0s AND refData.set.tOffTime >= T#0s))
-           AND (refData.set.bDemandOnly OR refData.set.eMode = E_LevelMode.Timed
-                OR (refData.set.eMode = E_LevelMode.Empty AND refData.set.fStart > refData.set.fStop)
-                OR (refData.set.eMode = E_LevelMode.Fill AND refData.set.fStart < refData.set.fStop));
+  SetOk := SetWhy() = E_UtError.None;
 END_METHOD
 
 bTimed := FALSE;
@@ -125,6 +148,7 @@ IF bFirstScan THEN
 ELSIF SetOk() THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
@@ -132,6 +156,7 @@ bReset := SystemReset() OR refData.bCmdReset;
 IF refData.bCmdReset THEN
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 bEmpty := refData.set.eMode = E_LevelMode.Empty;
 
@@ -266,9 +291,13 @@ END_IF;
 IF bPartHold AND NOT ipTarget.bIsRunning THEN
   bReq := FALSE;                  // no new start
 END_IF;
-ipTarget.Request(bRun := bReq, bHold := FALSE, bUrgent := bReq AND ((bEmpty AND bHighHigh) OR bPartRun));
+ipTarget.Request(bRun := bReq, bHold := FALSE, fSpeed := fSpeed,
+                 bUrgent := bReq AND ((bEmpty AND bHighHigh) OR bPartRun));
 
 (* the cycle count: each new call for pumping *)
+IF bReq <> bCycleWas THEN
+  tPhaseSince := tNow;
+END_IF;
 IF bReq AND NOT bCycleWas THEN
   refData.tot.nCycles := refData.tot.nCycles + 1;
   stKeptTot := refData.tot;
@@ -324,6 +353,17 @@ refData.sts.bAtStop := bAtStop;
 refData.sts.bHighHigh := bHighHigh;
 refData.sts.bLowLow := bLowLow;
 refData.sts.bRequest := bReq;
+refData.det.tPhaseTime := tNow - tPhaseSince;
+refData.det.tTimeLeft := T#0s;
+IF refData.sts.bRunOn AND refData.set.tRunOnMax > T#0s THEN
+  refData.det.tTimeLeft := MAX(T#0s, refData.set.tRunOnMax - (tNow - tFailedAt));
+ELSIF bTimed AND bRun AND bInterlock THEN
+  IF bCycOn THEN
+    refData.det.tTimeLeft := MAX(T#0s, refData.set.tOnTime - (tNow - tCycAt));
+  ELSE
+    refData.det.tTimeLeft := MAX(T#0s, refData.set.tOffTime - (tNow - tCycAt));
+  END_IF;
+END_IF;
 bFirstScan := FALSE;
 
 END_FUNCTION_BLOCK

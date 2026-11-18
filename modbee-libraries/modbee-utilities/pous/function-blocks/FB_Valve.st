@@ -12,7 +12,11 @@ Protections: open / close timeout (the end switch not made in its travel time + 
 position lost (an end switch lost at rest), slow stroke (set.tStrokeWarn > 0: a stroke confirmed by its end
 switch that took longer, a sign of wear; set.stSlowStroke, default a warning, until a stroke within the time),
 actuator in Local (bActRemote FALSE: the actuator's own Local / Remote switch; every output off, not available to
-its owner, the travel checks wait; set.stActLocal, default a warning after 2 s). Strokes counted (tot.nStrokes).
+its owner, the travel checks wait; set.stActLocal, default a warning after 2 s), no movement (set.stNoMovement, off
+by default: commanded away and the end switch of the position it left still made). Strokes counted (tot.nStrokes;
+the record's bCmdPreset sets it to nPresetStrokes); the last stroke's time per direction (sts.tLastOpenStroke /
+tLastCloseStroke, with sts.tLastStroke the latest). Simulation (the record's bSimulate, not kept, cleared by a
+system reset): the end switches are ignored and the travel times decide, with a warning (Simulated).
 Exercise: an FB_Exercise part on the valve (ipOwner := the valve) opens an idle valve in Auto for its run time
 (a part's Request, honoured in Auto like the owner's own: interlock, trips and the permissive still apply).
 Variants (EXTENDS FB_Valve): FB_ValveLatch (latching pulses), FB_ValveMotor (motorised: torque switches, Halt).
@@ -37,7 +41,7 @@ FUNCTION_BLOCK FB_Valve EXTENDS FB_Equipment
     stKeptTot : ST_ValveTot;
   END_VAR
   VAR CONSTANT
-    cLayout : UINT := 1;
+    cLayout : UINT := 2;
   END_VAR
   VAR
     bWantOpen : BOOL; (* the position commanded *)
@@ -50,6 +54,7 @@ FUNCTION_BLOCK FB_Valve EXTENDS FB_Equipment
     bReached : BOOL; (* the end switch of the commanded position has been made since the command *)
     stWSlow : ST_ProtectionWork;
     stWLocal : ST_ProtectionWork;
+    stWNoMove : ST_ProtectionWork;
     bSlowCause : BOOL; (* the last confirmed stroke was slow *)
     bSeated : BOOL; (* closed on torque since the close command *)
     bRemoteWas : BOOL := TRUE;
@@ -70,6 +75,8 @@ FUNCTION_BLOCK FB_Valve EXTENDS FB_Equipment
     bX : BOOL;
     bUseC : BOOL; (* the closed position has a proof (its switch, or the seat) *)
     bAtC : BOOL; (* that proof is made *)
+    bUseOpen : BOOL; (* the open end switch is used (not while simulated) *)
+    bUseClosed : BOOL;
   END_VAR
 
 
@@ -122,9 +129,21 @@ METHOD PROTECTED FeedbackOk : BOOL
   FeedbackOk := bIsOpen;
 END_METHOD
 
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tOpenTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tCloseTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tRetryWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tStrokeWarn >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
-  SetOk := refData.set.tOpenTime >= T#0s AND refData.set.tCloseTime >= T#0s AND refData.set.tRetryWindow >= T#0s
-           AND refData.set.tStrokeWarn >= T#0s;
+  SetOk := SetWhy() = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -148,12 +167,21 @@ IF bFirstScan THEN
 ELSIF SetOk() THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
 
 bReset := Begin(refCmd := refData, refSet := refData.set, refSts := refData.sts);
 bResetNow := bReset;
+IF SystemReset() THEN refData.bSimulate := FALSE; END_IF;
+bUseOpen := refData.set.bUseOpenLs AND NOT refData.bSimulate;
+bUseClosed := refData.set.bUseClosedLs AND NOT refData.bSimulate;
+IF refData.bCmdPreset THEN
+  refData.tot.nStrokes := refData.nPresetStrokes;
+  stKeptTot := refData.tot;
+  refData.bCmdPreset := FALSE;
+END_IF;
 
 (* where it is: the end switch when used, else the travel time since the command *)
 IF bWantOpen <> bWantPrev OR (bActRemote AND NOT bRemoteWas) THEN
@@ -166,19 +194,19 @@ IF bWantOpen <> bWantPrev OR (bActRemote AND NOT bRemoteWas) THEN
 END_IF;
 bWantPrev := bWantOpen;
 bRemoteWas := bActRemote;
-bUseC := refData.set.bUseClosedLs OR bSeatUse;
+bUseC := bUseClosed OR bSeatUse;
 IF NOT bWantOpen AND bSeatUse AND bSeatMade THEN
   bSeated := TRUE;                (* closed on torque: seated until the next command *)
 END_IF;
-bAtC := (refData.set.bUseClosedLs AND bClosedLs) OR bSeated;
+bAtC := (bUseClosed AND bClosedLs) OR bSeated;
 IF bWantOpen THEN
-  IF refData.set.bUseOpenLs THEN
+  IF bUseOpen THEN
     bIsOpen := bOpenLs;
   ELSE
     bIsOpen := tNow - tMovedAt >= refData.set.tOpenTime AND NOT bHalted AND bActRemote;
   END_IF;
   bIsClosed := FALSE;
-  bTravelBad := refData.set.bUseOpenLs AND NOT bOpenLs AND tNow - tMovedAt > refData.set.tOpenTime * 3 / 2;
+  bTravelBad := bUseOpen AND NOT bOpenLs AND tNow - tMovedAt > refData.set.tOpenTime * 3 / 2;
 ELSE
   IF bUseC THEN
     bIsClosed := bAtC;
@@ -189,10 +217,15 @@ ELSE
   bTravelBad := bUseC AND NOT bAtC AND tNow - tMovedAt > refData.set.tCloseTime * 3 / 2;
 END_IF;
 
-IF ((bWantOpen AND refData.set.bUseOpenLs AND bOpenLs) OR (NOT bWantOpen AND bAtC)) AND NOT bReached THEN
+IF ((bWantOpen AND bUseOpen AND bOpenLs) OR (NOT bWantOpen AND bAtC)) AND NOT bReached THEN
   bReached := TRUE;
   (* a stroke confirmed by its end switch: its time, slow or not *)
   refData.sts.tLastStroke := tNow - tMovedAt;
+  IF bWantOpen THEN
+    refData.sts.tLastOpenStroke := refData.sts.tLastStroke;
+  ELSE
+    refData.sts.tLastCloseStroke := refData.sts.tLastStroke;
+  END_IF;
   bSlowCause := refData.set.tStrokeWarn > T#0s AND refData.sts.tLastStroke > refData.set.tStrokeWarn;
 END_IF;
 IF refData.set.tStrokeWarn <= T#0s THEN
@@ -204,13 +237,13 @@ bTravelBad := bTravelBad AND NOT bReached AND NOT bHalted AND bActRemote;
 (* protections *)
 bX := F_Protect(tNow := tNow, bCause := bTravelBad, bResetReq := bReset, tRetryWindow := refData.set.tRetryWindow,
                 stSet := refData.set.stTravel, stSts := refData.sts.stTravel, stWork := stWTravel);
-bX := F_Protect(tNow := tNow, bCause := refData.set.bUseOpenLs AND refData.set.bUseClosedLs AND bOpenLs AND bClosedLs,
+bX := F_Protect(tNow := tNow, bCause := bUseOpen AND bUseClosed AND bOpenLs AND bClosedLs,
                 bResetReq := bReset, tRetryWindow := refData.set.tRetryWindow,
                 stSet := refData.set.stBothLimits, stSts := refData.sts.stBothLimits, stWork := stWBoth);
 (* position lost: the end switch of the commanded position was made, then went *)
 bX := F_Protect(tNow := tNow,
-                bCause := bReached AND bActRemote AND ((bWantOpen AND refData.set.bUseOpenLs AND NOT bOpenLs)
-                                        OR (NOT bWantOpen AND refData.set.bUseClosedLs AND NOT bClosedLs AND NOT bSeated)),
+                bCause := bReached AND bActRemote AND ((bWantOpen AND bUseOpen AND NOT bOpenLs)
+                                        OR (NOT bWantOpen AND bUseClosed AND NOT bClosedLs AND NOT bSeated)),
                 bResetReq := bReset, tRetryWindow := refData.set.tRetryWindow,
                 stSet := refData.set.stPositionLost, stSts := refData.sts.stPositionLost, stWork := stWLost);
 bX := F_Protect(tNow := tNow, bCause := bSlowCause, bResetReq := bReset, tRetryWindow := refData.set.tRetryWindow,
@@ -218,11 +251,21 @@ bX := F_Protect(tNow := tNow, bCause := bSlowCause, bResetReq := bReset, tRetryW
 bX := F_Protect(tNow := tNow, bCause := NOT bActRemote AND refData.set.eMode <> E_Mode.OutOfService,
                 bResetReq := bReset, tRetryWindow := refData.set.tRetryWindow,
                 stSet := refData.set.stActLocal, stSts := refData.sts.stActLocal, stWork := stWLocal);
-bTrip := stWTravel.bTrip OR stWBoth.bTrip OR stWLost.bTrip OR stWSlow.bTrip OR stWLocal.bTrip OR bVarTrip;
-bWarn := stWTravel.bWarn OR stWBoth.bWarn OR stWLost.bWarn OR stWSlow.bWarn OR stWLocal.bWarn OR bVarWarn;
+(* no movement: commanded away, the switch of the position it left still made *)
+bX := F_Protect(tNow := tNow,
+                bCause := NOT bReached AND NOT bHalted AND bActRemote
+                          AND ((bWantOpen AND bUseClosed AND bClosedLs) OR (NOT bWantOpen AND bUseOpen AND bOpenLs)),
+                bResetReq := bReset, tRetryWindow := refData.set.tRetryWindow,
+                stSet := refData.set.stNoMovement, stSts := refData.sts.stNoMovement, stWork := stWNoMove);
+bTrip := stWTravel.bTrip OR stWBoth.bTrip OR stWLost.bTrip OR stWSlow.bTrip OR stWLocal.bTrip OR stWNoMove.bTrip
+         OR bVarTrip;
+bWarn := stWTravel.bWarn OR stWBoth.bWarn OR stWLost.bWarn OR stWSlow.bWarn OR stWLocal.bWarn OR stWNoMove.bWarn
+         OR bVarWarn OR refData.bSimulate;
 eOwn := E_UtError.None;
 IF bVarTrip THEN
   eOwn := eVarError;
+ELSIF stWNoMove.bTrip OR stWNoMove.bWarn THEN
+  eOwn := E_UtError.NoMovement;
 ELSIF stWTravel.bTrip OR stWTravel.bWarn THEN
   eOwn := E_UtError.TravelTimeout;
 ELSIF stWBoth.bTrip OR stWBoth.bWarn THEN
@@ -235,6 +278,8 @@ ELSIF stWSlow.bTrip OR stWSlow.bWarn THEN
   eOwn := E_UtError.SlowStroke;
 ELSIF bVarWarn THEN
   eOwn := eVarError;
+ELSIF refData.bSimulate THEN
+  eOwn := E_UtError.Simulated;
 END_IF;
 
 Finish(refCmd := refData, refSet := refData.set, refSts := refData.sts,

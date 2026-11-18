@@ -7,6 +7,7 @@ A held jog (inch) button for a motor in Hand: the motor runs while the button is
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
 | in | `bJog` | `BOOL` | `FALSE` | the held jog button |
+| in | `bJogRev` | `BOOL` |  | jog in reverse (a reversing motor, FB_MotorRev) |
 | in | `ipMotor` | `I_Equipment` |  | required. The instance it drives (a motor, pump, valve or FB_Group) |
 | in | `refData` | `REFERENCE TO ST_MotorJogData` |  | Its record (a variable of this type) |
 | in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
@@ -24,6 +25,7 @@ A held jog (inch) button for a motor in Hand: the motor runs while the button is
 | --- | --- | --- | --- |
 | `bLimited` | `BOOL` |  | tJogMax ended the jog: release bJog |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_MotorJogSet`)
 

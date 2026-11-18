@@ -4,6 +4,7 @@ TYPE
     bInDelta : BOOL;
     tStarLeft : TIME;
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     stChangeover : ST_ProtectionSts;
     bCurrentRisen : BOOL; (* the star current has risen to fStarCurrentPct in this start *)
   END_STRUCT;

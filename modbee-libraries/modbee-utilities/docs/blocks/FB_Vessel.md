@@ -11,6 +11,8 @@ Offers `I_Vessel`: wire this instance to another block's `ip…` pin of that typ
 | in | `ipLevel` | `I_Measurement` |  | required. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
 | in | `refData` | `REFERENCE TO ST_VesselData` |  | Its record (a variable of this type) |
 | in | `stConfig` | `ST_VesselConfig` |  | engineering constants (set at the declaration) |
+| in | `fTableVol` | `REAL` |  | Table: the volume at the present level, in eVolumeUnit (an FB_Linearise) |
+| in | `fTableArea` | `REAL` |  | Table: the surface area at the present level, m2 (an FB_Linearise; optional) |
 | in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
 | out | `fVolume` | `REAL` |  | in eVolumeUnit, after the dead volume |
 | out | `fPercent` | `REAL` |  | of the full working volume |
@@ -51,6 +53,7 @@ Offers `I_Vessel`: wire this instance to another block's `ip…` pin of that typ
 | `bGood` | `BOOL` |  | The value can be trusted |
 | `bOverfull` | `BOOL` |  | the level is above the top |
 | `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Constants `ST_VesselConfig` (pin `stConfig`)
 
@@ -74,10 +77,11 @@ Set once, at the variable's declaration (engineering constants, not changed whil
 | `eMassUnit` | `E_Unit` | `E_Unit.Kg` | Kg or Tonne |
 | `fDensity` | `REAL` | `1000.0` | kg/m3 |
 | `fFraction` | `REAL` | `1.0` | share of the vessel |
+| `fTableFull` | `REAL` |  | Table: the volume when full, in eVolumeUnit (fHeight: the level when full) |
 
 ## Lists
 
-- `E_VesselShape`: `Vertical`, `Cone`, `Horizontal`, `Rect`, `Sphere`, `Pond` (default `Vertical`)
+- `E_VesselShape`: `Vertical`, `Cone`, `Horizontal`, `Rect`, `Sphere`, `Pond`, `Table` (default `Vertical`)
 
 ## How it works
 
@@ -93,6 +97,9 @@ One shape x `stConfig.nTanks` identical tanks joined at the bottom (the same lev
   Sphere      fDiameter
   Pond        sloped banks: floor fLength x fWidth, depth fHeight, bank fSlope (horizontal per 1 vertical,
               e.g. 3 for 3:1; 0 = Rect)
+  Table       any shape from a level table: wire an FB_Linearise of the level (level -> volume, in eVolumeUnit)
+              to fTableVol and, optional, one (level -> area, m2) to fTableArea; stConfig.fTableFull is the
+              volume when full, fHeight the level when full
 ```
 
 The level unit: `stConfig.eLevelUnit` when it is set; None (the default) takes the level's own unit (`ipLevel.eUnit`), and a level with no unit set reads as Metre. A level unit other than Metre, Cm, Mm or Percent is BadSetting. The vessel's `eUnit` is the level unit in use.

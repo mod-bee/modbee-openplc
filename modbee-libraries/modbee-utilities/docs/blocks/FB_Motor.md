@@ -68,6 +68,7 @@ Offers `I_Motor`: wire this instance to another block's `ip…` pin of that type
 | `bLinked` | `BOOL` |  | an owner is driving it |
 | `bInterlocked` | `BOOL` |  | The interlock is holding it off |
 | `bRefused` | `BOOL` |  | a setting write was refused and put back |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `bJogging` | `BOOL` |  | jogging (FB_MotorJog, Hand only) |
 | `bMustCycle` | `BOOL` |  | a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) |
 | `stOverload` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
@@ -81,6 +82,8 @@ Offers `I_Motor`: wire this instance to another block's `ip…` pin of that type
 | --- | --- | --- | --- |
 | `tRestartIn` | `TIME` |  | Time left before a start is allowed (restart delay) |
 | `tRunTime` | `TIME` |  | this run |
+| `tIdleTime` | `TIME` |  | since the last stop (0 while running) |
+| `tHandLeft` | `TIME` |  | a Hand run's time left under set.tHandMax (0 = none counting) |
 
 **Totals `tot`** (`ST_MotorTot`)
 
@@ -94,6 +97,8 @@ Offers `I_Motor`: wire this instance to another block's `ip…` pin of that type
 A direct-on-line motor or a run relay.
 
 Built in: overload, no feedback (never came after a start), feedback lost (went while running), stuck (stays after a stop); run hours and starts. Everything else is a part placed beside it ([`FB_Protection`](FB_Protection.md) for a thermistor / drive fault / external fault, [`FB_LocalControl`](FB_LocalControl.md) for Hand buttons and HOA, ...).
+
+Detail (det): `tRestartIn`, `tRunTime` (this run), `tIdleTime` (since the last stop, 0 while running), `tHandLeft` (a Hand run's time left under `set.tHandMax`, 0 = none counting).
 
 Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
 
@@ -122,6 +127,8 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `eActMode : E_Mode`
 - property `bIsRunning : BOOL`
 - property `bIsReady : BOOL`
+- property `tActIdleTime : TIME`
+- property `tActHandLeft : TIME`
 - property `bIsAvailable : BOOL`
 - property `bIsAuto : BOOL`
 - property `bIsFaulted : BOOL`

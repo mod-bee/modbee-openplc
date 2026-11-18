@@ -51,6 +51,7 @@ The last events (trips, stops, end reasons) with their time, newest first, optio
 | `bWrnConfig` | `BOOL` |  | aBuffer has no element, or more than 16 while kept |
 | `bWrnSrc` | `BOOL` |  | a call this scan had an nSrc outside aSources (ignored) |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **`stLast`** (`ST_Event`)
 

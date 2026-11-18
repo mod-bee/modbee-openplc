@@ -63,13 +63,15 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 | `stStartTooLong` | `ST_ProtectionSts` |  | a locked rotor, default Off; a protection's status ([protections](../conventions.md#protections)) |
 | `stBad` | `ST_ProtectionSts` |  | default a warning; a protection's status ([protections](../conventions.md#protections)) |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
+| `tMaskLeft` | `TIME` |  | running: the start mask's time left (0 when past it or stopped) |
 
 ## How it works
 
 A motor's current from a CT, as a part of its motor. Off until `set.fFullLoad` (the motor's full-load current, in the CT's unit) is set.
 
 - `fPercent`: the current as % of full load. `bProvesRun`: at or above `set.fRunPercent`; wire it to the motor's `bFeedback` when the CT, not an auxiliary contact, proves the motor runs.
-- `stHigh` (overload by current, default Off) and `stLow` (dry run / broken belt, default Off): % of full load with a deadband, checked once the motor runs (`bIsRunning`) and `set.tStartMask` has passed.
+- `stHigh` (overload by current, default Off) and `stLow` (dry run / broken belt, default Off): % of full load with a deadband, checked once the motor runs (`bIsRunning`) and `set.tStartMask` has passed (`sts.tMaskLeft`: the time left of the mask).
 - `stStartTooLong` (a locked rotor, default Off): the current still at or above its % while the motor's run command is on, for its delay.
 - `stBad` (default a warning): the current is not good while monitoring is wanted; high / low / start checks then wait (they never act on a bad reading).
 

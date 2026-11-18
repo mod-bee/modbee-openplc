@@ -102,25 +102,59 @@ FUNCTION_BLOCK FB_Sequencer EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_SequencerSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.eStopMode = E_SeqStopMode.Reverse OR stS.eStopMode = E_SeqStopMode.AllAtOnce
+          OR stS.eStopMode = E_SeqStopMode.Forward) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.eOnLoss = E_SeqLoss.Cascade OR stS.eOnLoss = E_SeqLoss.StopAll
+             OR stS.eOnLoss = E_SeqLoss.DownstreamOnly) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.tRestartDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.nMaxRetries >= 0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.tRetryWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_SequencerSet;
   END_VAR
-  SetOk := (stS.eStopMode = E_SeqStopMode.Reverse OR stS.eStopMode = E_SeqStopMode.AllAtOnce
-            OR stS.eStopMode = E_SeqStopMode.Forward)
-           AND (stS.eOnLoss = E_SeqLoss.Cascade OR stS.eOnLoss = E_SeqLoss.StopAll
-                OR stS.eOnLoss = E_SeqLoss.DownstreamOnly)
-           AND stS.tRestartDelay >= T#0s AND stS.nMaxRetries >= 0 AND stS.tRetryWindow >= T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* one step's settings are usable and fit the kept form *)
+METHOD PRIVATE RowWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_SeqStepSet;
+  END_VAR
+  RowWhy := E_UtError.None;
+  IF NOT (stS.tStartDelay >= T#0s) THEN
+    RowWhy := E_UtError.TimeBad;
+  ELSIF NOT (TIME_TO_LINT(stS.tStartDelay) / 100 <= 16#FFFF) THEN
+    RowWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tStopDelay >= T#0s) THEN
+    RowWhy := E_UtError.TimeBad;
+  ELSIF NOT (TIME_TO_LINT(stS.tStopDelay) / 100 <= 16#FFFF) THEN
+    RowWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tTimeout >= T#0s) THEN
+    RowWhy := E_UtError.TimeBad;
+  ELSIF NOT (TIME_TO_LINT(stS.tTimeout) / 100 <= 16#FFFF) THEN
+    RowWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE RowOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_SeqStepSet;
   END_VAR
-  RowOk := stS.tStartDelay >= T#0s AND TIME_TO_LINT(stS.tStartDelay) / 100 <= 16#FFFF
-           AND stS.tStopDelay >= T#0s AND TIME_TO_LINT(stS.tStopDelay) / 100 <= 16#FFFF
-           AND stS.tTimeout >= T#0s AND TIME_TO_LINT(stS.tTimeout) / 100 <= 16#FFFF;
+  RowOk := RowWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 METHOD PRIVATE Pack : BOOL
@@ -188,6 +222,7 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOkSet := TRUE;
@@ -199,6 +234,7 @@ FOR nI := 1 TO nN DO
   IF RowOk(stS := aStepSet[nS]) THEN
     Pack(nRow := nI, stS := aStepSet[nS]);
   ELSIF nI <= INT_TO_DINT(nKeptRows) THEN
+    refData.sts.eRefusedWhy := RowWhy(stS := aStepSet[nS]);
     Unpack(nRow := nI, stS := aStepSet[nS]);
     refData.sts.bRefused := TRUE;
   ELSE
@@ -253,6 +289,7 @@ ELSE
     refData.sts.bFltConfig := FALSE;
     refData.sts.nFaultStep := 0;
     refData.sts.bRefused := FALSE;
+    refData.sts.eRefusedWhy := E_UtError.None;
     FOR nI := 1 TO nN DO
       IF aStep[nLo + nI - 1].eState = E_SeqStepState.Fault THEN
         aStep[nLo + nI - 1].eState := E_SeqStepState.Off;

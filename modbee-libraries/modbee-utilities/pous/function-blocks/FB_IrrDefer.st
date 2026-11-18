@@ -54,12 +54,29 @@ FUNCTION_BLOCK FB_IrrDefer EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_IrrDeferSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tOnDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tClearDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (ABS(stS.fSoilWet) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (ABS(stS.fSoilDry) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (stS.fSoilDry < stS.fSoilWet) THEN
+    SetWhy := E_UtError.LimitsBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_IrrDeferSet;
   END_VAR
-  SetOk := stS.tOnDelay >= T#0s AND stS.tClearDelay >= T#0s
-           AND ABS(stS.fSoilWet) <= REAL#3.4E38 AND ABS(stS.fSoilDry) <= REAL#3.4E38 AND stS.fSoilDry < stS.fSoilWet;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -84,12 +101,14 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF SystemReset() THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the soil *)

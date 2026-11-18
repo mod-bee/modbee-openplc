@@ -10,7 +10,8 @@ level: ends the program), bIrrigatorStop (the irrigator's fail-safe: ends the pr
 aZones, ipPump (the pump, a group or a level control: optional), bPumpRunning (with no ipPump: the pump runs),
 bPumpFault (the supply has tripped: no water counts and the wait for it runs), ipMeter (for zones by volume and
 the flow check: optional), ipMasterValve (the master valve: optional), nRunZone (at the start: 0 = the program, n =
-only zone n, index in aZones), nDoseReq (at the start: -1 = set.bDose, 0 no, 1 dose this run), refData ->
+only zone n, index in aZones), nDoseReq (at the start: -1 = set.bDose, 0 no, 1 dose this run), tRunTime (at the start: each
+zone's water time this run, 0 = its own), refData ->
 bPumpDemand, bActive, nZone (the zone watering, 0 = none), bDoseEnable, bDoseHold, plus FB_Object's outputs.
 Order, so the pump never deadheads or hammers:
   start   the zone's valve (and the master valve) opens; once they are proven, set.tPumpStartDelay later the pump
@@ -51,7 +52,13 @@ kept at each start, change of zone, new pass and end; each zone keeps its own pr
 Resume goes on at the same zone (its valves start closed, its time and cycles kept); a latched run goes on at
 once, a held one when its bRun is back within set.tResumeWindow, else it ends (PowerCut); Restart does the same
 from the first zone and pass; None ends it (stop reason PowerCut). At most the water of the last hour in a zone is
-repeated (the zone saves its watered time hourly). *)
+repeated (the zone saves its watered time hourly).
+Pause from the record: bCmdPause holds the program as bPause does, until bCmdResume (or the program ends);
+set.tMaxPause > 0: a pause that long ends the program (stop reason PauseMax). set.tProgressSave > 0: the watering
+zone's progress is kept that often (else on its events), so a power cut loses at most that much. Status:
+sts.bPaused, sts.nRuns (programs started since power-up), sts.fDelivered (this program's water); det.tLeft (this
+pass's time left over the timed zones not done), det.tPhaseTime. Each zone shows how it ended (FB_Zone
+sts.eResult, sts.bSkipped). *)
 
 FUNCTION_BLOCK FB_ZoneSeq EXTENDS FB_Object
   VAR_INPUT
@@ -72,6 +79,7 @@ FUNCTION_BLOCK FB_ZoneSeq EXTENDS FB_Object
     ipMasterValve : I_Equipment;
     nRunZone : INT;
     nDoseReq : INT := -1;
+    tRunTime : TIME; (* at the start: each zone's water time this run (0 = its own set.tRunTime) *)
     refData : REFERENCE TO ST_ZoneSeqData;
   END_VAR
   VAR_IN_OUT
@@ -91,7 +99,7 @@ FUNCTION_BLOCK FB_ZoneSeq EXTENDS FB_Object
     stProgress : ST_ZoneSeqProgress;
   END_VAR
   VAR CONSTANT
-    cLayout : UINT := 5;
+    cLayout : UINT := 6;
   END_VAR
   VAR
     ePhase : E_ZonePhase;
@@ -100,6 +108,10 @@ FUNCTION_BLOCK FB_ZoneSeq EXTENDS FB_Object
     bLatched : BOOL;
     bRunPrev : BOOL;
     tPhaseAt : TIME;
+    bPauseLatch : BOOL; (* the record's bCmdPause *)
+    bHoldWas : BOOL;
+    tHeldAt : TIME;
+    tSavedAt : TIME;
     tProvedAt : TIME;
     bProved : BOOL;
     tLast : TIME;
@@ -151,6 +163,50 @@ FUNCTION_BLOCK FB_ZoneSeq EXTENDS FB_Object
     nAct : INT;
   END_VAR
 
+
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tPumpStartDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tValveOverlap >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tValveCloseDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tValveProve >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tMasterCloseDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tFlushTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tMaxPumpWait >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.nRepeats >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.nRepeats <= 100) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.eRainAction = E_RainAction.Pause OR refData.set.eRainAction = E_RainAction.Skip
+             OR refData.set.eRainAction = E_RainAction.Cancel OR refData.set.eRainAction = E_RainAction.Ignore) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (refData.set.tMaxTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tDefaultCap >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.fDefaultSp >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.fDefaultSp <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (refData.set.tResumeWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tMaxPause >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tProgressSave >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.eResume = E_RunResume.Resume OR refData.set.eResume = E_RunResume.Restart
+             OR refData.set.eResume = E_RunResume.None) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
 
 (* the first zone that may water now (in the program, water left, not soaking; with a one-zone run, that zone),
    from zone nAfter + 1 (0 = from the start); 0 = none *)
@@ -277,6 +333,9 @@ IF bFirstScan THEN
       bDoseRun := stProgress.bDoseRun;
       nPass := MAX(stProgress.nPass, 1);
       bLatched := stProgress.bLatched;
+      FOR nI := nLo TO nHi DO
+        aZones[nI].SetRunTime(tRunTime := stProgress.tRunTime);
+      END_FOR;
       IF refData.set.eResume = E_RunResume.Restart THEN
         FOR nI := nLo TO nHi DO
           aZones[nI].SetDone(bDone := FALSE);
@@ -310,18 +369,10 @@ IF bFirstScan THEN
       END_IF;
     END_IF;
   END_IF;
-ELSIF refData.set.tPumpStartDelay >= T#0s AND refData.set.tValveOverlap >= T#0s
-      AND refData.set.tValveCloseDelay >= T#0s AND refData.set.tValveProve >= T#0s
-      AND refData.set.tMasterCloseDelay >= T#0s AND refData.set.tFlushTime >= T#0s
-      AND refData.set.tMaxPumpWait >= T#0s AND refData.set.nRepeats >= 1 AND refData.set.nRepeats <= 100
-      AND (refData.set.eRainAction = E_RainAction.Pause OR refData.set.eRainAction = E_RainAction.Skip
-           OR refData.set.eRainAction = E_RainAction.Cancel OR refData.set.eRainAction = E_RainAction.Ignore)
-      AND refData.set.tMaxTime >= T#0s AND refData.set.tDefaultCap >= T#0s
-      AND refData.set.fDefaultSp >= 0.0 AND refData.set.fDefaultSp <= REAL#3.4E38 AND refData.set.tResumeWindow >= T#0s
-      AND (refData.set.eResume = E_RunResume.Resume OR refData.set.eResume = E_RunResume.Restart
-           OR refData.set.eResume = E_RunResume.None) THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
@@ -329,6 +380,7 @@ bReset := refData.bCmdReset OR SystemReset();
 IF refData.bCmdReset THEN
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 IF bReset THEN
   bProveWarn := FALSE;
@@ -345,7 +397,13 @@ ELSE
   bPumpOn := bPumpRunning;
 END_IF;
 bCounting := bPumpOn AND NOT bPumpFault;
-bHoldNow := bPause OR (bRainHold AND refData.set.eRainAction = E_RainAction.Pause) OR bResumeWait;
+IF refData.bCmdPause AND bActive THEN bPauseLatch := TRUE; END_IF;
+IF refData.bCmdResume OR NOT bActive THEN bPauseLatch := FALSE; END_IF;
+refData.bCmdPause := FALSE;
+refData.bCmdResume := FALSE;
+bHoldNow := bPause OR bPauseLatch OR (bRainHold AND refData.set.eRainAction = E_RainAction.Pause) OR bResumeWait;
+IF bHoldNow AND NOT bHoldWas THEN tHeldAt := tNow; END_IF;
+bHoldWas := bHoldNow;
 bRainSkip := bActive AND bRainHold AND refData.set.eRainAction = E_RainAction.Skip;
 IF bResumeWait AND bRun THEN
   bResumeWait := FALSE;
@@ -383,12 +441,16 @@ IF bNew AND bInterlock AND NOT bIrrigatorStop THEN
   END_IF;
   FOR nI := nLo TO nHi DO
     aZones[nI].SetDone(bDone := FALSE);
+    aZones[nI].SetRunTime(tRunTime := tRunTime);
   END_FOR;
+  stProgress.tRunTime := MAX(tRunTime, T#0s);
   nZone := NextZone(nAfter := 0, aZ := aZones);
   IF nZone > 0 THEN
     bActive := TRUE;
     bLatched := bStart OR bCmdRun OR NOT bRun;
     refData.sts.eStopReason := E_StopReason.None;
+    refData.sts.nRuns := refData.sts.nRuns + 1;
+    refData.sts.fDelivered := 0.0;
     tPumpWait := T#0s;
     nPass := 1;
     bResumeWait := FALSE;
@@ -427,6 +489,9 @@ IF bActive THEN
   ELSIF bRainHold AND refData.set.eRainAction = E_RainAction.Cancel THEN
     bEnd := TRUE;
     refData.sts.eStopReason := E_StopReason.Rain;
+  ELSIF bHoldNow AND NOT bResumeWait AND refData.set.tMaxPause > T#0s AND tNow - tHeldAt >= refData.set.tMaxPause THEN
+    bEnd := TRUE;
+    refData.sts.eStopReason := E_StopReason.PauseMax;
   ELSIF bResumeWait AND NOT bRun AND tNow - tPowerUp >= refData.set.tResumeWindow THEN
     bEnd := TRUE;
     refData.sts.eStopReason := E_StopReason.PowerCut;
@@ -446,6 +511,9 @@ IF bActive THEN
   END_IF;
 END_IF;
 refData.bCmdStop := FALSE;
+IF bEnd AND nZone >= nLo AND nZone <= nHi AND nZone > 0 THEN
+  aZones[nZone].SetResult(eResult := refData.sts.eStopReason, bSkipped := FALSE);   // the zone it was on
+END_IF;
 IF bEnd AND ePhase <> E_ZonePhase.Ending THEN
   bActive := FALSE;
   nClosing := nZone;
@@ -481,6 +549,7 @@ CASE ePhase OF
       nClosing := nZone;
       Go(ePh := E_ZonePhase.Paused);
     ELSIF bRainSkip THEN
+      aZones[nZone].SetResult(eResult := E_StopReason.Rain, bSkipped := TRUE);
       DropZone(aZ := aZones);                     // the rain skips it
     ELSIF aZones[nZone].bOpen AND bMasterOk THEN
       IF NOT bProved THEN bProved := TRUE; tProvedAt := tNow; END_IF;
@@ -489,12 +558,18 @@ CASE ePhase OF
       END_IF;
     ELSIF tNow - tPhaseAt >= refData.set.tValveProve AND NOT aZones[nZone].bOpen THEN
       bProveWarn := TRUE;         // its valve did not open: skip it
+      aZones[nZone].SetResult(eResult := E_StopReason.Fault, bSkipped := TRUE);
       DropZone(aZ := aZones);
     END_IF;
 
   E_ZonePhase.Watering, E_ZonePhase.Changing:
     IF bCounting AND ePhase = E_ZonePhase.Watering THEN
       aZones[nZone].AddWatered(tWatered := tDt, fWatered := fDv);   // not during a change: its target is reached
+      refData.sts.fDelivered := refData.sts.fDelivered + fDv;
+      IF refData.set.tProgressSave > T#0s AND tNow - tSavedAt >= refData.set.tProgressSave THEN
+        aZones[nZone].SaveProgress();
+        tSavedAt := tNow;
+      END_IF;
       aZones[nZone].Flow(fRate := fRateNow, bGood := bRateGood);
     END_IF;
     IF bHoldNow THEN
@@ -506,13 +581,20 @@ CASE ePhase OF
         bEndNow := FALSE;
         IF bSkip OR refData.bCmdSkip OR bRainSkip THEN
           bEndNow := TRUE;
+          IF bRainSkip THEN
+            aZones[nZone].SetResult(eResult := E_StopReason.Rain, bSkipped := TRUE);
+          ELSE
+            aZones[nZone].SetResult(eResult := E_StopReason.Request, bSkipped := TRUE);
+          END_IF;
         ELSIF aZones[nZone].bIsFlowTrip THEN
           bEndNow := TRUE;
           bFlowWarn := TRUE;
+          aZones[nZone].SetResult(eResult := E_StopReason.Fault, bSkipped := FALSE);
         ELSIF refData.set.tMaxPumpWait > T#0s AND tPumpWait >= refData.set.tMaxPumpWait AND refData.set.bPumpWaitSkips THEN
           bEndNow := TRUE;
           bWaitWarn := TRUE;
           tPumpWait := T#0s;
+          aZones[nZone].SetResult(eResult := E_StopReason.PumpFault, bSkipped := TRUE);
         END_IF;
         IF bEndNow THEN
           bFinalCycle := TRUE;
@@ -527,6 +609,7 @@ CASE ePhase OF
           bCycleDone := TRUE;
           IF bFinalCycle THEN
             aZones[nZone].SetDone(bDone := TRUE);
+            aZones[nZone].SetResult(eResult := E_StopReason.Done, bSkipped := FALSE);
           END_IF;
         END_IF;
       END_IF;
@@ -728,6 +811,16 @@ refData.sts.bRainHold := bRainHold;
 refData.sts.bMasterWanted := bMasterWant;
 refData.sts.bDoseOn := bDoseEnable;
 refData.sts.tPumpWait := tPumpWait;
+refData.sts.bPaused := bHoldNow AND bActive;
+refData.det.tPhaseTime := tNow - tPhaseAt;
+refData.det.tLeft := T#0s;
+IF bActive THEN
+  FOR nI := nLo TO nHi DO
+    IF nRunOnly = 0 OR nRunOnly = DINT_TO_INT(nI) THEN
+      refData.det.tLeft := refData.det.tLeft + aZones[nI].tActRemaining;
+    END_IF;
+  END_FOR;
+END_IF;
 bFirstScan := FALSE;
 
 END_FUNCTION_BLOCK

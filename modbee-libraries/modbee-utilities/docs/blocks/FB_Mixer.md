@@ -54,6 +54,7 @@ Runs a stirrer or agitator before the pump starts (holding the pump), with the p
 | `bLevelOk` | `BOOL` |  |  |
 | `stLowLevel` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Details `det`** (`ST_MixerDet`)
 

@@ -7,5 +7,6 @@ TYPE
     bCmdReset : BOOL; (* reset trips whose cause has gone (cleared) *)
     det : ST_DoseDet;
     tot : ST_DoseTot;
+    bCmdAbort : BOOL; (* end the dose now, stop reason Abort (cleared) *)
   END_STRUCT;
 END_TYPE

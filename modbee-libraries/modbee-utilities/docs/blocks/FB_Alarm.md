@@ -79,6 +79,7 @@ One alarm as its own block, the ISA-18.2 way: shelving, suppression, out of serv
 | `dtClearedAt` | `DT` |  | Clock time the condition cleared |
 | `eCode` | `E_UtError` |  | Which alarm it is (an `E_UtError` code; the HMI shows its words) |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Details `det`** (`ST_AlarmDet`)
 

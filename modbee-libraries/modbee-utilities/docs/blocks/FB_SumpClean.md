@@ -31,6 +31,8 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 | `bFailed` | `BOOL` |  |  |
 | `nCycles` | `INT` |  | since the last clean |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
+| `tElapsed` | `TIME` |  | the clean under way (0 when none) |
 
 **Settings `set`** (`ST_SumpCleanSet`)
 
@@ -43,7 +45,7 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 
 ## How it works
 
-Sump cleaning: every `set.nEvery` pump cycles (or `bClean` / `bCmdClean`) the sump is pumped down past its normal stop to `set.fCleanLevel` and the pump runs on `set.tCleanTime` there, to clear the settled solids. A part of an EMPTY [`FB_LevelControl`](FB_LevelControl.md): it asks for a normal run (`E_PartAction.Request`; the low-low cut-out and start limits still apply). Not reaching `fCleanLevel` within `set.tMaxClean` gives up: a warning (CleanFailed) until the next good clean or a reset. A cycle is one start of the owner's run. A bad level stops a clean.
+Sump cleaning: every `set.nEvery` pump cycles (or `bClean` / `bCmdClean`) the sump is pumped down past its normal stop to `set.fCleanLevel` and the pump runs on `set.tCleanTime` there, to clear the settled solids. A part of an EMPTY [`FB_LevelControl`](FB_LevelControl.md): it asks for a normal run (`E_PartAction.Request`; the low-low cut-out and start limits still apply). Not reaching `fCleanLevel` within `set.tMaxClean` gives up: a warning (CleanFailed) until the next good clean or a reset. A cycle is one start of the owner's run. A bad level stops a clean. The record shows the clean under way's time (`tElapsed`).
 
 ## Example
 

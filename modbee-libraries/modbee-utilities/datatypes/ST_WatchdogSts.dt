@@ -3,6 +3,7 @@ TYPE
     bOk : BOOL;
     bCommsFail : BOOL;
     bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     stFail : ST_ProtectionSts; (* nCount: failures since bCmdResetCount *)
   END_STRUCT;
 END_TYPE

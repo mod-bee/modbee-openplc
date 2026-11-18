@@ -55,14 +55,39 @@ FUNCTION_BLOCK FB_DoseBatch EXTENDS FB_Dose
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_DoseBatchSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF BaseSetWhy(refSet := stS) <> E_UtError.None THEN
+    SetWhy := BaseSetWhy(refSet := stS);
+  ELSIF NOT (stS.fTarget >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fTarget <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fSlowAt >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fSlowAt <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fPreact >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fPreact <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fTolerance >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fTolerance <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.tSettle >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_DoseBatchSet;
   END_VAR
-  SetOk := BaseSetOk(refSet := stS)
-           AND stS.fTarget >= 0.0 AND stS.fTarget <= REAL#3.4E38 AND stS.fSlowAt >= 0.0 AND stS.fSlowAt <= REAL#3.4E38
-           AND stS.fPreact >= 0.0 AND stS.fPreact <= REAL#3.4E38 AND stS.fTolerance >= 0.0
-           AND stS.fTolerance <= REAL#3.4E38 AND stS.tSettle >= T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -90,6 +115,7 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;

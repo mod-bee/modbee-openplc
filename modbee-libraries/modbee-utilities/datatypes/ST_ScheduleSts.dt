@@ -7,5 +7,6 @@ TYPE
     nInMask : DWORD; (* bit per window on now *)
     nConfigWindow : INT; (* the first window with a bad setting (0 none) *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

@@ -12,5 +12,6 @@ TYPE
     tStrokeWarn : TIME; (* a stroke slower than this warns (0 = off; needs the end switch) *)
     stSlowStroke : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#0s, eReset := E_ResetMode.Auto, tRecover := T#0s, nMaxRetries := 3);
     stActLocal : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#2s, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 3);
+    stNoMovement : ST_ProtectionSet := (eResponse := E_Response.Off, tDelay := T#2s, eReset := E_ResetMode.Retry, tRecover := T#1m, nMaxRetries := 3);
   END_STRUCT;
 END_TYPE

@@ -41,6 +41,7 @@ FB_Report for a list of values, one row each.
 | `nReports` | `UDINT` |  | Reports sent |
 | `nBadItem` | `INT` |  | the first item with a bad setting (0 none) |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Rows `ST_ReportSet` (pin `aItemSet`)
 
@@ -99,6 +100,7 @@ FB_Report for a list of values, one row each.
 | `nSuppressed` | `UDINT` |  | held back by tMinInterval |
 | `tSinceLast` | `TIME` |  | Time since the last report |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Lists
 

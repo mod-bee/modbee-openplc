@@ -12,10 +12,12 @@ itself), Manual (latches until a reset with the condition gone), Retry (clears i
 nMaxRetries raises within set.tRetryWindow); bSiren; tRearm (silenced or acknowledged but still on after this
 long: it annunciates again; 0 = never); eCode (the HMI's text for it; the project's, set at the declaration).
 The row number is the alarm's number for the HMI. Bad times act as 0 (louder, never quieter).
-Kept (a retained last-good copy, restored at power-up, a bad write put back, sts.bRefused): set, and each row's
+Kept (a retained last-good copy, restored at power-up, a bad write put back, sts.bRefused / eRefusedWhy): set, and
+each row's
 settings but eCode packed into two DWORDs for the first 32 rows (tDelay in 10 ms steps up to 46 h, tRecover in
 100 ms steps up to 109 min, tRearm in seconds up to 18 h, nMaxRetries 0..7). Nothing else is kept: a condition
-still present raises again after a power cut. *)
+still present raises again after a power cut.
+bChanged is TRUE for one scan when an alarm comes, goes or is acknowledged (counts or the latest row change). *)
 
 FUNCTION_BLOCK FB_AlarmTable EXTENDS FB_Object
   VAR_INPUT
@@ -35,6 +37,7 @@ FUNCTION_BLOCK FB_AlarmTable EXTENDS FB_Object
     bSiren : BOOL;
     bHealthy : BOOL; (* the common alarm relay (fail-safe) *)
     nOn : INT;
+    bChanged : BOOL; (* one scan: an alarm came, went or was acknowledged *)
   END_VAR
   VAR RETAIN
     stKept : ST_AlarmTableSet;
@@ -47,6 +50,7 @@ FUNCTION_BLOCK FB_AlarmTable EXTENDS FB_Object
     cMaxRows : INT := 32;
   END_VAR
   VAR
+    nLatestWas : INT;
     bRstSeen : BOOL; (* the commands act once per write (a master that keeps writing TRUE) *)
     bSilSeen : BOOL;
     tSirenAt : TIME;
@@ -82,24 +86,62 @@ FUNCTION_BLOCK FB_AlarmTable EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_AlarmTableSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tSirenTimeout >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tFastFlash > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tSlowFlash > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tRetryWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_AlarmTableSet;
   END_VAR
-  SetOk := stS.tSirenTimeout >= T#0s AND stS.tFastFlash > T#0s AND stS.tSlowFlash > T#0s AND stS.tRetryWindow >= T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* one row's settings are usable and fit the kept form *)
+METHOD PRIVATE RowWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_AlarmSet;
+  END_VAR
+  RowWhy := E_UtError.None;
+  IF NOT (stS.eResponse = E_Response.Off OR stS.eResponse = E_Response.Warn OR stS.eResponse = E_Response.Trip
+          OR stS.eResponse = E_Response.Signal) THEN
+    RowWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.eReset = E_ResetMode.Auto OR stS.eReset = E_ResetMode.Manual OR stS.eReset = E_ResetMode.Retry) THEN
+    RowWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.tDelay >= T#0s) THEN
+    RowWhy := E_UtError.TimeBad;
+  ELSIF NOT (TIME_TO_LINT(stS.tDelay) / 10 <= 16#FFFFFF) THEN
+    RowWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tRecover >= T#0s) THEN
+    RowWhy := E_UtError.TimeBad;
+  ELSIF NOT (TIME_TO_LINT(stS.tRecover) / 100 <= 16#FFFF) THEN
+    RowWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tRearm >= T#0s) THEN
+    RowWhy := E_UtError.TimeBad;
+  ELSIF NOT (TIME_TO_LINT(stS.tRearm) / 1000 <= 16#FFFF) THEN
+    RowWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.nMaxRetries <= 7) THEN
+    RowWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE RowOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_AlarmSet;
   END_VAR
-  RowOk := (stS.eResponse = E_Response.Off OR stS.eResponse = E_Response.Warn OR stS.eResponse = E_Response.Trip
-            OR stS.eResponse = E_Response.Signal)
-           AND (stS.eReset = E_ResetMode.Auto OR stS.eReset = E_ResetMode.Manual OR stS.eReset = E_ResetMode.Retry)
-           AND stS.tDelay >= T#0s AND TIME_TO_LINT(stS.tDelay) / 10 <= 16#FFFFFF
-           AND stS.tRecover >= T#0s AND TIME_TO_LINT(stS.tRecover) / 100 <= 16#FFFF
-           AND stS.tRearm >= T#0s AND TIME_TO_LINT(stS.tRearm) / 1000 <= 16#FFFF AND stS.nMaxRetries <= 7;
+  RowOk := RowWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 METHOD PRIVATE Pack : BOOL
@@ -179,6 +221,7 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOkSet := TRUE;
@@ -189,6 +232,7 @@ FOR nI := 1 TO nRows DO
   IF RowOk(stS := aAlarmSet[nS]) THEN
     Pack(nRow := nI, stS := aAlarmSet[nS]);
   ELSIF nI <= nKeptRows THEN
+    refData.sts.eRefusedWhy := RowWhy(stS := aAlarmSet[nS]);
     Unpack(nRow := nI, stS := aAlarmSet[nS]);
     refData.sts.bRefused := TRUE;
   ELSE
@@ -210,6 +254,7 @@ refData.bCmdSilence := FALSE;
 IF bRst THEN
   refData.sts.nFirstOut := 0;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* each alarm *)
@@ -292,6 +337,9 @@ IF refData.sts.nFirst > 0 THEN
 ELSE
   refData.sts.eFirstCode := E_UtError.None;
 END_IF;
+bChanged := NOT bFirstScan AND (nOn <> refData.sts.nOn OR nUnacked <> refData.sts.nUnacked
+                                OR nTrips <> refData.sts.nTrips OR refData.sts.nLatest <> nLatestWas);
+nLatestWas := refData.sts.nLatest;
 refData.sts.nOn := nOn;
 refData.sts.nTrips := nTrips;
 refData.sts.nUnacked := nUnacked;

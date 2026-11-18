@@ -14,6 +14,9 @@ ipLevel (the transducer, to check it; unwired = floats only), ipOwner (the level
   the high float can start it again (the high-high float starts it at any time). The low float stops at once
   (E_PartAction.Stop, also the level control's own request).
 - Both floats made: high wins, and "floats disagree" (a warning).
+- set.bRunAll: while the overflow backup asks, bRunAll is TRUE (wire it to FB_Stages.bRunAll: every pump runs).
+- Totals: tot.nHighEvents (high float made) and tot.tHighTime (its made time, added when it clears), kept over a
+  power cut; the record's bCmdResetStats zeroes them.
 One action per Evaluate: Run > Stop > Warn. The warnings also show on the part's own bWarning / eErrorId.
 Its rung stopping while it acts is PartLost on its owner.
 Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back. *)
@@ -28,13 +31,15 @@ FUNCTION_BLOCK FB_LevelFloats EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_OUTPUT
     bTransducerFault : BOOL;
     bFloatControl : BOOL;
+    bRunAll : BOOL; (* the overflow backup asks every pump (set.bRunAll) *)
   END_VAR
   VAR RETAIN
     stKept : ST_LevelFloatsSet;
     nKeptLayout : UINT;
+    stKeptTot : ST_LevelFloatsTot; (* totals, kept at each event end and on a reset *)
   END_VAR
   VAR CONSTANT
-    cLayout : UINT := 1;
+    cLayout : UINT := 2;
     cNotUsed : REAL := 3.4E38; (* a level that is not used *)
   END_VAR
   VAR
@@ -44,6 +49,8 @@ FUNCTION_BLOCK FB_LevelFloats EXTENDS FB_Object IMPLEMENTS I_Part
     bDisagree : BOOL;
     bHighRun : BOOL; (* the overflow backup *)
     tHighAt : TIME;
+    bHWas : BOOL;
+    tHFrom : TIME;
     bFloatRun : BOOL; (* float control *)
     tRunAt : TIME;
     bLocked : BOOL;
@@ -114,9 +121,23 @@ METHOD PUBLIC GetNext : I_Part
   GetNext := ipNext;
 END_METHOD
 
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tHighHold >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tFloatRunTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tLockout >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tCheckDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.fCheckLevel = refData.set.fCheckLevel) THEN   // NaN
+    SetWhy := E_UtError.ValueBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
-  SetOk := refData.set.tHighHold >= T#0s AND refData.set.tFloatRunTime >= T#0s AND refData.set.tLockout >= T#0s
-           AND refData.set.tCheckDelay >= T#0s AND refData.set.fCheckLevel = refData.set.fCheckLevel;   // not NaN
+  SetOk := SetWhy() = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) OR ipOwner = NULL OR ipFloats = NULL THEN
@@ -135,13 +156,16 @@ tNow := TIME();
 IF bFirstScan THEN
   IF nKeptLayout = cLayout THEN
     refData.set := stKept;
+    refData.tot := stKeptTot;
   ELSE
     stKept := refData.set;
+    stKeptTot := refData.tot;
     nKeptLayout := cLayout;
   END_IF;
 ELSIF SetOk() THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
@@ -152,10 +176,17 @@ END_IF;
 IF refData.bCmdReset THEN
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
   bTransducerFault := FALSE;
   bChecking := FALSE;
 END_IF;
 
+IF refData.bCmdResetStats THEN
+  refData.tot.nHighEvents := 0;
+  refData.tot.tHighTime := T#0s;
+  stKeptTot := refData.tot;
+  refData.bCmdResetStats := FALSE;
+END_IF;
 (* the floats: high wins *)
 IF ipFloats.bIsFitted THEN
   bH := ipFloats.Band(eBand := E_Band.High);
@@ -255,6 +286,16 @@ ELSE
   eState := E_State.Idle;
 END_IF;
 refData.sts.bRun := bHighRun OR bFloatRun;
+bRunAll := bHighRun AND refData.set.bRunAll;
+(* the high float's events: counted when made, timed and kept when it clears *)
+IF bH AND NOT bHWas THEN
+  refData.tot.nHighEvents := refData.tot.nHighEvents + 1;
+  tHFrom := tNow;
+ELSIF bHWas AND NOT bH THEN
+  refData.tot.tHighTime := refData.tot.tHighTime + (tNow - tHFrom);
+  stKeptTot := refData.tot;
+END_IF;
+bHWas := bH;
 refData.sts.bStop := bStopNow;
 refData.sts.bFloatControl := bFloatControl;
 refData.sts.bTransducerFault := bTransducerFault;

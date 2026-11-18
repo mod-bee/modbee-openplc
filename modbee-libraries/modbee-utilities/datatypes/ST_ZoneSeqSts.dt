@@ -13,5 +13,9 @@ TYPE
     bDoseOn : BOOL;
     tPumpWait : TIME; (* the time with no water for want of the pump *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bPaused : BOOL; (* held (bPause, bCmdPause, a rain pause, a resume wait) *)
+    nRuns : UDINT; (* programs started since power-up *)
+    fDelivered : LREAL; (* this program's water (the meter) *)
   END_STRUCT;
 END_TYPE

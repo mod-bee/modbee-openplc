@@ -27,6 +27,7 @@ Offers `I_Measurement`: wire this instance to another block's `ip…` pin of tha
 | `bSimulate` | `BOOL` |  | never kept: off after a power cut |
 | `fSimValue` | `REAL` |  |  |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_MeasOverrideSet`)
 

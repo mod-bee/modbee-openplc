@@ -14,7 +14,10 @@ Other blocks read it through I_SystemMode (their ipSystem pin).
 The mode in use (set.eModeSource): Hmi = the record's choice; Switch = the selector bSwManual / bSwAuto (neither:
 Off; both: Off and a SelectorFault warning); Remote = the selector's Off and Manual act here, its Auto hands over
 to the record's choice. With set.ePowerUp Off a selector found out of Off at power-up is held Off until moved.
-bForceOff holds the plant Off (the choice is kept). sts.eMode is the mode in use. *)
+bForceOff holds the plant Off (the choice is kept). sts.eMode is the mode in use.
+set.bOfferManual FALSE: the plant is Off / Auto only (Off / On): Manual is refused as a bad write (set.eMode,
+nCmdMode 1), a selector's Manual contact acts as Off, and there is no manual run.
+bModeChanged is TRUE for one scan when the mode changes. *)
 
 FUNCTION_BLOCK FB_SystemMode EXTENDS FB_Object IMPLEMENTS I_SystemMode
   VAR_INPUT
@@ -34,6 +37,7 @@ FUNCTION_BLOCK FB_SystemMode EXTENDS FB_Object IMPLEMENTS I_SystemMode
     bAuto3 : BOOL;
     bAuto4 : BOOL;
     bManualRun : BOOL;
+    bModeChanged : BOOL; (* one scan: the mode changed *)
     bPowerUpHold : BOOL;
   END_VAR
   VAR RETAIN
@@ -41,7 +45,7 @@ FUNCTION_BLOCK FB_SystemMode EXTENDS FB_Object IMPLEMENTS I_SystemMode
     nKeptLayout : UINT;
   END_VAR
   VAR CONSTANT
-    cLayout : UINT := 1;
+    cLayout : UINT := 2;
   END_VAR
   VAR
     tStartAt : TIME;
@@ -85,15 +89,38 @@ PROPERTY PUBLIC bSystemReset : BOOL
   END_GET
 END_PROPERTY
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_SystemModeSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.nAutoTypes >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.nAutoTypes <= 8) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.nAutoType >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.nAutoType <= stS.nAutoTypes) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.tManualMaxRun >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tPowerOnDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.eMode = E_SysMode.Off OR stS.eMode = E_SysMode.Manual OR stS.eMode = E_SysMode.Auto) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF stS.eMode = E_SysMode.Manual AND NOT stS.bOfferManual THEN
+    SetWhy := E_UtError.ChoiceBad;  // Manual is not offered
+  ELSIF NOT (stS.eModeSource = E_ModeSource.Hmi OR stS.eModeSource = E_ModeSource.Switch
+             OR stS.eModeSource = E_ModeSource.Remote) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_SystemModeSet;
   END_VAR
-  SetOk := stS.nAutoTypes >= 1 AND stS.nAutoTypes <= 8 AND stS.nAutoType >= 1 AND stS.nAutoType <= stS.nAutoTypes
-           AND stS.tManualMaxRun >= T#0s AND stS.tPowerOnDelay >= T#0s
-           AND (stS.eMode = E_SysMode.Off OR stS.eMode = E_SysMode.Manual OR stS.eMode = E_SysMode.Auto)
-           AND (stS.eModeSource = E_ModeSource.Hmi OR stS.eModeSource = E_ModeSource.Switch
-                OR stS.eModeSource = E_ModeSource.Remote);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -131,6 +158,7 @@ IF refData.nCmdMode >= 0 THEN
     2: refData.set.eMode := E_SysMode.Auto;
   ELSE
     refData.sts.bRefused := TRUE;
+    refData.sts.eRefusedWhy := E_UtError.ChoiceBad;
   END_CASE;
   refData.nCmdMode := -1;
 END_IF;
@@ -138,6 +166,7 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;          // a bad write is put back
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
@@ -148,11 +177,12 @@ bResetNow := bReset OR refData.bCmdReset;
 IF refData.bCmdReset THEN
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the mode in use: the HMI choice, the selector, or the selector's Auto handing over to the HMI; forced Off *)
 bSelFault := bSwManual AND bSwAuto;
-IF bSwManual AND NOT bSelFault THEN
+IF bSwManual AND NOT bSelFault AND refData.set.bOfferManual THEN
   eSel := E_SysMode.Manual;
 ELSIF bSwAuto AND NOT bSelFault THEN
   eSel := E_SysMode.Auto;
@@ -269,6 +299,7 @@ IF bOk THEN
     eState := E_State.Idle;
   END_IF;
 END_IF;
+bModeChanged := NOT bFirstScan AND eNow <> refData.sts.eMode;
 refData.sts.eMode := eNow;
 refData.sts.nAutoType := nType;
 refData.sts.bManualRun := bManualRun;

@@ -5,6 +5,8 @@ TYPE
     bBypassed : BOOL;
     nNotOk : INT;
     nTrips : UDINT; (* times bOk went FALSE (not kept) *)
+    tTimeLeft : TIME; (* the shortest delay left of a condition about to count (0 = none) *)
     bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

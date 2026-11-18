@@ -53,6 +53,7 @@ The output side of the IO map: functions to terminals, from a table, with commis
 | `nBad` | `INT` |  | fitted functions whose channel is not good |
 | `nMissing` | `INT` |  | fitted modules not answering |
 | `bRefused` | `BOOL` |  | a bad settings write (record or rows) was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Details `det`** (`ST_IoMapDet`)
 
@@ -191,7 +192,7 @@ Forcing: a slot names a channel (`eKind` DigitalOut or AnalogOut, `eSrc`, `nModu
 
 Errors: `bError` for a configuration fault (IoArraySize, IoAddress, IoShared, IoNotFitted) or rows that were never good (BadSetting); `bWarning` for IoForced, IoMissing, IoBad, SettingRefused.
 
-Kept settings (a retained last-good copy, restored at power-up, a bad write put back, `sts.bRefused`): each row is its address packed into one DWORD ([`F_IoAddrPack`](F_IoAddrPack.md): bits 0..2 `eSrc`, 3..9 `nModule` 0..127, 10..17 `nCh`). The first 32 digital and 4 analog rows are kept, with `set.tForceTime` and the layout number: 38 retained values.
+Kept settings (a retained last-good copy, restored at power-up, a bad write put back, `sts.bRefused` / `eRefusedWhy`): each row is its address packed into one DWORD ([`F_IoAddrPack`](F_IoAddrPack.md): bits 0..2 `eSrc`, 3..9 `nModule` 0..127, 10..17 `nCh`). The first 32 digital and 4 analog rows are kept, with `set.tForceTime` and the layout number: 38 retained values.
 
 A row with an unknown source or a module over 127 is a bad write and put back.
 

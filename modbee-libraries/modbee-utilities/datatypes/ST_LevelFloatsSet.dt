@@ -5,5 +5,6 @@ TYPE
     tLockout : TIME := T#1m; (* float control: then this long before the high float starts it again *)
     tCheckDelay : TIME := T#10s; (* transducer check *)
     fCheckLevel : REAL; (* the high float made with the level below this = transducer fault (0: the owner's high-high) *)
+    bRunAll : BOOL; (* the overflow backup runs every pump (bRunAll -> FB_Stages.bRunAll) *)
   END_STRUCT;
 END_TYPE

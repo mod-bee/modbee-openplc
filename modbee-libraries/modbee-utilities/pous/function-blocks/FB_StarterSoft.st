@@ -33,6 +33,16 @@ FUNCTION_BLOCK FB_StarterSoft EXTENDS FB_Object IMPLEMENTS I_Part
   END_VAR
 
 
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.stStartTooLong.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.stStartTooLong.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 METHOD PUBLIC Evaluate : E_PartAction
   VAR_INPUT
     bRunning : BOOL;
@@ -106,14 +116,16 @@ IF bFirstScan THEN
     stKept := refData.set;
     nKeptLayout := cLayout;
   END_IF;
-ELSIF refData.set.stStartTooLong.tDelay >= T#0s AND refData.set.stStartTooLong.tRecover >= T#0s THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.bRefused := TRUE;
 END_IF;
 IF SystemReset() THEN
   refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 IF NOT bAdded THEN
   ipOwner.AddPart(ipPart := THIS^);

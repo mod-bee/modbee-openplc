@@ -6,5 +6,6 @@ TYPE
     nPass : INT;
     nRunOnly : INT;
     bDoseRun : BOOL;
+    tRunTime : TIME; (* the run's tRunTime pin (0 = each zone's own) *)
   END_STRUCT;
 END_TYPE

@@ -51,6 +51,7 @@ Offers `I_Measurement`: wire this instance to another block's `ip…` pin of tha
 | `bGood` | `BOOL` |  | The value can be trusted |
 | `eSignal` | `E_AiStatus` |  |  |
 | `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stFault` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 
 **Details `det`** (`ST_AnalogInDet`)

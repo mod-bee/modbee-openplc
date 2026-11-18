@@ -13,6 +13,8 @@ warning). set.tMaxPause > 0: a pause that long ends it. After a run ends, a new 
 and come again. A held request (bRun) refused by the interlock waits: it starts when the interlock comes back
 while it is still held (a remote start held while the pump is off starts when the pump is back in Auto); a
 latched start (bStart, bCmdStart) refused by the interlock is dropped.
+Detail (det): tElapsed (time counted), tTimeLeft (set.bByTime), tPaused (the current pause), tPhaseTime (since
+the run started or ended; a restart starts it over).
 Restart (bRestart / bCmdRestart): the active run ends with stop reason Restart (counted, logged) and a new run
 starts in the same scan: time from zero, its parts start over (FB_RunVolume takes a new start total), latched as
 before, bRunCmd not dropped. A stop in the same scan wins; no run active: nothing happens. nActRunId changes at
@@ -70,6 +72,9 @@ FUNCTION_BLOCK FB_Run EXTENDS FB_Object IMPLEMENTS I_Run
     bCapWarn : BOOL; (* a part's safety time cap ended a run (cleared by a reset or a new run) *)
     nRunId : UDINT; (* changes at every start *)
     bHeldWait : BOOL; (* a held request refused by the interlock: starts when it comes back *)
+    bActiveWas : BOOL; (* for det.tPhaseTime *)
+    nRunIdWas : UDINT;
+    tPhaseSince : TIME;
   END_VAR
   VAR_TEMP
     bResetNow : BOOL;
@@ -140,9 +145,23 @@ METHOD PRIVATE EndRun
   stProgress.bLatched := FALSE;
 END_METHOD
 
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tRunTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tMaxTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tMaxPause >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tResumeWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tProgressSave > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
-  SetOk := refData.set.tRunTime >= T#0s AND refData.set.tMaxTime >= T#0s AND refData.set.tMaxPause >= T#0s
-           AND refData.set.tResumeWindow >= T#0s AND refData.set.tProgressSave > T#0s;
+  SetOk := SetWhy() = E_UtError.None;
 END_METHOD
 
 (* the equipment: ipTarget (driven from here, every scan) or the bEquipRunning wire *)
@@ -197,6 +216,7 @@ IF bFirstScan THEN
 ELSIF SetOk() THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
 END_IF;
@@ -205,6 +225,7 @@ bResetNow := bReset OR refData.bCmdReset OR SystemReset();
 IF refData.bCmdReset THEN
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
   bMaxWarn := FALSE;
   bCapWarn := FALSE;
 END_IF;
@@ -304,6 +325,12 @@ ELSE
   refData.det.tPaused := T#0s;
 END_IF;
 bRunCmd := bActive AND NOT bWaiting AND NOT bPauseNow AND bInterlock;
+IF bActive <> bActiveWas OR nRunId <> nRunIdWas THEN
+  tPhaseSince := tNow;
+END_IF;
+bActiveWas := bActive;
+nRunIdWas := nRunId;
+refData.det.tPhaseTime := tNow - tPhaseSince;
 
 (* counting: only while the equipment runs *)
 IF bRunCmd AND bEqRun THEN

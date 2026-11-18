@@ -55,6 +55,7 @@ An engineering demand to an analog output card: clamp, ramp, a fail value on the
 | `bManual` | `BOOL` |  | in Manual now (pin or kept choice) |
 | `bBadInput` | `BOOL` |  | the demand is not a number: output held |
 | `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by bCmdReset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Constants `ST_AnalogOutConfig` (pin `stConfig`)
 

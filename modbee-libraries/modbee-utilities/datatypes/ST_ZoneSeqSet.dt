@@ -16,5 +16,7 @@ TYPE
     tResumeWindow : TIME := T#1m; (* a held run: its bRun must be back within this, else it ends *)
     tMaxTime : TIME; (* the cap of a zone cycle whose only target is a volume (0 = worked out) *)
     tDefaultCap : TIME := T#2h; (* ... when there is no tMaxTime and no zone minimum flow *)
+    tMaxPause : TIME; (* a pause this long ends the program (0 = no limit) *)
+    tProgressSave : TIME; (* keep the zone's progress this often while watering (0 = on events only) *)
   END_STRUCT;
 END_TYPE

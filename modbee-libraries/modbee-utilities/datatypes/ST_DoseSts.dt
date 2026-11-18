@@ -10,6 +10,7 @@ TYPE
     stMaxTime : ST_ProtectionSts;
     stStockLow : ST_ProtectionSts;
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     eMode : E_Mode; (* the mode in use *)
     bHandRun : BOOL; (* a Hand run is on *)
   END_STRUCT;

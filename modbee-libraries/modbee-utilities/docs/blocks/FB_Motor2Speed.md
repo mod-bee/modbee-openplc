@@ -53,6 +53,7 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 | `bHandHigh` | `BOOL` |  | Hand speed chosen last (kept) |
 | `tChangeover` | `TIME` | `T#2s` | An aux must follow its coil within this time |
 | `stChangeover` | `ST_ProtectionSet` | `(eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0)` | default Manual; a protection's settings ([protections](../conventions.md#protections)) |
+| `bJogHigh` | `BOOL` |  | a jog (FB_MotorJog) runs at high speed (FALSE: low) |
 
 **Status `sts`** (`ST_Motor2SpeedSts`)
 
@@ -60,6 +61,7 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 | --- | --- | --- | --- |
 | `bHighSpeed` | `BOOL` |  | running at high |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stChangeover` | `ST_ProtectionSts` |  | default Manual; a protection's status ([protections](../conventions.md#protections)) |
 
 ## Record `ST_MotorData` (pin `refData`)
@@ -105,6 +107,7 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 | `bLinked` | `BOOL` |  | an owner is driving it |
 | `bInterlocked` | `BOOL` |  | The interlock is holding it off |
 | `bRefused` | `BOOL` |  | a setting write was refused and put back |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `bJogging` | `BOOL` |  | jogging (FB_MotorJog, Hand only) |
 | `bMustCycle` | `BOOL` |  | a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) |
 | `stOverload` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
@@ -118,6 +121,8 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 | --- | --- | --- | --- |
 | `tRestartIn` | `TIME` |  | Time left before a start is allowed (restart delay) |
 | `tRunTime` | `TIME` |  | this run |
+| `tIdleTime` | `TIME` |  | since the last stop (0 while running) |
+| `tHandLeft` | `TIME` |  | a Hand run's time left under set.tHandMax (0 = none counting) |
 
 **Totals `tot`** (`ST_MotorTot`)
 
@@ -134,7 +139,7 @@ Everything of [`FB_Motor`](FB_Motor.md) (modes, protections, totals, `refData`) 
 
 Speed: Hand -> `set.bHandHigh` (kept; `bCmdLow` / `bCmdHigh`, or [`FB_LocalControl`](FB_LocalControl.md)'s `bLow` / `bHigh`, choose it and start in Hand); Auto -> the owner's speed (Request `fSpeed`: <= `set.fLowSpeedPct` = low, above = high; none = `bAutoHigh`). With `set.bStartInLow` a start to high runs low for `set.tLowStart` first. Low -> high waits `set.tSpeedChange`, high -> low `set.tDownChange` (0 = the same) ([`FB_Changeover`](FB_Changeover.md)). An aux that does not follow its coil within `set.tChangeover` trips `set.stChangeover` (default Manual): `bError` Changeover. A planned gap never counts as feedback lost. `fActSpeed`: `fLowSpeedPct` or 100.
 
-Jog: [`FB_MotorJog`](FB_MotorJog.md). Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
+Jog: [`FB_MotorJog`](FB_MotorJog.md), at `set.bJogHigh`'s speed. Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
 
 ## Example
 
@@ -163,6 +168,8 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `eActMode : E_Mode`
 - property `bIsRunning : BOOL`
 - property `bIsReady : BOOL`
+- property `tActIdleTime : TIME`
+- property `tActHandLeft : TIME`
 - property `bIsAvailable : BOOL`
 - property `bIsAuto : BOOL`
 - property `bIsFaulted : BOOL`

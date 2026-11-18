@@ -56,6 +56,7 @@ Sequential pulsing (jet-pulse filter cleaning, flush valves): one output at a ti
 | `bWaitDemandDrop` | `BOOL` |  | stopped: demand cleaning waits for bDemand / bEnable to drop |
 | `tTimeLeft` | `TIME` |  | in the phase |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Lists
 

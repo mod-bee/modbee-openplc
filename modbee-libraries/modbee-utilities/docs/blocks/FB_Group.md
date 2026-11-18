@@ -67,8 +67,13 @@ Offers `I_Equipment`: wire this instance to another block's `ip…` pin of that 
 | `nRunning` | `INT` |  |  |
 | `nCalled` | `INT` |  |  |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `nExercising` | `INT` |  | members on an exercise run |
 | `tExerciseIn` | `TIME` |  | until the next exercise run (0: off, or one running) |
+| `nAvailable` | `INT` |  | duty members available (not skipped) |
+| `bShortfall` | `BOOL` |  | asked for more members than can run (none left, or nMaxRunning) |
+| `tRotateIn` | `TIME` |  | Periodic: until the next rotation (0 otherwise) |
+| `bStopping` | `BOOL` |  | a staged stop is under way |
 
 ## Lists
 
@@ -97,7 +102,9 @@ Stop (`set.eStop`): when nothing is asked any more, AllAtOnce releases every mem
 
 Exercise (`set.tExerciseEvery`, 0 = off): while nothing is asked, a member that has not run for `tExerciseEvery` (an available one, not skipped) runs for `set.tExerciseTime`; a request, the member going unavailable or the setting off ends it; `sts.nExercising`, `sts.tExerciseIn` (until the next one). Idle time counts power-on time only (no clock). A member that exercises itself, or an owner exercise ([`FB_Exercise`](FB_Exercise.md) on the level control: it asks the group, so the lead runs), leaves this off.
 
-An invalid setting is refused and put back (`sts.bRefused`, a warning until a reset).
+Status: `sts.nAvailable` (duty members available), `sts.bShortfall` (asked for more members than can run: none left to call, or `nMaxRunning` reached), `sts.tRotateIn` (Periodic: until the next rotation), `sts.bStopping` (a staged stop).
+
+An invalid setting is refused and put back (`sts.bRefused` / `eRefusedWhy`, a warning until a reset).
 
 ## Example
 

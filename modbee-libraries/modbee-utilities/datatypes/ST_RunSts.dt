@@ -7,5 +7,6 @@ TYPE
     bPaused : BOOL;
     bWaiting : BOOL; (* a new run waits for the permissive *)
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

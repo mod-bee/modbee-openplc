@@ -7,7 +7,12 @@ TYPE
     nRunning : INT;
     nCalled : INT;
     bRefused : BOOL;
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
     nExercising : INT; (* members on an exercise run *)
     tExerciseIn : TIME; (* until the next exercise run (0: off, or one running) *)
+    nAvailable : INT; (* duty members available (not skipped) *)
+    bShortfall : BOOL; (* asked for more members than can run (none left, or nMaxRunning) *)
+    tRotateIn : TIME; (* Periodic: until the next rotation (0 otherwise) *)
+    bStopping : BOOL; (* a staged stop is under way *)
   END_STRUCT;
 END_TYPE

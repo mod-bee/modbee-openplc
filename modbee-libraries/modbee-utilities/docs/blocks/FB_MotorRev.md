@@ -59,6 +59,7 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 | `bAtLimitFwd` | `BOOL` |  |  |
 | `bAtLimitRev` | `BOOL` |  |  |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stChangeover` | `ST_ProtectionSts` |  | default Manual; a protection's status ([protections](../conventions.md#protections)) |
 
 ## Record `ST_MotorData` (pin `refData`)
@@ -104,6 +105,7 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 | `bLinked` | `BOOL` |  | an owner is driving it |
 | `bInterlocked` | `BOOL` |  | The interlock is holding it off |
 | `bRefused` | `BOOL` |  | a setting write was refused and put back |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `bJogging` | `BOOL` |  | jogging (FB_MotorJog, Hand only) |
 | `bMustCycle` | `BOOL` |  | a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) |
 | `stOverload` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
@@ -117,6 +119,8 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 | --- | --- | --- | --- |
 | `tRestartIn` | `TIME` |  | Time left before a start is allowed (restart delay) |
 | `tRunTime` | `TIME` |  | this run |
+| `tIdleTime` | `TIME` |  | since the last stop (0 while running) |
+| `tHandLeft` | `TIME` |  | a Hand run's time left under set.tHandMax (0 = none counting) |
 
 **Totals `tot`** (`ST_MotorTot`)
 
@@ -135,7 +139,7 @@ Direction: Hand -> `set.bHandReverse` (kept; `bCmdFwd` / `bCmdRev`, or [`FB_Loca
 
 A change waits `set.tReversalDelay` ([`FB_Changeover`](FB_Changeover.md)); with `set.bStopBeforeReverse` a direction change stops and needs a new start (the run request going away). An aux that does not follow its coil within `set.tChangeover` trips `set.stChangeover` (default Manual): `bError` Changeover. A planned gap never counts as feedback lost.
 
-Jog: [`FB_MotorJog`](FB_MotorJog.md). Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
+Jog: [`FB_MotorJog`](FB_MotorJog.md), in reverse with its `bJogRev`. Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
 
 ## Example
 
@@ -165,6 +169,8 @@ Ladder uses the pins above. These are for ST code and for other blocks (through 
 - property `eActMode : E_Mode`
 - property `bIsRunning : BOOL`
 - property `bIsReady : BOOL`
+- property `tActIdleTime : TIME`
+- property `tActHandLeft : TIME`
 - property `bIsAvailable : BOOL`
 - property `bIsAuto : BOOL`
 - property `bIsFaulted : BOOL`

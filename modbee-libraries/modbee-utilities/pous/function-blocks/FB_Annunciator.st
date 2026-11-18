@@ -74,13 +74,30 @@ FUNCTION_BLOCK FB_Annunciator EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_AnnunciatorSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tHornTimeout >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tReHorn >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tFastFlash > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tSlowFlash > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.eHornPriority = E_AlarmPriority.Low OR stS.eHornPriority = E_AlarmPriority.Medium
+             OR stS.eHornPriority = E_AlarmPriority.High OR stS.eHornPriority = E_AlarmPriority.Critical) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_AnnunciatorSet;
   END_VAR
-  SetOk := stS.tHornTimeout >= T#0s AND stS.tReHorn >= T#0s AND stS.tFastFlash > T#0s AND stS.tSlowFlash > T#0s
-           AND (stS.eHornPriority = E_AlarmPriority.Low OR stS.eHornPriority = E_AlarmPriority.Medium
-                OR stS.eHornPriority = E_AlarmPriority.High OR stS.eHornPriority = E_AlarmPriority.Critical);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 METHOD PRIVATE PrioNo : INT
@@ -117,6 +134,7 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
@@ -130,6 +148,7 @@ bSilenceSeen := refData.bCmdSilence;
 refData.bCmdSilence := FALSE;
 IF bAckReq OR SystemReset() THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 nHornPrio := PrioNo(ePrio := refData.set.eHornPriority);
 

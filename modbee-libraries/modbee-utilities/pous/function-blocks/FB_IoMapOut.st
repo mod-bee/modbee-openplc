@@ -24,7 +24,8 @@ starts the time again, bCmdRelease or bReleaseAll end it at once, every force en
 Errors: bError for a configuration fault (IoArraySize, IoAddress, IoShared, IoNotFitted) or rows that were
 never good (BadSetting); bWarning for IoForced, IoMissing, IoBad, SettingRefused.
 
-Kept settings (a retained last-good copy, restored at power-up, a bad write put back, sts.bRefused): each row
+Kept settings (a retained last-good copy, restored at power-up, a bad write put back, sts.bRefused / eRefusedWhy):
+each row
 is its address packed into one DWORD (F_IoAddrPack: bits 0..2 eSrc, 3..9 nModule 0..127, 10..17 nCh). The
 first 32 digital and 4 analog rows are kept, with set.tForceTime and the layout number: 38 retained values.
 A row with an unknown source or a module over 127 is a bad write and put back.
@@ -73,6 +74,7 @@ FUNCTION_BLOCK FB_IoMapOut EXTENDS FB_Object
   VAR_TEMP
     bSizeBad : BOOL;
     bSetOk : BOOL;
+    eWhy : E_UtError; (* the first bad setting of this write *)
     bRestore : BOOL;
     nD : DINT;
     nA : DINT;
@@ -121,27 +123,35 @@ bSizeBad := bSizeBad OR nD > cDoKept OR nA > cAoKept;
 IF refData.bCmdReset THEN
   refData.bCmdReset := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* 0. the rows: the kept copy at power-up, a bad write put back *)
 bRestore := bFirstScan AND nKeptLayout = cLayout;
 IF NOT bRestore THEN
   bSetOk := refData.set.tForceTime >= T#1ms AND refData.set.tForceTime <= T#10m;
+  eWhy := E_UtError.None;
+  IF NOT bSetOk THEN
+    eWhy := E_UtError.TimeBad;
+  END_IF;
   FOR nI := 1 TO nD DO
     nSj := LOWER_BOUND(aDoSet, 1) + nI - 1;
     IF NOT F_IoAddrOk(eSrc := aDoSet[nSj].eSrc, nModule := aDoSet[nSj].nModule) THEN
       bSetOk := FALSE;
+      IF eWhy = E_UtError.None THEN eWhy := E_UtError.IoAddress; END_IF;
     END_IF;
   END_FOR;
   FOR nI := 1 TO nA DO
     nSj := LOWER_BOUND(aAoSet, 1) + nI - 1;
     IF NOT F_IoAddrOk(eSrc := aAoSet[nSj].eSrc, nModule := aAoSet[nSj].nModule) THEN
       bSetOk := FALSE;
+      IF eWhy = E_UtError.None THEN eWhy := E_UtError.IoAddress; END_IF;
     END_IF;
   END_FOR;
   IF NOT bSetOk AND nKeptLayout = cLayout THEN
     bRestore := TRUE;
     refData.sts.bRefused := TRUE;
+    refData.sts.eRefusedWhy := eWhy;
   END_IF;
 END_IF;
 IF bRestore THEN

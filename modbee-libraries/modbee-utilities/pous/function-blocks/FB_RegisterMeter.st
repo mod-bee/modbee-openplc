@@ -10,7 +10,9 @@ counted; the register catches up when good again. Bad past set.stInputBad's dela
 (SensorBad). Units: set.eInUnit (the register's volume unit, with fScale applied after) and set.eOutUnit (the
 total's), E_Unit volume units, both set convert each addition; both None = no conversion; one set, or a unit that
 is not a volume, is a bad setting (put back). The total is LREAL, kept hourly, when bRunning falls (the pump stops; optional)
-and on a reset (bCmdResetTotal). *)
+and on a reset (bCmdResetTotal).
+Total commands: bCmdResetTotal (with set.bConfirmReset, only together with bCmdConfirm in the same write) and
+bCmdPreset (the total to fPresetTotal, 0 .. 1E12). *)
 
 FUNCTION_BLOCK FB_RegisterMeter EXTENDS FB_Object IMPLEMENTS I_Meter
   VAR_INPUT
@@ -25,7 +27,7 @@ FUNCTION_BLOCK FB_RegisterMeter EXTENDS FB_Object IMPLEMENTS I_Meter
     stKeptTot : ST_RegisterMeterTot;
   END_VAR
   VAR CONSTANT
-    cLayout : UINT := 2;
+    cLayout : UINT := 3;
   END_VAR
   VAR
     stWInputBad : ST_ProtectionWork;
@@ -90,7 +92,7 @@ METHOD PUBLIC Band : BOOL
   Band := FALSE;
 END_METHOD
 
-METHOD PRIVATE SetOk : BOOL
+METHOD PRIVATE SetWhy : E_UtError
   VAR_INPUT
     stS : REFERENCE TO ST_RegisterMeterSet;
   END_VAR
@@ -99,8 +101,31 @@ METHOD PRIVATE SetOk : BOOL
     fU : LREAL;
   END_VAR
   fU := F_UnitFactor(eFromUnit := stS.eInUnit, eToUnit := stS.eOutUnit, bOk => bU);
-  SetOk := bU AND stS.fScale >= 0.0 AND stS.fScale <= REAL#3.4E38 AND stS.fRolloverAt >= 0.0 AND stS.fMaxStep >= 0.0
-           AND stS.tRateWindow > T#0s AND stS.stInputBad.tDelay >= T#0s AND stS.stInputBad.tRecover >= T#0s;
+  SetWhy := E_UtError.None;
+  IF NOT (bU) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.fScale >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fScale <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.fRolloverAt >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fMaxStep >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.tRateWindow > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.stInputBad.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stInputBad.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
+METHOD PRIVATE SetOk : BOOL
+  VAR_INPUT
+    stS : REFERENCE TO ST_RegisterMeterSet;
+  END_VAR
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -126,9 +151,14 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
+END_IF;
+IF SystemReset() THEN                // the plant reset clears a refused write
+  refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* count the increases *)
@@ -173,11 +203,21 @@ IF tWin >= refData.set.tRateWindow THEN
 END_IF;
 
 (* reset, keep *)
-IF refData.bCmdResetTotal THEN
+IF refData.bCmdResetTotal AND (refData.bCmdConfirm OR NOT refData.set.bConfirmReset) THEN
   refData.bCmdResetTotal := FALSE;
   refData.tot.fTotal := 0.0;
   fWindowTotal := 0.0;
   stKeptTot := refData.tot;
+END_IF;
+refData.bCmdResetTotal := FALSE;
+refData.bCmdConfirm := FALSE;
+IF refData.bCmdPreset THEN
+  IF refData.fPresetTotal >= 0.0 AND refData.fPresetTotal <= 1.0E12 THEN
+    refData.tot.fTotal := refData.fPresetTotal;
+    fWindowTotal := refData.fPresetTotal;
+    stKeptTot := refData.tot;
+  END_IF;
+  refData.bCmdPreset := FALSE;
 END_IF;
 IF (bRunningWas AND NOT bRunning) OR tNow - tKeptAt >= T#1h THEN
   stKeptTot := refData.tot;

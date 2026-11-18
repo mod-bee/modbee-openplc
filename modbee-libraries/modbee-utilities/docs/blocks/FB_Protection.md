@@ -25,6 +25,8 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `bCmdReset` | `BOOL` |  | Reset trips whose cause has gone (HMI command; cleared by the block) |
+| `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by its reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_ProtectionPartSet`)
 
@@ -53,6 +55,8 @@ One protection on any condition, as a part of its owner: a thermistor, a drive f
 A protection that is not Clear and whose rung stops being called raises PartLost on its owner until reset.
 
 A thermistor: `set.eErrorId` := `E_UtError.Thermistor`; while it is tripped, a motor holds its coil off (`bHoldOff`), even against an IO-page force.
+
+A bad settings write is put back (`bRefused` / `eRefusedWhy`) and warns its owner (SettingRefused) until its reset (`bCmdReset`) or the owner's.
 
 ## Example
 

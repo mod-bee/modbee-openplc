@@ -44,6 +44,7 @@ A run-hour and start meter with a service interval, for anything that runs.
 | `bServiceDue` | `BOOL` |  | a warning, ServiceDue |
 | `tLastRun` | `TIME` |  | written at each run end |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Totals `tot`** (`ST_RunHoursTot`)
 

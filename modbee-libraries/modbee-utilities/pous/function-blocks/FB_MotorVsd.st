@@ -8,7 +8,8 @@ ramp), nSpeedRefRaw (scaled to set.fRawMin..fRawMax, a Modbus register), bDriveR
 reset), bAtSpeed.
 Speed asked for: Auto -> the owner's speed (Request fSpeed, < 0 = set.fAutoSpeed); Hand -> set.fHandSpeed.
 Clamped to fMinSpeed..fMaxSpeed; a target inside the skip band holds at its near edge; ramped by fAccelRate /
-fDecelRate (% per second, 0 = the drive ramps); a start begins from fMinSpeed.
+fDecelRate (% per set.eRateUnit: second by default, minute, hour or day; 0 = the drive ramps); a start begins from
+fMinSpeed. A jog (FB_MotorJog) runs at set.fJogSpeed (0 = fHandSpeed).
 Drive protections: driveNotReady (the ready relay lost while running), speedDev (|reference - fSpeedFb| past
 set.fDevBand while running with the ramp done and set.tDriveRamp passed since the reference stopped changing,
 fSpeedFb wired).
@@ -29,6 +30,9 @@ FUNCTION_BLOCK FB_MotorVsd EXTENDS FB_Motor
     nSpeedRefRaw : UINT;
     bDriveReset : BOOL;
     bAtSpeed : BOOL;
+  END_VAR
+  VAR CONSTANT
+    cVsdLayout : UINT := 2; (* the layout of its own kept settings *)
   END_VAR
   VAR RETAIN
     stKeptVsd : ST_VsdSet;
@@ -56,6 +60,42 @@ FUNCTION_BLOCK FB_MotorVsd EXTENDS FB_Motor
     fShown : REAL;
   END_VAR
 
+
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE VsdWhy : E_UtError
+  VsdWhy := E_UtError.None;
+  IF NOT (refVsd.set.fMinSpeed >= 0.0) THEN
+    VsdWhy := E_UtError.BelowMin;
+  ELSIF NOT (refVsd.set.fMaxSpeed <= 100.0) THEN
+    VsdWhy := E_UtError.AboveMax;
+  ELSIF NOT (refVsd.set.fMinSpeed <= refVsd.set.fMaxSpeed) THEN
+    VsdWhy := E_UtError.LimitsBad;
+  ELSIF NOT (refVsd.set.fAccelRate >= 0.0) THEN
+    VsdWhy := E_UtError.BelowMin;
+  ELSIF NOT (refVsd.set.fDecelRate >= 0.0) THEN
+    VsdWhy := E_UtError.BelowMin;
+  ELSIF NOT (refVsd.set.fSkipLow <= refVsd.set.fSkipHigh) THEN
+    VsdWhy := E_UtError.LimitsBad;
+  ELSIF NOT (refVsd.set.tResetPulse >= T#0s) THEN
+    VsdWhy := E_UtError.TimeBad;
+  ELSIF NOT (refVsd.set.fDevBand >= 0.0) THEN
+    VsdWhy := E_UtError.BelowMin;
+  ELSIF NOT (refVsd.set.tDriveRamp >= T#0s) THEN
+    VsdWhy := E_UtError.TimeBad;
+  ELSIF NOT (refVsd.set.fRatedHz >= 0.0) THEN
+    VsdWhy := E_UtError.BelowMin;
+  ELSIF NOT (refVsd.set.fRatedHz <= REAL#3.4E38) THEN
+    VsdWhy := E_UtError.AboveMax;
+  ELSIF NOT (refVsd.set.fRatedRpm >= 0.0) THEN
+    VsdWhy := E_UtError.BelowMin;
+  ELSIF NOT (refVsd.set.fRatedRpm <= REAL#3.4E38) THEN
+    VsdWhy := E_UtError.AboveMax;
+  ELSIF NOT (refVsd.set.fJogSpeed >= 0.0) THEN
+    VsdWhy := E_UtError.BelowMin;
+  ELSIF NOT (refVsd.set.fJogSpeed <= 100.0) THEN
+    VsdWhy := E_UtError.AboveMax;
+  END_IF;
+END_METHOD
 
 METHOD PROTECTED OVERRIDE DriveChecks
   VAR_INPUT
@@ -105,28 +145,32 @@ IF NOT __ISVALIDREF(refVsd) THEN
   RETURN;
 END_IF;
 IF bVsdFirst THEN
-  IF nKeptVsdLayout = cLayout THEN
+  IF nKeptVsdLayout = cVsdLayout THEN
     refVsd.set := stKeptVsd;
   ELSE
     stKeptVsd := refVsd.set;
-    nKeptVsdLayout := cLayout;
+    nKeptVsdLayout := cVsdLayout;
   END_IF;
   tLastRamp := tNow;
   bVsdFirst := FALSE;
-ELSIF refVsd.set.fMinSpeed >= 0.0 AND refVsd.set.fMaxSpeed <= 100.0 AND refVsd.set.fMinSpeed <= refVsd.set.fMaxSpeed
-      AND refVsd.set.fAccelRate >= 0.0 AND refVsd.set.fDecelRate >= 0.0 AND refVsd.set.fSkipLow <= refVsd.set.fSkipHigh
-      AND refVsd.set.tResetPulse >= T#0s AND refVsd.set.fDevBand >= 0.0 AND refVsd.set.tDriveRamp >= T#0s
-      AND refVsd.set.fRatedHz >= 0.0 AND refVsd.set.fRatedHz <= REAL#3.4E38
-      AND refVsd.set.fRatedRpm >= 0.0 AND refVsd.set.fRatedRpm <= REAL#3.4E38 THEN
+ELSIF VsdWhy() = E_UtError.None THEN
   stKeptVsd := refVsd.set;
 ELSE
+  refVsd.sts.eRefusedWhy := VsdWhy();
   refVsd.set := stKeptVsd;
   refVsd.sts.bRefused := TRUE;
+END_IF;
+IF bResetThisScan THEN                  // the equipment's reset clears a refused write
+  refVsd.sts.bRefused := FALSE;
+  refVsd.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 (* the speed asked for *)
 IF __ISVALIDREF(refData) AND refData.set.eMode = E_Mode.Hand THEN
   fTarget := refVsd.set.fHandSpeed;
+  IF bJogging AND refVsd.set.fJogSpeed > 0.0 THEN
+    fTarget := refVsd.set.fJogSpeed;   // a jog (FB_MotorJog) at its own speed
+  END_IF;
 ELSIF fSpeedReq >= 0.0 AND fSpeedReq = fSpeedReq THEN
   fTarget := fSpeedReq;
 ELSE
@@ -147,6 +191,13 @@ IF bQ AND NOT bQWas THEN
 END_IF;
 bQWas := bQ;
 fDt := TIME_TO_REAL(tNow - tLastRamp) / 1000.0;
+CASE refVsd.set.eRateUnit OF          // a rate per minute / hour / day: a smaller step per second
+  E_RateUnit.PerMin: fDt := fDt / 60.0;
+  E_RateUnit.PerHour: fDt := fDt / 3600.0;
+  E_RateUnit.PerDay: fDt := fDt / 86400.0;
+ELSE
+  ;
+END_CASE;
 tLastRamp := tNow;
 IF NOT bQ THEN
   fSpeedRef := 0.0;

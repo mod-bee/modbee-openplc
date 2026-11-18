@@ -29,6 +29,9 @@ Offers `I_Meter`: wire this instance to another block's `ip…` pin of that type
 | --- | --- | --- | --- |
 | `bCmdResetTotal` | `BOOL` |  | the total back to 0 (rising edge, cleared) |
 | `bCmdResetBatch` | `BOOL` |  | the batch back to 0 (cleared) |
+| `bCmdConfirm` | `BOOL` |  | confirms bCmdResetTotal (set.bConfirmReset); cleared by the block |
+| `bCmdPreset` | `BOOL` |  | the total to fPresetTotal (cleared by the block) |
+| `fPresetTotal` | `LREAL` |  |  |
 
 **Settings `set`** (`ST_PulseMeterSet`)
 
@@ -42,6 +45,7 @@ Offers `I_Meter`: wire this instance to another block's `ip…` pin of that type
 | `eInUnit` | `E_Unit` |  | the volume unit of fPerPulse (None = no conversion) |
 | `eOutUnit` | `E_Unit` |  | the volume unit of the total and the rate (None = no conversion) |
 | `stInputBad` | `ST_ProtectionSet` | `(eResponse := E_Response.Warn, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0)` | a protection's settings ([protections](../conventions.md#protections)) |
+| `bConfirmReset` | `BOOL` |  | a total reset needs the record's bCmdConfirm in the same write |
 
 **Status `sts`** (`ST_PulseMeterSts`)
 
@@ -50,7 +54,10 @@ Offers `I_Meter`: wire this instance to another block's `ip…` pin of that type
 | `bGood` | `BOOL` |  | The value can be trusted |
 | `fRate` | `REAL` |  | per hour |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stInputBad` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
+| `nPulses` | `UDINT` |  | pulses counted since power-up |
+| `bTooFast` | `BOOL` |  | pulses at the scan-rate limit (a pulse every second scan; held 5 s) |
 
 **Totals `tot`** (`ST_PulseMeterTot`)
 
@@ -71,7 +78,9 @@ Units: `set.eInUnit` (the unit of `fPerPulse`) and `set.eOutUnit` (the unit of t
 
 Batch: `tot.fBatch` counts like `tot.fTotal` until `bResetBatch` (rising edge) / `bCmdResetBatch`; `bBatchDone` is TRUE once it has reached `set.fBatchTarget` (0 = off), until the batch is reset.
 
-Offers `I_Meter` (an `I_Measurement` too: its rate): the total and the rate (per hour, over `set.tRateWindow`). The total and the batch are kept hourly, when `bRunning` falls (the pump stops; optional) and on a reset.
+Offers `I_Meter` (an `I_Measurement` too: its rate): the total and the rate (per hour, over `set.tRateWindow`). The total and the batch are kept hourly, when `bRunning` falls (the pump stops; optional) and on a reset. `sts.nPulses` counts pulses since power-up; pulses at the input's limit (a pulse every second scan) warn (PulsesTooFast, `sts.bTooFast`, held 5 s).
+
+Total commands: `bCmdResetTotal` (with `set.bConfirmReset`, only together with `bCmdConfirm` in the same write) and `bCmdPreset` (the total to `fPresetTotal`, 0 .. 1E12).
 
 ## Example
 

@@ -23,6 +23,7 @@ An irrigation or wash-down program: the zones watered in turn, by time or by vol
 | in | `ipMasterValve` | `I_Equipment` |  | the master valve: optional. The instance it drives (a motor, pump, valve or FB_Group) |
 | in | `nRunZone` | `INT` |  | at the start: 0 = the program, n = only zone n, index in aZones |
 | in | `nDoseReq` | `INT` | `-1` | at the start: -1 = set.bDose, 0 no, 1 dose this run |
+| in | `tRunTime` | `TIME` |  | at the start: each zone's water time this run (0 = its own set.tRunTime) |
 | in | `refData` | `REFERENCE TO ST_ZoneSeqData` |  | Its record (a variable of this type) |
 | in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
 | in-out | `aZones` | `ARRAY[*] OF FB_Zone` |  | The FB_Zone instances, in run order (`ARRAY[1..n] OF FB_Zone`) |
@@ -48,6 +49,8 @@ An irrigation or wash-down program: the zones watered in turn, by time or by vol
 | `bCmdSkip` | `BOOL` |  |  |
 | `bCmdReset` | `BOOL` |  | Reset trips whose cause has gone (HMI command; cleared by the block) |
 | `nCmdRunZone` | `INT` | `-1` | run only this zone (index in aZones): a start; then -1 |
+| `bCmdPause` | `BOOL` |  | pause (latched until bCmdResume, or the program ends); cleared by the block |
+| `bCmdResume` | `BOOL` |  | cleared by the block |
 
 **Settings `set`** (`ST_ZoneSeqSet`)
 
@@ -69,6 +72,8 @@ An irrigation or wash-down program: the zones watered in turn, by time or by vol
 | `tResumeWindow` | `TIME` | `T#1m` | a held run: its bRun must be back within this, else it ends |
 | `tMaxTime` | `TIME` |  | the cap of a zone cycle whose only target is a volume (0 = worked out) |
 | `tDefaultCap` | `TIME` | `T#2h` | ... when there is no tMaxTime and no zone minimum flow |
+| `tMaxPause` | `TIME` |  | a pause this long ends the program (0 = no limit) |
+| `tProgressSave` | `TIME` |  | keep the zone's progress this often while watering (0 = on events only) |
 
 **Status `sts`** (`ST_ZoneSeqSts`)
 
@@ -87,6 +92,17 @@ An irrigation or wash-down program: the zones watered in turn, by time or by vol
 | `bDoseOn` | `BOOL` |  |  |
 | `tPumpWait` | `TIME` |  | the time with no water for want of the pump |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
+| `bPaused` | `BOOL` |  | held (bPause, bCmdPause, a rain pause, a resume wait) |
+| `nRuns` | `UDINT` |  | programs started since power-up |
+| `fDelivered` | `LREAL` |  | this program's water (the meter) |
+
+**Details `det`** (`ST_ZoneSeqDet`)
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `tLeft` | `TIME` |  | this pass's time left (the time zones not done) |
+| `tPhaseTime` | `TIME` |  | time in the present phase |
 
 ## Lists
 
@@ -128,6 +144,8 @@ Repeats: `set.nRepeats` (1..100) runs the whole program that many times (a one-z
 Rain: `bRainHold` (wire [`FB_IrrDefer`](FB_IrrDefer.md)'s `bDefer` to it; its `bToStorage` goes to the route) acts per `set.eRainAction`: Pause holds the program (pump off, valves closed as at the end; the zones keep their progress) until it is gone; Skip ends the zone watering and every zone not yet done (the program ends Done); Cancel ends the program (stop reason Rain); Ignore does nothing. The active zone's pressure setpoint is `fZoneSp`: the zone's `set.fPressure`, else `set.fDefaultSp` (wire it to [`FB_SpeedLoop`](FB_SpeedLoop.md)'s `fSp` pin, with its `set.eSpSource` Pin).
 
 Power cut: the program's place (running, latched or held, the zone, the pass, a one-zone run, the dose choice) is kept at each start, change of zone, new pass and end; each zone keeps its own progress. After a cut, `set.eResume`: Resume goes on at the same zone (its valves start closed, its time and cycles kept); a latched run goes on at once, a held one when its `bRun` is back within `set.tResumeWindow`, else it ends (PowerCut); Restart does the same from the first zone and pass; None ends it (stop reason PowerCut). At most the water of the last hour in a zone is repeated (the zone saves its watered time hourly).
+
+Pause from the record: `bCmdPause` holds the program as `bPause` does, until `bCmdResume` (or the program ends); `set.tMaxPause` > 0: a pause that long ends the program (stop reason PauseMax). `set.tProgressSave` > 0: the watering zone's progress is kept that often (else on its events), so a power cut loses at most that much. Status: `sts.bPaused`, `sts.nRuns` (programs started since power-up), `sts.fDelivered` (this program's water); `det.tLeft` (this pass's time left over the timed zones not done), `det.tPhaseTime`. Each zone shows how it ended ([`FB_Zone`](FB_Zone.md) `sts.eResult`, `sts.bSkipped`).
 
 ## Example
 

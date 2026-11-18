@@ -72,12 +72,33 @@ FUNCTION_BLOCK FB_PulseSeq EXTENDS FB_Object
 
 
 (* the settings are usable *)
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_PulseSeqSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.nPulsesPerChannel >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.nPostCycles >= 0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.tPulseOn >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tPulseOff >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tChannelGap >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tCyclePause >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tStartDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_PulseSeqSet;
   END_VAR
-  SetOk := stS.nPulsesPerChannel >= 1 AND stS.nPostCycles >= 0 AND stS.tPulseOn >= T#0s AND stS.tPulseOff >= T#0s
-           AND stS.tChannelGap >= T#0s AND stS.tCyclePause >= T#0s AND stS.tStartDelay >= T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 (* channel nP (1-based) is not skipped *)
@@ -112,12 +133,14 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF SystemReset() THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 nLo := LOWER_BOUND(aOutputs, 1);
 nHi := UPPER_BOUND(aOutputs, 1);

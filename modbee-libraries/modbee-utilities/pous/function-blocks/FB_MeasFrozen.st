@@ -62,12 +62,29 @@ METHOD PUBLIC Band : BOOL
   IF ipIn <> NULL THEN Band := ipIn.Band(eBand := eBand); END_IF;
 END_METHOD
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_MeasFrozenSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.fBand >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.fBand <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.stFrozen.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stFrozen.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.stFrozen.nMaxRetries >= 0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_MeasFrozenSet;
   END_VAR
-  SetOk := stS.fBand >= 0.0 AND stS.fBand <= REAL#3.4E38 AND stS.stFrozen.tDelay >= T#0s
-           AND stS.stFrozen.tRecover >= T#0s AND stS.stFrozen.nMaxRetries >= 0;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) OR ipIn = NULL THEN
@@ -88,6 +105,7 @@ IF bFirstScan THEN
 ELSIF SetOk(stS := refData.set) THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.bRefused := TRUE;
 END_IF;
@@ -96,6 +114,7 @@ IF refData.bCmdReset THEN
   bReset := TRUE;
   refData.bCmdReset := FALSE;
   refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 (* a bad input or a change past the band restarts the wait *)
 IF NOT ipIn.bIsGood OR ABS(ipIn.fActValue - fRef) > refData.set.fBand THEN

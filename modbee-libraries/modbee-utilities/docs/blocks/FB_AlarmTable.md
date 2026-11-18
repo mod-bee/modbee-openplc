@@ -19,6 +19,7 @@ All of a panel's alarms in one block, one row each, with the fault and warning l
 | out | `bSiren` | `BOOL` |  | with set.tSirenTimeout; a new alarm sounds again |
 | out | `bHealthy` | `BOOL` |  | the common alarm relay (fail-safe) |
 | out | `nOn` | `INT` |  | Alarms on now |
+| out | `bChanged` | `BOOL` |  | one scan: an alarm came, went or was acknowledged |
 | out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
 | out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
@@ -57,6 +58,7 @@ All of a panel's alarms in one block, one row each, with the fault and warning l
 | `nTrips` | `INT` |  |  |
 | `nUnacked` | `INT` |  |  |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Rows `ST_AlarmSet` (pin `aAlarmSet`)
 
@@ -108,7 +110,7 @@ Each row: `eResponse` Off / Warn / Trip; the condition after `tDelay` (on) and `
 
 The row number is the alarm's number for the HMI. Bad times act as 0 (louder, never quieter).
 
-Kept (a retained last-good copy, restored at power-up, a bad write put back, `sts.bRefused`): set, and each row's settings but `eCode` packed into two DWORDs for the first 32 rows (`tDelay` in 10 ms steps up to 46 h, `tRecover` in 100 ms steps up to 109 min, `tRearm` in seconds up to 18 h, `nMaxRetries` 0..7). Nothing else is kept: a condition still present raises again after a power cut.
+Kept (a retained last-good copy, restored at power-up, a bad write put back, `sts.bRefused` / `eRefusedWhy`): set, and each row's settings but `eCode` packed into two DWORDs for the first 32 rows (`tDelay` in 10 ms steps up to 46 h, `tRecover` in 100 ms steps up to 109 min, `tRearm` in seconds up to 18 h, `nMaxRetries` 0..7). Nothing else is kept: a condition still present raises again after a power cut. `bChanged` is TRUE for one scan when an alarm comes, goes or is acknowledged (counts or the latest row change).
 
 ## Example
 

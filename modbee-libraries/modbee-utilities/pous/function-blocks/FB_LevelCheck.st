@@ -11,13 +11,17 @@ A bad measurement is ridden through for set.tBadRide (the state is held), then t
 sensor raises its own fault, and a switch band still acts. A measurement that is not fitted is no check.
 It acts per its protection settings (off / warn / trip / signal, delay, reset). A signal is a stop without an
 alarm (the owner stops and restarts with it); with set.bDoneWhenReached a signal ends the owner's run instead
-(Done: a full destination ends a latched transfer run; for a held run keep the pause). Its rung stopping while it acts is PartLost on its owner. *)
+(Done: a full destination ends a latched transfer run; for a held run keep the pause). Its rung stopping while it acts is PartLost on its owner.
+bInhibit TRUE suppresses the check (no cause): an active one clears per its reset settings.
+A bad settings write is put back (sts.bRefused / sts.eRefusedWhy) and warns its owner (SettingRefused) until its
+reset (bCmdReset) or the owner's. *)
 
 FUNCTION_BLOCK FB_LevelCheck EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT
     bSwitch : BOOL := FALSE; (* optional switch, TRUE = past the level (a backup, or the only signal) *)
     ipMeas : I_Measurement; (* optional: none wired = the switch alone *)
     ipOwner : I_PartOwner; (* required *)
+    bInhibit : BOOL; (* TRUE: the check is suppressed (no cause; an active one clears per its reset) *)
     refData : REFERENCE TO ST_LevelCheckData;
   END_VAR
   VAR RETAIN
@@ -72,8 +76,15 @@ METHOD PUBLIC Evaluate : E_PartAction
   IF refData.set.bMaskAtStart AND bMasked THEN
     bCause := FALSE;
   END_IF;
+  IF bInhibit THEN
+    bCause := FALSE;              (* suppressed by the project (e.g. while a known condition holds) *)
+  END_IF;
   bOwnReset := refData.bCmdReset;
   refData.bCmdReset := FALSE;
+  IF bResetWanted OR bOwnReset THEN
+    refData.sts.bRefused := FALSE;
+    refData.sts.eRefusedWhy := E_UtError.None;
+  END_IF;
   bTrip := F_Protect(tNow := TIME(), bCause := bCause, bResetReq := bResetWanted OR bOwnReset,
                      tRetryWindow := T#1h, stSet := refData.set, stSts := refData.sts, stWork := stWork);
   IF stWork.bTrip THEN
@@ -83,6 +94,9 @@ METHOD PUBLIC Evaluate : E_PartAction
   ELSIF stWork.bSignal THEN
     Evaluate := E_PartAction.Stop;
   ELSIF stWork.bWarn OR stWork.bBadSetting THEN
+    Evaluate := E_PartAction.Warn;
+  ELSIF refData.sts.bRefused THEN
+    eErrorId := E_UtError.SettingRefused;
     Evaluate := E_PartAction.Warn;
   ELSE
     Evaluate := E_PartAction.None;
@@ -100,10 +114,25 @@ METHOD PUBLIC GetNext : I_Part
   GetNext := ipNext;
 END_METHOD
 
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.tDelay >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tRecover >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.nMaxRetries >= 0) THEN
+    SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.fDeadband >= 0.0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (refData.set.tBadRide >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.fSetpoint = refData.set.fSetpoint) THEN   // NaN
+    SetWhy := E_UtError.ValueBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
-  SetOk := refData.set.tDelay >= T#0s AND refData.set.tRecover >= T#0s AND refData.set.nMaxRetries >= 0
-           AND refData.set.fDeadband >= 0.0 AND refData.set.tBadRide >= T#0s
-           AND refData.set.fSetpoint = refData.set.fSetpoint;   // not NaN
+  SetOk := SetWhy() = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) OR ipOwner = NULL THEN
@@ -123,7 +152,9 @@ IF bFirstScan THEN
 ELSIF SetOk() THEN
   stKept := refData.set;
 ELSE
+  refData.sts.eRefusedWhy := SetWhy();
   refData.set := stKept;
+  refData.sts.bRefused := TRUE;
 END_IF;
 IF NOT bAdded THEN
   ipOwner.AddPart(ipPart := THIS^);
@@ -172,9 +203,11 @@ bBand := bBand OR bSwitch;         (* the backup switch, also with a bad or unfi
 refData.sts.bBeyond := bBeyond;
 bCalled := TRUE;
 bError := stWork.bTrip;
-bWarning := stWork.bWarn;
-IF bError OR bWarning THEN
+bWarning := stWork.bWarn OR refData.sts.bRefused;
+IF bError OR stWork.bWarn THEN
   eErrorId := refData.set.eErrorId;
+ELSIF refData.sts.bRefused THEN
+  eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;
 END_IF;

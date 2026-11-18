@@ -5,7 +5,8 @@ aItem[i].stMem, and aItem[i].sts). Each row runs the FB_Report decision (F_Repor
 item; bEnable back (link up / born) = every item reports First (with its and set.bReportOnStart); bForce /
 bCmdForce = every item reports now, aItem[i].bCmdForce that item. set.tHeartbeat applies to items whose own is 0.
 Pins: bEnable, bForce, refData, aItemSet, aItem -> bAnyReport, nReportCount, plus FB_Object's outputs. Kept (a
-retained last-good copy, restored at power-up, a bad write put back, the row's sts.bRefused): set and the item
+retained last-good copy, restored at power-up, a bad write put back, the row's sts.bRefused / eRefusedWhy): set and
+the item
 settings. An item with a bad setting and no good copy is left out: warning BadSetting, sts.nBadItem names it.
 Tables of different sizes: error BadSetting. *)
 
@@ -51,11 +52,21 @@ FUNCTION_BLOCK FB_ReportArray EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_ReportArraySet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tHeartbeat >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_ReportArraySet;
   END_VAR
-  SetOk := stS.tHeartbeat >= T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -90,6 +101,7 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOkSet := TRUE;
@@ -100,6 +112,7 @@ refData.bCmdForce := FALSE;
 bRst := bForceAll OR SystemReset();
 IF bRst THEN
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
 END_IF;
 
 bAnyReport := FALSE;
@@ -119,6 +132,8 @@ FOR nI := 1 TO nN DO
       nKeptMask := nKeptMask OR nBit;
     END_IF;
   ELSIF nBit <> 0 AND (nKeptMask AND nBit) <> 0 THEN
+    aItem[nR].sts.eRefusedWhy := F_ReportSetWhy(stS := aItemSet[nS]);
+    refData.sts.eRefusedWhy := aItem[nR].sts.eRefusedWhy;
     aItemSet[nS] := aKeptItem[nI];
     aItem[nR].sts.bRefused := TRUE;
     refData.sts.bRefused := TRUE;
@@ -128,6 +143,7 @@ FOR nI := 1 TO nN DO
   END_IF;
   IF bRst THEN
     aItem[nR].sts.bRefused := FALSE;
+    aItem[nR].sts.eRefusedWhy := E_UtError.None;
   END_IF;
   IF bRowOk THEN
     tBeat := aItemSet[nS].tHeartbeat;

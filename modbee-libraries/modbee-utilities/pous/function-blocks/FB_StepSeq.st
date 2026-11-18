@@ -105,13 +105,28 @@ FUNCTION_BLOCK FB_StepSeq EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE StepWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_StepSet;
+  END_VAR
+  StepWhy := E_UtError.None;
+  IF NOT (stS.tDuration >= T#0s) THEN
+    StepWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tTimeout >= T#0s) THEN
+    StepWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.nLoops >= 0) THEN
+    StepWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.eOnTimeout = E_StepTimeout.Hold OR stS.eOnTimeout = E_StepTimeout.Next
+             OR stS.eOnTimeout = E_StepTimeout.Stop) THEN
+    StepWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE StepOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_StepSet;
   END_VAR
-  StepOk := stS.tDuration >= T#0s AND stS.tTimeout >= T#0s AND stS.nLoops >= 0
-            AND (stS.eOnTimeout = E_StepTimeout.Hold OR stS.eOnTimeout = E_StepTimeout.Next
-                 OR stS.eOnTimeout = E_StepTimeout.Stop);
+  StepOk := StepWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -151,6 +166,7 @@ bOkSet := refData.set.nStopStep >= 0;
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF stKept.nStopStep >= 0 THEN
+  refData.sts.eRefusedWhy := E_UtError.BelowMin;   // nStopStep
   refData.set := stKept;
   refData.sts.bRefused := TRUE;
   bOkSet := TRUE;
@@ -161,6 +177,7 @@ FOR nI := 1 TO nN DO
   IF StepOk(stS := aStepSet[nS]) THEN
     IF nI <= cMaxKept THEN aKeptStep[nI] := aStepSet[nS]; END_IF;
   ELSIF nI <= INT_TO_DINT(nKeptRows) THEN
+    refData.sts.eRefusedWhy := StepWhy(stS := aStepSet[nS]);
     aStepSet[nS] := aKeptStep[nI];
     refData.sts.bRefused := TRUE;
   ELSE
@@ -212,6 +229,7 @@ END_IF;
 IF bResetReq THEN
   refData.sts.bRecipeBad := FALSE;
   refData.sts.bRefused := FALSE;
+  refData.sts.eRefusedWhy := E_UtError.None;
   IF bHeld THEN
     bHeld := FALSE;               (* the step carries on, with a fresh timeout *)
     tTmo := T#0s;

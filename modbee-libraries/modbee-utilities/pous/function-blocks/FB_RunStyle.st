@@ -42,13 +42,26 @@ FUNCTION_BLOCK FB_RunStyle EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_RunStyleSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.eStyle = E_RunStyle.Held OR stS.eStyle = E_RunStyle.Toggle OR stS.eStyle = E_RunStyle.Pulse
+          OR (stS.eStyle = E_RunStyle.KeepAlive AND stS.tKeepAlive > T#0s)) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tKeepAlive >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tPulse >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_RunStyleSet;
   END_VAR
-  SetOk := (stS.eStyle = E_RunStyle.Held OR stS.eStyle = E_RunStyle.Toggle OR stS.eStyle = E_RunStyle.Pulse
-            OR (stS.eStyle = E_RunStyle.KeepAlive AND stS.tKeepAlive > T#0s))
-           AND stS.tKeepAlive >= T#0s AND stS.tPulse >= T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -76,9 +89,14 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.bRefused := TRUE;
   bOk := TRUE;
+END_IF;
+IF SystemReset() THEN                // the plant reset clears a refused write
+  refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 bEdge := bIn AND NOT bInPrev;
 bStopEdge := bStop AND NOT bStopPrev;

@@ -44,6 +44,7 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 | `bHolding` | `BOOL` |  | a start is waiting |
 | `bFailWaiting` | `BOOL` |  | the wait after a failed start is running |
 | `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## Constants `ST_StartsConfig` (pin `stConfig`)
 

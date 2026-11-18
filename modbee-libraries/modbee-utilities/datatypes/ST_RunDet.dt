@@ -3,5 +3,6 @@ TYPE
     tElapsed : TIME; (* run time counted (while the equipment runs) *)
     tTimeLeft : TIME;
     tPaused : TIME; (* how long the current pause has lasted (0 while not paused) *)
+    tPhaseTime : TIME; (* since the run started (active) or ended (idle); a restart starts it over *)
   END_STRUCT;
 END_TYPE

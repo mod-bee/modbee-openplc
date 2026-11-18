@@ -1,0 +1,8 @@
+TYPE
+  ST_SpeedLoopDet : STRUCT
+    fP : REAL; (* the PID's parts, % speed *)
+    fI : REAL;
+    fD : REAL;
+    tPhaseTime : TIME; (* time in the present phase *)
+  END_STRUCT;
+END_TYPE

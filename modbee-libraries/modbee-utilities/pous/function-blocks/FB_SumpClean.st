@@ -2,7 +2,8 @@
 its normal stop to set.fCleanLevel and the pump runs on set.tCleanTime there, to clear the settled solids. A part
 of an EMPTY FB_LevelControl: it asks for a normal run (E_PartAction.Request; the low-low cut-out and start limits
 still apply). Not reaching fCleanLevel within set.tMaxClean gives up: a warning (CleanFailed) until the next good
-clean or a reset. A cycle is one start of the owner's run. A bad level stops a clean. *)
+clean or a reset. A cycle is one start of the owner's run. A bad level stops a clean. The record shows the
+clean under way's time (tElapsed). *)
 
 FUNCTION_BLOCK FB_SumpClean EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT
@@ -32,6 +33,20 @@ FUNCTION_BLOCK FB_SumpClean EXTENDS FB_Object IMPLEMENTS I_Part
     tAt : TIME;
   END_VAR
 
+
+(* the first bad setting (None: all good) *)
+METHOD PRIVATE SetWhy : E_UtError
+  SetWhy := E_UtError.None;
+  IF NOT (refData.set.nEvery >= 0) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (ABS(refData.set.fCleanLevel) <= REAL#3.4E38) THEN
+    SetWhy := E_UtError.ValueBad;
+  ELSIF NOT (refData.set.tCleanTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tMaxClean >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
 
 METHOD PUBLIC Evaluate : E_PartAction
   VAR_INPUT
@@ -87,6 +102,7 @@ METHOD PUBLIC Evaluate : E_PartAction
       END_IF;
     END_IF;
   END_IF;
+  IF bCleaning THEN refData.tElapsed := tN - tStart; ELSE refData.tElapsed := T#0s; END_IF;
   IF bCleaning THEN
     Evaluate := E_PartAction.Request;
   ELSIF refData.bFailed THEN
@@ -119,10 +135,10 @@ IF bFirstScan THEN
     stKept := refData.set;
     nKeptLayout := cLayout;
   END_IF;
-ELSIF refData.set.nEvery >= 0 AND ABS(refData.set.fCleanLevel) <= REAL#3.4E38 AND refData.set.tCleanTime >= T#0s
-      AND refData.set.tMaxClean >= T#0s THEN
+ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
+  refData.eRefusedWhy := SetWhy();
   refData.set := stKept;
   refData.bRefused := TRUE;
 END_IF;
@@ -140,8 +156,10 @@ IF refData.bCmdReset OR SystemReset() THEN
   refData.bCmdReset := FALSE;
   refData.bFailed := FALSE;
   refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 refData.bCleaning := bCleaning;
+IF bCleaning THEN refData.tElapsed := TIME() - tStart; ELSE refData.tElapsed := T#0s; END_IF;
 bError := FALSE;
 bWarning := refData.bFailed OR refData.bRefused;
 IF refData.bFailed THEN

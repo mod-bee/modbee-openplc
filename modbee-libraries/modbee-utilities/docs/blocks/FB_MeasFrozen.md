@@ -26,6 +26,7 @@ Offers `I_Measurement`: wire this instance to another block's `ip…` pin of tha
 | `bCmdReset` | `BOOL` |  | reset a held Manual trip (cleared by the block) |
 | `stFrozen` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_MeasFrozenSet`)
 

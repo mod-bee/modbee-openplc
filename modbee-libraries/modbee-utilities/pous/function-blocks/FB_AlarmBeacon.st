@@ -53,12 +53,33 @@ FUNCTION_BLOCK FB_AlarmBeacon EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_BeaconSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.eStyle = E_BeaconStyle.Count OR stS.eStyle = E_BeaconStyle.Binary) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.nBits >= 1) THEN
+    SetWhy := E_UtError.BelowMin;
+  ELSIF NOT (stS.nBits <= 15) THEN
+    SetWhy := E_UtError.AboveMax;
+  ELSIF NOT (stS.tShort > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tLong > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tGap > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tPause > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_BeaconSet;
   END_VAR
-  SetOk := (stS.eStyle = E_BeaconStyle.Count OR stS.eStyle = E_BeaconStyle.Binary) AND stS.nBits >= 1 AND stS.nBits <= 15
-           AND stS.tShort > T#0s AND stS.tLong > T#0s AND stS.tGap > T#0s AND stS.tPause > T#0s;
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
@@ -84,12 +105,14 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
+  refData.eRefusedWhy := SetWhy(stS := refData.set);
   refData.set := stKept;
   refData.bRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF SystemReset() THEN
   refData.bRefused := FALSE;
+  refData.eRefusedWhy := E_UtError.None;
 END_IF;
 nN := 0;
 FOR nI := nLo TO nHi DO

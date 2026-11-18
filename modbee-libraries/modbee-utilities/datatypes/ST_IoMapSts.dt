@@ -4,5 +4,6 @@ TYPE
     nBad : INT; (* fitted functions whose channel is not good *)
     nMissing : INT; (* fitted modules not answering *)
     bRefused : BOOL; (* a bad settings write (record or rows) was put back (cleared by a reset) *)
+    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
   END_STRUCT;
 END_TYPE

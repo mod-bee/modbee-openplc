@@ -42,6 +42,7 @@ Offers `I_Meter`: wire this instance to another block's `ip…` pin of that type
 | `fRate` | `REAL` |  | per hour |
 | `fRunMoved` | `LREAL` |  | this run so far |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Totals `tot`** (`ST_LevelMeterTot`)
 

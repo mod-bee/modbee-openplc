@@ -127,6 +127,7 @@ Holds a pressure, flow or level by changing a pump's speed (PID), or runs it at 
 | `bManual` | `BOOL` |  |  |
 | `bPvBad` | `BOOL` |  |  |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 | `stPvBad` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `ePhase` | `E_LoopPhase` |  | The phase now (status) |
 | `ePresetUsed` | `E_LoopPreset` |  |  |
@@ -140,6 +141,15 @@ Holds a pressure, flow or level by changing a pump's speed (PID), or runs it at 
 | `stFill` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `stNotReaching` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `stHunting` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
+
+**Details `det`** (`ST_SpeedLoopDet`)
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `fP` | `REAL` |  | the PID's parts, % speed |
+| `fI` | `REAL` |  |  |
+| `fD` | `REAL` |  | % speed |
+| `tPhaseTime` | `TIME` |  | time in the present phase |
 
 ## Lists
 
@@ -186,7 +196,9 @@ A bad or unfitted measurement under control: the speed is held at once; past `se
 
 Restart: after a reset that was needed (Manual reset, or a Retry lockout) the loop waits for `bRun` to cycle, unless `set.bRestartAfterReset`. `bAtSetpoint`: in control, boost or sleep, the value within `set.fAtSpBand` of the setpoint in use. `fError`: how far the value is short of the setpoint (`set.bReverse`: above it), 0 when not good; with Fixed control Pv against the setpoint in use (0 when that is 0), for a fixed-speed set staged on bands; with `bAtMax` (at the top of the speed range, not held by the flow limit) and `bAtMin` it feeds [`FB_Cascade`](FB_Cascade.md)'s staging. `bMoreNeeded`: in control at the top speed and short of the setpoint by more than `fAtSpBand` for `set.tStageDelay`; `bLessNeeded`: in control at the minimum speed for `set.tStageDelay` (hints for an owner adding or dropping pumps; a highPv warning stops both). `bFilled` can drive a pump's prime-done input; `stLowAtMax` is the lost-prime check.
 
-Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back (`sts.bRefused`, a warning until a reset).
+Detail (det): the PID's parts `fP` / `fI` / `fD` (% speed) and `tPhaseTime` (time in the present phase).
+
+Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back (`sts.bRefused` / `eRefusedWhy`, a warning until a reset).
 
 ## Example
 

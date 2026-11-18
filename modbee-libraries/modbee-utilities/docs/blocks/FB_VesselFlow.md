@@ -34,6 +34,7 @@ What flows into a vessel: its volume's rise per hour plus the metered outflow (a
 | `fRise` | `REAL` |  | the volume's change per hour |
 | `fOutflow` | `REAL` |  | the outflow meter's rate per hour |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## How it works
 

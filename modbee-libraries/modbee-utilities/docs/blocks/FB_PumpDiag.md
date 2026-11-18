@@ -26,6 +26,7 @@ Names the likely cause of a pump's hydraulic trouble from its pressure, flow and
 | --- | --- | --- | --- |
 | `eDiagnosis` | `E_PumpDiag` |  | status |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_PumpDiagSet`)
 

@@ -11,6 +11,7 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 | in | `ipBooster` | `I_Equipment` |  | the booster pump (required). The instance it drives (a motor, pump, valve or FB_Group) |
 | in | `ipPressure` | `I_Measurement` |  | Pressure start (optional). A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
 | in | `ipOwner` | `I_PartOwner` |  | the station's level control (required). The owner's instance |
+| in | `bPermit` | `BOOL` | `TRUE` | FALSE: the booster does not run now (it stops at once) |
 | in | `refData` | `REFERENCE TO ST_BoosterData` |  | Its record (a variable of this type) |
 | in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
 | out | `bWanted` | `BOOL` |  |  |
@@ -29,6 +30,7 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 | `bWanted` | `BOOL` |  | status |
 | `stLost` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
 | `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 **Settings `set`** (`ST_BoosterSet`)
 
@@ -49,7 +51,7 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 
 A series booster pump that runs with a station's duty pumps, as a part of the station's [`FB_LevelControl`](FB_LevelControl.md) (one booster, not in the duty rotation).
 
-While the station runs (its request on and its pumps running): `set.eStartBy` Delay starts the booster `set.tDelay` after the duty pumps run; Pressure starts it while `ipPressure` is at or below `set.fStartAt`, until it is at or above `set.fStopAt` (with a pressure that is not good: as Delay). At a cycle end the booster stops at once; give the duty pumps a stop delay ([`FB_Pump`](FB_Pump.md) `set.tStopDelay` = the gap) so they stop that much later. `set.bRequired`: wanted and not running for `set.stLost`'s delay -> BoosterLost (a trip stops the station).
+While the station runs (its request on and its pumps running): `set.eStartBy` Delay starts the booster `set.tDelay` after the duty pumps run; Pressure starts it while `ipPressure` is at or below `set.fStartAt`, until it is at or above `set.fStopAt` (with a pressure that is not good: as Delay). At a cycle end the booster stops at once; give the duty pumps a stop delay ([`FB_Pump`](FB_Pump.md) `set.tStopDelay` = the gap) so they stop that much later. `set.bRequired`: wanted and not running for `set.stLost`'s delay -> BoosterLost (a trip stops the station). `bPermit` FALSE (default TRUE) keeps the booster off whatever the rule says (it stops at once).
 
 ## Example
 

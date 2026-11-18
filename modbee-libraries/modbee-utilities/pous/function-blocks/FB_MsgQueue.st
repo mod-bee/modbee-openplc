@@ -84,15 +84,30 @@ FUNCTION_BLOCK FB_MsgQueue EXTENDS FB_Object
   END_VAR
 
 
+METHOD PRIVATE SetWhy : E_UtError
+  VAR_INPUT
+    stS : REFERENCE TO ST_MsgQueueSet;
+  END_VAR
+  SetWhy := E_UtError.None;
+  IF NOT (stS.tShowTime >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.tClearFullAfter >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (stS.eMode = E_MsgMode.Queue OR stS.eMode = E_MsgMode.Active) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.eWhenFull = E_MsgFull.DropOldest OR stS.eWhenFull = E_MsgFull.HoldNew) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  ELSIF NOT (stS.eMinKind = E_MsgKind.Normal OR stS.eMinKind = E_MsgKind.Held OR stS.eMinKind = E_MsgKind.Warning
+             OR stS.eMinKind = E_MsgKind.Fault) THEN
+    SetWhy := E_UtError.ChoiceBad;
+  END_IF;
+END_METHOD
+
 METHOD PRIVATE SetOk : BOOL
   VAR_INPUT
     stS : REFERENCE TO ST_MsgQueueSet;
   END_VAR
-  SetOk := stS.tShowTime >= T#0s AND stS.tClearFullAfter >= T#0s
-           AND (stS.eMode = E_MsgMode.Queue OR stS.eMode = E_MsgMode.Active)
-           AND (stS.eWhenFull = E_MsgFull.DropOldest OR stS.eWhenFull = E_MsgFull.HoldNew)
-           AND (stS.eMinKind = E_MsgKind.Normal OR stS.eMinKind = E_MsgKind.Held OR stS.eMinKind = E_MsgKind.Warning
-                OR stS.eMinKind = E_MsgKind.Fault);
+  SetOk := SetWhy(stS := stS) = E_UtError.None;
 END_METHOD
 
 METHOD PRIVATE KindNo : INT
@@ -135,12 +150,14 @@ IF bNewScan THEN
   IF bSetOk THEN
     stKept := refData.set;
   ELSIF SetOk(stS := stKept) THEN
+    refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
     refData.set := stKept;
     refData.sts.bRefused := TRUE;
     bSetOk := TRUE;
   END_IF;
   IF SystemReset() THEN
     refData.sts.bRefused := FALSE;
+    refData.sts.eRefusedWhy := E_UtError.None;
   END_IF;
 END_IF;
 refData.sts.bWrnConfig := nNb < 1 OR nSHi < nSLo;

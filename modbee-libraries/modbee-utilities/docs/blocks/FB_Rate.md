@@ -49,6 +49,7 @@ The rate of change of a value (a least-squares trend), with rising-fast and fall
 | `bReady` | `BOOL` |  | a full window of good readings has been measured |
 | `bBadInput` | `BOOL` |  | fIn not usable now: fRate held |
 | `bRefused` | `BOOL` |  | a bad settings write was put back (cleared by a reset) |
+| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
 
 ## How it works
 

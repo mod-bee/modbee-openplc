@@ -12,5 +12,8 @@ TYPE
     tWindowAt : TIME;
     bBypassOn : BOOL;
     bWentBad : BOOL; (* went out this scan *)
+    tDelayLeft : TIME; (* not OK, before tDelay: the time left until it counts (0 otherwise) *)
+    tBypassFor : TIME; (* bypassed so far (0 when not) *)
+    tBypassLeft : TIME; (* bypassed: the time left before it drops out (0: none, or no timeout) *)
   END_STRUCT;
 END_TYPE
