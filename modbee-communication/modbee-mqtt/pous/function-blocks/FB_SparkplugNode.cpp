@@ -685,12 +685,14 @@ bool mq_spWriteAny(const strucpp::IEC_ANY& any,
         // Bounded by the DECLARED capacity, which is what any.DISIZE carries.
         // A longer value is refused rather than truncated: a truncated
         // setpoint name or recipe id is worse than none.
-        if (value.as.bytes.data == nullptr) return false;
+        // An empty one is a value - it clears the STRING - and may come with
+        // no text pointer at all (a kept write holds none for zero bytes).
+        if (value.as.bytes.data == nullptr && value.as.bytes.length != 0) return false;
         const int32_t capacity = any.DISIZE;
         if (capacity <= 0) return false;
         if ((int32_t)value.as.bytes.length >= capacity) return false;
         char* target = (char*)any.PVALUE;
-        memcpy(target, value.as.bytes.data, value.as.bytes.length);
+        if (value.as.bytes.length > 0) memcpy(target, value.as.bytes.data, value.as.bytes.length);
         target[value.as.bytes.length] = '\0';
         return true;
     }
