@@ -2,7 +2,7 @@
   "resources": {
     "modbee-mqtt": {
       "repo": "mod-bee/modbee-mqtt",
-      "ref": "3d2f173cb8690bfaa80fc4da232c44366edb683d",
+      "ref": "8634ece2d89139bfb76a3b6ea638e4fc30d2d9f4",
       "path": "",
       "include": [
         "library.properties",

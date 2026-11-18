@@ -1859,6 +1859,14 @@ static uint8_t mq_goodbyeReason(const MqttClient& client) {
 // attempt - never lastReasonCode, which is the last code from ANY packet: a
 // link that died at the TCP level was once reported as "the broker refused the
 // connection: Granted QoS 2", the client's own SUBACK from an hour earlier.
+// A client a stop still has to reach: neither stopped (Idle) nor already
+// saying goodbye (Disconnecting), where a second disconnect() would cut the
+// DISCONNECT off before it leaves.
+static bool mq_stillGoing(const MqttClient& client) {
+    const MqttState state = client.state();
+    return state != MqttState::Idle && state != MqttState::Disconnecting;
+}
+
 std::string mq_connectRefusal(MqttClient& client) {
     const MqttStatus& status = client.status();
     if (status.connectReasonCode == 0) return std::string();
@@ -2394,7 +2402,13 @@ void loop()
     const bool want = (bool)bConnect;
     if (!want) {
         if (client) {
-            if ((bool)bLinkUp) client->client.disconnect(mq_goodbyeReason(client->client));
+            // Whatever it is doing - connected, dialling, or waiting to try
+            // again - unless it has already stopped or is saying goodbye.
+            // Not bLinkUp: a settings change clears that while the client may
+            // still be retrying, and a stop then never reached it.
+            if (mq_stillGoing(client->client)) {
+                client->client.disconnect(mq_goodbyeReason(client->client));
+            }
             // Still polled, so the DISCONNECT actually leaves and the broker
             // sees a deliberate goodbye rather than a lost link.
             client->client.poll();
@@ -2880,7 +2894,10 @@ void loop()
             bRelink = (bool)bRelink || relink;
             bReconfigure = true;
             nChangeAt = (int32_t)(uint32_t)mq_millis();
-            if (client->client.isConnected()) {
+            // Not only a connected client: one still dialling or waiting to
+            // retry would go on with the old settings until the new ones are
+            // applied - or for ever, if bConnect goes FALSE first.
+            if (mq_stillGoing(client->client)) {
                 client->client.disconnect(mq_goodbyeReason(client->client));
             }
             client->client.poll();
