@@ -768,6 +768,9 @@ struct MqSpGroup {
     bool asking = false;
     uint32_t slot = 0;                 // the interval slot last looked at
     uint32_t askedAt = 0;
+    uint32_t shadowAt = 0;             // where its members' bytes start in the record's shadow
+    bool shadowKept = false;           // the shadow holds what the node was last given
+    bool idle = false;                 // its interval is zero: Record leaves it alone
 };
 
 struct MqSpRecord {
@@ -777,7 +780,14 @@ struct MqSpRecord {
     const uint8_t* address = nullptr;  // a cache of where the record is
     const strucpp::TypeDesc* type = nullptr;
     std::vector<MqSpGroup> groups;
-    uint32_t settingsSum = 0;
+    std::string settings;              // sSettings as last applied
+    // THE SHADOW: each member's bytes as the node was last given them (a
+    // STRING as its length and text), so an unchanged member costs a memcmp
+    // and no setAt. One block for the whole record, made once its members are
+    // declared; none (out of memory) samples every member as before.
+    uint8_t* shadow = nullptr;         // mq_allocLarge: PSRAM where the board has it
+    uint32_t lostSeen = 0;             // the node's writesLost() when nLostCnt was counted
+    int32_t lost = 0;
     uint32_t unitsSum = 0;
     float defaultPct = -1.0f;
     uint16_t clauses = 0;              // clauses at the first call
@@ -788,6 +798,25 @@ struct MqSpRecord {
     uint32_t calledCycle = 0;          // the node cycle of its last call
     bool applied = false;
     bool usesUnits = false;
+    MqSpRecord() = default;
+    MqSpRecord(const MqSpRecord&) = delete;
+    MqSpRecord& operator=(const MqSpRecord&) = delete;
+    ~MqSpRecord() { mq_freeLarge(shadow); }
+};
+
+// THE BIRTH SAMPLES FIRST. Record gives the node nothing while it is not born;
+// a birth carries every member, so each one is sampled just before the node
+// builds it. A birth from the not-born state is started inside the client's
+// poll - the session coming up with no primary host, the primary host's STATE
+// online, a command - and this layer, attached to the client ahead of the
+// node, sees each of those first. The node's owed-birth retry runs in its own
+// poll(), and the block samples before that call (loop()).
+struct MqSpReport;
+struct MqSpBirthHook : MqttClientHook {
+    MqttSparkplugNode* node = nullptr;
+    MqSpReport* report = nullptr;
+    void sessionEstablished(bool sessionPresent) override;
+    bool message(const MqttMessage& message) override;
 };
 
 struct MqSpReport {
@@ -808,7 +837,9 @@ struct MqSpReport {
     std::string failKey;               // the record whose call failed last
     std::string failText;
     uint8_t failResult = 0;
+    MqSpBirthHook birth;
     ~MqSpReport() {
+        if (MqttClient* client = birth.attachedTo()) client->detach(birth);
         for (size_t i = 0; i < records.size(); i++) delete records[i];
     }
 };
@@ -1542,8 +1573,54 @@ static int mq_spRecordApply(MqttSparkplugNode* node, MqSpRecord& record,
 // by its class. Returns QueueFull when a
 // message asked for could not be queued, else Ok. `request`: Record's bSend
 // rose this scan (onreq).
+// A member's room in the record's shadow: its bytes, or a STRING's length and text.
+static size_t mq_spShadowSize(const MqSpLeaf& leaf) {
+    return leaf.cls == strucpp::TYPE_STRING ? sizeof(uint16_t) + leaf.size : leaf.size;
+}
+
+// Whether a member moved since the node was last given it - always, when
+// `force` - the shadow then made what it is now. `shadow` steps past it.
+static bool mq_spShadowMoved(const MqSpLeaf& leaf, const uint8_t* at, uint8_t*& shadow,
+                             bool force) {
+    uint8_t* kept = shadow;
+    shadow += mq_spShadowSize(leaf);
+    if (leaf.cls == strucpp::TYPE_STRING) {
+        // Its length first: a STRING cut short keeps its old text past the end.
+        const uint16_t length = (uint16_t)strnlen((const char*)at, leaf.size);
+        if (!force) {
+            uint16_t was;
+            memcpy(&was, kept, sizeof was);
+            if (was == length && memcmp(kept + sizeof was, at, length) == 0) return false;
+        }
+        memcpy(kept, &length, sizeof length);
+        memcpy(kept + sizeof length, at, length);
+        return true;
+    }
+    if (!force && memcmp(kept, at, leaf.size) == 0) return false;
+    memcpy(kept, at, leaf.size);
+    return true;
+}
+
+// A member into the node when it moved (every time, with no shadow); `shadow`
+// steps past it. The node's own comparison, deadbands and report by exception
+// are as before: a setAt of the value it already holds changes nothing there.
+static void mq_spLeafSample(MqttSparkplugNode* node, const MqSpLeaf& leaf, uint8_t* base,
+                            uint8_t*& shadow, bool force) {
+    if (shadow != nullptr && !mq_spShadowMoved(leaf, base + leaf.offset, shadow, force)) return;
+    MqttSparkplugValue value;
+    if (mq_spValueOfAny(mq_spLeafAny(leaf, base), &value)) node->setAt(leaf.point, value);
+}
+
+// Every member of a group into the node, as mq_spLeafSample.
+static void mq_spGroupSample(MqttSparkplugNode* node, MqSpGroup& group, uint8_t* base,
+                             uint8_t* shadow) {
+    const bool force = !group.shadowKept;
+    for (const MqSpLeaf& leaf : group.leaves) mq_spLeafSample(node, leaf, base, shadow, force);
+    if (shadow != nullptr) group.shadowKept = true;
+}
+
 static uint8_t mq_spGroupScan(MqttSparkplugNode* node, MqSpReport& report,
-                              MqSpGroup& group, uint8_t* base, bool remote,
+                              MqSpGroup& group, uint8_t* base, uint8_t* shadow, bool remote,
                               int32_t intervalMs, bool request) {
     MqSpLeaf* const leaves = group.leaves.data();
     const size_t count = group.leaves.size();
@@ -1604,12 +1681,8 @@ static uint8_t mq_spGroupScan(MqttSparkplugNode* node, MqSpReport& report,
 
     if (!enabled) {
         group.wasEnabled = false;
-        for (size_t i = 0; i < count; i++) {
-            MqttSparkplugValue value;
-            if (mq_spValueOfAny(mq_spLeafAny(leaves[i], base), &value)) {
-                node->setAt(leaves[i].point, value);
-            }
-        }
+        // Kept current while born, for the device's birth or the view's start.
+        if (born) mq_spGroupSample(node, group, base, shadow);
         return askFailed ? (uint8_t)E_MQTTRESULT::QUEUEFULL : (uint8_t)E_MQTTRESULT::OK;
     }
     if (!group.wasEnabled) {
@@ -1628,11 +1701,17 @@ static uint8_t mq_spGroupScan(MqttSparkplugNode* node, MqSpReport& report,
     }
     const bool watch = online && !changedEvery && !wholeSet;
     int going = 0;
-    for (size_t i = 0; i < count; i++) {
+    // Not born, no member is sampled - the birth samples them all first - and
+    // only a pulse still running is looked at.
+    const bool force = !group.shadowKept;
+    uint8_t* kept = shadow;
+    for (size_t i = 0; i < count && (born || group.pulsing > 0); i++) {
         MqSpLeaf& leaf = leaves[i];
+        bool took = false;
         if (takeWrites) {
             MqttSparkplugValue value;
             if (node->commandPendingAt(leaf.point) && node->takeAt(leaf.point, value)) {
+                took = true;   // the node now holds the command: given the member again below
                 if (mq_spWriteAny(mq_spLeafAny(leaf, base), value)) {
                     if (!group.pulses.empty() && group.pulses[i].pulseNs > 0) {
                         MqSpPulse& pulse = group.pulses[i];
@@ -1656,11 +1735,11 @@ static uint8_t mq_spGroupScan(MqttSparkplugNode* node, MqSpReport& report,
                 else memset(at, 0, (size_t)leaf.size);
             }
         }
-        // The value into the node, born or not: the birth carries it.
-        MqttSparkplugValue value;
-        if (mq_spValueOfAny(mq_spLeafAny(leaf, base), &value)) node->setAt(leaf.point, value);
+        // The value into the node when it moved, in the scan it moved in.
+        if (born) mq_spLeafSample(node, leaf, base, kept, force || took);
         if (watch && node->changePendingAt(leaf.point)) going++;
     }
+    if (born && shadow != nullptr) group.shadowKept = true;
     if (!online || count == 0) {
         return askFailed ? (uint8_t)E_MQTTRESULT::QUEUEFULL : (uint8_t)E_MQTTRESULT::OK;
     }
@@ -1715,6 +1794,48 @@ static uint8_t mq_spGroupScan(MqttSparkplugNode* node, MqSpReport& report,
         }
     }
     return askFailed ? (uint8_t)E_MQTTRESULT::QUEUEFULL : (uint8_t)E_MQTTRESULT::OK;
+}
+
+// Every member of every record in use (called in this node cycle or the last)
+// into the node, as its scan would: what a birth from the not-born state
+// carries. The members that did not move since cost a memcmp.
+static void mq_spReportSample(MqttSparkplugNode* node, MqSpReport& report) {
+    for (MqSpRecord* record : report.records) {
+        if (record->address == nullptr || record->calledCycle + 1 < report.cycle) continue;
+        uint8_t* base = const_cast<uint8_t*>(record->address);
+        uint8_t* shadow = record->shadow;
+        for (MqSpGroup& group : record->groups) {
+            if (group.idle) continue;
+            mq_spGroupSample(node, group, base, shadow != nullptr ? shadow + group.shadowAt : nullptr);
+        }
+    }
+}
+
+void MqSpBirthHook::sessionEstablished(bool sessionPresent) {
+    (void)sessionPresent;
+    // With no primary host the node births as its session comes up.
+    if (node != nullptr && report != nullptr && !node->isBorn() && !node->hasPrimaryHost()) {
+        mq_spReportSample(node, *report);
+    }
+}
+
+bool MqSpBirthHook::message(const MqttMessage& message) {
+    if (node == nullptr || report == nullptr || node->isBorn()) return false;
+    MqttSparkplugTopicParts parts;
+    if (!mq_sparkplugParseTopic((const char*)message.topic.data, message.topic.length, parts)) {
+        return false;
+    }
+    // A host's STATE online is the birth a primary host waits for; a command
+    // can be a rebirth request. Either may birth the node inside this poll.
+    bool births = mq_sparkplugIsCommand(parts.type);
+    if (parts.isState()) {
+        bool online = false;
+        uint64_t timestamp = 0;
+        births = mq_sparkplugParseState(message.payload.data, message.payload.length, online,
+                                        timestamp) && online;
+    }
+    if (births) mq_spReportSample(node, *report);
+    return false;   // the node's, after this
 }
 
 static bool mq_spSame(const std::string& kept, const char* text) {
@@ -1892,6 +2013,11 @@ void loop()
         if (report != nullptr) {
             mqSpReportsOwned().all.push_back(report);
             nReport = (strucpp::XWORD_t)(uintptr_t)report;
+            // Ahead of the node, which attaches when it first connects: a
+            // birth started in the client's poll is sampled for first.
+            report->birth.node = node;
+            report->birth.report = report;
+            client->attach(report->birth);
         }
         nApi = (strucpp::XWORD_t)(uintptr_t)node;
         nClient = (strucpp::XWORD_t)(uintptr_t)client;
@@ -1945,6 +2071,14 @@ void loop()
         // FB_SparkplugHost, or a second node on the same client - and then it is
         // asked again every scan, so removing that one is enough.
         bConnectAsked = node->connect();
+    }
+    // A birth that was refused is owed, and poll() tries it again: connected,
+    // the primary host (if any) online, not born. Sampled for first.
+    if (bConnectAsked && !node->isBorn() && client->isConnected() &&
+        (!node->hasPrimaryHost() || node->primaryHostOnline())) {
+        if (MqSpReport* owed = mq_spReportOf((strucpp::XWORD_t)nReport)) {
+            mq_spReportSample(node, *owed);
+        }
     }
     node->poll();
 
@@ -2080,15 +2214,25 @@ E_MQTTRESULT Record()
         record->clauses = (uint16_t)clauses.size();
         record->declareBad = (int16_t)mq_spRecordDeclare(node, *report, *record, clauses,
                                                          record->prefix);
+        // The shadow, once: the members are fixed from here on. Without one
+        // (out of memory) every member is given to the node every scan.
+        size_t room = 0;
+        for (MqSpGroup& group : record->groups) {
+            group.shadowAt = (uint32_t)room;
+            for (const MqSpLeaf& leaf : group.leaves) room += mq_spShadowSize(leaf);
+        }
+        if (room > 0) record->shadow = (uint8_t*)mq_allocLarge(room);
     }
 
     // --- Options: whenever the text, the units or the log deadband change ---
-    size_t length = 0;
-    while ((bound <= 0 || (int32_t)length < bound) && text[length] != '\0') length++;
-    const uint32_t sum = mq_fingerprint(2166136261u, text, length);
+    // The text against the one last applied: a memcmp, and the clauses parsed
+    // again only when it differs.
+    const size_t length = bound > 0 ? strnlen(text, (size_t)bound) : strlen(text);
+    const bool newText = length != record->settings.size() ||
+                         memcmp(text, record->settings.data(), length) != 0;
     float pct = (float)stReportConfig.FDEADBANDPCT;
     if (!(pct >= 0.0f)) pct = 0.0f;
-    if (!record->applied || sum != record->settingsSum || pct != record->defaultPct ||
+    if (!record->applied || newText || pct != record->defaultPct ||
         (record->usesUnits && report->unitsSum != record->unitsSum)) {
         if (clauses.empty()) mq_spParseClauses(text, bound, clauses);
         int bad;
@@ -2101,7 +2245,7 @@ E_MQTTRESULT Record()
         }
         record->bad = (int16_t)(record->declareBad != 0 ? record->declareBad : bad);
         record->applied = true;
-        record->settingsSum = sum;
+        record->settings.assign(text, length);
         record->defaultPct = pct;
         if (record->usesUnits) {
             report->usesUnits = true;
@@ -2128,20 +2272,30 @@ E_MQTTRESULT Record()
         if ((group.kind == MQ_SP_LOG || group.kind == MQ_SP_LIVE) && interval <= 0) {
             // Never "every scan": a whole record at the task rate floods the link.
             noInterval = group.kind == MQ_SP_LOG && !report->viewed ? -3 : -2;
+            group.idle = true;
             continue;
         }
+        group.idle = false;
+        uint8_t* shadow = record->shadow;
         if (mq_spGroupScan(node, *report, group, anyData.PVALUE,
+                           shadow != nullptr ? shadow + group.shadowAt : nullptr,
                            (bool)stReportConfig.BREMOTECONTROL, interval, request) ==
             (uint8_t)E_MQTTRESULT::QUEUEFULL) {
             queueFull = true;
         }
     }
-    int32_t lost = 0;
-    for (const MqSpGroup& group : record->groups) {
-        if (!mq_spIsWritableKind(group.kind)) continue;
-        for (const MqSpLeaf& leaf : group.leaves) lost += (int32_t)node->writesLostAt((size_t)leaf.point);
+    // Counted again only when the node has lost a write since.
+    const uint32_t lostNow = node->writesLost();
+    if (lostNow != record->lostSeen) {
+        record->lostSeen = lostNow;
+        int32_t lost = 0;
+        for (const MqSpGroup& group : record->groups) {
+            if (!mq_spIsWritableKind(group.kind)) continue;
+            for (const MqSpLeaf& leaf : group.leaves) lost += (int32_t)node->writesLostAt((size_t)leaf.point);
+        }
+        record->lost = lost;
     }
-    nLostCnt = lost;
+    nLostCnt = record->lost;
 
     if (record->bad != 0) {
         return mq_spRecordFail(*report, anyData, prefix, E_MQTTRESULT::INVALIDARGUMENT,
