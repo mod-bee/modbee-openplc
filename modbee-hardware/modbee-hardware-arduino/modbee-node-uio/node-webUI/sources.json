@@ -2,7 +2,7 @@
   "resources": {
     "node-webUI": {
       "repo": "mod-bee/modbee-node-uio",
-      "ref": "v0.1.0",
+      "ref": "v0.1.1",
       "path": "node-webUI",
       "include": [
         "library.properties",
