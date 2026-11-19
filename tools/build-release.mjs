@@ -22,6 +22,8 @@
 //    the AVR simulator instead.
 // 3. Build every library found under this repository, the ones a library
 //    uses (its project's `data.libraries`) first, installing each as it is built.
+//    A library whose verify compile fails stops the build: the editor still
+//    writes its .stlib, but a release must not ship one that does not compile.
 // 4. Copy the results to --out as <library>-<version>.stlib and
 //    com.modbee.node-<version>.vpp, put every .stlib in one ZIP
 //    (modbee-openplc-libraries.zip, which the editor's Install Library
@@ -133,7 +135,10 @@ try {
     return { dir, name, version, uses, sources, file: `${name}-${version}.stlib` }
   })
   for (const lib of buildOrder(libraries)) {
-    const { stlibPath } = cli('library', 'build', lib.dir, '--clean')
+    const { stlibPath, verification } = cli('library', 'build', lib.dir, '--clean')
+    if (verification && !verification.success) {
+      throw new Error(`${lib.name} ${lib.version}: verify compile failed: ${verification.message ?? 'see the log above'}`)
+    }
     copyFileSync(join(lib.dir, stlibPath), join(out, lib.file))
     cli('library', 'install', join(out, lib.file))
     console.log(`built    ${lib.file}`)
