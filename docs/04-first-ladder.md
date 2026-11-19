@@ -41,13 +41,13 @@ The program you will build has five rungs:
 
 | Rung | Does |
 | --- | --- |
-| 1 | `UIO` block **Board**: brings the board up and exchanges the I/O on every scan |
-| 2 | `DIGITAL_IN` block **Inputs**: the eight digital inputs, `Inputs.DI01` to `Inputs.DI08` |
-| 3 | Contact `Inputs.DI01` drives coil `Lamp` |
-| 4 | Contact `Inputs.DI02` starts the 5 s timer **PumpDelay**, which drives coil `Pump` |
-| 5 | `DIGITAL_OUT` block **Outputs**: `Lamp` to DO1 and `Pump` to DO2 |
+| 1 | `FB_NodeUio` block **Board**: brings the board up and exchanges the I/O on every scan |
+| 2 | `FB_DigitalInputs` block **Inputs**: the eight digital inputs, `Inputs.bDI01` to `Inputs.bDI08` |
+| 3 | Contact `Inputs.bDI01` drives coil `Lamp` |
+| 4 | Contact `Inputs.bDI02` starts the 5 s timer **PumpDelay**, which drives coil `Pump` |
+| 5 | `FB_DigitalOutputs` block **Outputs**: `Lamp` to DO1 and `Pump` to DO2 |
 
-The order matters. `UIO` comes first. Then the blocks that read inputs, then
+The order matters. `FB_NodeUio` comes first. Then the blocks that read inputs, then
 your logic, and the blocks that drive outputs come last. That way, every scan
 works on one consistent picture of the inputs.
 
@@ -72,16 +72,16 @@ works on one consistent picture of the inputs.
 
    ![Placing a block](images/ladder-block-place.webp)
 
-4. Type the block's type, `UIO`, into the block, and press Enter.
+4. Type the block's type, `FB_NodeUio`, into the block, and press Enter.
 
    ![Typing the block type](images/ladder-block-type.webp)
 
    The block gets its pins, and the editor declares a variable for it in the
-   variables table, `UIO0` of type `UIO`. That variable is the block's
+   variables table, of type `FB_NodeUio`. That variable is the block's
    **instance**: its own memory, kept from one scan to the next.
 
 5. Give the instance a meaningful name. In the variables table, click the
-   `UIO0` row, then click its name, type `Board` and click outside the table.
+   new row, then click its name, type `Board` and click outside the table.
    The editor asks whether to update the diagram as well. Click
    **Yes, rename references**.
 
@@ -92,23 +92,23 @@ works on one consistent picture of the inputs.
 
    ![Rung 1 finished](images/ladder-rung-board.webp)
 
-`READY` turns on once the board's I/O chips have answered. `ERROR` and
-`STATUS` say why if they don't. Leave them empty for now.
+`bBoardReady` turns on once the board's I/O chips have answered. `bError` and
+`eErrorId` say why if they don't. Leave them empty for now.
 
 ## Rung 2: the inputs
 
-Add a rung the same way. Place a block, type `DIGITAL_IN` and rename its
+Add a rung the same way. Place a block, type `FB_DigitalInputs` and rename its
 instance to `Inputs`.
 
 ![Rung 2: the digital inputs](images/ladder-rung-inputs.webp)
 
-Its outputs `DI01` to `DI08` are the eight inputs. You use them as
-`Inputs.DI01`, `Inputs.DI02` and so on.
+Its outputs `bDI01` to `bDI08` are the eight inputs. You use them as
+`Inputs.bDI01`, `Inputs.bDI02` and so on.
 
 ## Rung 3: the lamp
 
 1. Add a rung. Right-click, choose **Contact** and place it. Type
-   `Inputs.DI01` and press Enter.
+   `Inputs.bDI01` and press Enter.
 
    ![A contact on input DI1](images/ladder-contact.webp)
 
@@ -120,7 +120,7 @@ Its outputs `DI01` to `DI08` are the eight inputs. You use them as
 
 ## Rung 4: the pump, after 5 seconds
 
-1. Add a rung with a contact on `Inputs.DI02`.
+1. Add a rung with a contact on `Inputs.bDI02`.
 2. Place a block to the right of the contact and type `TON`: the standard
    on-delay timer. Rename its instance to `PumpDelay`.
 3. Click the empty field on the timer's `PT` pin, type `T#5s` (5 seconds, in
@@ -135,13 +135,13 @@ time so far.
 
 ## Rung 5: the outputs
 
-1. Add a rung with a `DIGITAL_OUT` block and rename its instance to `Outputs`.
-2. Click the field on the `DO01` pin and start typing `Lamp`. The editor lists
+1. Add a rung with a `FB_DigitalOutputs` block and rename its instance to `Outputs`.
+2. Click the field on the `bDO01` pin and start typing `Lamp`. The editor lists
    the variables that fit. Click **Lamp**.
 
    ![Picking a variable for a block pin](images/ladder-pin-list.webp)
 
-3. Click an empty part of the rung, then do the same on `DO02` with **Pump**.
+3. Click an empty part of the rung, then do the same on `bDO02` with **Pump**.
 
    ![Rung 5: the digital outputs](images/ladder-rung-outputs.webp)
 
@@ -204,12 +204,12 @@ cable.
 The rungs now show the values in the board. A wire that carries power turns
 green, so you can follow it through each contact and coil. Blocks show their
 values beside the pins, such as `PT` and `ET` on the timer. The picture below
-has DI1 switched on: the contact `Inputs.DI01` is closed and the `Lamp` coil
+has DI1 switched on: the contact `Inputs.bDI01` is closed and the `Lamp` coil
 is on.
 
 ![The debugger with DI1 switched on](images/board-debugger-live.webp)
 
-- Switch DI1 on: `Inputs.DI01` and `Lamp` turn on, and the lamp on DO1
+- Switch DI1 on: `Inputs.bDI01` and `Lamp` turn on, and the lamp on DO1
   lights.
 - Switch DI2 on: `PumpDelay.ET` counts up, and after 5 seconds `Pump` and DO2
   come on.

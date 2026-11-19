@@ -1,0 +1,13 @@
+TYPE
+  ST_ExpansionModule : STRUCT
+    eModuleType : E_ExpansionModuleType; (* setting: what the module is; NONE = an empty row *)
+    nI2cAddress : BYTE; (* setting: its I2C address, 16#08..16#77 (not 16#49 or 16#5F: the board's own) *)
+    bFitted : BOOL := TRUE; (* setting: installed on this site *)
+    nFirstImageIndex : INT; (* setting: the image row of its channel 1 - in XD for a digital kind, XA for an analog one *)
+    nChannels : USINT; (* status: its channels *)
+    bAnswering : BOOL; (* status: answers at its address *)
+    bGood : BOOL; (* status: present and read/written; its channels can be trusted *)
+    eModuleState : E_ExpansionModuleState; (* status: OK, or why not *)
+    nFailedTransactionCount : UINT; (* status: failed transactions since start *)
+  END_STRUCT;
+END_TYPE

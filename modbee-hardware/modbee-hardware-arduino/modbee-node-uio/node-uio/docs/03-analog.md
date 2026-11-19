@@ -25,7 +25,7 @@ rather than a plausible full scale:
 
 So transmitter-failed-high detection works: NAMUR NE43 counts anything from
 21 mA up as a failed transmitter, and 22.0 is there. Saturation is judged on the
-converter count (`AI01_RAW` at 32765 or more) before calibration, so no offset
+converter count (`nAI01RawCount` at 32765 or more) before calibration, so no offset
 can hide it. Short of saturation, a channel calibrated so that full scale sits
 below the converter's limit can read a little above it (20.5 mA, an NE43
 over-range), up to the same 22 mA / 11 V.
@@ -49,8 +49,8 @@ software to detect it. Check the bridges against what your program says.
 
 ## Raw counts
 
-`AI01_RAW` and friends are the converter's own count, 0 to 32767, before
-scaling and before calibration. `AO01_RAW` and `AO02_RAW` are the same on the way
+`nAI01RawCount` and friends are the converter's own count, 0 to 32767, before
+scaling and before calibration. `nAO01RawCount` and `nAO02RawCount` are the same on the way
 out, after scaling.
 
 You need them for two things: calibrating a channel, and working out whether a
@@ -60,7 +60,7 @@ reading that looks wrong is the sensor or the scaling.
 
 The four inputs share one converter and are read in turn, so any one channel
 refreshes roughly every 20 ms no matter how fast your task runs. Reading
-`AI01` twice in one scan gives the same number twice, and reading it every
+`fAI01` twice in one scan gives the same number twice, and reading it every
 millisecond does not make it change every millisecond.
 
 The output converter is only written when the value changes, so holding a
@@ -70,26 +70,26 @@ setpoint costs nothing on the I2C bus.
 
 Two points and an offset per channel:
 
-- `LOW_COUNT` is the raw count you see with the bottom of the range applied.
-- `HIGH_COUNT` is the raw count with the top applied.
-- `OFFSET` is added to the scaled result afterwards.
+- `nZeroCount` is the raw count you see with 0 V (or 0 mA) applied.
+- `nFullScaleCount` is the raw count with full scale, 10 V (or 20 mA), applied.
+- `fOffset` is added to the scaled result afterwards.
 
-Leaving `LOW_COUNT` and `HIGH_COUNT` equal falls back to a straight ratio,
+Leaving `nZeroCount` and `nFullScaleCount` equal falls back to a straight ratio,
 which is what an uncalibrated channel does.
 
 To calibrate AI01:
 
-1. Apply a known 0 V (or 0 mA) and read `AI01_RAW`. That is `LOW_COUNT`.
-2. Apply a known 10 V (or 20 mA) and read `AI01_RAW`. That is `HIGH_COUNT`.
-3. Set `CHANNEL := UIO_AI01`, the two counts and `OFFSET := 0`, then pulse `APPLY`.
-4. Check `AI01` now reads what you applied.
-5. Pulse `SAVE`.
+1. Apply a known 0 V (or 0 mA) and read `nAI01RawCount`. That is `nZeroCount`.
+2. Apply a known 10 V (or 20 mA) and read `nAI01RawCount`. That is `nFullScaleCount`.
+3. Set `eChannel := UIO_AI01`, the two counts and `fOffset := 0`, then pulse `bApplyCalibration`.
+4. Check `fAI01` now reads what you applied.
+5. Pulse `bSaveToFlash`.
 
-`APPLY` takes effect at once but only in RAM. Nothing reaches flash until
-`SAVE`, so you can try values freely.
+`bApplyCalibration` takes effect at once but only in RAM. Nothing reaches flash until
+`bSaveToFlash`, so you can try values freely.
 
-`CHANNEL` names the channel — `UIO_AI01` to `UIO_AI04` for the inputs,
+`eChannel` names the channel — `UIO_AI01` to `UIO_AI04` for the inputs,
 `UIO_AO01` and `UIO_AO02` for the outputs.
 
-`RESET` puts every channel back to its default and saves that — worth knowing
+`bResetAllToDefaults` puts every channel back to its default and saves that — worth knowing
 about when a calibration has gone wrong and you want a known starting point.

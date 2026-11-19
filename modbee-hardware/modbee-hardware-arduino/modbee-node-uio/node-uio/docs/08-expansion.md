@@ -7,77 +7,77 @@ modules beside the Node: the same bus as the board's own ADC (16#49) and DAC
 **No chip drivers are built in yet.** Everything here works today - the module
 table, detection, the images, the not-present handling - and a fitted module is
 found by its address answering. Until this firmware has a driver for its kind
-it reads `UIO_XS_NO_DRIVER` and is **not ok**, so nothing trusts its channels.
+it reads `UIO_XS_NO_DRIVER` and is **not good**, so nothing trusts its channels.
 The drivers come one family at a time, each with a bench test (below).
 
 ## Pins first
 
-### `UIO_EXPANSION`
+### `FB_ExpansionModules`
 
 | Pin | | |
 | --- | --- | --- |
-| `MODULES` | in-out, ARRAY OF UIO_XMOD | the module table, up to 8 rows |
-| `XD` | in-out, ARRAY OF BOOL | the digital image |
-| `XA` | in-out, ARRAY OF REAL | the analog image |
-| `ALL_OK` | out, BOOL | every fitted module is present and working |
-| `FITTED_COUNT`, `MISSING_COUNT` | out, USINT | rows fitted; of those, not ok |
-| `FIRST_BAD` | out, INT | the first row that is not ok, 0 when none |
-| `ERROR` | out, BOOL | a fitted module is not ok |
-| `STATUS` | out, UIO_RESULT | `UIO_UNSUPPORTED` on the Runtime |
-| `STATUS_TEXT` | out, STRING(30) | the first problem in words |
+| `aModules` | in-out, ARRAY OF ST_ExpansionModule | the module table, up to 8 rows |
+| `aDigitalImage` | in-out, ARRAY OF BOOL | the digital image |
+| `aAnalogImage` | in-out, ARRAY OF REAL | the analog image |
+| `bAllModulesGood` | out, BOOL | every fitted module is present and working |
+| `nModulesFitted`, `nFaultyModules` | out, USINT | rows fitted; of those, not good |
+| `nFirstFaultyModule` | out, INT | the first row that is not good, 0 when none |
+| `bError` | out, BOOL | a fitted module is not ok |
+| `eErrorId` | out, E_UioResult | `UIO_UNSUPPORTED` on the Runtime |
+| `sStatusText` | out, STRING(30) | the first problem in words |
 
-### A row: `UIO_XMOD`
+### A row: `ST_ExpansionModule`
 
 | Member | | |
 | --- | --- | --- |
-| `kind` | setting, UIO_XKIND | what the module is; `UIO_XK_NONE` = an empty row |
-| `address` | setting, BYTE | its I2C address, 16#08..16#77 |
-| `fitted` | setting, BOOL | installed on this site (default TRUE) |
-| `first` | setting, INT | the image row of its channel 1: in `XD` for a digital kind, `XA` for an analog one |
-| `count` | status, USINT | its channels |
-| `present` | status, BOOL | answers at its address |
-| `ok` | status, BOOL | present and read/written: its channels can be trusted |
-| `state` | status, UIO_XSTATE | `UIO_XS_OK`, or why not |
-| `errors` | status, UINT | failed transactions since start |
+| `eModuleType` | setting, E_ExpansionModuleType | what the module is; `UIO_XK_NONE` = an empty row |
+| `nI2cAddress` | setting, BYTE | its I2C address, 16#08..16#77 |
+| `bFitted` | setting, BOOL | installed on this site (default TRUE) |
+| `nFirstImageIndex` | setting, INT | the image row of its channel 1: in `aDigitalImage` for a digital kind, `aAnalogImage` for an analog one |
+| `nChannels` | status, USINT | its channels |
+| `bAnswering` | status, BOOL | answers at its address |
+| `bGood` | status, BOOL | present and read/written: its channels can be trusted |
+| `eModuleState` | status, E_ExpansionModuleState | `UIO_XS_OK`, or why not |
+| `nFailedTransactionCount` | status, UINT | failed transactions since start |
 
 ### The kinds
 
 | Kind | Channels | Image |
 | --- | --- | --- |
-| `UIO_XK_MCP23017_DI` / `_DO` | 16 | `XD` |
-| `UIO_XK_PCF8574_DI` / `_DO` | 8 | `XD` |
-| `UIO_XK_PCA9555_DI` / `_DO` | 16 | `XD` |
-| `UIO_XK_ADS1115_AI` | 4 (raw counts) | `XA` |
-| `UIO_XK_MCP4728_AO` | 4 | `XA` |
-| `UIO_XK_GP8413_AO` | 2 | `XA` |
-| `UIO_XK_TMP117_T`, `UIO_XK_MCP9808_T` | 1 (°C) | `XA` |
-| `UIO_XK_SHT4X_TH` | 2 (°C, %RH) | `XA` |
+| `UIO_XK_MCP23017_DI` / `_DO` | 16 | `aDigitalImage` |
+| `UIO_XK_PCF8574_DI` / `_DO` | 8 | `aDigitalImage` |
+| `UIO_XK_PCA9555_DI` / `_DO` | 16 | `aDigitalImage` |
+| `UIO_XK_ADS1115_AI` | 4 (raw counts) | `aAnalogImage` |
+| `UIO_XK_MCP4728_AO` | 4 | `aAnalogImage` |
+| `UIO_XK_GP8413_AO` | 2 | `aAnalogImage` |
+| `UIO_XK_TMP117_T`, `UIO_XK_MCP9808_T` | 1 (°C) | `aAnalogImage` |
+| `UIO_XK_SHT4X_TH` | 2 (°C, %RH) | `aAnalogImage` |
 
 A second ADS1115 must use 16#48, 16#4A or 16#4B: 16#49 is the board's.
 
 ### The states
 
-| `state` | Means |
+| `eModuleState` | Means |
 | --- | --- |
 | `UIO_XS_UNUSED` | an empty row |
 | `UIO_XS_OK` | present and working |
-| `UIO_XS_NOT_FITTED` | `fitted` FALSE: not on this site |
+| `UIO_XS_NOT_FITTED` | `bFitted` FALSE: not on this site |
 | `UIO_XS_MISSING` | nothing answers at the address |
 | `UIO_XS_NO_DRIVER` | answers, but this firmware cannot read that kind yet |
 | `UIO_XS_FAILING` | answers, and its transactions fail |
 | `UIO_XS_BAD_ADDRESS` | not 16#08..16#77 |
 | `UIO_XS_IN_USE` | the board's own part (16#49, 16#5F), or another row's address |
-| `UIO_XS_NO_ROOM` | its channels do not fit the image from `first` |
+| `UIO_XS_NO_ROOM` | its channels do not fit the image from `nFirstImageIndex` |
 
-### `UIO_I2C_SCAN`
+### `FB_I2cScan`
 
 | Pin | | |
 | --- | --- | --- |
-| `FOUND` | in-out, ARRAY OF BYTE | the addresses that answered, lowest first |
-| `START` | in, BOOL | rising edge: scan 16#08..16#77 |
-| `BUSY`, `DONE` | out, BOOL | scanning; finished |
-| `COUNT` | out, USINT | addresses found |
-| `ERROR`, `STATUS` | out | the bus is not up, or `FOUND` was too short |
+| `aFoundAddresses` | in-out, ARRAY OF BYTE | the addresses that answered, lowest first |
+| `bExecute` | in, BOOL | rising edge: scan 16#08..16#77 |
+| `bBusy`, `bDone` | out, BOOL | scanning; finished |
+| `nAddressesFound` | out, USINT | addresses found |
+| `bError`, `eErrorId` | out | the bus is not up, or `aFoundAddresses` was too short |
 
 A healthy board always shows 16#49 and 16#5F.
 
@@ -85,31 +85,31 @@ A healthy board always shows 16#49 and 16#5F.
 
 The module table is a settings table like any other: retain it, let the HMI
 edit it. The images are plain arrays the project's IO code copies into the
-IO map's image, with the module's `ok` as each channel's quality:
+IO map's image, with the module's `bGood` as each channel's quality:
 
 ```
 VAR_GLOBAL RETAIN
-  XMODS : ARRAY[1..4] OF UIO_XMOD;
+  XMODS : ARRAY[1..4] OF ST_ExpansionModule;
 END_VAR
 VAR_GLOBAL
   XDI : ARRAY[1..32] OF BOOL;
   XAI : ARRAY[1..8] OF REAL;
 END_VAR
 
-expansion(MODULES := XMODS, XD := XDI, XA := XAI);
+expansion(aModules := XMODS, aDigitalImage := XDI, aAnalogImage := XAI);
 
 (* One row of the IO map's module table per expansion row (UT_IO_MAP):
-   src I2C, module = the row, first / count into the IO map's image. *)
+   src I2C, module = the row, nFirstImageIndex / nChannels into the IO map's image. *)
 FOR m := 1 TO 4 DO
-  mods[I2C_ROW0 + m].ok := XMODS[m].ok;
-  FOR c := 0 TO XMODS[m].count - 1 DO
-    di[I2C_FIRST + XMODS[m].first + c].q := XDI[XMODS[m].first + c];
-    di[I2C_FIRST + XMODS[m].first + c].bad := NOT XMODS[m].ok;
+  mods[I2C_ROW0 + m].bGood := XMODS[m].bGood;
+  FOR c := 0 TO XMODS[m].nChannels - 1 DO
+    di[I2C_FIRST + XMODS[m].nFirstImageIndex + c].q := XDI[XMODS[m].nFirstImageIndex + c];
+    di[I2C_FIRST + XMODS[m].nFirstImageIndex + c].bad := NOT XMODS[m].bGood;
   END_FOR;
 END_FOR;
 ```
 
-A function mapped to a module that is not ok takes its fail-safe, and the IO
+A function mapped to a module that is not good takes its fail-safe, and the IO
 map says why. **A module that is not there is never read as OFF.**
 
 ## What it does on the bus
@@ -119,8 +119,8 @@ map says why. **A module that is not there is never read as OFF.**
 - **Missing modules are asked again every five seconds,** so one plugged back
   in is found by itself. A working module that fails three transactions in a
   row is treated as missing and found again.
-- **One lock for the bus.** The board's own ADC and DAC, `UIO_EXPANSION` and
-  `UIO_I2C_SCAN` share Wire1 under one lock, whatever PLC task each runs in. A
+- **One lock for the bus.** The board's own ADC and DAC, `FB_ExpansionModules` and
+  `FB_I2cScan` share Wire1 under one lock, whatever PLC task each runs in. A
   block that cannot have the bus within a few milliseconds tries again next
   scan rather than stalling its task.
 - **I2C is a cabinet bus.** Keep modules within about a metre of the Node.

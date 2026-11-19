@@ -44,8 +44,8 @@ one save period of change in a power cut.** Shorten the period and you lose less
 but spend flash life; lengthen it and the opposite. The default on an ESP32 is
 60 seconds; ten suits most machines.
 
-Stopping the PLC cleanly saves anything held, and so do `RESTART` and a deep
-`SLEEP`: each saves the retained values just before the board goes down, and
+Stopping the PLC cleanly saves anything held, and so do `FB_Restart` and a deep
+`FB_Sleep`: each saves the retained values just before the board goes down, and
 waits for the save (about 10 to 50 ms). A power cut or a crash cannot. A light
 sleep keeps RAM and leaves anything held until the board wakes.
 

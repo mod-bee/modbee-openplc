@@ -108,8 +108,9 @@ library, not only the ones a project uses.
   `ST_MqttTlsConfig`, `E_BeeBusResult`). The work is done by methods on the
   block: `node.ReadHoldingRegisters(...)`. The utilities are named for the
   equipment they drive (`FB_Motor`, `FB_Pump`).
-- `node-uio` and `node-webUI` keep their board names (`DIGITAL_IN`,
-  `UIO_RESULT`, `WEB_SERVER`).
+- `node-uio` uses the same style from 0.2.0, with the board's terminal labels in
+  its pins (`FB_DigitalInputs.bDI01`, `E_UioResult`); `node-webUI` keeps its
+  board names (`WEB_SERVER`).
 
 ## Licence
 

@@ -85,6 +85,6 @@ the program `main` in `task0`.
 into two: a **LOGIC** task for the plant control, with a high priority, and a
 **COMMS** task for Modbus, MQTT and HMI links, with a lower one. A slow
 network then never holds up the control logic. Keep the board's I/O blocks
-(`UIO`, `DIGITAL_IN`, `DIGITAL_OUT` and the others) together in one task.
+(`FB_NodeUio`, `FB_DigitalInputs`, `FB_DigitalOutputs` and the others) together in one task.
 
 Next: [4. First Ladder program](04-first-ladder.md)

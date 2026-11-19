@@ -46,8 +46,8 @@ held.
 | [04 Sleep and power](04-sleep.md) | Sleep, wake sources, what holds, and running on a battery |
 | [05 Retained variables](05-retained-variables.md) | RETAIN, where it is kept, and what it costs |
 | [06 Troubleshooting](06-troubleshooting.md) | Symptoms, and what causes them |
-| [07 Pulses and diagnostics](07-pulses-and-diagnostics.md) | `PULSE_COUNT` for flow meters, `SYS_INFO` for on-site diagnosis |
-| [08 I2C expansion](08-expansion.md) | `UIO_EXPANSION`, `UIO_I2C_SCAN`, the module table, and adding a chip driver |
+| [07 Pulses and diagnostics](07-pulses-and-diagnostics.md) | `FB_PulseCounter` for flow meters, `FB_SystemInfo` for on-site diagnosis |
+| [08 I2C expansion](08-expansion.md) | `FB_ExpansionModules`, `FB_I2cScan`, the module table, and adding a chip driver |
 
 ## The board underneath
 

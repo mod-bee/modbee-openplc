@@ -36,7 +36,7 @@ Remember that ModBee boards and libraries need the
 
 ## Things to try next
 
-- **Read an analog sensor:** add an `ANALOG_IN` block after `DIGITAL_IN`, and
+- **Read an analog sensor:** add an `FB_AnalogInputs` block after `FB_DigitalInputs`, and
   see [node-uio analog](../modbee-hardware/modbee-hardware-arduino/modbee-node-uio/node-uio/docs/03-analog.md).
 - **Keep a value through a power cut:** declare it `RETAIN`. See
   [retained variables](../modbee-hardware/modbee-hardware-arduino/modbee-node-uio/node-uio/docs/05-retained-variables.md).

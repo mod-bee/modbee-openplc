@@ -1,8 +1,8 @@
 (* Starts the board and services it. Every project needs one, called first.
 
-READY   the ADC and the DAC both answered.
-ERROR   they did not.
-STATUS  why.
+bBoardReady  the ADC and the DAC both answered.
+bError  they did not.
+eErrorId  why.
           UIO_OK, UIO_NOT_READY, UIO_INVALID_ARGUMENT, UIO_IO_ERROR,
           UIO_NO_DATA, UIO_TOO_LARGE, UIO_UNSUPPORTED
 
@@ -15,11 +15,11 @@ one consistent picture of them for the whole scan.
 Nothing here is configured. Pins, addresses and ranges belong to the board, and
 the blocks that follow set what can be set. *)
 
-FUNCTION_BLOCK UIO
+FUNCTION_BLOCK FB_NodeUio
   VAR_OUTPUT
-    READY : BOOL;
-    ERROR : BOOL;
-    STATUS : UIO_RESULT;
+    bBoardReady : BOOL; (* the board's analog converters (ADC and DAC) both answered *)
+    bError : BOOL; (* they did not *)
+    eErrorId : E_UioResult; (* why; UIO_OK when fine *)
   END_VAR
   VAR
     started : BOOL;
@@ -63,16 +63,16 @@ strucpp::IEC_TIME uio_timeOfS(uint32_t seconds)
     return strucpp::IEC_TIME((strucpp::TIME_t)seconds * strucpp::NS_PER_S);
 }
 
-UIO_RESULT uio_status(UioResult result)
+E_UIORESULT uio_status(UioResult result)
 {
-  return (UIO_RESULT)(uint8_t)result;
+  return (E_UIORESULT)(uint8_t)result;
 }
 
 void setup()
 {
-  READY = false;
-  ERROR = false;
-  STATUS = UIO_RESULT::UIO_OK;
+  bBoardReady = false;
+  bError = false;
+  eErrorId = E_UIORESULT::UIO_OK;
   started = false;
 }
 
@@ -82,18 +82,18 @@ void loop()
     started = true;
     const UioResult opened = uio().begin();
     if (opened != UIO_OK) {
-      READY = false;
-      ERROR = true;
-      STATUS = uio_status(opened);
+      bBoardReady = false;
+      bError = true;
+      eErrorId = uio_status(opened);
       return;
     }
   }
 
   uio().update();
 
-  READY = uio().ready();
-  ERROR = !(bool)READY;
-  STATUS = uio_status((bool)READY ? UIO_OK : UIO_NOT_READY);
+  bBoardReady = uio().ready();
+  bError = !(bool)bBoardReady;
+  eErrorId = uio_status((bool)bBoardReady ? UIO_OK : UIO_NOT_READY);
 }
 
 END_FUNCTION_BLOCK
