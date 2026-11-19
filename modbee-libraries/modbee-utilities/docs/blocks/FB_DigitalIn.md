@@ -7,7 +7,7 @@ A switch, float or contact cleaned up: debounce, an alarm on a state, chatter de
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
 | in | `bRawIn` | `BOOL` |  | the raw input (NC: NOT at the pin) |
-| in | `eInputQuality` | `E_IoQ` | `E_IoQ.Ok` | quality from the IO map row |
+| in | `bInputGood` | `BOOL` | `TRUE` | the source is healthy (the IO map row's bGood); FALSE: bSignal held, bError IoBad |
 | in | `bResetFaults` | `BOOL R_EDGE` |  | reset a Manual alarm |
 | in | `refData` | `REFERENCE TO ST_DigitalInData` |  | the block's record |
 | in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
@@ -41,6 +41,7 @@ A switch, float or contact cleaned up: debounce, an alarm on a state, chatter de
 | `nChatterChanges` | `INT` |  | more than this many clean changes within tChatterWindow = chatter (0 = off) |
 | `tChatterWindow` | `TIME` | `T#10s` | the window chatter is counted in |
 | `tRetryCountWindow` | `TIME` | `T#1h` | a Retry protection counts its trips within this window (0 = until a reset) |
+| `bSensorFitted` | `BOOL` | `TRUE` | FALSE: not on this site (bSignal FALSE, no alarm, eState Off) |
 
 **Status `sts`** (`ST_DigitalInSts`)
 
@@ -81,8 +82,8 @@ A switch, float or contact, cleaned up: debounce, an alarm on a state, chatter d
             not good, a warning (Chatter), until the input has been steady for tChatterWindow (count 0 = off)
   alarm     a warning (StateAlarm) on the chosen state of bSignal (set.eAlarmWhen), after set.tAlarmDelay; it clears per
             set.eAlarmResetMode (Auto when bSignal returns; Manual holds until a reset)
-  eInputQuality      NotFitted / Unused: not on this site: bSignal FALSE, no alarm, eState Off; any other bad quality: bSignal
-            held, not good, bError IoBad
+  bInputGood FALSE   (a bad IO channel, module or comms): bSignal held, not good, bError IoBad
+  not fitted         set.bSensorFitted FALSE: not on this site: bSignal FALSE, no alarm, eState Off
 ```
 
 Totals (tot): `nChangeCount` of the clean input, `tTotalOnTime` while `bSignal` is TRUE; running totals (no day rollover: the board has no clock; SCADA makes days), kept hourly; `bCmdResetTotals` clears them. Simulation is an IO map force.

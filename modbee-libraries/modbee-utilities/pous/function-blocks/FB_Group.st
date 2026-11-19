@@ -14,7 +14,8 @@ Parts: a part added to the group (e.g. FB_LevelCheck High on the header flow met
 evaluated every scan: a trip or a stop releases every member at once (bError and the part's eErrorId on a trip,
 stop reason Part), a hold lets none start, a warning shows.
 Asked to run: the lead first, then the next available members in rotation order up to 1 + nExtraMembers, one per
-set.tAddMemberDelay; released one per set.tDropMemberDelay, the most recent first. Failover: a called member that is
+set.tAddMemberAfter after the last add or drop; while still asked for fewer, released one per set.tDropMemberAfter
+(after the last add or drop), the most recent first. Failover: a called member that is
 not running after set.tFailoverAfter is skipped and the next one is called at once (until a reset or nothing is
 asked); a member that became unavailable is skipped until it is available again. Rotation (set.eRotateBy): EachStart (the lead moves on at
 each group start), Periodic (every set.tRotateInterval), Fixed (set.nFixedLeadMember). The lead is kept over a power
@@ -30,7 +31,8 @@ Swap while running (set.bSwapWhileRunning): a rotation while the group runs (bRo
 calls the next member first and releases the longest-running one (not the new lead) once the new one runs;
 nobody available, or no room under nMaxMembersRunning: no swap.
 Stop (set.eStopOrder): when nothing is asked any more, AllAtOnce releases every member; Staged releases the most
-recent first, one per set.tBetweenMemberStops. A new request during a staged stop keeps those still running.
+recent first: the first at once, then one per set.tStagedStopInterval (a shutdown gap, not the tDropMemberAfter of a
+smaller request). A new request during a staged stop keeps those still running.
 Exercise (set.tExerciseAfterIdle, 0 = off): while nothing is asked, a member that has not run for tExerciseAfterIdle
 (an available one, not skipped) runs for set.tExerciseRunTime; a request, the member going unavailable or the
 setting off ends it; sts.nMembersExercising, sts.tNextExerciseTimeLeft (until the next one). Idle time counts power-on time only
@@ -126,9 +128,9 @@ FUNCTION_BLOCK FB_Group EXTENDS FB_Object IMPLEMENTS I_Equipment
 (* the first bad setting (None: all good) *)
 METHOD PRIVATE SetWhy : E_UtError
   SetWhy := E_UtError.None;
-  IF NOT (refData.set.tAddMemberDelay >= T#0s) THEN
+  IF NOT (refData.set.tAddMemberAfter >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (refData.set.tDropMemberDelay >= T#0s) THEN
+  ELSIF NOT (refData.set.tDropMemberAfter >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   ELSIF NOT (refData.set.tFailoverAfter >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
@@ -142,7 +144,7 @@ METHOD PRIVATE SetWhy : E_UtError
     SetWhy := E_UtError.BelowMin;
   ELSIF NOT (refData.set.nMaxMembersRunning <= cMax) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (refData.set.tBetweenMemberStops >= T#0s) THEN
+  ELSIF NOT (refData.set.tStagedStopInterval >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   ELSIF NOT (refData.set.fEqualHoursBand >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
@@ -404,7 +406,7 @@ END_IF;
 (* call one more: at once for the first or after a failover, else one per stage delay; a swap calls the
    next member too, if nMaxMembersRunning allows one more *)
 IF (nCalled < nRequired OR (nSwapOut > 0 AND nSwapIn = 0)) AND bLimitOk
-   AND (nCalled = 0 OR tNow - tLastStage >= refData.set.tAddMemberDelay) THEN
+   AND (nCalled = 0 OR tNow - tLastStage >= refData.set.tAddMemberAfter) THEN
   (* rotation order from the lead; Hours: the fewest run hours, closer than fEqualHoursBand counts as equal *)
   nBest := 0;
   fBestHours := 0.0;
@@ -464,7 +466,7 @@ IF NOT bReq AND refData.set.eStopOrder = E_GroupStop.AllAtOnce THEN
 ELSIF NOT bReq THEN
   bX := FALSE;
   IF nJockey > 0 THEN bX := aCalled[nJockey]; END_IF;
-  IF (nCalled > 0 OR bX) AND (NOT bStopping OR tNow - tLastStop >= refData.set.tBetweenMemberStops) THEN
+  IF (nCalled > 0 OR bX) AND (NOT bStopping OR tNow - tLastStop >= refData.set.tStagedStopInterval) THEN
     nLast := 0;
     nLastSeq := -1;
     FOR nI := 1 TO cMax DO
@@ -480,7 +482,7 @@ ELSIF NOT bReq THEN
     bStopping := TRUE;
   END_IF;
   nSwapOut := 0;
-ELSIF nSwapOut = 0 AND nCalled > nRequired AND tNow - tLastStage >= refData.set.tDropMemberDelay THEN
+ELSIF nSwapOut = 0 AND nCalled > nRequired AND tNow - tLastStage >= refData.set.tDropMemberAfter THEN
   nLast := 0;
   nLastSeq := -1;
   FOR nI := 1 TO cMax DO

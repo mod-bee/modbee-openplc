@@ -14,9 +14,9 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 | in | `ipOwner` | `I_PartOwner` |  | optional: the motor it protects. An instance of a block that offers I_PartOwner (FB_Alarm, FB_AlarmBeacon, FB_AlarmTable, FB_AnalogIn, FB_AnalogOut, ...) |
 | in | `refData` | `REFERENCE TO ST_RotationData` |  | the block's record |
 | in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
-| out | `bNoFaultTripped` | `BOOL` |  | no protection tripped |
-| out | `bRotating` | `BOOL` |  | pulses being seen |
 | out | `fSpeed` | `REAL` |  | in set.eSpeedUnit (default rpm) |
+| out | `bRotating` | `BOOL` |  | pulses being seen |
+| out | `bNoFaultTripped` | `BOOL` |  | no protection tripped |
 | out | `bError` | `BOOL` |  | TRUE while a trip or setting fault is active *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
 | out | `eErrorId` | `E_UtError` |  | which error: the first since the last reset, else the first warning; None when all is well *(from FB_Object)* |
@@ -41,13 +41,12 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 | `tStalledAfterNoPulse` | `TIME` | `T#3s` | no pulse this long while running = stalled |
 | `fUnderspeedBelow` | `REAL` |  | underspeed below this (0 = off) |
 | `fOverspeedAbove` | `REAL` |  | overspeed above this (0 = off) |
-| `tSpeedFaultDelay` | `TIME` | `T#5s` | under / over speed must last this long |
 | `tMeasureSpeedOver` | `TIME` | `T#1s` | the speed is measured over at least this |
 | `tCoastDownTime` | `TIME` | `T#10s` | after a stop, pulses are expected this long |
 | `tRetryCountWindow` | `TIME` | `T#1h` | Retry counts trips within this window (0 = until a reset) |
 | `stStallFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Trip, tTripDelay := T#0s, eResetMode := E_ResetMode.Manual, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3)` | no pulses while running; a protection's settings ([protections](../conventions.md#protections)) |
-| `stUnderspeedFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Warn, tTripDelay := T#0s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3)` | speed below fUnderspeedBelow; a protection's settings ([protections](../conventions.md#protections)) |
-| `stOverspeedFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Off, tTripDelay := T#0s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3)` | speed above fOverspeedAbove; a protection's settings ([protections](../conventions.md#protections)) |
+| `stUnderspeedFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Warn, tTripDelay := T#5s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3)` | speed below fUnderspeedBelow; a protection's settings ([protections](../conventions.md#protections)) |
+| `stOverspeedFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Off, tTripDelay := T#5s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3)` | speed above fOverspeedAbove; a protection's settings ([protections](../conventions.md#protections)) |
 | `stPulsesWhileStoppedFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Warn, tTripDelay := T#0s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3)` | pulses while stopped (after the coast down): the sensor is suspect; a protection's settings ([protections](../conventions.md#protections)) |
 
 **Status `sts`** (`ST_RotationSts`)
@@ -101,8 +100,8 @@ Protections (`ST_ProtectionSet`, [`F_Protect`](F_Protect.md)):
 
 ```
   stStallFault       Trip, Manual  running, past tMaskAfterStart and tStalledAfterNoPulse, no pulse for tStalledAfterNoPulse   -> Stall
-  stUnderspeedFault  Warn, Auto    running, past tMaskAfterStart, below fUnderspeedBelow (> 0) for tSpeedFaultDelay   -> Underspeed
-  stOverspeedFault   Off           above fOverspeedAbove (> 0) for tSpeedFaultDelay                               -> Overspeed
+  stUnderspeedFault  Warn, Auto    running, past tMaskAfterStart, below fUnderspeedBelow (> 0) for its tTripDelay (5 s) -> Underspeed
+  stOverspeedFault   Off           above fOverspeedAbove (> 0) for its tTripDelay (5 s)                           -> Overspeed
   stPulsesWhileStoppedFault      Warn, Auto    pulses while stopped, tCoastDownTime after the stop                     -> PulsesWhileStopped
 ```
 

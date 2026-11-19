@@ -10,7 +10,7 @@ Offers `I_LocalChoice`: wire this instance to another block's `ip…` pin of tha
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `bOpenTorqueTripped` | `BOOL` |  | the open torque switch tripped |
+| in | `bOpenTorqueTripped` | `BOOL` | `FALSE` | the open torque switch tripped |
 | in | `bCloseTorqueTripped` | `BOOL` |  | the close torque switch tripped |
 | in | `refMotorisedData` | `REFERENCE TO ST_ValveMotorData` |  | the motorised valve record |
 | in | `bOpenLimitSwitch` | `BOOL` | `FALSE` | open end switch (TRUE = made) *(from FB_Valve)* |

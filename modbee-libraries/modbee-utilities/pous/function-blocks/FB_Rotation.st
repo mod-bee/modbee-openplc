@@ -23,8 +23,8 @@ sensor checks do not need the unit and still act.
 
 Protections (ST_ProtectionSet, F_Protect):
   stStallFault       Trip, Manual  running, past tMaskAfterStart and tStalledAfterNoPulse, no pulse for tStalledAfterNoPulse   -> Stall
-  stUnderspeedFault  Warn, Auto    running, past tMaskAfterStart, below fUnderspeedBelow (> 0) for tSpeedFaultDelay   -> Underspeed
-  stOverspeedFault   Off           above fOverspeedAbove (> 0) for tSpeedFaultDelay                               -> Overspeed
+  stUnderspeedFault  Warn, Auto    running, past tMaskAfterStart, below fUnderspeedBelow (> 0) for its tTripDelay (5 s) -> Underspeed
+  stOverspeedFault   Off           above fOverspeedAbove (> 0) for its tTripDelay (5 s)                           -> Overspeed
   stPulsesWhileStoppedFault      Warn, Auto    pulses while stopped, tCoastDownTime after the stop                     -> PulsesWhileStopped
 A trip or a signal acts on the owner (Trip / Stop); a warning shows on it. Reset: bResetFaults (rising edge), the
 record's bCmdResetFaults (once per write), the owner's reset, the system reset.
@@ -41,9 +41,9 @@ FUNCTION_BLOCK FB_Rotation EXTENDS FB_Object IMPLEMENTS I_Part
     refData : REFERENCE TO ST_RotationData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    bNoFaultTripped : BOOL; (* no protection tripped *)
-    bRotating : BOOL; (* pulses being seen *)
     fSpeed : REAL; (* in set.eSpeedUnit (default rpm) *)
+    bRotating : BOOL; (* pulses being seen *)
+    bNoFaultTripped : BOOL; (* no protection tripped *)
   END_VAR
   VAR RETAIN
     stKept : ST_RotationSet;
@@ -69,8 +69,6 @@ FUNCTION_BLOCK FB_Rotation EXTENDS FB_Object IMPLEMENTS I_Part
     tRunStart : TIME;
     tStopAt : TIME;
     tFastUntil : TIME;
-    tBelowSince : TIME;
-    tAboveSince : TIME;
     fMeasured : REAL; (* the pulse rate of the last window, pulses / s *)
     stWStall : ST_ProtectionWork;
     stWUnder : ST_ProtectionWork;
@@ -113,8 +111,6 @@ METHOD PRIVATE SetWhy : E_UtError
     SetWhy := E_UtError.BelowMin;
   ELSIF NOT (stS.fOverspeedAbove >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.tSpeedFaultDelay >= T#0s) THEN
-    SetWhy := E_UtError.TimeBad;
   ELSIF NOT (stS.tMeasureSpeedOver >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   ELSIF NOT (stS.tCoastDownTime >= T#0s) THEN
@@ -336,13 +332,7 @@ bRotating := bEdgeSeen AND tNow - tLastEdge < refData.set.tStalledAfterNoPulse;
 (* the conditions *)
 bPastStart := bRun AND tNow - tRunStart >= refData.set.tMaskAfterStart;
 bBelow := bPastStart AND NOT bUnitBad AND refData.set.fUnderspeedBelow > 0.0 AND fShown < refData.set.fUnderspeedBelow;
-IF NOT bBelow THEN
-  tBelowSince := tNow;
-END_IF;
 bAbove := NOT bUnitBad AND refData.set.fOverspeedAbove > 0.0 AND fShown > refData.set.fOverspeedAbove;
-IF NOT bAbove THEN
-  tAboveSince := tNow;
-END_IF;
 
 (* the resets: the pin, the record (once per write), the owner, the system *)
 bResetReq := bResetFaults OR (refData.bCmdResetFaults AND NOT bCmdSeen) OR bOwnerReset OR SystemReset();
@@ -358,10 +348,10 @@ F_Protect(tNow := tNow, bConditionPresent := bPastStart AND (NOT bEdgeSeen OR tN
                                   AND tNow - tRunStart >= refData.set.tStalledAfterNoPulse,
           bResetRequest := bResetReq, tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stStallFault,
           stStatus := refData.sts.stStallFault, stWorking := stWStall);
-F_Protect(tNow := tNow, bConditionPresent := bBelow AND tNow - tBelowSince >= refData.set.tSpeedFaultDelay,
+F_Protect(tNow := tNow, bConditionPresent := bBelow,
           bResetRequest := bResetReq, tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stUnderspeedFault,
           stStatus := refData.sts.stUnderspeedFault, stWorking := stWUnder);
-F_Protect(tNow := tNow, bConditionPresent := bAbove AND tNow - tAboveSince >= refData.set.tSpeedFaultDelay,
+F_Protect(tNow := tNow, bConditionPresent := bAbove,
           bResetRequest := bResetReq, tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stOverspeedFault,
           stStatus := refData.sts.stOverspeedFault, stWorking := stWOver);
 F_Protect(tNow := tNow, bConditionPresent := NOT bRun AND bRotating AND tNow - tStopAt >= refData.set.tCoastDownTime

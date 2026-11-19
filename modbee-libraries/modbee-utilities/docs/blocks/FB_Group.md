@@ -44,14 +44,14 @@ Offers `I_Equipment`: wire this instance to another block's `ip…` pin of that 
 | `eRotateBy` | `E_Rotate` |  | how the lead moves on: EachStart, Periodic, Fixed or Hours |
 | `tRotateInterval` | `TIME` | `T#24h` | Periodic: the lead moves on this often |
 | `nFixedLeadMember` | `INT` | `1` | Fixed: the member that always leads (1..4) |
-| `tAddMemberDelay` | `TIME` | `T#5s` | between member starts when more are wanted |
-| `tDropMemberDelay` | `TIME` | `T#5s` | between member stops when fewer are wanted |
+| `tAddMemberAfter` | `TIME` | `T#5s` | while more are wanted: the next member is added this long after the last add or drop |
+| `tDropMemberAfter` | `TIME` | `T#5s` | while still asked, for fewer: the next member is dropped (the most recent first) this long after the last add or drop |
 | `tFailoverAfter` | `TIME` | `T#10s` | a called member not running after this is skipped and the next one called |
 | `nMaxMembersRunning` | `INT` |  | most members running at once, Hand included (0 = no limit) |
 | `bHandRunCounts` | `BOOL` | `TRUE` | a member running in Hand counts toward the members wanted |
 | `bSwapWhileRunning` | `BOOL` |  | a rotation while running: start the next member, then stop the old one |
-| `eStopOrder` | `E_GroupStop` |  | nothing asked any more: stop all at once, or one per tBetweenMemberStops |
-| `tBetweenMemberStops` | `TIME` | `T#3s` | Staged: between member stops |
+| `eStopOrder` | `E_GroupStop` |  | nothing asked any more: stop AllAtOnce, or Staged (one per tStagedStopInterval) |
+| `tStagedStopInterval` | `TIME` | `T#3s` | eStopOrder Staged, nothing asked any more: the first member stops at once, each next one this long after the last |
 | `fEqualHoursBand` | `REAL` | `1.0` | Hours: members this close in run hours (h) count as equal (rotation order) |
 | `tExerciseAfterIdle` | `TIME` |  | run a member idle this long while nothing is asked (0 = off) |
 | `tExerciseRunTime` | `TIME` | `T#30s` | for this long |
@@ -90,7 +90,7 @@ Jockey: the first member that is an `I_Pump` with role Jockey is not a duty memb
 
 Parts: a part added to the group (e.g. [`FB_LevelCheck`](FB_LevelCheck.md) High on the header flow meter for a burst main) is evaluated every scan: a trip or a stop releases every member at once (`bError` and the part's `eErrorId` on a trip, stop reason Part), a hold lets none start, a warning shows.
 
-Asked to run: the lead first, then the next available members in rotation order up to 1 + `nExtraMembers`, one per `set.tAddMemberDelay`; released one per `set.tDropMemberDelay`, the most recent first. Failover: a called member that is not running after `set.tFailoverAfter` is skipped and the next one is called at once (until a reset or nothing is asked); a member that became unavailable is skipped until it is available again. Rotation (`set.eRotateBy`): EachStart (the lead moves on at each group start), Periodic (every `set.tRotateInterval`), Fixed (`set.nFixedLeadMember`). The lead is kept over a power cut. Nobody available while asked: a warning (NoneAvailable).
+Asked to run: the lead first, then the next available members in rotation order up to 1 + `nExtraMembers`, one per `set.tAddMemberAfter`; released one per `set.tDropMemberAfter`, the most recent first. Failover: a called member that is not running after `set.tFailoverAfter` is skipped and the next one is called at once (until a reset or nothing is asked); a member that became unavailable is skipped until it is available again. Rotation (`set.eRotateBy`): EachStart (the lead moves on at each group start), Periodic (every `set.tRotateInterval`), Fixed (`set.nFixedLeadMember`). The lead is kept over a power cut. Nobody available while asked: a warning (NoneAvailable).
 
 Hours rotation (`set.eRotateBy` = Hours): each call takes the available member with the fewest run hours (each member's `fActRunHours`, e.g. [`FB_Pump`](FB_Pump.md) / [`FB_Motor`](FB_Motor.md)'s `tot.fRunHours`); members within `set.fEqualHoursBand` hours of each other count as equal and go in rotation order, and the lead moves on at each group start, so equal members take turns.
 
@@ -98,7 +98,7 @@ A member in Hand is never called (it is not available); while it runs it counts 
 
 Swap while running (`set.bSwapWhileRunning`): a rotation while the group runs (`bRotate`, `bCmdRotateNow`, Periodic) calls the next member first and releases the longest-running one (not the new lead) once the new one runs; nobody available, or no room under `nMaxMembersRunning`: no swap.
 
-Stop (`set.eStopOrder`): when nothing is asked any more, AllAtOnce releases every member; Staged releases the most recent first, one per `set.tBetweenMemberStops`. A new request during a staged stop keeps those still running.
+Stop (`set.eStopOrder`): when nothing is asked any more, AllAtOnce releases every member; Staged releases the most recent first: the first at once, then one per `set.tStagedStopInterval` (a shutdown gap, not the `set.tDropMemberAfter` of a smaller request, which counts from the last add or drop). A new request during a staged stop keeps those still running.
 
 Exercise (`set.tExerciseAfterIdle`, 0 = off): while nothing is asked, a member that has not run for `tExerciseAfterIdle` (an available one, not skipped) runs for `set.tExerciseRunTime`; a request, the member going unavailable or the setting off ends it; `sts.nMembersExercising`, `sts.tNextExerciseTimeLeft` (until the next one). Idle time counts power-on time only (no clock). A member that exercises itself, or an owner exercise ([`FB_Exercise`](FB_Exercise.md) on the level control: it asks the group, so the lead runs), leaves this off.
 

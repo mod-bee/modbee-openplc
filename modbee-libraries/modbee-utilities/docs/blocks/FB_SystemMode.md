@@ -8,7 +8,7 @@ Offers `I_SystemMode`: wire this instance to another block's `ip…` pin of that
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `bManualRunRequest` | `BOOL` |  | manual run request (held) |
+| in | `bManualRunRequest` | `BOOL` | `FALSE` | manual run request (held) |
 | in | `bPlantReset` | `BOOL R_EDGE` |  | the plant reset |
 | in | `bSelectorManual` | `BOOL` |  | the selector in Manual (set.eModeSource Switch / Remote) |
 | in | `bSelectorAuto` | `BOOL` |  | the selector in Auto |

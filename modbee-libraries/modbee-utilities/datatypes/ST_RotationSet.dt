@@ -7,13 +7,12 @@ TYPE
     tStalledAfterNoPulse : TIME := T#3s; (* no pulse this long while running = stalled *)
     fUnderspeedBelow : REAL; (* underspeed below this (0 = off) *)
     fOverspeedAbove : REAL; (* overspeed above this (0 = off) *)
-    tSpeedFaultDelay : TIME := T#5s; (* under / over speed must last this long *)
     tMeasureSpeedOver : TIME := T#1s; (* the speed is measured over at least this *)
     tCoastDownTime : TIME := T#10s; (* after a stop, pulses are expected this long *)
     tRetryCountWindow : TIME := T#1h; (* Retry counts trips within this window (0 = until a reset) *)
     stStallFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#0s, eResetMode := E_ResetMode.Manual, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
-    stUnderspeedFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#0s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
-    stOverspeedFault : ST_ProtectionSet := (eActionOnFault := E_Response.Off, tTripDelay := T#0s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
+    stUnderspeedFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#5s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
+    stOverspeedFault : ST_ProtectionSet := (eActionOnFault := E_Response.Off, tTripDelay := T#5s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
     stPulsesWhileStoppedFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#0s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
   END_STRUCT;
 END_TYPE

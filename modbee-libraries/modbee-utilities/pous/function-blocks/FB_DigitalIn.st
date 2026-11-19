@@ -1,5 +1,5 @@
 (* FB_DigitalIn — a switch, float or contact, cleaned up: debounce, an alarm on a state, chatter detection.
-Pins: bRawIn (the raw input; NC: NOT at the pin), eInputQuality (its quality from the IO map), bResetFaults (reset a Manual alarm)
+Pins: bRawIn (the raw input; NC: NOT at the pin), bInputGood (its source is healthy: the IO map row's bGood), bResetFaults (reset a Manual alarm)
 -> bSignal (the clean signal), bStateAlarm, bChattering, bGood, plus FB_Object's bError / bWarning / eErrorId / eState.
 refData: its record.
   debounce  bSignal follows the input once it has held its new state for set.tDebounceOnTime (turning on) or tDebounceOffTime
@@ -8,8 +8,8 @@ refData: its record.
             not good, a warning (Chatter), until the input has been steady for tChatterWindow (count 0 = off)
   alarm     a warning (StateAlarm) on the chosen state of bSignal (set.eAlarmWhen), after set.tAlarmDelay; it clears per
             set.eAlarmResetMode (Auto when bSignal returns; Manual holds until a reset)
-  eInputQuality      NotFitted / Unused: not on this site: bSignal FALSE, no alarm, eState Off; any other bad quality: bSignal
-            held, not good, bError IoBad
+  bInputGood FALSE   (a bad IO channel, module or comms): bSignal held, not good, bError IoBad
+  not fitted         set.bSensorFitted FALSE: not on this site: bSignal FALSE, no alarm, eState Off
 Totals (tot): nChangeCount of the clean input, tTotalOnTime while bSignal is TRUE; running totals (no day rollover: the board
 has no clock; SCADA makes days), kept hourly; bCmdResetTotals clears them. Simulation is an IO map force.
 Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back. *)
@@ -17,7 +17,7 @@ Settings are kept by the block (a retained last-good copy): restored at power-up
 FUNCTION_BLOCK FB_DigitalIn EXTENDS FB_Object
   VAR_INPUT
     bRawIn : BOOL; (* the raw input (NC: NOT at the pin) *)
-    eInputQuality : E_IoQ := E_IoQ.Ok; (* quality from the IO map row *)
+    bInputGood : BOOL := TRUE; (* the source is healthy (the IO map row's bGood); FALSE: bSignal held, bError IoBad *)
     bResetFaults : BOOL R_EDGE; (* reset a Manual alarm *)
     refData : REFERENCE TO ST_DigitalInData; (* the block's record *)
   END_VAR
@@ -101,8 +101,8 @@ IF NOT __ISVALIDREF(refData) THEN
   RETURN;
 END_IF;
 tNow := TIME();
-bNotFitted := eInputQuality = E_IoQ.Unused OR eInputQuality = E_IoQ.NotFitted;
-bQBad := NOT bNotFitted AND NOT (eInputQuality = E_IoQ.Ok OR eInputQuality = E_IoQ.Forced);
+bNotFitted := NOT refData.set.bSensorFitted;
+bQBad := NOT bNotFitted AND NOT bInputGood;
 bRaw := bRawIn AND NOT bNotFitted;
 
 (* kept settings and totals; a bad write is put back *)

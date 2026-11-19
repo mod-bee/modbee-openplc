@@ -8,7 +8,7 @@ Offers `I_Vessel`: wire this instance to another block's `ip…` pin of that typ
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `fTableVolume` | `REAL` |  | Table: the volume at the present level, in eVolumeUnit (an FB_Linearise) |
+| in | `fTableVolume` | `REAL` | `0.0` | Table: the volume at the present level, in eVolumeUnit (an FB_Linearise) |
 | in | `fTableArea` | `REAL` |  | Table: the surface area at the present level, m2 (an FB_Linearise; optional) |
 | in | `ipLevel` | `I_Measurement` |  | required. An instance of a block that offers I_Measurement (FB_AnalogIn, FB_FlowTotal, FB_LevelMeter, FB_MeasFilter, FB_MeasFrozen, ...) |
 | in | `refData` | `REFERENCE TO ST_VesselData` |  | the block's record |

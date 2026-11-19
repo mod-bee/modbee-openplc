@@ -8,5 +8,6 @@ TYPE
     nChatterChanges : INT; (* more than this many clean changes within tChatterWindow = chatter (0 = off) *)
     tChatterWindow : TIME := T#10s; (* the window chatter is counted in *)
     tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
+    bSensorFitted : BOOL := TRUE; (* FALSE: not on this site (bSignal FALSE, no alarm, eState Off) *)
   END_STRUCT;
 END_TYPE

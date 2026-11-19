@@ -8,7 +8,7 @@ Offers `I_Meter`: wire this instance to another block's `ip…` pin of that type
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `bPulse` | `BOOL` |  | each rising edge is one pulse (at most one pulse per two scans) |
+| in | `bPulse` | `BOOL` | `FALSE` | each rising edge is one pulse (at most one pulse per two scans) |
 | in | `nHardwareCount` | `UDINT` |  | a hardware counter (e.g. node-uio FB_PulseCounter): each count is one pulse |
 | in | `bInputGood` | `BOOL` | `TRUE` | the input can be trusted |
 | in | `bPumpRunning` | `BOOL` | `FALSE` | optional: the pump runs; its fall keeps the totals |
