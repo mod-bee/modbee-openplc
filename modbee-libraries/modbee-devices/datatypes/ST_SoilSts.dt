@@ -1,0 +1,18 @@
+TYPE
+  ST_SoilSts : STRUCT
+    eStatus : E_DeviceStatus; (* Off, Ok, Setup (address not 1..247), NoReply, Lost or BadData *)
+    sStatusText : STRING(30); (* the status in words, for a panel *)
+    tValueAge : TIME; (* time since the last good reading *)
+    bGood : BOOL; (* answering, every value plausible (as the bGood pin) *)
+    bError : BOOL; (* as the bError pin *)
+    eErrorId : E_DeviceError; (* as the eErrorId pin *)
+    fMoisturePct : REAL; (* soil moisture, % *)
+    fTemperatureDegC : REAL; (* soil temperature, degC *)
+    fConductivity : REAL; (* electrical conductivity (EC), uS/cm *)
+    fPh : REAL; (* pH, 0-14 *)
+    fNitrogen : REAL; (* nitrogen, mg/kg *)
+    fPhosphorus : REAL; (* phosphorus, mg/kg *)
+    fPotassium : REAL; (* potassium, mg/kg *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a good write) *)
+  END_STRUCT;
+END_TYPE

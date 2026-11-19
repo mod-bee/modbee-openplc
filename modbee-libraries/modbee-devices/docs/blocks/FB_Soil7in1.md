@@ -7,39 +7,66 @@ Reads a 7-in-1 soil probe on Modbus RTU: moisture, temperature, conductivity
 VAR
   line  : FB_ModbusNode;            (* the RS485 line, a client *)
   soil1 : FB_Soil7in1;
-  soil1Data : ST_SoilData := (nUnitId := 1);
+  soil1Data : ST_SoilData := (set := (nUnitId := 1));
 END_VAR
 
-soil1(fbNode := line, stData := soil1Data);
+soil1(fbNode := line, refData := soil1Data);
 IF soil1.bGood THEN
-  moisture := soil1.fMoisture;
+  moisture := soil1.fMoisturePct;
 END_IF;
 ```
 
 ## Pins
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in-out | `fbNode` | FB_ModbusNode | | The RS485 line's node, as a client |
-| in-out | `stData` | ST_SoilData | | Settings and status (below) |
-| in | `bEnable` | BOOL | TRUE | Read the sensor |
-| out | `bGood` | BOOL | | Answering, every value plausible |
-| out | `fMoisture` | REAL | | % (as the sensor reports it) |
-| out | `fTemperature` | REAL | | °C, negative below zero |
-| out | `fEc` | REAL | | µS/cm |
-| out | `fPh` | REAL | | pH |
-| out | `fNitrogen` | REAL | | mg/kg |
-| out | `fPhosphorus` | REAL | | mg/kg |
-| out | `fPotassium` | REAL | | mg/kg |
+| in | `bEnable` | `BOOL` | `TRUE` | read the sensor |
+| in | `refData` | `REFERENCE TO ST_SoilData` |  | the sensor's record: settings set and status sts |
+| in-out | `fbNode` | `FB_ModbusNode` |  | the RS485 line's FB_ModbusNode (a client) |
+| out | `bGood` | `BOOL` |  | answering, every value plausible |
+| out | `fMoisturePct` | `REAL` |  | soil moisture, % (as the sensor reports it) |
+| out | `fTemperatureDegC` | `REAL` |  | soil temperature, degC (negative below zero) |
+| out | `fConductivity` | `REAL` |  | electrical conductivity (EC), uS/cm |
+| out | `fPh` | `REAL` |  | pH, 0-14 |
+| out | `fNitrogen` | `REAL` |  | nitrogen, mg/kg |
+| out | `fPhosphorus` | `REAL` |  | phosphorus, mg/kg |
+| out | `fPotassium` | `REAL` |  | potassium, mg/kg |
+| out | `bError` | `BOOL` |  | enabled and not Ok (Setup, NoReply, Lost or BadData) |
+| out | `eErrorId` | `E_DeviceError` |  | which error: None while all is well |
 
-### `stData` (ST_SoilData)
+## Record `ST_SoilData` (pin `refData`)
+
+**Settings `set`** (`ST_SoilSet`)
+
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `nUnitId` | USINT | 1 | The sensor's Modbus address, 1..247 (factory 1) |
-| `eMap` | E_SoilMap | `E_SoilMap.Jxct` | Its register map (below) |
-| `tPeriod` | TIME | T#10s | Read it this often (at least 1 s) |
-| `eStatus` | E_DeviceStatus | | Status code (see the [README](../README.md)) |
-| `sStatus` | STRING(30) | | Status in words |
-| `tAge` | TIME | | Time since the last good reading |
+| `nUnitId` | `BYTE` | `1` | the sensor's Modbus address, 1..247 (factory 1) |
+| `eRegisterMap` | `E_SoilMap` | `E_SoilMap.Jxct` | its register map: Jxct (most units) unless the maker's sheet says otherwise |
+| `tReadInterval` | `TIME` | `T#10s` | read it this often (at least 1 s: the sensor answers within 1 s) |
+
+**Status `sts`** (`ST_SoilSts`)
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `eStatus` | `E_DeviceStatus` |  | Off, Ok, Setup (address not 1..247), NoReply, Lost or BadData |
+| `sStatusText` | `STRING(30)` |  | the status in words, for a panel |
+| `tValueAge` | `TIME` |  | time since the last good reading |
+| `bGood` | `BOOL` |  | answering, every value plausible (as the bGood pin) |
+| `bError` | `BOOL` |  | as the bError pin |
+| `eErrorId` | `E_DeviceError` |  | as the eErrorId pin |
+| `fMoisturePct` | `REAL` |  | soil moisture, % |
+| `fTemperatureDegC` | `REAL` |  | soil temperature, degC |
+| `fConductivity` | `REAL` |  | electrical conductivity (EC), uS/cm |
+| `fPh` | `REAL` |  | pH, 0-14 |
+| `fNitrogen` | `REAL` |  | nitrogen, mg/kg |
+| `fPhosphorus` | `REAL` |  | phosphorus, mg/kg |
+| `fPotassium` | `REAL` |  | potassium, mg/kg |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and the last good value put back (until a good write) |
+
+## Lists
+
+- `E_DeviceError`: `None`, `AddressBad`, `NoReply`, `Lost`, `BadData`, `NoRecord` (default `None`)
+- `E_DeviceStatus`: `Off`, `Ok`, `Setup`, `NoReply`, `Lost`, `BadData` (default `Off`)
+- `E_SoilMap`: `Jxct`, `Linear` (default `Jxct`)
 
 ## Wiring and line settings
 - RS485 A/B to the line; the probe's supply as its label says (usually 5–30 V DC).
@@ -47,7 +74,7 @@ END_IF;
   factory address **1**. Several probes share one line at different addresses,
   one `FB_Soil7in1` each.
 
-## Register maps (`stData.eMap`)
+## Register maps (`refData.set.eRegisterMap`)
 Makers differ, so the map is a setting.
 
 | Map | Registers (holding, FC03) | Scaling |
@@ -63,7 +90,9 @@ the values are impossible (`Bad data`).
 - Each reading is a standing `Watch` on the node, so the node schedules the line.
 - Plausible: moisture 0–100 %, temperature −40–80 °C, pH 0–14, EC 0–20000 µS/cm,
   N P K 0–2000 mg/kg. Anything outside is `Bad data` and `bGood` drops.
-- The outputs hold the last good reading while `bGood` is FALSE; `stData.tAge` says how old it is.
+- The outputs hold the last good reading while `bGood` is FALSE; `refData.sts.tValueAge` says how old it is.
 - A sensor that stops answering backs off before it is asked again, so after a
   cable is fixed it can take a little while to show OK.
-- **Power cut**: nothing is kept; the outputs are 0 until the first good reading.
+- **Power cut**: the settings (`set`: `nUnitId`, `eRegisterMap`, `tReadInterval`) are kept by the block
+  (a retained last-good copy, restored at power-up); a write that cannot work is refused and the last good
+  value put back (`sts.bSettingRefused`). The readings are not kept: the outputs are 0 until the first good reading.

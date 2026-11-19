@@ -1,0 +1,5 @@
+TYPE
+  {attribute 'qualified_only'}
+  {attribute 'strict'}
+  E_DeviceError : (None, AddressBad, NoReply, Lost, BadData, NoRecord) := None;
+END_TYPE

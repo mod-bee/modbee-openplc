@@ -1,0 +1,7 @@
+TYPE
+  ST_SoilSet : STRUCT
+    nUnitId : BYTE := 1; (* the sensor's Modbus address, 1..247 (factory 1) *)
+    eRegisterMap : E_SoilMap := E_SoilMap.Jxct; (* its register map: Jxct (most units) unless the maker's sheet says otherwise *)
+    tReadInterval : TIME := T#10s; (* read it this often (at least 1 s: the sensor answers within 1 s) *)
+  END_STRUCT;
+END_TYPE
