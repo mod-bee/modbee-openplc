@@ -45,6 +45,7 @@ text.
 | `E_MqttTrigger.OnChange` (default) | when it moves by `fDeadband`, and every `tSendInterval` anyway |
 | `E_MqttTrigger.OnInterval` | every `tSendInterval`, changed or not. `tSendInterval := T#0s` is refused with `InvalidArgument`, never turned into "every scan" |
 | `E_MqttTrigger.OnRequest` | on a rising edge of `bExecute`, and nothing else - no first value, no heartbeat |
+| `E_MqttTrigger.ChangedEvery` | at most once every `tSendInterval`, and only when it moved by `fDeadband` from the value last sent. A change inside the interval waits for its end; an unchanged value sends nothing, so there is no heartbeat. For a log over a metered link. `tSendInterval := T#0s` is refused with `InvalidArgument` |
 
 `bEnable := FALSE` stops it without losing the record; an edge of `bExecute`
 raised meanwhile does not fire on enabling. `nMessageSentCount` counts messages; `tSinceLastSent` is
@@ -212,6 +213,7 @@ the data:
 | --- | --- |
 | `OnChange` | setpoints, commands, states - things that move when somebody moves them. `tSendInterval` is then the heartbeat that keeps the far end's quality good while nothing happens |
 | `OnInterval` | analogues that never stop moving. A wet well level changes every scan, so on-change would publish at the task rate - send the set on a clock instead |
+| `ChangedEvery` | a slow log over a metered link: every `tSendInterval`, only the members that changed since they were last sent, nothing when none did |
 | `OnRequest` | a recipe download. `bExecute` sends the **whole** set, changed or not, so the receiving end gets something complete to act on rather than the three values that happened to differ |
 
 `nMembers` counts the members published, `nMessageSentCount` the messages, and `nMessagesSentThisScan`

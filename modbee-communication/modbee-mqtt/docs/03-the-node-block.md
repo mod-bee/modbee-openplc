@@ -39,10 +39,14 @@ could explain.
 | `E_MqttTransport` | runs on | what matters |
 | --- | --- | --- |
 | `RuntimeTcp` | the Runtime | `sHostName`, `nHostPort` |
-| `ArduinoWiFi` | a board | `sHostName`, `nHostPort`, and `stNetworkConfig.sSsid` - or node-uio's `NETWORK` joins the network |
+| `ArduinoWiFi` | a board | `sHostName`, `nHostPort`, and `stNetworkConfig.sSsid` - or node-uio's `FB_WiFiNetwork` joins the network |
 | `ArduinoEthernet` | a board | `sHostName`, `nHostPort`, and `stNetworkConfig`'s MAC and address |
 | `Cellular` | a board | `sHostName`, `nHostPort`, and a modem block (`FB_GsmModemA7670` or `FB_GsmModemSim7070`) from the `modbee-gsm` library |
 | `External` | either | `nExternalLink`, and nothing else |
+
+`nExternalLink` is a handle, not a setting: it takes the link output of the
+block that made the transport, wired straight across. Never type a value into
+it, and leave it unconnected for every other `eTransport`.
 
 | `E_MqttSecurity` | |
 | --- | --- |
@@ -338,8 +342,8 @@ It is the **same client** either way, so every method's record carries on.
 `bConnected` drops for the moment it takes.
 
 A Wi-Fi login in `stNetworkConfig` that changes makes the client leave the
-network and join again with the new one (a radio node-uio's `NETWORK` brought
-up is `NETWORK`'s to rejoin).
+network and join again with the new one (a radio node-uio's `FB_WiFiNetwork` brought
+up is `FB_WiFiNetwork`'s to rejoin).
 
 **A pinned key stays pinned.** With `TlsPinned`, a new `sHostName` is a new broker
 with a different key, and it is refused until `bTrustFirstBrokerKey` is switched off and

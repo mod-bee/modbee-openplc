@@ -35,12 +35,12 @@ to check when it does not report. The point list of `Record` is page 15.
 
 **Everything about the connection is the client's** - `eTransport`, `sHostName`,
 `eSecurity`, the login in `stSessionConfig`, the Wi-Fi in `stNetworkConfig`
-or node-uio's `NETWORK`:
+or node-uio's `FB_WiFiNetwork`:
 
 | `eTransport` | Where | Who brings the network up |
 | --- | --- | --- |
 | `E_MqttTransport.RuntimeTcp` | the OpenPLC Runtime. The default | the computer |
-| `E_MqttTransport.ArduinoWiFi` | a board's Wi-Fi | `NETWORK` (node-uio), or `stNetworkConfig` |
+| `E_MqttTransport.ArduinoWiFi` | a board's Wi-Fi | `FB_WiFiNetwork` (node-uio), or `stNetworkConfig` |
 | `E_MqttTransport.ArduinoEthernet` | a board's Ethernet | the client, from `stNetworkConfig` |
 | `E_MqttTransport.Cellular` | the modem on the GSM HAT | `FB_GsmModemA7670` or `FB_GsmModemSim7070` (modbee-gsm) |
 | `E_MqttTransport.External` | a transport wired to `nExternalLink` | whoever made it |
@@ -105,7 +105,7 @@ sp.Record(anyData := STS, anyPointList := '* = now, db = 0.01');
 sp.Record(anyData := CMD, anyPointList := '* = cmd', sMetricNamePrefix := 'Cmd/');
 ```
 
-The Wi-Fi itself is node-uio's `NETWORK` block, joined from the site's
+The Wi-Fi itself is node-uio's `FB_WiFiNetwork` block, joined from the site's
 settings; the client waits for it.
 
 ## The same Node, cellular later

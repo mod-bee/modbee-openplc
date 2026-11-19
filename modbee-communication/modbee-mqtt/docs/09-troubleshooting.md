@@ -187,7 +187,7 @@ On the Runtime `sLastError` carries the TLS library's own words instead, and a
 key that is not the pinned one names both fingerprints.
 
 **Check `stNetworkConfig`**: `sMacAddress` and `sIpAddress` set for Ethernet, `sSsid` for
-Wi-Fi (or node-uio's `NETWORK` joining it). A board with no MAC cannot open
+Wi-Fi (or node-uio's `FB_WiFiNetwork` joining it). A board with no MAC cannot open
 an Ethernet link - *set MAC on MQTT_ARDUINO* is that message, naming the
 structure by its 0.1 name - and every board on a segment needs its own.
 

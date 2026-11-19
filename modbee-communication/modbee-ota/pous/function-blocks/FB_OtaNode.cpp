@@ -263,7 +263,7 @@ static bool ota_nodeGate(void* context) {
 }
 static void ota_nodeEvent(void*, OtaEvent event, OtaUpdater&) {
   // The boot slot has switched and the reboot is two seconds away: the last
-  // moment to keep retained values, the same path RESTART takes.
+  // moment to keep retained values, the same path node-uio's FB_Restart takes.
   if (event == OtaEvent::Applying && runtime_retain_flush_now) runtime_retain_flush_now();
 }
 

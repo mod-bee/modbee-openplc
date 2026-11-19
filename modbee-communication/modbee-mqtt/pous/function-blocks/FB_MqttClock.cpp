@@ -10,7 +10,7 @@ eTimeSource  where the time comes from - the same list as FB_MqttClient, so a
                                               Nothing is set
              E_MqttTransport.ArduinoWiFi      NTP from sNtpServer, through the
              E_MqttTransport.ArduinoEthernet  board's IP stack (ESP32).
-                                              node-uio's NETWORK or the
+                                              node-uio's FB_WiFiNetwork or the
                                               FB_MqttClient brings the
                                               network up; this waits for it
              E_MqttTransport.Cellular         the mobile network's time
@@ -41,9 +41,9 @@ sLastError  why, in words. Empty when fine.
 
 ---
 
-  wifi ( ENABLE := TRUE, SSID := ..., PASSWORD := ... );   NETWORK, node-uio
+  wifi ( bEnable := TRUE, sSsid := ..., sWiFiPassword := ... );   FB_WiFiNetwork, node-uio
   ntp  ( eTimeSource := E_MqttTransport.ArduinoWiFi );
-  mqtt ( eTimeSource := E_MqttTransport.ArduinoWiFi, sHostName := ..., ... );
+  mqtt ( eTransport := E_MqttTransport.ArduinoWiFi, sHostName := ..., ... );
   sp   ( fbClient := mqtt, ... );                          stamps with it
 
 ONE CLOCK, AND EVERYTHING USES IT. This sets the board's system clock, so
@@ -172,7 +172,7 @@ void loop()
             // lwIP's SNTP client, started once: it polls sNtpServer on its own,
             // in the background, and sets the system clock every tResyncInterval.
             // Nothing here waits for a packet. The radio is somebody else's -
-            // NETWORK or FB_MqttClient joins it - and SNTP simply retries until
+            // FB_WiFiNetwork or FB_MqttClient joins it - and SNTP simply retries until
             // there is a network to ask.
             if (!(bool)bStarted) {
                 const char* server = sNtpServer.length() > 0 ? sNtpServer.c_str()

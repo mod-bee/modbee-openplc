@@ -404,7 +404,7 @@ eTransport  where the bytes go. The target must have it; one it does not have
            is reported on bError and sLastError, never built.
              E_MqttTransport.RuntimeTcp       the OpenPLC Runtime's network
              E_MqttTransport.ArduinoWiFi      a board's Wi-Fi. stNetworkConfig
-                                              joins it, or node-uio's NETWORK
+                                              joins it, or node-uio's FB_WiFiNetwork
              E_MqttTransport.ArduinoEthernet  a board's Ethernet, from
                                               stNetworkConfig's MAC and address
              E_MqttTransport.Cellular         the modem a modbee-gsm modem block
@@ -439,9 +439,10 @@ eProtocol   which MQTT version to speak. E_MqttProtocol.V5ThenV311 (the
            default) tries 5.0 and drops to 3.1.1 only when the broker says the
            VERSION is the problem - never on a login or network failure.
            E_MqttProtocol.V5 and E_MqttProtocol.V311 speak one only.
-nExternalLink  a transport another block made, for
-           eTransport := E_MqttTransport.External. Not something to wire by
-           hand.
+nExternalLink  E_MqttTransport.External only: wire the link output of the
+           block that made the transport here. It is a handle, not a setting:
+           never type a value into it, and leave it unconnected for every
+           other eTransport.
 bConnect    TRUE connects and stays connected. FALSE says goodbye properly -
            the broker publishes no Will - and keeps the client, so every
            method's record survives the gap.
@@ -502,7 +503,7 @@ stTls        ST_MqttTlsConfig, what to trust. Files on the Runtime; a board
 stNetworkConfig  ST_MqttNetworkConfig, what only a board has. Refused on the
            Runtime, which uses its machine's network.
              sSsid          ArduinoWiFi: the network to join. Empty when
-                            node-uio's NETWORK joins it
+                            node-uio's FB_WiFiNetwork joins it
              sWiFiPassword  its password; empty for an open network
              sMacAddress    ArduinoEthernet: this board's MAC,
                             'DE:AD:BE:EF:FE:ED'. Each board needs its own
@@ -599,6 +600,11 @@ kept no session.
        E_MqttTrigger.OnInterval  every tSendInterval, which must be set
        E_MqttTrigger.OnRequest   on bExecute's rising edge; nothing else, no
                                  first value, no heartbeat
+       E_MqttTrigger.ChangedEvery  at most once every tSendInterval, which
+                                 must be set, and only when it moved by
+                                 fDeadband from the value last sent: a
+                                 change inside the interval waits for its
+                                 end, an unchanged value sends nothing
      ALWAYS SET tSendInterval WITH OnChange: a value that never moves otherwise
      publishes nothing, and the far end cannot tell that from a dead device.
      A BOOL counts as 1.0 or 0.0, so leave fDeadband 0 for anything that is
@@ -607,8 +613,8 @@ kept no session.
      its first value at once. nMessageSentCount counts messages; tSinceLastSent is the time since
      the last one (T#0s before the first, which nMessageSentCount = 0 tells apart).
      Ok, NotConnected, InvalidArgument (a type the wire cannot carry,
-     OnInterval with no tSendInterval, E_MqttTrigger.ChangedEvery, which is
-     Sparkplug's), QueueFull, or the broker's refusal.
+     OnInterval or ChangedEvery with no tSendInterval), QueueFull, or the
+     broker's refusal.
 
   mqtt.Subscribe(anyValue, sTopic, eQos, tExpectedInterval, bEnable, bSubscribed =>,
                  eQuality =>, bValueEverReceived =>, tValueAge =>, nMessageReceivedCount =>, nMalformedCount =>,
@@ -639,13 +645,14 @@ kept no session.
      topic, so the STRUCT is the topic scheme. OnChange sends a member when
      it changes and every tSendInterval anyway; OnInterval the whole set every
      tSendInterval; OnRequest the whole set on bExecute's rising edge, changed or
-     not. No deadband, on purpose: one number over mixed types would freeze
-     a BOOL. A member the wire cannot carry - an array, a nested STRUCT, a
+     not; ChangedEvery, every tSendInterval, the members that changed since
+     they were last sent, and nothing when none did. No deadband, on
+     purpose: one number over mixed types would freeze a BOOL. A member the wire cannot carry - an array, a nested STRUCT, a
      TIME - is refused, counted on nMembersRefused, and the call returns
      InvalidArgument; the other members still go. nMembers: members
      published. nMessageSentCount: messages for this record. nMessagesSentThisScan: sent by this
      call. Ok, NotConnected, InvalidArgument (also: not a STRUCT, OnInterval
-     with no tSendInterval, ChangedEvery), InvalidTopic, QueueFull.
+     or ChangedEvery with no tSendInterval), InvalidTopic, QueueFull.
 
   mqtt.SubscribeStruct(anyData, sBaseTopic, eQos, tExpectedInterval, bEnable, nMembers =>,
                        nMembersRefused =>, bSubscribed =>, eWorstMemberQuality =>, bAllMembersEverReceived =>,
@@ -740,7 +747,7 @@ kept no session.
 | `nHostPort` | `UINT` |  | the broker's port; 0 = 1883 plain, 8883 TLS |
 | `sClientId` | `STRING(48)` |  | this device's name on the broker, unique there; empty = the broker assigns one |
 | `eProtocol` | `E_MqttProtocol` |  | MQTT version: 5.0 then 3.1.1 (default), 5.0 only, 3.1.1 only |
-| `nExternalLink` | `__XWORD` |  | eTransport External: the link another block made; never wired by hand |
+| `nExternalLink` | `__XWORD` |  | E_MqttTransport.External only: wire the link output of the block that made the transport; a handle, never a value to type; leave unconnected otherwise |
 | `bConnect` | `BOOL` | `TRUE` | TRUE connects and stays connected; FALSE disconnects cleanly, no Will |
 | `bTrustFirstBrokerKey` | `BOOL` |  | TlsPinned: learn and keep the first key the broker shows; a new rising edge forgets it |
 | `stSessionConfig` | `ST_MqttSessionConfig` |  | keep-alive, session, login, queue and message sizes, reconnecting |
@@ -793,7 +800,7 @@ result := mqtt.Report(anyValue := ..., sTopic := ..., eTrigger := ...,
 ```
 
 Returns `E_MqttResult`.
-Publishes anyValue on sTopic, called every scan. eTrigger says when: OnChange (moved by fDeadband, and every tSendInterval anyway), OnInterval (every tSendInterval, which must be set) or OnRequest (bExecute's rising edge). E_MqttResult.Ok while the record is valid.
+Publishes anyValue on sTopic, called every scan. eTrigger says when: OnChange (moved by fDeadband, and every tSendInterval anyway), OnInterval (every tSendInterval, which must be set), OnRequest (bExecute's rising edge) or ChangedEvery (moved by fDeadband, at most once every tSendInterval). E_MqttResult.Ok while the record is valid.
 
 **Inputs**
 
@@ -801,7 +808,7 @@ Publishes anyValue on sTopic, called every scan. eTrigger says when: OnChange (m
 | --- | --- | --- | --- |
 | `anyValue` | `ANY` |  | the variable to report |
 | `sTopic` | `STRING(128)` |  | where it goes; no wildcards |
-| `eTrigger` | `E_MqttTrigger` |  | when it sends: OnChange (default), OnInterval or OnRequest |
+| `eTrigger` | `E_MqttTrigger` |  | when it sends: OnChange (default), OnInterval, OnRequest or ChangedEvery |
 | `fDeadband` | `LREAL` |  | OnChange: smallest change worth a message; 0 = any change |
 | `tSendInterval` | `TIME` |  | OnChange: resend unchanged after this (T#0s never); OnInterval: the interval |
 | `eQos` | `E_MqttQos` |  | delivery guarantee |
@@ -865,7 +872,7 @@ result := mqtt.PublishStruct(anyData := ..., sBaseTopic := ...,
 ```
 
 Returns `E_MqttResult`.
-Publishes every member of the STRUCT anyData on sBaseTopic/<member>, called every scan. OnChange: a member when it changes, and every tSendInterval anyway; OnInterval: the whole set every tSendInterval; OnRequest: the whole set on bExecute's rising edge. A member the wire cannot carry is counted on nMembersRefused and returns E_MqttResult.InvalidArgument.
+Publishes every member of the STRUCT anyData on sBaseTopic/<member>, called every scan. OnChange: a member when it changes, and every tSendInterval anyway; OnInterval: the whole set every tSendInterval; OnRequest: the whole set on bExecute's rising edge; ChangedEvery: every tSendInterval, the members that changed. A member the wire cannot carry is counted on nMembersRefused and returns E_MqttResult.InvalidArgument.
 
 **Inputs**
 
@@ -873,7 +880,7 @@ Publishes every member of the STRUCT anyData on sBaseTopic/<member>, called ever
 | --- | --- | --- | --- |
 | `anyData` | `ANY` |  | the STRUCT; each member goes on sBaseTopic/<member> |
 | `sBaseTopic` | `STRING(128)` |  | the topic the members hang off |
-| `eTrigger` | `E_MqttTrigger` |  | when it sends: OnChange (default), OnInterval or OnRequest |
+| `eTrigger` | `E_MqttTrigger` |  | when it sends: OnChange (default), OnInterval, OnRequest or ChangedEvery |
 | `tSendInterval` | `TIME` |  | OnChange: resend unchanged after this; OnInterval: the interval |
 | `eQos` | `E_MqttQos` |  | delivery guarantee |
 | `bRetain` | `BOOL` |  | the broker keeps the last one for later subscribers |
@@ -1172,7 +1179,7 @@ eTimeSource  where the time comes from - the same list as FB_MqttClient, so a
                                               Nothing is set
              E_MqttTransport.ArduinoWiFi      NTP from sNtpServer, through the
              E_MqttTransport.ArduinoEthernet  board's IP stack (ESP32).
-                                              node-uio's NETWORK or the
+                                              node-uio's FB_WiFiNetwork or the
                                               FB_MqttClient brings the
                                               network up; this waits for it
              E_MqttTransport.Cellular         the mobile network's time
@@ -1223,9 +1230,9 @@ sLastError  why, in words. Empty when fine.
 | `bError` | `BOOL` |  | the source cannot give the time here, or NTP silent for a minute |
 | `sLastError` | `STRING(64)` |  | why, in words; empty when fine |
 
-wifi ( ENABLE := TRUE, SSID := ..., PASSWORD := ... );   NETWORK, node-uio
+wifi ( bEnable := TRUE, sSsid := ..., sWiFiPassword := ... );   FB_WiFiNetwork, node-uio
   ntp  ( eTimeSource := E_MqttTransport.ArduinoWiFi );
-  mqtt ( eTimeSource := E_MqttTransport.ArduinoWiFi, sHostName := ..., ... );
+  mqtt ( eTransport := E_MqttTransport.ArduinoWiFi, sHostName := ..., ... );
   sp   ( fbClient := mqtt, ... );                          stamps with it
 
 ONE CLOCK, AND EVERYTHING USES IT. This sets the board's system clock, so
