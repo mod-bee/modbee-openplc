@@ -9,29 +9,29 @@ conversation at a time: the bridge turns the second into the first. Without
 it, two SCADA packages polling one RS-485 segment talk over each other.
 
 stSerialConfig  ST_ModbusSerialConfig, the segment behind. sDevice on the
-           Runtime ('/dev/ttyUSB0'); nUart, nRxPin, nTxPin, nDePin and tDeHold
+           Runtime ('/dev/ttyUSB0'); nUart, nRxPin, nTxPin, nDriverEnablePin and tDriverEnableHold
            on a board; nBaudRate (0 = 19200) and eParity (Even, the Modbus
-           default) on both. nUnitId is a node's and must stay 0 here: the
+           default) on both. nServerUnitId is a node's and must stay 0 here: the
            bridge routes nFirstUnitId..nLastUnitId.
-nPort        the TCP port clients connect to. 0 for 502.
+nLocalPort   the TCP port clients connect to. 0 for 502.
 nFirstUnitId the lowest unit id out on the segment, 1..247.
 nLastUnitId  the highest. Equal to nFirstUnitId routes one device.
 nMaxClients  clients held at once. 0 = 8 on the Runtime, 2 on a board. A
            board that cannot hold that many says so on sLastError.
-nMaxPending  transactions outstanding on the serial side at once. 0 = 8.
-bPassOthers  forward a unit id not routed instead of answering "no such
+nMaxPendingOperations  transactions outstanding on the serial side at once. 0 = 8.
+bForwardUnroutedUnits  forward a unit id not routed instead of answering "no such
            path". Off by default: with it on, a mistyped unit id becomes a
            timeout several hundred milliseconds long that blocks the whole
            segment. For a bus whose devices you do not know.
 bConnect     TRUE (default) runs the bridge.
 
-bLinkUp      both ends are open.
-nClients     clients connected.
-nForwarded   requests sent to the segment.
-nNoPath      requests refused with exception 0x0A: no route, or no room for
+bLinkOpen    both ends are open.
+nClientsConnected  clients connected.
+nForwardedRequestCount  requests sent to the segment.
+nGatewayPathUnavailableCount  requests refused with exception 0x0A: no route, or no room for
            another transaction. OUR problem - a range typed wrong, or
-           nMaxPending too small.
-nNoDevice    requests answered with exception 0x0B: the route exists and the
+           nMaxPendingOperations too small.
+nGatewayTargetFailedCount  requests answered with exception 0x0B: the route exists and the
            device did not answer. ITS problem - off, unplugged, another
            address. Two numbers worth two alarms: a plain timeout cannot say
            which end of the plant to walk to.
@@ -42,7 +42,7 @@ sLastError   in words: the operating system's own.
 
   segment : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200);
 
-  bridge(stSerialConfig := segment, nPort := 502, nFirstUnitId := 1, nLastUnitId := 32);
+  bridge(stSerialConfig := segment, nLocalPort := 502, nFirstUnitId := 1, nLastUnitId := 32);
 
 IT STANDS ALONE: no FB_ModbusNode, because a bridge is both ends of a wire.
 Put it in the network task; it services both ends once per call. It does not
@@ -54,31 +54,30 @@ block). *)
 FUNCTION_BLOCK FB_ModbusBridge
   VAR_INPUT
     stSerialConfig : ST_ModbusSerialConfig;      (* the segment behind: device or UART, baud, parity *)
-    nPort          : UINT;                       (* the TCP port clients connect to; 0 = 502 *)
-    nFirstUnitId   : BYTE;                       (* the lowest unit id on the segment, 1..247 *)
-    nLastUnitId    : BYTE;                       (* the highest *)
-    nMaxClients    : BYTE;                       (* clients held at once; 0 = 8 on the Runtime, 2 on a board *)
-    nMaxPending    : BYTE;                       (* transactions outstanding on the segment; 0 = 8 *)
-    bPassOthers    : BOOL;                       (* forward a unit id not routed instead of refusing it *)
-    bConnect       : BOOL := TRUE;               (* TRUE runs the bridge *)
+    nLocalPort : UINT; (* the TCP port clients connect to; 0 = 502 *)
+    nFirstUnitId : BYTE; (* the lowest unit id on the segment, 1..247 *)
+    nLastUnitId : BYTE; (* the highest *)
+    nMaxClients : BYTE; (* clients held at once; 0 = 8 on the Runtime, 2 on a board *)
+    nMaxPendingOperations : BYTE; (* transactions outstanding on the segment; 0 = 8 *)
+    bForwardUnroutedUnits : BOOL; (* forward a unit id not routed instead of refusing it *)
+    bConnect : BOOL := TRUE; (* TRUE runs the bridge *)
   END_VAR
   VAR_OUTPUT
-    bLinkUp        : BOOL;                       (* both ends are open *)
-    nClients       : INT;                        (* clients connected *)
-    nForwarded     : DINT;                       (* requests sent to the segment *)
-    nNoPath        : DINT;                       (* refused: no route (exception 0x0A) *)
-    nNoDevice      : DINT;                       (* the device did not answer (exception 0x0B) *)
-    sFramingReason : STRING(160);                (* how the segment finds frames, and why *)
-    bError         : BOOL;                       (* it did not open, or has since failed *)
-    eErrorId       : E_ModbusResult;             (* why; Ok when fine *)
-    sLastError     : STRING(64);                 (* why, in words *)
+    bLinkOpen : BOOL; (* both ends are open *)
+    nClientsConnected : INT; (* clients connected *)
+    nForwardedRequestCount : DINT; (* requests sent to the segment *)
+    nGatewayPathUnavailableCount : DINT; (* refused: no route (exception 0x0A) *)
+    nGatewayTargetFailedCount : DINT; (* the device did not answer (exception 0x0B) *)
+    sFramingReason : STRING(160); (* how the segment finds frames, and why *)
+    bError : BOOL; (* it did not open, or has since failed *)
+    eErrorId : E_ModbusResult; (* why; Ok when fine *)
+    sLastError : STRING(64); (* why, in words *)
   END_VAR
   VAR
     nApi           : __XWORD;
     bTried         : BOOL;
     nRetryAt       : DINT;
   END_VAR
-
 #include <ModBeeModbus.h>
 
 #include <new>
@@ -135,11 +134,11 @@ MbbBridgesOwned& mbbBridgesOwned() {
 
 void setup()
 {
-    bLinkUp = false;
-    nClients = 0;
-    nForwarded = 0;
-    nNoPath = 0;
-    nNoDevice = 0;
+    bLinkOpen = false;
+    nClientsConnected = 0;
+    nForwardedRequestCount = 0;
+    nGatewayPathUnavailableCount = 0;
+    nGatewayTargetFailedCount = 0;
     sFramingReason = "";
     bError = false;
     eErrorId = strucpp::E_MODBUSRESULT::OK;
@@ -154,9 +153,9 @@ void loop()
     ModbusBridge* bridge = (ModbusBridge*)(uintptr_t)(strucpp::XWORD_t)nApi;
 
     if (!(bool)bConnect) {
-        if (bridge && (bool)bLinkUp) bridge->end();
-        bLinkUp = false;
-        nClients = 0;
+        if (bridge && (bool)bLinkOpen) bridge->end();
+        bLinkOpen = false;
+        nClientsConnected = 0;
         bTried = false;
         return;
     }
@@ -167,7 +166,7 @@ void loop()
         sLastError = text;
     };
 
-    if (!(bool)bLinkUp) {
+    if (!(bool)bLinkOpen) {
         const mb_time_t now = mb_millis();
         if ((bool)bTried &&
             (int32_t)(now - (mb_time_t)(uint32_t)(int32_t)nRetryAt) < 0) {
@@ -181,8 +180,8 @@ void loop()
             fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "nFirstUnitId..nLastUnitId name the devices out there, 1..247");
             return;
         }
-        if ((uint8_t)stSerialConfig.NUNITID != 0) {
-            fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "stSerialConfig.nUnitId is a node's; a bridge routes nFirstUnitId..nLastUnitId");
+        if ((uint8_t)stSerialConfig.NSERVERUNITID != 0) {
+            fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "stSerialConfig.nServerUnitId is a node's; a bridge routes nFirstUnitId..nLastUnitId");
             return;
         }
 
@@ -198,12 +197,12 @@ void loop()
 
         const uint32_t baud = ((int32_t)stSerialConfig.NBAUDRATE > 0)
             ? (uint32_t)(int32_t)stSerialConfig.NBAUDRATE : 19200u;
-        const uint16_t tcpPort = ((uint16_t)nPort != 0) ? (uint16_t)nPort : MODBUS_TCP_PORT;
+        const uint16_t tcpPort = ((uint16_t)nLocalPort != 0) ? (uint16_t)nLocalPort : MODBUS_TCP_PORT;
 
         if ((uint8_t)nMaxClients > 0) bridge->maxClients((size_t)(uint8_t)nMaxClients);
-        if ((uint8_t)nMaxPending > 0) bridge->maxOutstanding((size_t)(uint8_t)nMaxPending);
+        if ((uint8_t)nMaxPendingOperations > 0) bridge->maxOutstanding((size_t)(uint8_t)nMaxPendingOperations);
         bridge->route((uint8_t)nFirstUnitId, (uint8_t)nLastUnitId);
-        bridge->routeEverythingElse((bool)bPassOthers);
+        bridge->routeEverythingElse((bool)bForwardUnroutedUnits);
 
 #if defined(MODBUS_PLATFORM_HOST)
         if (stSerialConfig.SDEVICE.length() == 0) {
@@ -227,14 +226,14 @@ void loop()
         // The UART drives DE here: see mbb_serialBegin() in FB_ModbusNode.
         const int de = mbb_serialBegin(port, baud, cfg, (int)(int16_t)stSerialConfig.NRXPIN,
                                        (int)(int16_t)stSerialConfig.NTXPIN,
-                                       (int)(int16_t)stSerialConfig.NDEPIN);
+                                       (int)(int16_t)stSerialConfig.NDRIVERENABLEPIN);
 #else
         port->begin(baud, cfg);
-        const int de = (int)(int16_t)stSerialConfig.NDEPIN;
+        const int de = (int)(int16_t)stSerialConfig.NDRIVERENABLEPIN;
 #endif
         bridge->serial(port, baud);
         if (de >= 0) {
-            const int32_t holdUs = mbb_microsOf(stSerialConfig.TDEHOLD);
+            const int32_t holdUs = mbb_microsOf(stSerialConfig.TDRIVERENABLEHOLD);
             bridge->directionPin(de, true, holdUs > 0 ? (uint32_t)holdUs : 2000u);
         }
 #if defined(MBB_BRIDGE_WIFI)
@@ -267,7 +266,7 @@ void loop()
             fail(strucpp::E_MODBUSRESULT::NOTINITIALISED, "the serial device or the TCP port would not open");
             return;
         }
-        bLinkUp = true;
+        bLinkOpen = true;
         bError = false;
         eErrorId = strucpp::E_MODBUSRESULT::OK;
         sLastError = "";
@@ -279,10 +278,10 @@ void loop()
     // Both ends, once per call.
     bridge->poll();
 
-    nClients = (int16_t)bridge->clients();
-    nForwarded = (int32_t)bridge->forwarded();
-    nNoPath = (int32_t)bridge->noPath();
-    nNoDevice = (int32_t)bridge->deviceAbsent();
+    nClientsConnected = (int16_t)bridge->clients();
+    nForwardedRequestCount = (int32_t)bridge->forwarded();
+    nGatewayPathUnavailableCount = (int32_t)bridge->noPath();
+    nGatewayTargetFailedCount = (int32_t)bridge->deviceAbsent();
 }
 
 END_FUNCTION_BLOCK

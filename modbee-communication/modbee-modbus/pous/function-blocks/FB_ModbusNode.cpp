@@ -18,9 +18,9 @@ eTransport  where the bytes go. The target must have it; one it does not have
 eRole       E_ModbusRole.Client (default) asks: the Read and Write methods,
            Watch, Point, Points, Device. E_ModbusRole.Server answers: Map puts
            your variables at Modbus addresses. E_ModbusRole.Both is both.
-sHost       a TCP client: the device to connect to. Empty on a TCP node means
+sHostName   a TCP client: the device to connect to. Empty on a TCP node means
            be a server.
-nPort       the TCP port. 0 for 502.
+nTcpPort    the TCP port. 0 for 502.
 bConnect    TRUE (default) opens the link and keeps it open. FALSE closes it -
            the port is released, the socket dropped - and keeps every
            record, watch and map for when it opens again.
@@ -30,23 +30,23 @@ stSerialConfig  ST_ModbusSerialConfig, a serial line. Ignored on TCP.
              nBaudRate    0 = 19200, the Modbus default
              eParity      Even (default, 8E1, the specification's), Odd,
                           None (8N2, per the specification), None8N1
-             nUnitId      a serial SERVER: the unit id it answers to,
+             nServerUnitId  a serial SERVER: the unit id it answers to,
                           1..247. A TCP server answers any unit id
              nUart        a board: which hardware serial, 0 for the first.
                           One the board does not have is refused
              nRxPin       a board: receive pin, -1 for the board's own
              nTxPin       a board: transmit pin, -1 for the board's own
-             nDePin       a board: the RS-485 driver-enable pin, -1 for
+             nDriverEnablePin  a board: the RS-485 driver-enable pin, -1 for
                           none. On an ESP32 the UART drives it
-             tDeHold      a board: how long DE is held after the last byte
+             tDriverEnableHold  a board: how long DE is held after the last byte
                           where the UART cannot drive it. 0 = two characters
 stTimingConfig  ST_ModbusTimingConfig, the link's timing and limits. Every
            member left at its default is right for most links.
              tTimeout     how long to wait for a reply. T#0s MEASURES IT PER
                           DEVICE, which is almost always better than one
                           figure for a slow drive and a fast I/O block alike
-             nRetries     attempts after the first. 0 = the library's own
-             tReconnect   how often a dropped link is tried again.
+             nRetriesPerRequest  attempts after the first. 0 = the library's own
+             tReconnectInterval  how often a dropped link is tried again.
                           T#0s = 2 s
              bAutoReconnect  TRUE (default) brings a dropped link back by
                           itself, and every watch is made due when it does.
@@ -57,38 +57,37 @@ stTimingConfig  ST_ModbusTimingConfig, the link's timing and limits. Every
                           4001; Ascii for a radio or modem that cannot hold
                           RTU's character timing. Ascii on TCP and Tcp on a
                           serial line are refused
-             tFailsafe    a server: no client write for this long drives the
-                          addresses Map gave eOnLoss. T#0s = never
-             tIdle        a TCP server: close a connection unused this long,
+             tWriterLossAfter  a server: no client write for this long drives the
+                          addresses Map gave eActionOnWriterLoss. T#0s = never
+             tCloseIdleClientAfter  a TCP server: close a connection unused this long,
                           which a client that vanished without closing
                           leaves. T#0s = 60 s
              nMaxClients  a TCP server: connections held at once. 0 = 8 on
                           the Runtime, 2 on a board. A board that cannot hold
                           that many says so instead of holding fewer
-             nMaxPending  requests that may wait at once. 0 = 64 on the
+             nMaxPendingOperations  requests that may wait at once. 0 = 64 on the
                           Runtime, 16 on a board. Past it: QueueFull
-             nMaxPendingBytes  bytes the waiting writes share. 0 = 16192 on
+             nMaxPendingWriteBytes  bytes the waiting writes share. 0 = 16192 on
                           the Runtime, 1024 on a board
 stIdentityConfig  ST_ModbusIdentityConfig, a server's nameplate: what it
-           answers function code 43 with (sVendor, sProduct, sRevision).
+           answers function code 43 with (sVendorName, sProductCode, sMajorMinorRevision).
            Empty: no answer, as most devices.
 stNetworkConfig  ST_ModbusNetworkConfig, what only a board has. Refused on
            the Runtime, which uses its machine's network.
              sSsid        ArduinoWiFi: the network to join
              sWiFiPassword  its password, up to 63 characters (WPA2)
-             sMac         ArduinoEthernet: this board's MAC,
+             sMacAddress  ArduinoEthernet: this board's MAC,
                           'DE:AD:BE:EF:FE:ED'. Each board needs its own
-             sIp          this node's fixed address. REQUIRED: a server must
-                          be findable, and DHCP on Ethernet blocks the scan.
-                          'dhcp' asks a server anyway, bounded to 1 s an
-                          attempt
-             sGateway     empty = the address ending .1
-             sSubnet      empty = 255.255.255.0
+             sIpAddress   this node's fixed address; empty = DHCP, bounded to
+                          1 s an attempt. A server is best given a fixed one,
+                          so its clients can find it
+             sGatewayAddress  empty = the address ending .1
+             sSubnetMask  empty = 255.255.255.0
 
-bLinkUp     the link is open.
+bLinkOpen   the link is open.
 bConnected  there is something at the other end: a TCP client's socket is
            up, a server is listening, a serial line is open.
-nClients    a TCP server: clients connected.
+nClientsConnected  a TCP server: clients connected.
 bError      something failed: the link, or a method call (named on
            sLastError until that call succeeds).
 eErrorId    why. E_ModbusResult.Ok when fine.
@@ -103,7 +102,7 @@ Each call is found again by what it is about: its variable's declared name
 and type, and the method. A call with no variable (WriteSingleCoil,
 WriteSingleRegister, MaskWriteRegister, Device) is found by its unit and
 address. So one variable is one record per method; the same local in two
-instances of one function block is two. A node holds up to 256 records; past that a method returns E_ModbusResult.QueueFull. Every method
+instances of one function block is two. A node holds up to 256 records, one per variable per method; past that a method returns E_ModbusResult.QueueFull. Every method
 runs in this block's task and returns E_ModbusResult.WrongTask in any other.
 
 A REQUEST (the Read and Write methods) starts on a rising edge of bExecute and
@@ -121,22 +120,22 @@ registers), is InvalidArgument before anything reaches the wire. Unit 0
 broadcasts a write: every device performs it and none answers, so Ok means
 sent.
 
-  node.ReadCoils(anyData, nUnitId, nAddress, nQuantity, bExecute)
-  node.ReadDiscreteInputs(anyData, nUnitId, nAddress, nQuantity, bExecute)
+  node.ReadCoils(anyData, nUnitId, nStartAddress, nQuantity, bExecute)
+  node.ReadDiscreteInputs(anyData, nUnitId, nStartAddress, nQuantity, bExecute)
      function codes 1 and 2, into a BOOL or an array of BOOL.
-  node.ReadHoldingRegisters(anyData, nUnitId, nAddress, nQuantity, eOrder,
+  node.ReadHoldingRegisters(anyData, nUnitId, nStartAddress, nQuantity, eWordOrder,
                             bExecute)
-  node.ReadInputRegisters(anyData, nUnitId, nAddress, nQuantity, eOrder,
+  node.ReadInputRegisters(anyData, nUnitId, nStartAddress, nQuantity, eWordOrder,
                           bExecute)
      function codes 3 and 4. WORD, INT and UINT take a register each; REAL,
      DINT, UDINT, DWORD take two and LREAL, LINT, ULINT, LWORD four, laid
-     out by eOrder (ABCD, CDAB, BADC, DCBA). A flow rate reading 4.6e-41
-     instead of 1234.5 is the wrong eOrder, not the wrong address.
+     out by eWordOrder (ABCD, CDAB, BADC, DCBA). A flow rate reading 4.6e-41
+     instead of 1234.5 is the wrong eWordOrder, not the wrong address.
   node.WriteSingleCoil(bValue, nUnitId, nAddress, bExecute)          FC 5
   node.WriteSingleRegister(nValue, nUnitId, nAddress, bExecute)      FC 6
-  node.WriteMultipleCoils(anyData, nUnitId, nAddress, nQuantity,
+  node.WriteMultipleCoils(anyData, nUnitId, nStartAddress, nQuantity,
                           bExecute)                                  FC 15
-  node.WriteMultipleRegisters(anyData, nUnitId, nAddress, nQuantity, eOrder,
+  node.WriteMultipleRegisters(anyData, nUnitId, nStartAddress, nQuantity, eWordOrder,
                               bExecute)                              FC 16
      the wide types as the reads; a set of values that only mean anything
      together goes as one request and cannot half-arrive.
@@ -146,12 +145,12 @@ sent.
      (current AND nAndMask) OR (nOrMask AND NOT nAndMask). Bit 3 alone:
      nAndMask := 16#FFF7, nOrMask := 16#0008.
   node.ReadWriteMultipleRegisters(anyReadData, anyWriteData, nUnitId,
-                                  nReadAddress, nReadQuantity, nWriteAddress,
+                                  nReadStartAddress, nReadQuantity, nWriteStartAddress,
                                   nWriteQuantity, bExecute)          FC 23
      one transaction, the write first: a command and its result together.
      WORD, INT or UINT only.
-  node.ReadDeviceIdentification(nUnitId, bExecute, sVendor =>, sProduct =>,
-                                sRevision =>)                        FC 43
+  node.ReadDeviceIdentification(nUnitId, bExecute, sVendorName =>, sProductCode =>,
+                                sMajorMinorRevision =>)                        FC 43
      the device's nameplate, what a handheld tool shows. A device without
      one answers with an exception: Refused, not worth an alarm.
 
@@ -160,65 +159,67 @@ while it is wanted, and its inputs may change while it runs. E_ModbusResult.Ok
 means the record is valid; E_ModbusResult.LinkDown while the link is not
 open, the record kept.
 
-  node.Watch(anyData, nUnitId, eTable, nAddress, tPeriod, nQuantity, eOrder,
-             nDeadband, bEnable, eQuality =>, bSeen =>, tAge =>,
-             nFailures =>)
-     keeps anyData up to date every tPeriod (T#0s = 1 s) and says how much
+  node.Watch(anyData, nUnitId, eTable, nStartAddress, tReadInterval, nQuantity, eWordOrder,
+             nDeadband, bEnable, eQuality =>, bValueEverReceived =>, tValueAge =>,
+             nConsecutiveFailureCount =>, bValueChanged =>)
+     keeps anyData up to date every tReadInterval (T#0s = 1 s) and says how much
      to believe it. Returns the last read's result. eQuality: Good within
-     tPeriod, Uncertain a little late, Bad stale or failed, Unknown never
+     tReadInterval, Uncertain a little late, Bad stale or failed, Unknown never
      read - a commissioning fault (wrong address, device not fitted), where
      Bad is a running one (cable, power). Interlock on eQuality, not the
      value. A read still out when the next falls due is not stacked, and a
      dead device is backed off to one attempt in sixteen. nUnitId, eTable,
-     nAddress and eOrder may change while running: the watch is re-aimed and
-     starts again at Unknown.
-  node.Point(anyValue, nUnitId, eFunction, nAddress, eType, eOrder, nBit,
-             fScale, fOffset, tPeriod, tStale, tTimeout, bEnable,
-             bOk =>, eQuality =>, tAge =>, nFailures =>)
+     nStartAddress and eWordOrder may change while running: the watch is re-aimed and
+     starts again at Unknown. bValueChanged is TRUE for one call when
+     anyData has moved by more than nDeadband since the last change it
+     reported (a bit: any change); the first value counts as one.
+  node.Point(anyValue, nUnitId, eFunctionCode, nStartAddress, eDataType, eWordOrder, nBitNumber,
+             fScale, fOffset, tUpdateInterval, tLostAfter, tTimeout, bEnable,
+             bGood =>, eQuality =>, tValueAge =>, nConsecutiveFailureCount =>)
      one value on a field device defined entirely by settings, every input
      read every scan. A read point writes raw x fScale + fOffset into
      anyValue (REAL, LREAL, an integer or a BOOL) once it has answered, and
      holds the last good value while it is lost - never a made-up 0. A write
-     point sends anyValue when it changes and again every tPeriod. bOk is
-     FALSE before the first answer and after tStale (T#0s = 3 x tPeriod)
+     point sends anyValue when it changes and again every tUpdateInterval. bGood is
+     FALSE before the first answer and after tLostAfter (T#0s = 3 x tUpdateInterval)
      without one: interlock on it. Returns the last attempt's result;
      InvalidArgument for settings that cannot work (Float32 with
-     WriteSingleRegister, nBit above 15, a RegisterBit write).
-  node.Points(anySettings, anyPoints, bEnable, nGoodCnt =>, nLostCnt =>,
-              nFirstLost =>, sStatusText =>)
-     a table of points: anySettings an ARRAY OF ST_ModbusPointConfig
-     (retain it - it is the site's configuration), anyPoints an ARRAY OF
+     WriteSingleRegister, nBitNumber above 15, a RegisterBit write).
+  node.Points(anyPointSettings, anyPointStatus, bEnable, nGoodPoints =>, nLostPoints =>,
+              nFirstLostPoint =>, sStatusText =>)
+     a table of points: anyPointSettings an ARRAY OF ST_ModbusPointConfig
+     (retain it - it is the site's configuration), anyPointStatus an ARRAY OF
      ST_ModbusPointStatus of the same length (not retained; fWriteValue is
      your logic's, the rest is status). Each row behaves as a Point and is
      re-read every scan. Returns Ok while every enabled row is ok, else the
      first lost row's result; sStatusText names it for a panel ('pt 3 unit 5
      lost', 'pt 2 unit 9 no answer', 'pt 4 bad settings').
-  node.Device(nUnitId, tPoll, tGone, bAnswering =>, bSeen =>, tSilent =>,
+  node.Device(nUnitId, tDiagnosticPollInterval, tNotAnsweringAfter, bAnswering =>, bEverAnswered =>, tSinceLastHeard =>,
               tRoundTrip =>)
      how one device is doing, read off the traffic already going to it:
-     bAnswering within tGone (T#0s = 5 s), bSeen ever, tSilent since,
-     tRoundTrip measured. bSeen FALSE is a device never fitted or wrongly
-     addressed (found at the desk); bSeen with bAnswering FALSE is one that
-     has died (found in the plant). tPoll asks it (function code 8, which
+     bAnswering within tNotAnsweringAfter (T#0s = 5 s), bEverAnswered ever, tSinceLastHeard since,
+     tRoundTrip measured. bEverAnswered FALSE is a device never fitted or wrongly
+     addressed (found at the desk); bEverAnswered with bAnswering FALSE is one that
+     has died (found in the plant). tDiagnosticPollInterval asks it (function code 8, which
      touches no register) for a device nothing else talks to; an exception
      still counts as answering. Returns Ok while valid.
-  node.Map(anyData, eTable, nAddress, eOnLoss, nSafeValue, bWritten =>,
-           bSafeApplied =>)
+  node.Map(anyData, eTable, nStartAddress, eActionOnWriterLoss, nSafeValue, bWrittenByClient =>,
+           bSafeValueApplied =>)
      puts anyData at Modbus addresses for clients to read and write, in
      place: the variable IS the register, nothing is copied. A BOOL or array
      of BOOL in Coil or DiscreteInput, a WORD, INT or UINT (or an array) in
      HoldingRegister or InputRegister; a REAL or DINT is refused, because a
      client could read half an old value and half a new one - publish a
-     scaled integer. An array's lower bound maps to nAddress. Put what a
-     client must not change in a read-only table. eOnLoss ResetToValue
+     scaled integer. An array's lower bound maps to nStartAddress. Put what a
+     client must not change in a read-only table. eActionOnWriterLoss ResetToValue
      drives a single writable address to nSafeValue after
-     stTimingConfig.tFailsafe without a client write. bWritten: a client
+     stTimingConfig.tWriterLossAfter without a client write. bWrittenByClient: a client
      wrote this range since the last call. A server needs at least one Map.
 
-  node.Statistics(bReset, nPending =>, nSent =>, nReceived =>,
-                  nChecksumErrors =>, nFramingErrors =>, nNoiseBytes =>,
-                  nReconnects =>, sFramingReason =>)
-     the link's counters; a rising edge of bReset zeroes them. Checksum
+  node.Statistics(bResetCounters, nPendingOperations =>, nFrameSentCount =>, nFrameReceivedCount =>,
+                  nChecksumErrorCount =>, nFramingErrorCount =>, nNoiseByteCount =>,
+                  nReconnectCount =>, sFramingReason =>)
+     the link's counters; a rising edge of bResetCounters zeroes them. Checksum
      errors climbing: noise, a baud mismatch or no termination. Noise bytes:
      a floating bus, fit the bias resistors. Framing errors: another
      protocol on the bus, or frames split - sFramingReason says which rule
@@ -227,11 +228,11 @@ open, the record kept.
   serial : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200);
 
   node(eTransport := E_ModbusTransport.RuntimeSerial, stSerialConfig := serial);
-  eResult := node.ReadHoldingRegisters(anyData := aSpeeds, nUnitId := 2,
-                                       nAddress := 40, bExecute := bRead);
+  eLastResult := node.ReadHoldingRegisters(anyData := aSpeeds, nUnitId := 2,
+                                       nStartAddress := 40, bExecute := bRead);
   node.Watch(anyData := nLevel, nUnitId := 2,
-             eTable := E_ModbusTable.InputRegister, nAddress := 30,
-             tPeriod := T#2s, eQuality => eLevelQuality);
+             eTable := E_ModbusTable.InputRegister, nStartAddress := 30,
+             tReadInterval := T#2s, eQuality => eLevelQuality);
 
 ONE TASK. This block and its methods run in one task, the network task, at a
 higher rate than the machine's: T#1ms on the Runtime, T#50ms on a board to
@@ -245,21 +246,21 @@ FUNCTION_BLOCK FB_ModbusNode
   VAR_INPUT
     eTransport       : E_ModbusTransport;        (* RuntimeSerial, RuntimeTcp, ArduinoSerial, ArduinoWiFi, ArduinoEthernet *)
     eRole            : E_ModbusRole;             (* Client (default), Server or Both *)
-    sHost            : STRING(48);               (* a TCP client: the device; empty = a TCP server *)
-    nPort            : UINT;                     (* the TCP port; 0 = 502 *)
-    bConnect         : BOOL := TRUE;             (* TRUE opens the link and keeps it open *)
-    stSerialConfig   : ST_ModbusSerialConfig;    (* device, baud, parity, the node's own unit id, a board's UART pins *)
-    stTimingConfig   : ST_ModbusTimingConfig;    (* timeout, retries, reconnect, framing, failsafe, limits *)
-    stIdentityConfig : ST_ModbusIdentityConfig;  (* a server's nameplate, function code 43 *)
-    stNetworkConfig  : ST_ModbusNetworkConfig;   (* a board's Wi-Fi or Ethernet *)
+    sHostName : STRING(48); (* a TCP client: the device; empty = a TCP server *)
+    nTcpPort : UINT; (* the TCP port; 0 = 502 *)
+    bConnect : BOOL := TRUE; (* TRUE opens the link and keeps it open *)
+    stSerialConfig : ST_ModbusSerialConfig; (* device, baud, parity, the node's own unit id, a board's UART pins *)
+    stTimingConfig : ST_ModbusTimingConfig; (* timeout, retries, reconnect, framing, failsafe, limits *)
+    stIdentityConfig : ST_ModbusIdentityConfig; (* a server's nameplate, function code 43 *)
+    stNetworkConfig : ST_ModbusNetworkConfig; (* a board's Wi-Fi or Ethernet *)
   END_VAR
   VAR_OUTPUT
-    bLinkUp          : BOOL;                     (* the link is open *)
-    bConnected       : BOOL;                     (* there is something at the other end *)
-    nClients         : INT;                      (* a TCP server: clients connected *)
-    bError           : BOOL;                     (* the link or a method call failed *)
-    eErrorId         : E_ModbusResult;           (* why; Ok when fine *)
-    sLastError       : STRING(64);               (* why, in words *)
+    bLinkOpen : BOOL; (* the link is open *)
+    bConnected : BOOL; (* link ready: client socket up, server listening, or serial line open *)
+    nClientsConnected : INT; (* a TCP server: clients connected *)
+    bError : BOOL; (* the link or a method call failed *)
+    eErrorId : E_ModbusResult; (* why; Ok when fine *)
+    sLastError : STRING(64); (* why, in words *)
   END_VAR
   VAR
     nApi             : __XWORD;                  (* the link (ModbusAPI) *)
@@ -279,14 +280,13 @@ FUNCTION_BLOCK FB_ModbusNode
     nTask            : __XWORD;                  (* the task this block runs in, for its methods *)
     nMethods         : __XWORD;                  (* the methods' records *)
   END_VAR
-
 (* Reads coils (function code 1) into anyData on a rising edge of bExecute.
    Queued until the answer, then Ok or why not, until the next edge. *)
 METHOD PUBLIC ReadCoils : E_ModbusResult
   VAR_INPUT
     anyData          : ANY;                      (* a BOOL or an array of BOOL *)
     nUnitId          : BYTE;                     (* the device, 1..247 *)
-    nAddress         : UINT;                     (* the first coil *)
+    nStartAddress         : UINT;                     (* the first coil *)
     nQuantity        : UINT;                     (* how many; 0 = the variable's count *)
     bExecute         : BOOL;                     (* rising edge reads *)
   END_VAR
@@ -298,34 +298,34 @@ METHOD PUBLIC ReadDiscreteInputs : E_ModbusResult
   VAR_INPUT
     anyData          : ANY;                      (* a BOOL or an array of BOOL *)
     nUnitId          : BYTE;                     (* the device, 1..247 *)
-    nAddress         : UINT;                     (* the first input *)
+    nStartAddress         : UINT;                     (* the first input *)
     nQuantity        : UINT;                     (* how many; 0 = the variable's count *)
     bExecute         : BOOL;                     (* rising edge reads *)
   END_VAR
 END_METHOD
 
 (* Reads holding registers (function code 3) into anyData on a rising edge of
-   bExecute. 32- and 64-bit types take two or four registers in eOrder. *)
+   bExecute. 32- and 64-bit types take two or four registers in eWordOrder. *)
 METHOD PUBLIC ReadHoldingRegisters : E_ModbusResult
   VAR_INPUT
     anyData          : ANY;                      (* a WORD, INT, UINT, REAL, DINT, LREAL... or an array of one *)
     nUnitId          : BYTE;                     (* the device, 1..247 *)
-    nAddress         : UINT;                     (* the first register *)
+    nStartAddress         : UINT;                     (* the first register *)
     nQuantity        : UINT;                     (* how many values; 0 = the variable's count *)
-    eOrder           : E_ModbusOrder;            (* a wide value's word order: ABCD (default), CDAB, BADC, DCBA *)
+    eWordOrder           : E_ModbusOrder;            (* a wide value's word order: ABCD (default), CDAB, BADC, DCBA *)
     bExecute         : BOOL;                     (* rising edge reads *)
   END_VAR
 END_METHOD
 
 (* Reads input registers (function code 4) into anyData on a rising edge of
-   bExecute. 32- and 64-bit types take two or four registers in eOrder. *)
+   bExecute. 32- and 64-bit types take two or four registers in eWordOrder. *)
 METHOD PUBLIC ReadInputRegisters : E_ModbusResult
   VAR_INPUT
     anyData          : ANY;                      (* a WORD, INT, UINT, REAL, DINT, LREAL... or an array of one *)
     nUnitId          : BYTE;                     (* the device, 1..247 *)
-    nAddress         : UINT;                     (* the first register *)
+    nStartAddress         : UINT;                     (* the first register *)
     nQuantity        : UINT;                     (* how many values; 0 = the variable's count *)
-    eOrder           : E_ModbusOrder;            (* a wide value's word order: ABCD (default), CDAB, BADC, DCBA *)
+    eWordOrder           : E_ModbusOrder;            (* a wide value's word order: ABCD (default), CDAB, BADC, DCBA *)
     bExecute         : BOOL;                     (* rising edge reads *)
   END_VAR
 END_METHOD
@@ -357,21 +357,21 @@ METHOD PUBLIC WriteMultipleCoils : E_ModbusResult
   VAR_INPUT
     anyData          : ANY;                      (* a BOOL or an array of BOOL, copied at the edge *)
     nUnitId          : BYTE;                     (* the device, 1..247; 0 broadcasts *)
-    nAddress         : UINT;                     (* the first coil *)
+    nStartAddress         : UINT;                     (* the first coil *)
     nQuantity        : UINT;                     (* how many; 0 = the variable's count *)
     bExecute         : BOOL;                     (* rising edge writes *)
   END_VAR
 END_METHOD
 
 (* Writes holding registers (function code 16) from anyData on a rising edge
-   of bExecute. 32- and 64-bit types take two or four registers in eOrder. *)
+   of bExecute. 32- and 64-bit types take two or four registers in eWordOrder. *)
 METHOD PUBLIC WriteMultipleRegisters : E_ModbusResult
   VAR_INPUT
     anyData          : ANY;                      (* a WORD, INT, UINT, REAL, DINT, LREAL... or an array, copied at the edge *)
     nUnitId          : BYTE;                     (* the device, 1..247; 0 broadcasts *)
-    nAddress         : UINT;                     (* the first register *)
+    nStartAddress         : UINT;                     (* the first register *)
     nQuantity        : UINT;                     (* how many values; 0 = the variable's count *)
-    eOrder           : E_ModbusOrder;            (* a wide value's word order: ABCD (default), CDAB, BADC, DCBA *)
+    eWordOrder           : E_ModbusOrder;            (* a wide value's word order: ABCD (default), CDAB, BADC, DCBA *)
     bExecute         : BOOL;                     (* rising edge writes *)
   END_VAR
 END_METHOD
@@ -396,9 +396,9 @@ METHOD PUBLIC ReadWriteMultipleRegisters : E_ModbusResult
     anyReadData      : ANY;                      (* a WORD, INT or UINT, or an array: what is read *)
     anyWriteData     : ANY;                      (* a WORD, INT or UINT, or an array: what is written, copied at the edge *)
     nUnitId          : BYTE;                     (* the device, 1..247 *)
-    nReadAddress     : UINT;                     (* the first register read *)
+    nReadStartAddress     : UINT;                     (* the first register read *)
     nReadQuantity    : UINT;                     (* how many read; 0 = anyReadData's count *)
-    nWriteAddress    : UINT;                     (* the first register written *)
+    nWriteStartAddress    : UINT;                     (* the first register written *)
     nWriteQuantity   : UINT;                     (* how many written; 0 = anyWriteData's count *)
     bExecute         : BOOL;                     (* rising edge starts it *)
   END_VAR
@@ -412,31 +412,32 @@ METHOD PUBLIC ReadDeviceIdentification : E_ModbusResult
     bExecute         : BOOL;                     (* rising edge reads *)
   END_VAR
   VAR_OUTPUT
-    sVendor          : STRING(32);               (* who made it *)
-    sProduct         : STRING(32);               (* what it is *)
-    sRevision        : STRING(32);               (* which version *)
+    sVendorName          : STRING(32);               (* who made it *)
+    sProductCode         : STRING(32);               (* what it is *)
+    sMajorMinorRevision        : STRING(32);               (* which version *)
   END_VAR
 END_METHOD
 
-(* Keeps anyData up to date from a device every tPeriod, called every scan.
+(* Keeps anyData up to date from a device every tReadInterval, called every scan.
    Returns the last read's result; eQuality says how much to believe it. *)
 METHOD PUBLIC Watch : E_ModbusResult
   VAR_INPUT
     anyData          : ANY;                      (* the variable kept up to date: BOOL for bits, WORD, REAL... for registers *)
     nUnitId          : BYTE;                     (* the device, 1..247 *)
     eTable           : E_ModbusTable;            (* what is read: Coil, DiscreteInput, HoldingRegister (default), InputRegister *)
-    nAddress         : UINT;                     (* the first address *)
-    tPeriod          : TIME;                     (* how often; T#0s = 1 s *)
+    nStartAddress         : UINT;                     (* the first address *)
+    tReadInterval          : TIME;                     (* how often; T#0s = 1 s *)
     nQuantity        : UINT;                     (* how many values; 0 = the variable's count. Fixed at the first call *)
-    eOrder           : E_ModbusOrder;            (* a wide value's word order *)
-    nDeadband        : UINT;                     (* how far a register must move to count as a change; 0 = any *)
+    eWordOrder           : E_ModbusOrder;            (* a wide value's word order *)
+    nDeadband        : UINT;                     (* how far the value must move before bValueChanged reports it; 0 = any change *)
     bEnable          : BOOL := TRUE;             (* FALSE stops it, keeping the record *)
   END_VAR
   VAR_OUTPUT
     eQuality         : E_ModbusQuality;          (* Unknown never read, Good, Uncertain late, Bad stale or failed *)
-    bSeen            : BOOL;                     (* a value has arrived at least once *)
-    tAge             : TIME;                     (* since it last arrived; T#0s before the first *)
-    nFailures        : UINT;                     (* reads that failed in a row *)
+    bValueEverReceived            : BOOL;                     (* a value has arrived at least once *)
+    tValueAge             : TIME;                     (* since it last arrived; T#0s before the first *)
+    nConsecutiveFailureCount        : UINT;                     (* reads that failed in a row *)
+    bValueChanged    : BOOL;                     (* TRUE for one call when the value has moved by more than nDeadband since the last change reported *)
   END_VAR
 END_METHOD
 
@@ -447,23 +448,23 @@ METHOD PUBLIC Point : E_ModbusResult
   VAR_INPUT
     anyValue         : ANY;                      (* REAL, LREAL, an integer or a BOOL: the point *)
     nUnitId          : BYTE;                     (* the device, 1..247 *)
-    eFunction        : E_ModbusPointFunction;    (* how it is reached: ReadCoils .. ReadInputRegisters, WriteSingleCoil, WriteSingleRegister, WriteMultipleRegisters *)
-    nAddress         : UINT;                     (* the register or coil, numbered from 0 as the manual's table *)
-    eType            : E_ModbusPointType;        (* Bit, Int16, UInt16 (default), Int32, UInt32, Float32, RegisterBit *)
-    eOrder           : E_ModbusOrder;            (* the word order of a 32-bit value *)
-    nBit             : USINT;                    (* RegisterBit: which bit, 0..15 *)
+    eFunctionCode        : E_ModbusPointFunction;    (* how it is reached: ReadCoils .. ReadInputRegisters, WriteSingleCoil, WriteSingleRegister, WriteMultipleRegisters *)
+    nStartAddress         : UINT;                     (* the register or coil, numbered from 0 as the manual's table *)
+    eDataType            : E_ModbusPointType;        (* Bit, Int16, UInt16 (default), Int32, UInt32, Float32, RegisterBit *)
+    eWordOrder           : E_ModbusOrder;            (* the word order of a 32-bit value *)
+    nBitNumber             : USINT;                    (* RegisterBit: which bit, 0..15 *)
     fScale           : REAL := 1.0;              (* value = raw x fScale + fOffset *)
-    fOffset          : REAL;
-    tPeriod          : TIME;                     (* how often to read it or send it again; T#0s = 1 s *)
-    tStale           : TIME;                     (* no good answer for this long = lost; T#0s = 3 x tPeriod *)
-    tTimeout         : TIME;                     (* how long this device may take; T#0s = measured *)
+    fOffset          : REAL;  (* added after scaling, in engineering units *)
+    tUpdateInterval          : TIME;                     (* how often to read it or send it again; T#0s = 1 s *)
+    tLostAfter           : TIME;                     (* no good answer for this long = lost; T#0s = 3 x tUpdateInterval *)
+    tTimeout         : TIME;                     (* how long this device may take; leave T#0s = measured *)
     bEnable          : BOOL := TRUE;             (* FALSE = not fitted: never asked, never ok *)
   END_VAR
   VAR_OUTPUT
-    bOk              : BOOL;                     (* the value is good or a little late: interlock on this *)
+    bGood              : BOOL;                     (* the value is good or a little late: interlock on this *)
     eQuality         : E_ModbusQuality;          (* Unknown never answered, Good, Uncertain late, Bad lost *)
-    tAge             : TIME;                     (* since the last good answer *)
-    nFailures        : UINT;                     (* failed attempts in a row *)
+    tValueAge             : TIME;                     (* since the last good answer *)
+    nConsecutiveFailureCount        : UINT;                     (* failed attempts in a row *)
   END_VAR
 END_METHOD
 
@@ -471,14 +472,14 @@ END_METHOD
    Ok while every enabled row is ok, else the first lost row's result. *)
 METHOD PUBLIC Points : E_ModbusResult
   VAR_INPUT
-    anySettings      : ANY;                      (* ARRAY OF ST_ModbusPointConfig; retain it *)
-    anyPoints        : ANY;                      (* ARRAY OF ST_ModbusPointStatus, the same length; not retained *)
+    anyPointSettings      : ANY;                      (* ARRAY OF ST_ModbusPointConfig; retain it *)
+    anyPointStatus        : ANY;                      (* ARRAY OF ST_ModbusPointStatus, the same length; not retained *)
     bEnable          : BOOL := TRUE;             (* FALSE stops asking *)
   END_VAR
   VAR_OUTPUT
-    nGoodCnt         : INT;                      (* enabled rows that are ok *)
-    nLostCnt         : INT;                      (* enabled rows that are not *)
-    nFirstLost       : INT;                      (* the first such row, counted from 1; 0 when none *)
+    nGoodPoints         : INT;                      (* enabled rows that are ok *)
+    nLostPoints         : INT;                      (* enabled rows that are not *)
+    nFirstLostPoint       : INT;                      (* the first such row, counted from 1; 0 when none *)
     sStatusText      : STRING(30);               (* that row in a few words, for a panel *)
   END_VAR
 END_METHOD
@@ -488,13 +489,13 @@ END_METHOD
 METHOD PUBLIC Device : E_ModbusResult
   VAR_INPUT
     nUnitId          : BYTE;                     (* the device, 1..247 *)
-    tPoll            : TIME;                     (* ask it this often (function code 8); T#0s = only watch the traffic *)
-    tGone            : TIME;                     (* silent this long = not answering; T#0s = 5 s *)
+    tDiagnosticPollInterval            : TIME;                     (* ask it this often (function code 8); T#0s = only watch the traffic *)
+    tNotAnsweringAfter            : TIME;                     (* silent this long = not answering; T#0s = 5 s *)
   END_VAR
   VAR_OUTPUT
-    bAnswering       : BOOL;                     (* it has answered within tGone *)
-    bSeen            : BOOL;                     (* it has answered at least once *)
-    tSilent          : TIME;                     (* since it last answered; T#0s before it ever has *)
+    bAnswering       : BOOL;                     (* it has answered within tNotAnsweringAfter *)
+    bEverAnswered            : BOOL;                     (* it has answered at least once *)
+    tSinceLastHeard          : TIME;                     (* since it last answered; T#0s before it ever has *)
     tRoundTrip       : TIME;                     (* how long it takes to reply, measured *)
   END_VAR
 END_METHOD
@@ -505,29 +506,29 @@ METHOD PUBLIC Map : E_ModbusResult
   VAR_INPUT
     anyData          : ANY;                      (* a BOOL, WORD, INT or UINT, or a fixed-bounds array of one *)
     eTable           : E_ModbusTable;            (* Coil, DiscreteInput, HoldingRegister (default), InputRegister *)
-    nAddress         : UINT;                     (* the first address; an array's lower bound lands here *)
-    eOnLoss          : E_ModbusFailsafe;         (* a writable single address after tFailsafe without a write: HoldLastValue (default) or ResetToValue *)
+    nStartAddress         : UINT;                     (* the first address; an array's lower bound lands here *)
+    eActionOnWriterLoss          : E_ModbusFailsafe;         (* a writable single address after tWriterLossAfter without a write: HoldLastValue (default) or ResetToValue *)
     nSafeValue       : DINT;                     (* the value ResetToValue drives it to *)
   END_VAR
   VAR_OUTPUT
-    bWritten         : BOOL;                     (* a client wrote this range since the last call *)
-    bSafeApplied     : BOOL;                     (* the safe value was applied since the last call *)
+    bWrittenByClient         : BOOL;                     (* a client wrote this range since the last call *)
+    bSafeValueApplied     : BOOL;                     (* the safe value was applied since the last call *)
   END_VAR
 END_METHOD
 
-(* The link's counters. A rising edge of bReset zeroes them. *)
+(* The link's counters. A rising edge of bResetCounters zeroes them. *)
 METHOD PUBLIC Statistics : E_ModbusResult
   VAR_INPUT
-    bReset           : BOOL;                     (* rising edge zeroes the counters *)
+    bResetCounters           : BOOL;                     (* rising edge zeroes the counters *)
   END_VAR
   VAR_OUTPUT
-    nPending         : INT;                      (* requests queued and not yet concluded *)
-    nSent            : DINT;                     (* frames transmitted *)
-    nReceived        : DINT;                     (* frames received *)
-    nChecksumErrors  : DINT;                     (* frames that arrived corrupt *)
-    nFramingErrors   : DINT;                     (* frames that were structurally impossible *)
-    nNoiseBytes      : DINT;                     (* bytes discarded hunting for a frame *)
-    nReconnects      : DINT;                     (* times the link dropped and came back *)
+    nPendingOperations         : INT;                      (* requests queued and not yet concluded *)
+    nFrameSentCount            : DINT;                     (* frames transmitted *)
+    nFrameReceivedCount        : DINT;                     (* frames received *)
+    nChecksumErrorCount  : DINT;                     (* frames that arrived corrupt *)
+    nFramingErrorCount   : DINT;                     (* frames that were structurally impossible *)
+    nNoiseByteCount      : DINT;                     (* bytes discarded hunting for a frame *)
+    nReconnectCount      : DINT;                     (* times the link dropped and came back *)
     sFramingReason   : STRING(160);              (* how this link finds frames, and why *)
   END_VAR
 END_METHOD
@@ -850,10 +851,11 @@ int mbb_serialBegin(HardwareSerial* port, uint32_t baud, uint32_t cfg,
 }
 #endif
 
-// 'dhcp', in any case: the way to say a server-assigned address was meant.
+// Empty asks a DHCP server, as in every ModBee library ('dhcp', in any case,
+// is taken the same way).
 static bool mbb_wantsDhcp(const char* text)
 {
-    return text != nullptr && strcasecmp(text, "dhcp") == 0;
+    return text == nullptr || text[0] == '\0' || strcasecmp(text, "dhcp") == 0;
 }
 
 #if defined(MBB_HAS_WIFI) || defined(MBB_HAS_ETHERNET)
@@ -945,7 +947,7 @@ strucpp::E_MODBUSRESULT mbb_serve(ModbusAPI* mb, uint8_t kind, bool onWifi, uint
 {
     if (kind != MBB_KIND_TCP) {
         if (unitId < 1 || unitId > 247) {
-            why = "a serial server needs stSerialConfig.nUnitId, 1 to 247";
+            why = "a serial server needs stSerialConfig.nServerUnitId, 1 to 247";
             return strucpp::E_MODBUSRESULT::INVALIDARGUMENT;
         }
         if (kind == MBB_KIND_ASCII) ((ModbusASCII*)mb)->slave(unitId);
@@ -1054,6 +1056,7 @@ struct MbbRecord {
     uint8_t order = 0;
     int32_t interval = 0;
     uint16_t deadband = 0;
+    std::vector<double> reported;   // Watch: the values bValueChanged last reported
     uint32_t seenWrites = 0;
     uint16_t seenFailsafe = 0;
     bool bound = false;
@@ -1235,9 +1238,9 @@ static int32_t mbb_countOf(const strucpp::IEC_ANY& any, uint16_t asked) {
 
 void setup()
 {
-    bLinkUp = false;
+    bLinkOpen = false;
     bConnected = false;
-    nClients = 0;
+    nClientsConnected = 0;
     bError = false;
     eErrorId = strucpp::E_MODBUSRESULT::OK;
     sLastError = "";
@@ -1264,10 +1267,10 @@ void loop()
     // else may use the converter. The link object stays, with every binding
     // and watch the methods made on it.
     if (!(bool)bConnect) {
-        if (mb && (bool)bLinkUp) mb->end();
-        bLinkUp = false;
+        if (mb && (bool)bLinkOpen) mb->end();
+        bLinkOpen = false;
         bConnected = false;
-        nClients = 0;
+        nClientsConnected = 0;
         bTried = false;
         return;
     }
@@ -1278,7 +1281,7 @@ void loop()
         sLastError = text;
     };
 
-    if (!(bool)bLinkUp) {
+    if (!(bool)bLinkOpen) {
         // ONE SCAN BEFORE OPENING, so a Map called below this block in the same
         // program has handed the server half over first.
         if (!(bool)bSettled) {
@@ -1354,33 +1357,33 @@ void loop()
         // them.
         const int32_t timeoutMs = mbb_millisOf(stTimingConfig.TTIMEOUT);
         if (timeoutMs > 0) mb->timeout((mb_time_t)timeoutMs);
-        if ((uint8_t)stTimingConfig.NRETRIES > 0) mb->retries((uint8_t)stTimingConfig.NRETRIES);
+        if ((uint8_t)stTimingConfig.NRETRIESPERREQUEST > 0) mb->retries((uint8_t)stTimingConfig.NRETRIESPERREQUEST);
         nAppliedTimeout = timeoutMs;
-        nAppliedRetries = (uint8_t)stTimingConfig.NRETRIES;
-        const int32_t failsafeMs = mbb_millisOf(stTimingConfig.TFAILSAFE);
+        nAppliedRetries = (uint8_t)stTimingConfig.NRETRIESPERREQUEST;
+        const int32_t failsafeMs = mbb_millisOf(stTimingConfig.TWRITERLOSSAFTER);
         if (failsafeMs > 0) mb->failsafeAfter((mb_time_t)failsafeMs);
         // Taken when the link opens; a figure the board cannot hold fails the
         // open with the reason on sLastError.
-        if ((uint16_t)stTimingConfig.NMAXPENDING > 0 || (uint16_t)stTimingConfig.NMAXPENDINGBYTES > 0) {
-            mb->queueSize((size_t)(uint16_t)stTimingConfig.NMAXPENDING,
-                          (size_t)(uint16_t)stTimingConfig.NMAXPENDINGBYTES);
+        if ((uint16_t)stTimingConfig.NMAXPENDINGOPERATIONS > 0 || (uint16_t)stTimingConfig.NMAXPENDINGWRITEBYTES > 0) {
+            mb->queueSize((size_t)(uint16_t)stTimingConfig.NMAXPENDINGOPERATIONS,
+                          (size_t)(uint16_t)stTimingConfig.NMAXPENDINGWRITEBYTES);
         }
         // Recovery is on by default, the library's two seconds: the far end of
         // a Modbus link is a device that gets rebooted.
         if (!(bool)stTimingConfig.BAUTORECONNECT) {
             mb->reconnectAfter(0);
         } else {
-            const int32_t reconnectMs = mbb_millisOf(stTimingConfig.TRECONNECT);
+            const int32_t reconnectMs = mbb_millisOf(stTimingConfig.TRECONNECTINTERVAL);
             mb->reconnectAfter(reconnectMs > 0 ? (mb_time_t)reconnectMs : (mb_time_t)MBB_REOPEN_MS);
         }
 
         const uint32_t baud = ((int32_t)stSerialConfig.NBAUDRATE > 0)
             ? (uint32_t)(int32_t)stSerialConfig.NBAUDRATE : 19200u;
-        const uint16_t tcpPort = ((uint16_t)nPort != 0) ? (uint16_t)nPort : MODBUS_TCP_PORT;
+        const uint16_t tcpPort = ((uint16_t)nTcpPort != 0) ? (uint16_t)nTcpPort : MODBUS_TCP_PORT;
         const bool asServer = role == strucpp::E_MODBUSROLE::SERVER || role == strucpp::E_MODBUSROLE::BOTH;
         const bool asClient = role == strucpp::E_MODBUSROLE::CLIENT || role == strucpp::E_MODBUSROLE::BOTH;
         const uint8_t maxClients = (uint8_t)stTimingConfig.NMAXCLIENTS;
-        const mb_time_t idleMs = (mb_time_t)mbb_millisOf(stTimingConfig.TIDLE);
+        const mb_time_t idleMs = (mb_time_t)mbb_millisOf(stTimingConfig.TCLOSEIDLECLIENTAFTER);
 
         // A server with nothing to serve: said plainly, rather than answering
         // every request with an exception for a reason nobody can see.
@@ -1407,10 +1410,10 @@ void loop()
         } else {
             ModbusTCP* tcp = (ModbusTCP*)mb;
             tcp->rtuOverTcp(frame == strucpp::E_MODBUSFRAMING::RTU);
-            // sHost empty means be a server: the two impossible states - a
+            // sHostName empty means be a server: the two impossible states - a
             // client with nowhere to connect, a server pointed at somebody -
             // stay unreachable.
-            const bool wantsClient = asClient && sHost.length() > 0;
+            const bool wantsClient = asClient && sHostName.length() > 0;
             if (asServer) {
                 const char* why = "";
                 const strucpp::E_MODBUSRESULT served =
@@ -1420,9 +1423,9 @@ void loop()
                     return;
                 }
             }
-            if (wantsClient) opened = tcp->connect(sHost.c_str(), tcpPort) || opened;
+            if (wantsClient) opened = tcp->connect(sHostName.c_str(), tcpPort) || opened;
             if (!asServer && !wantsClient) {
-                fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "a TCP client needs sHost; leave it empty to be a server");
+                fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "a TCP client needs sHostName; leave it empty to be a server");
                 return;
             }
         }
@@ -1439,12 +1442,12 @@ void loop()
 #if defined(ARDUINO_ARCH_ESP32)
             const int de = mbb_serialBegin(port, baud, cfg, (int)(int16_t)stSerialConfig.NRXPIN,
                                            (int)(int16_t)stSerialConfig.NTXPIN,
-                                           (int)(int16_t)stSerialConfig.NDEPIN);
+                                           (int)(int16_t)stSerialConfig.NDRIVERENABLEPIN);
 #else
             port->begin(baud, cfg);
-            const int de = (int)(int16_t)stSerialConfig.NDEPIN;
+            const int de = (int)(int16_t)stSerialConfig.NDRIVERENABLEPIN;
 #endif
-            const int32_t holdUs = mbb_microsOf(stSerialConfig.TDEHOLD);
+            const int32_t holdUs = mbb_microsOf(stSerialConfig.TDRIVERENABLEHOLD);
             const uint32_t hold = holdUs > 0 ? (uint32_t)holdUs : 2000u;
             if (wanted == MBB_KIND_ASCII) {
                 if (de >= 0) ((ModbusASCII*)mb)->directionPin(de, true, hold);
@@ -1456,24 +1459,20 @@ void loop()
         } else {
             // --- bring the network up: an OpenPLC program has no setup() of
             // its own, so the node does it from stNetworkConfig.
-            const char* ip = stNetworkConfig.SIP.c_str();
+            const char* ip = stNetworkConfig.SIPADDRESS.c_str();
             if (link == strucpp::E_MODBUSTRANSPORT::ARDUINOWIFI) {
 #if defined(MBB_HAS_WIFI)
-                if (stNetworkConfig.SIP.length() == 0) {
-                    fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "set stNetworkConfig.sIp, or 'dhcp' to ask for one");
-                    return;
-                }
                 if (WiFi.status() != WL_CONNECTED) {
                     // The address is set BEFORE joining: WiFi.config() after
                     // WiFi.begin() is a lease already taken and then argued with.
                     if (!mbb_wantsDhcp(ip)) {
                         IPAddress address;
                         if (!address.fromString(ip)) {
-                            fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "stNetworkConfig.sIp is not an address");
+                            fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "stNetworkConfig.sIpAddress is not an address");
                             return;
                         }
-                        WiFi.config(address, mbb_gatewayFor(address, stNetworkConfig.SGATEWAY.c_str()),
-                                    mbb_subnetFor(stNetworkConfig.SSUBNET.c_str()));
+                        WiFi.config(address, mbb_gatewayFor(address, stNetworkConfig.SGATEWAYADDRESS.c_str()),
+                                    mbb_subnetFor(stNetworkConfig.SSUBNETMASK.c_str()));
                     }
                     WiFi.begin(stNetworkConfig.SSSID.c_str(), stNetworkConfig.SWIFIPASSWORD.c_str());
                     // Not an error yet: joining takes seconds and does not
@@ -1490,12 +1489,8 @@ void loop()
 #if defined(MBB_HAS_ETHERNET)
                 // The Arduino Ethernet library: a W5100 or W5500 on SPI. An
                 // ESP32's built-in RMII PHY is the core's ETH library, not this.
-                if (stNetworkConfig.SIP.length() == 0) {
-                    fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "set stNetworkConfig.sIp, or 'dhcp' to ask for one");
-                    return;
-                }
                 uint8_t mac[6] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-                mbb_parseMac(stNetworkConfig.SMAC.c_str(), mac);
+                mbb_parseMac(stNetworkConfig.SMACADDRESS.c_str(), mac);
                 if (mbb_wantsDhcp(ip)) {
                     // DHCP blocks, sixty seconds by default: bounded to one
                     // second and retried on the node's timer.
@@ -1507,14 +1502,14 @@ void loop()
                 } else {
                     IPAddress address;
                     if (!address.fromString(ip)) {
-                        fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "stNetworkConfig.sIp is not an address");
+                        fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "stNetworkConfig.sIpAddress is not an address");
                         return;
                     }
                     // Static, and instant. The gateway serves as DNS too:
                     // nothing here resolves a name.
-                    const IPAddress gateway = mbb_gatewayFor(address, stNetworkConfig.SGATEWAY.c_str());
+                    const IPAddress gateway = mbb_gatewayFor(address, stNetworkConfig.SGATEWAYADDRESS.c_str());
                     Ethernet.begin(mac, address, gateway, gateway,
-                                   mbb_subnetFor(stNetworkConfig.SSUBNET.c_str()));
+                                   mbb_subnetFor(stNetworkConfig.SSUBNETMASK.c_str()));
                 }
                 if (Ethernet.hardwareStatus() == EthernetNoHardware) {
                     fail(strucpp::E_MODBUSRESULT::NOTINITIALISED, "no Ethernet controller found on SPI");
@@ -1544,8 +1539,8 @@ void loop()
                     return;
                 }
             } else {
-                if (sHost.length() == 0) {
-                    fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "a TCP client needs sHost");
+                if (sHostName.length() == 0) {
+                    fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT, "a TCP client needs sHostName");
                     return;
                 }
                 if (!mbbArduinoTransport) {
@@ -1555,7 +1550,7 @@ void loop()
                         if (mbbWifiClient) {
                             mbbArduinoTransport = new (std::nothrow)
                                 ModbusArduinoClientTransport<WiFiClient>(*mbbWifiClient,
-                                                                         sHost.c_str(), tcpPort);
+                                                                         sHostName.c_str(), tcpPort);
                         }
                     }
 #endif
@@ -1565,7 +1560,7 @@ void loop()
                         if (mbbEthClient) {
                             mbbArduinoTransport = new (std::nothrow)
                                 ModbusArduinoClientTransport<EthernetClient>(*mbbEthClient,
-                                                                             sHost.c_str(), tcpPort);
+                                                                             sHostName.c_str(), tcpPort);
                         }
                     }
 #endif
@@ -1582,7 +1577,7 @@ void loop()
         if (opened && onSerial && asServer) {
             const char* why = "";
             const strucpp::E_MODBUSRESULT served = serve(mb, wanted, false, tcpPort, 0, 0,
-                                                (uint8_t)stSerialConfig.NUNITID, opened, why);
+                                                (uint8_t)stSerialConfig.NSERVERUNITID, opened, why);
             if (served != strucpp::E_MODBUSRESULT::OK) {
                 fail(served, why);
                 return;
@@ -1594,7 +1589,7 @@ void loop()
             return;
         }
 
-        bLinkUp = true;
+        bLinkOpen = true;
         bError = false;
         eErrorId = strucpp::E_MODBUSRESULT::OK;
         sLastError = "";
@@ -1609,23 +1604,23 @@ void loop()
         nAppliedTimeout = timeoutMs;
         mb->timeout((mb_time_t)timeoutMs);
     }
-    if ((uint8_t)stTimingConfig.NRETRIES != (uint8_t)nAppliedRetries) {
-        nAppliedRetries = (uint8_t)stTimingConfig.NRETRIES;
+    if ((uint8_t)stTimingConfig.NRETRIESPERREQUEST != (uint8_t)nAppliedRetries) {
+        nAppliedRetries = (uint8_t)stTimingConfig.NRETRIESPERREQUEST;
         if ((uint8_t)nAppliedRetries > 0) mb->retries((uint8_t)nAppliedRetries);
     }
     {
         uint32_t h = 2166136261u;
-        h = mbb_fingerprint(h, stIdentityConfig.SVENDOR.c_str(), stIdentityConfig.SVENDOR.length());
+        h = mbb_fingerprint(h, stIdentityConfig.SVENDORNAME.c_str(), stIdentityConfig.SVENDORNAME.length());
         h = mbb_fingerprint(h, "|", 1);
-        h = mbb_fingerprint(h, stIdentityConfig.SPRODUCT.c_str(), stIdentityConfig.SPRODUCT.length());
+        h = mbb_fingerprint(h, stIdentityConfig.SPRODUCTCODE.c_str(), stIdentityConfig.SPRODUCTCODE.length());
         h = mbb_fingerprint(h, "|", 1);
-        h = mbb_fingerprint(h, stIdentityConfig.SREVISION.c_str(), stIdentityConfig.SREVISION.length());
+        h = mbb_fingerprint(h, stIdentityConfig.SMAJORMINORREVISION.c_str(), stIdentityConfig.SMAJORMINORREVISION.length());
         if (h != (uint32_t)nIdentityKey) {
             nIdentityKey = h;
-            if (stIdentityConfig.SVENDOR.length() > 0 || stIdentityConfig.SPRODUCT.length() > 0 ||
-                stIdentityConfig.SREVISION.length() > 0) {
-                mb->identity(stIdentityConfig.SVENDOR.c_str(), stIdentityConfig.SPRODUCT.c_str(),
-                             stIdentityConfig.SREVISION.c_str());
+            if (stIdentityConfig.SVENDORNAME.length() > 0 || stIdentityConfig.SPRODUCTCODE.length() > 0 ||
+                stIdentityConfig.SMAJORMINORREVISION.length() > 0) {
+                mb->identity(stIdentityConfig.SVENDORNAME.c_str(), stIdentityConfig.SPRODUCTCODE.c_str(),
+                             stIdentityConfig.SMAJORMINORREVISION.c_str());
             }
         }
     }
@@ -1635,7 +1630,7 @@ void loop()
     mb->poll();
 
     bConnected = mb->connected();
-    nClients = (int16_t)mb->clients();   // 0 on a serial line, which has a bus
+    nClientsConnected = (int16_t)mb->clients();   // 0 on a serial line, which has a bus
 
     // A link open with nobody at the other end - a TCP client whose device
     // refused or dropped the connection - is LinkDown, in the operating
@@ -1657,12 +1652,12 @@ void loop()
 #if defined(MODBUS_PLATFORM_HOST)
     // Every input is used: what only a board has is reported on the Runtime,
     // never silently ignored.
-    if (stNetworkConfig.SSSID.length() > 0 || stNetworkConfig.SMAC.length() > 0 ||
-        stNetworkConfig.SIP.length() > 0) {
+    if (stNetworkConfig.SSSID.length() > 0 || stNetworkConfig.SMACADDRESS.length() > 0 ||
+        stNetworkConfig.SIPADDRESS.length() > 0) {
         fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT,
              "stNetworkConfig is for a board; the Runtime uses its machine's network");
     } else if ((uint8_t)stSerialConfig.NUART != 0 || (int16_t)stSerialConfig.NRXPIN != -1 ||
-               (int16_t)stSerialConfig.NTXPIN != -1 || (int16_t)stSerialConfig.NDEPIN != -1) {
+               (int16_t)stSerialConfig.NTXPIN != -1 || (int16_t)stSerialConfig.NDRIVERENABLEPIN != -1) {
         fail(strucpp::E_MODBUSRESULT::INVALIDARGUMENT,
              "stSerialConfig nUart and the pins are a board's; the Runtime takes sDevice");
     }
@@ -1718,7 +1713,7 @@ strucpp::E_MODBUSRESULT mbb_request(MbbRecord* r, bool execute, bool linkUp, Sta
 
 // The link a method may use: open and with a peer.
 #define MBB_LINK() ((ModbusAPI*)(uintptr_t)(strucpp::XWORD_t)nApi)
-#define MBB_UP() ((bool)bLinkUp && (bool)bConnected && MBB_LINK() != nullptr)
+#define MBB_UP() ((bool)bLinkOpen && (bool)bConnected && MBB_LINK() != nullptr)
 
 // The four reads share one body: bits or registers, and the wide types.
 static ModbusResult mbb_startRead(ModbusAPI* mb, ModbusTable table, const strucpp::IEC_ANY& any,
@@ -1763,7 +1758,7 @@ strucpp::E_MODBUSRESULT ReadCoils()
     if (r == nullptr) return strucpp::E_MODBUSRESULT::QUEUEFULL;
     const strucpp::E_MODBUSRESULT result = mbb_request(r, (bool)bExecute, MBB_UP(), [&]() {
         return mbb_startRead(MBB_LINK(), ModbusTable::Coil, anyData, (uint8_t)nUnitId,
-                             (uint16_t)nAddress, (uint16_t)nQuantity, ModbusOrder::ABCD, r);
+                             (uint16_t)nStartAddress, (uint16_t)nQuantity, ModbusOrder::ABCD, r);
     });
     return mbb_noteCall((strucpp::XWORD_t)nMethods, "ReadCoils", r, result);
 }
@@ -1775,7 +1770,7 @@ strucpp::E_MODBUSRESULT ReadDiscreteInputs()
     if (r == nullptr) return strucpp::E_MODBUSRESULT::QUEUEFULL;
     const strucpp::E_MODBUSRESULT result = mbb_request(r, (bool)bExecute, MBB_UP(), [&]() {
         return mbb_startRead(MBB_LINK(), ModbusTable::DiscreteInput, anyData, (uint8_t)nUnitId,
-                             (uint16_t)nAddress, (uint16_t)nQuantity, ModbusOrder::ABCD, r);
+                             (uint16_t)nStartAddress, (uint16_t)nQuantity, ModbusOrder::ABCD, r);
     });
     return mbb_noteCall((strucpp::XWORD_t)nMethods, "ReadDiscreteInputs", r, result);
 }
@@ -1787,8 +1782,8 @@ strucpp::E_MODBUSRESULT ReadHoldingRegisters()
     if (r == nullptr) return strucpp::E_MODBUSRESULT::QUEUEFULL;
     const strucpp::E_MODBUSRESULT result = mbb_request(r, (bool)bExecute, MBB_UP(), [&]() {
         return mbb_startRead(MBB_LINK(), ModbusTable::HoldingRegister, anyData, (uint8_t)nUnitId,
-                             (uint16_t)nAddress, (uint16_t)nQuantity,
-                             (ModbusOrder)(int)(strucpp::E_MODBUSORDER)eOrder, r);
+                             (uint16_t)nStartAddress, (uint16_t)nQuantity,
+                             (ModbusOrder)(int)(strucpp::E_MODBUSORDER)eWordOrder, r);
     });
     return mbb_noteCall((strucpp::XWORD_t)nMethods, "ReadHoldingRegisters", r, result);
 }
@@ -1800,8 +1795,8 @@ strucpp::E_MODBUSRESULT ReadInputRegisters()
     if (r == nullptr) return strucpp::E_MODBUSRESULT::QUEUEFULL;
     const strucpp::E_MODBUSRESULT result = mbb_request(r, (bool)bExecute, MBB_UP(), [&]() {
         return mbb_startRead(MBB_LINK(), ModbusTable::InputRegister, anyData, (uint8_t)nUnitId,
-                             (uint16_t)nAddress, (uint16_t)nQuantity,
-                             (ModbusOrder)(int)(strucpp::E_MODBUSORDER)eOrder, r);
+                             (uint16_t)nStartAddress, (uint16_t)nQuantity,
+                             (ModbusOrder)(int)(strucpp::E_MODBUSORDER)eWordOrder, r);
     });
     return mbb_noteCall((strucpp::XWORD_t)nMethods, "ReadInputRegisters", r, result);
 }
@@ -1839,7 +1834,7 @@ strucpp::E_MODBUSRESULT WriteMultipleCoils()
     if (!mbb_inTask((strucpp::XWORD_t)nTask)) return strucpp::E_MODBUSRESULT::WRONGTASK;
     char where[16];
     MbbRecord* r = mbb_recordOf(mbb_methodsOf(nMethods), MBB_WRITE_COILS, &anyData,
-                                mbb_where(where, sizeof where, (uint8_t)nUnitId, (uint16_t)nAddress));
+                                mbb_where(where, sizeof where, (uint8_t)nUnitId, (uint16_t)nStartAddress));
     if (r == nullptr) return strucpp::E_MODBUSRESULT::QUEUEFULL;
     const strucpp::E_MODBUSRESULT result = mbb_request(r, (bool)bExecute, MBB_UP(), [&]() {
         const int32_t count = mbb_countOf(anyData, (uint16_t)nQuantity);
@@ -1848,7 +1843,7 @@ strucpp::E_MODBUSRESULT WriteMultipleCoils()
             return ModbusResult::InvalidArgument;
         }
         // Copied now: a write never points back at the caller.
-        return MBB_LINK()->client().writeCoils((uint8_t)nUnitId, (uint16_t)nAddress,
+        return MBB_LINK()->client().writeCoils((uint8_t)nUnitId, (uint16_t)nStartAddress,
                                                (const bool*)anyData.PVALUE, (uint16_t)count,
                                                mbb_handlerFor(r), (uint16_t)anyData.DISTRIDE);
     });
@@ -1860,7 +1855,7 @@ strucpp::E_MODBUSRESULT WriteMultipleRegisters()
     if (!mbb_inTask((strucpp::XWORD_t)nTask)) return strucpp::E_MODBUSRESULT::WRONGTASK;
     char where[16];
     MbbRecord* r = mbb_recordOf(mbb_methodsOf(nMethods), MBB_WRITE_REGISTERS, &anyData,
-                                mbb_where(where, sizeof where, (uint8_t)nUnitId, (uint16_t)nAddress));
+                                mbb_where(where, sizeof where, (uint8_t)nUnitId, (uint16_t)nStartAddress));
     if (r == nullptr) return strucpp::E_MODBUSRESULT::QUEUEFULL;
     const strucpp::E_MODBUSRESULT result = mbb_request(r, (bool)bExecute, MBB_UP(), [&]() {
         const int32_t count = mbb_countOf(anyData, (uint16_t)nQuantity);
@@ -1870,16 +1865,16 @@ strucpp::E_MODBUSRESULT WriteMultipleRegisters()
         }
         const uint16_t stride = (uint16_t)anyData.DISTRIDE;
         if (bits == 16) {
-            return MBB_LINK()->client().writeRegisters((uint8_t)nUnitId, (uint16_t)nAddress,
+            return MBB_LINK()->client().writeRegisters((uint8_t)nUnitId, (uint16_t)nStartAddress,
                                                        (const uint16_t*)anyData.PVALUE,
                                                        (uint16_t)count, mbb_handlerFor(r), stride);
         }
         // Wider than a register: packed and sent as ONE request whatever the
         // count, so values that only mean anything together cannot half-arrive.
         return MBB_LINK()->client().writeWideArray(
-            (uint8_t)nUnitId, (uint16_t)nAddress, anyData.PVALUE,
+            (uint8_t)nUnitId, (uint16_t)nStartAddress, anyData.PVALUE,
             mbb_wideTypeOfClass((uint32_t)anyData.ELEMCLASS),
-            (ModbusOrder)(int)(strucpp::E_MODBUSORDER)eOrder, (uint16_t)count, stride, mbb_handlerFor(r));
+            (ModbusOrder)(int)(strucpp::E_MODBUSORDER)eWordOrder, (uint16_t)count, stride, mbb_handlerFor(r));
     });
     return mbb_noteCall((strucpp::XWORD_t)nMethods, "WriteMultipleRegisters", r, result);
 }
@@ -1904,7 +1899,7 @@ strucpp::E_MODBUSRESULT ReadWriteMultipleRegisters()
     if (!mbb_inTask((strucpp::XWORD_t)nTask)) return strucpp::E_MODBUSRESULT::WRONGTASK;
     char where[16];
     MbbRecord* r = mbb_recordOf(mbb_methodsOf(nMethods), MBB_READ_WRITE, &anyReadData,
-                                mbb_where(where, sizeof where, (uint8_t)nUnitId, (uint16_t)nReadAddress));
+                                mbb_where(where, sizeof where, (uint8_t)nUnitId, (uint16_t)nReadStartAddress));
     if (r == nullptr) return strucpp::E_MODBUSRESULT::QUEUEFULL;
     const strucpp::E_MODBUSRESULT result = mbb_request(r, (bool)bExecute, MBB_UP(), [&]() {
         const int32_t reads = mbb_countOf(anyReadData, (uint16_t)nReadQuantity);
@@ -1934,8 +1929,8 @@ strucpp::E_MODBUSRESULT ReadWriteMultipleRegisters()
         r->readDest = anyReadData.PVALUE;
         r->readStride = (uint16_t)anyReadData.DISTRIDE;
         return MBB_LINK()->client().readWriteRegisters(
-            (uint8_t)nUnitId, (uint16_t)nReadAddress, r->bounce, (uint16_t)reads,
-            (uint16_t)nWriteAddress, values, (uint16_t)writes, mbb_handlerFor(r));
+            (uint8_t)nUnitId, (uint16_t)nReadStartAddress, r->bounce, (uint16_t)reads,
+            (uint16_t)nWriteStartAddress, values, (uint16_t)writes, mbb_handlerFor(r));
     });
     return mbb_noteCall((strucpp::XWORD_t)nMethods, "ReadWriteMultipleRegisters", r, result);
 }
@@ -1947,14 +1942,14 @@ strucpp::E_MODBUSRESULT Watch()
     const strucpp::E_MODBUSRESULT result = [&]() -> strucpp::E_MODBUSRESULT {
         if (r == nullptr) return strucpp::E_MODBUSRESULT::QUEUEFULL;
         ModbusAPI* mb = MBB_LINK();
-        if (mb == nullptr || !(bool)bLinkUp) {
+        if (mb == nullptr || !(bool)bLinkOpen) {
             eQuality = strucpp::E_MODBUSQUALITY::UNKNOWN;
             return strucpp::E_MODBUSRESULT::LINKDOWN;
         }
-        const int32_t periodMs = mbb_millisOf(tPeriod);
+        const int32_t periodMs = mbb_millisOf(tReadInterval);
         const mb_time_t interval = periodMs > 0 ? (mb_time_t)periodMs : 1000u;
         const ModbusTable table = (ModbusTable)(int)(strucpp::E_MODBUSTABLE)eTable;
-        const ModbusOrder order = (ModbusOrder)(int)(strucpp::E_MODBUSORDER)eOrder;
+        const ModbusOrder order = (ModbusOrder)(int)(strucpp::E_MODBUSORDER)eWordOrder;
 
         if (r->index == 0) {
             const int32_t count = mbb_countOf(anyData, (uint16_t)nQuantity);
@@ -1966,7 +1961,7 @@ strucpp::E_MODBUSRESULT Watch()
             const uint16_t stride = (uint16_t)anyData.DISTRIDE;
             const uint16_t many = (uint16_t)count;
             const uint8_t unit = (uint8_t)nUnitId;
-            const uint16_t first = (uint16_t)nAddress;
+            const uint16_t first = (uint16_t)nStartAddress;
             size_t made;
             if (bits == 1) {
                 made = mb->poller().addBits(unit, first, (bool*)anyData.PVALUE, many, interval,
@@ -1989,7 +1984,6 @@ strucpp::E_MODBUSRESULT Watch()
             r->table = (uint8_t)table;
             r->address = first;
             r->order = (uint8_t)order;
-            if (r->deadband > 0) mb->poller().setDeadband(made, r->deadband);
         }
         const size_t poll = r->index - 1;
 
@@ -2010,30 +2004,51 @@ strucpp::E_MODBUSRESULT Watch()
         // The address follows the inputs: the same entry is re-aimed and
         // starts again from Unknown. The size stays the first call's.
         if ((uint8_t)nUnitId != r->unit || (uint8_t)table != r->table ||
-            (uint16_t)nAddress != r->address || (uint8_t)order != r->order) {
-            if (!mb->poller().retarget(poll, (uint8_t)nUnitId, (uint16_t)nAddress, table, order)) {
+            (uint16_t)nStartAddress != r->address || (uint8_t)order != r->order) {
+            if (!mb->poller().retarget(poll, (uint8_t)nUnitId, (uint16_t)nStartAddress, table, order)) {
                 // Bits asked of a register variable, or the reverse.
                 return strucpp::E_MODBUSRESULT::INVALIDARGUMENT;
             }
             r->unit = (uint8_t)nUnitId;
             r->table = (uint8_t)table;
-            r->address = (uint16_t)nAddress;
+            r->address = (uint16_t)nStartAddress;
             r->order = (uint8_t)order;
         }
         if ((int32_t)interval != r->interval) {
             r->interval = (int32_t)interval;
             mb->poller().setInterval(poll, interval);
         }
-        if ((uint16_t)nDeadband != r->deadband) {
-            r->deadband = (uint16_t)nDeadband;
-            mb->poller().setDeadband(poll, r->deadband);
-        }
+        r->deadband = (uint16_t)nDeadband;
 
         eQuality = (strucpp::E_MODBUSQUALITY)(int32_t)(int)mb->poller().quality(poll);
         const mb_time_t age = mb->poller().age(poll);
-        tAge = mbb_timeOf(age == ModbusPoller::NEVER ? 0 : (int32_t)age);
-        bSeen = (age != ModbusPoller::NEVER);
-        nFailures = (uint16_t)mb->poller().consecutiveFailures(poll);
+        tValueAge = mbb_timeOf(age == ModbusPoller::NEVER ? 0 : (int32_t)age);
+        bValueEverReceived = (age != ModbusPoller::NEVER);
+        nConsecutiveFailureCount = (uint16_t)mb->poller().consecutiveFailures(poll);
+        // bValueChanged: some element has moved by more than nDeadband since the
+        // values last reported (a bit: any change). The first value counts.
+        bValueChanged = false;
+        if ((bool)bValueEverReceived) {
+            const uint32_t cls = (uint32_t)anyData.ELEMCLASS;
+            const size_t n = (size_t)(anyData.DICOUNT > 0 ? anyData.DICOUNT : 1);
+            const uint8_t* base = (const uint8_t*)anyData.PVALUE;
+            const size_t stride = (size_t)anyData.DISTRIDE;
+            const bool first = r->reported.size() != n;
+            if (first) r->reported.assign(n, 0.0);
+            bool moved = first;
+            for (size_t i = 0; i < n && !moved; i++) {
+                double v = 0.0;
+                mbb_readClass(cls, mbb_elementBits(cls), base + i * stride, v);
+                const double d = v > r->reported[i] ? v - r->reported[i] : r->reported[i] - v;
+                moved = mbb_elementBits(cls) == 1 ? d != 0.0 : d > (double)r->deadband;
+            }
+            if (moved) {
+                for (size_t i = 0; i < n; i++) {
+                    mbb_readClass(cls, mbb_elementBits(cls), base + i * stride, r->reported[i]);
+                }
+                bValueChanged = true;
+            }
+        }
         if (!r->running) return strucpp::E_MODBUSRESULT::OK;
         return mbb_result(mb->poller().lastResult(poll));
     }();
@@ -2083,9 +2098,9 @@ strucpp::E_MODBUSRESULT Point()
     MbbRecord* r = mbb_recordOf(mbb_methodsOf(nMethods), MBB_POINT, &anyValue, "");
     const strucpp::E_MODBUSRESULT result = [&]() -> strucpp::E_MODBUSRESULT {
         if (r == nullptr) return strucpp::E_MODBUSRESULT::QUEUEFULL;
-        bOk = false;
+        bGood = false;
         ModbusAPI* mb = MBB_LINK();
-        if (mb == nullptr || !(bool)bLinkUp) {
+        if (mb == nullptr || !(bool)bLinkOpen) {
             eQuality = strucpp::E_MODBUSQUALITY::UNKNOWN;
             return strucpp::E_MODBUSRESULT::LINKDOWN;
         }
@@ -2099,11 +2114,11 @@ strucpp::E_MODBUSRESULT Point()
         ModbusPoint* point = mb->points().at(r->index - 1);
         if (point == nullptr) return strucpp::E_MODBUSRESULT::NOTINITIALISED;
 
-        const int fc = (int)(strucpp::E_MODBUSPOINTFUNCTION)eFunction;
+        const int fc = (int)(strucpp::E_MODBUSPOINTFUNCTION)eFunctionCode;
         const ModbusPointConfig wanted = mbb_pointConfig(
-            (uint8_t)nUnitId, fc, (uint16_t)nAddress, (int)(strucpp::E_MODBUSPOINTTYPE)eType,
-            (int)(strucpp::E_MODBUSORDER)eOrder, (uint8_t)nBit, (float)fScale, (float)fOffset,
-            mbb_millisOf(tPeriod), mbb_millisOf(tStale), mbb_millisOf(tTimeout), (bool)bEnable);
+            (uint8_t)nUnitId, fc, (uint16_t)nStartAddress, (int)(strucpp::E_MODBUSPOINTTYPE)eDataType,
+            (int)(strucpp::E_MODBUSORDER)eWordOrder, (uint8_t)nBitNumber, (float)fScale, (float)fOffset,
+            mbb_millisOf(tUpdateInterval), mbb_millisOf(tLostAfter), mbb_millisOf(tTimeout), (bool)bEnable);
         const bool valid = mbb_pointApply(mb, point, wanted);
         // A write point sends the variable; a read point fills it once the
         // device has answered, and holds the last good value after.
@@ -2113,10 +2128,10 @@ strucpp::E_MODBUSRESULT Point()
         const mb_time_t t = mb_millis();
         eQuality = (strucpp::E_MODBUSQUALITY)(int32_t)(int)((bool)bEnable ? point->quality(t)
                                                                  : ModbusQuality::Unknown);
-        bOk = valid && (bool)bEnable && point->ok(t);
+        bGood = valid && (bool)bEnable && point->ok(t);
         const mb_time_t age = point->age(t);
-        tAge = mbb_timeOf(age == ModbusPoller::NEVER ? 0 : (int32_t)age);
-        nFailures = point->failures();
+        tValueAge = mbb_timeOf(age == ModbusPoller::NEVER ? 0 : (int32_t)age);
+        nConsecutiveFailureCount = point->failures();
         if (!valid) return strucpp::E_MODBUSRESULT::INVALIDARGUMENT;
         if (!(bool)bEnable) return strucpp::E_MODBUSRESULT::OK;
         return mbb_result(point->lastResult());
@@ -2173,36 +2188,49 @@ int32_t mbb_getMs(const uint8_t* row, const MbbMember& m) {
 strucpp::E_MODBUSRESULT Points()
 {
     if (!mbb_inTask((strucpp::XWORD_t)nTask)) return strucpp::E_MODBUSRESULT::WRONGTASK;
-    MbbRecord* r = mbb_recordOf(mbb_methodsOf(nMethods), MBB_POINTS, &anySettings, "");
+    MbbRecord* r = mbb_recordOf(mbb_methodsOf(nMethods), MBB_POINTS, &anyPointSettings, "");
     const strucpp::E_MODBUSRESULT result = [&]() -> strucpp::E_MODBUSRESULT {
         if (r == nullptr) return strucpp::E_MODBUSRESULT::QUEUEFULL;
-        if (!mbb_isArrayOf(anySettings, "ST_ModbusPointConfig") ||
-            !mbb_isArrayOf(anyPoints, "ST_ModbusPointStatus")) {
+        if (!mbb_isArrayOf(anyPointSettings, "ST_ModbusPointConfig") ||
+            !mbb_isArrayOf(anyPointStatus, "ST_ModbusPointStatus")) {
             sStatusText = "not point tables";
             return strucpp::E_MODBUSRESULT::INVALIDARGUMENT;
         }
-        const strucpp::TypeDesc* cd = anySettings.TYPEDESC;
-        const strucpp::TypeDesc* sd = anyPoints.TYPEDESC;
-        const MbbMember cUnit = mbb_member(cd, "nUnitId"), cFn = mbb_member(cd, "eFunction"),
-                        cAddr = mbb_member(cd, "nAddress"), cType = mbb_member(cd, "eType"),
-                        cOrder = mbb_member(cd, "eOrder"), cBit = mbb_member(cd, "nBit"),
+        const strucpp::TypeDesc* cd = anyPointSettings.TYPEDESC;
+        const strucpp::TypeDesc* sd = anyPointStatus.TYPEDESC;
+        const MbbMember cUnit = mbb_member(cd, "nUnitId"), cFn = mbb_member(cd, "eFunctionCode"),
+                        cAddr = mbb_member(cd, "nStartAddress"), cType = mbb_member(cd, "eDataType"),
+                        cOrder = mbb_member(cd, "eWordOrder"), cBit = mbb_member(cd, "nBitNumber"),
                         cScale = mbb_member(cd, "fScale"), cOffset = mbb_member(cd, "fOffset"),
-                        cPeriod = mbb_member(cd, "tPeriod"), cStale = mbb_member(cd, "tStale"),
+                        cPeriod = mbb_member(cd, "tUpdateInterval"), cStale = mbb_member(cd, "tLostAfter"),
                         cTimeout = mbb_member(cd, "tTimeout"), cEnable = mbb_member(cd, "bEnable");
         const MbbMember sWrite = mbb_member(sd, "fWriteValue"), sValue = mbb_member(sd, "fValue"),
-                        sBit = mbb_member(sd, "bValue"), sOk = mbb_member(sd, "bOk"),
-                        sQuality = mbb_member(sd, "eQuality"), sAge = mbb_member(sd, "tAge"),
-                        sFailures = mbb_member(sd, "nFailures"), sResult = mbb_member(sd, "eResult");
+                        sBit = mbb_member(sd, "bValue"), sOk = mbb_member(sd, "bGood"),
+                        sQuality = mbb_member(sd, "eQuality"), sAge = mbb_member(sd, "tValueAge"),
+                        sFailures = mbb_member(sd, "nConsecutiveFailureCount"), sResult = mbb_member(sd, "eLastResult");
 
-        int64_t rows = anySettings.DICOUNT;
-        if (anyPoints.DICOUNT < rows) rows = anyPoints.DICOUNT;
+        // Found by name: a member renamed on one side only would read as 0 without
+        // a word. internal/check-point-members.py keeps the two in step; this
+        // refuses rather than run on a mismatch.
+        const MbbMember* names[] = {&cUnit, &cFn, &cAddr, &cType, &cOrder, &cBit, &cScale, &cOffset,
+                                    &cPeriod, &cStale, &cTimeout, &cEnable, &sWrite, &sValue, &sBit,
+                                    &sOk, &sQuality, &sAge, &sFailures, &sResult};
+        for (const MbbMember* m : names) {
+            if (!m->found) {
+                sStatusText = "point tables do not match";
+                return strucpp::E_MODBUSRESULT::INVALIDARGUMENT;
+            }
+        }
+
+        int64_t rows = anyPointSettings.DICOUNT;
+        if (anyPointStatus.DICOUNT < rows) rows = anyPointStatus.DICOUNT;
 
         ModbusAPI* mb = MBB_LINK();
-        if (mb == nullptr || !(bool)bLinkUp) {
-            for (int64_t k = 0; k < rows; k++) mbb_set(anyPoints.at((int32_t)k), sOk, 0.0);
-            nGoodCnt = 0;
-            nLostCnt = (int16_t)rows;
-            nFirstLost = 0;
+        if (mb == nullptr || !(bool)bLinkOpen) {
+            for (int64_t k = 0; k < rows; k++) mbb_set(anyPointStatus.at((int32_t)k), sOk, 0.0);
+            nGoodPoints = 0;
+            nLostPoints = (int16_t)rows;
+            nFirstLostPoint = 0;
             sStatusText = "field bus down";
             return strucpp::E_MODBUSRESULT::LINKDOWN;
         }
@@ -2226,8 +2254,8 @@ strucpp::E_MODBUSRESULT Points()
         uint8_t firstUnit = 0;
 
         for (int64_t k = 0; k < rows; k++) {
-            const uint8_t* cfg = anySettings.at((int32_t)k);
-            uint8_t* sts = anyPoints.at((int32_t)k);
+            const uint8_t* cfg = anyPointSettings.at((int32_t)k);
+            uint8_t* sts = anyPointStatus.at((int32_t)k);
             ModbusPoint* point = mb->points().at(r->index - 1 + (size_t)k);
             if (point == nullptr) continue;
             const bool fitted = mbb_get(cfg, cEnable) != 0.0;
@@ -2267,24 +2295,24 @@ strucpp::E_MODBUSRESULT Points()
                 }
             }
         }
-        nGoodCnt = good;
-        nLostCnt = lost;
-        nFirstLost = firstLost > 0 ? (int16_t)firstLost : 0;
+        nGoodPoints = good;
+        nLostPoints = lost;
+        nFirstLostPoint = firstLost > 0 ? (int16_t)firstLost : 0;
 
         // One short line for a panel; the codes are in each row.
         char text[31];
-        if (anyPoints.DICOUNT != anySettings.DICOUNT) {
+        if (anyPointStatus.DICOUNT != anyPointSettings.DICOUNT) {
             snprintf(text, sizeof text, "tables differ");
         } else if (firstLost < 0) {
             text[0] = '\0';
         } else if (firstInvalid) {
-            snprintf(text, sizeof text, "pt %d bad settings", (int)firstLost);
+            snprintf(text, sizeof text, "point %d bad settings", (int)firstLost);
         } else if (!(bool)bEnable) {
             snprintf(text, sizeof text, "stopped");
         } else if (firstNever) {
-            snprintf(text, sizeof text, "pt %d unit %u no answer", (int)firstLost, (unsigned)firstUnit);
+            snprintf(text, sizeof text, "point %d unit %u no answer", (int)firstLost, (unsigned)firstUnit);
         } else {
-            snprintf(text, sizeof text, "pt %d unit %u lost", (int)firstLost, (unsigned)firstUnit);
+            snprintf(text, sizeof text, "point %d unit %u lost", (int)firstLost, (unsigned)firstUnit);
         }
         sStatusText = text;
         if (firstLost < 0) return strucpp::E_MODBUSRESULT::OK;
@@ -2350,9 +2378,9 @@ strucpp::E_MODBUSRESULT ReadDeviceIdentification()
         mbb_identityObject(r->reply, MBB_NAMEPLATE_BYTES, 0x01, r->product);
         mbb_identityObject(r->reply, MBB_NAMEPLATE_BYTES, 0x02, r->revision);
     }
-    sVendor = r->vendor.c_str();
-    sProduct = r->product.c_str();
-    sRevision = r->revision.c_str();
+    sVendorName = r->vendor.c_str();
+    sProductCode = r->product.c_str();
+    sMajorMinorRevision = r->revision.c_str();
     return mbb_noteCall((strucpp::XWORD_t)nMethods, "ReadDeviceIdentification", r, result);
 }
 
@@ -2365,28 +2393,28 @@ strucpp::E_MODBUSRESULT Device()
     const strucpp::E_MODBUSRESULT result = [&]() -> strucpp::E_MODBUSRESULT {
         if (r == nullptr) return strucpp::E_MODBUSRESULT::QUEUEFULL;
         ModbusAPI* mb = MBB_LINK();
-        if (mb == nullptr || !(bool)bLinkUp) {
+        if (mb == nullptr || !(bool)bLinkOpen) {
             bAnswering = false;
             return strucpp::E_MODBUSRESULT::LINKDOWN;
         }
         const uint8_t unit = (uint8_t)nUnitId;
         // Read off the traffic already happening: a screen of these puts
         // nothing extra on the bus.
-        const mb_time_t goneMs = mbb_millisOf(tGone) > 0 ? (mb_time_t)mbb_millisOf(tGone) : 5000u;
+        const mb_time_t goneMs = mbb_millisOf(tNotAnsweringAfter) > 0 ? (mb_time_t)mbb_millisOf(tNotAnsweringAfter) : 5000u;
         const mb_time_t silence = mb->silenceFor(unit);
         if (silence == MB_NEVER_HEARD) {
-            tSilent = mbb_timeOf(0);
-            bSeen = false;
+            tSinceLastHeard = mbb_timeOf(0);
+            bEverAnswered = false;
             bAnswering = false;
         } else {
-            tSilent = mbb_timeOf((int32_t)silence);
-            bSeen = true;
+            tSinceLastHeard = mbb_timeOf((int32_t)silence);
+            bEverAnswered = true;
             bAnswering = silence <= goneMs;
         }
         tRoundTrip = mbb_timeOf((int32_t)mb->roundTrip(unit));
         // The link test, for a device nothing else talks to. Refused as a
-        // duplicate while one is out, so a short tPoll cannot stack them.
-        const int32_t pollEvery = mbb_millisOf(tPoll);
+        // duplicate while one is out, so a short tDiagnosticPollInterval cannot stack them.
+        const int32_t pollEvery = mbb_millisOf(tDiagnosticPollInterval);
         if (pollEvery > 0) {
             const mb_time_t now = mb_millis();
             if (!r->polling || (int32_t)(now - (mb_time_t)(uint32_t)r->nextPoll) >= 0) {
@@ -2408,15 +2436,15 @@ strucpp::E_MODBUSRESULT Map()
     nServe = (strucpp::XWORD_t)(uintptr_t)&mbb_serve;
     MbbRecord* r = mbb_recordOf(mbb_methodsOf(nMethods), MBB_MAP, &anyData, "");
     const strucpp::E_MODBUSRESULT result = [&]() -> strucpp::E_MODBUSRESULT {
-        bWritten = false;
-        bSafeApplied = false;
+        bWrittenByClient = false;
+        bSafeValueApplied = false;
         if (r == nullptr) return strucpp::E_MODBUSRESULT::QUEUEFULL;
         ModbusAPI* mb = MBB_LINK();
         // A binding into a link that never opened is a map nothing serves.
-        if (mb == nullptr || !(bool)bLinkUp) return strucpp::E_MODBUSRESULT::LINKDOWN;
+        if (mb == nullptr || !(bool)bLinkOpen) return strucpp::E_MODBUSRESULT::LINKDOWN;
 
         const ModbusTable table = (ModbusTable)(int)(strucpp::E_MODBUSTABLE)eTable;
-        const uint16_t first = (uint16_t)nAddress;
+        const uint16_t first = (uint16_t)nStartAddress;
         const int32_t count = anyData.DICOUNT;
         if (!r->bound) {
             const uint8_t bits = mbb_elementBits((uint32_t)anyData.ELEMCLASS);
@@ -2434,7 +2462,7 @@ strucpp::E_MODBUSRESULT Map()
             if (!ok) return strucpp::E_MODBUSRESULT::INVALIDARGUMENT;
             // A safe state is per address, on a writable table; a range has no
             // single safe value, so it is never guessed.
-            const bool reset = (strucpp::E_MODBUSFAILSAFE)eOnLoss == strucpp::E_MODBUSFAILSAFE::RESETTOVALUE;
+            const bool reset = (strucpp::E_MODBUSFAILSAFE)eActionOnWriterLoss == strucpp::E_MODBUSFAILSAFE::RESETTOVALUE;
             if (reset && count == 1 && mb_tableIsWritable(table)) {
                 if (bits == 1) mb->failsafeCoil(first, (int32_t)nSafeValue != 0);
                 else mb->failsafeHreg(first, (uint16_t)(int32_t)nSafeValue);
@@ -2456,8 +2484,8 @@ strucpp::E_MODBUSRESULT Map()
         // other's edges.
         const uint32_t writes = mb->map().bindingWrites(table, first);
         const uint16_t safed = mb->map().failsafeCount(table, first);
-        bWritten = writes != r->seenWrites;
-        bSafeApplied = safed != r->seenFailsafe;
+        bWrittenByClient = writes != r->seenWrites;
+        bSafeValueApplied = safed != r->seenFailsafe;
         r->seenWrites = writes;
         r->seenFailsafe = safed;
         return strucpp::E_MODBUSRESULT::OK;
@@ -2469,22 +2497,22 @@ strucpp::E_MODBUSRESULT Statistics()
 {
     if (!mbb_inTask((strucpp::XWORD_t)nTask)) return strucpp::E_MODBUSRESULT::WRONGTASK;
     ModbusAPI* mb = MBB_LINK();
-    const bool reset = (bool)bReset && !(bool)bResetSeen;
-    bResetSeen = (bool)bReset;
+    const bool reset = (bool)bResetCounters && !(bool)bResetSeen;
+    bResetSeen = (bool)bResetCounters;
     if (mb == nullptr) return strucpp::E_MODBUSRESULT::LINKDOWN;
     if (reset) mb->resetStats();
     // Counted across outages: a reconnect count is worth reading most while
     // the link is down.
-    nPending = (int16_t)mb->pending();
+    nPendingOperations = (int16_t)mb->pending();
     const ModbusLinkStats stats = mb->stats();
-    nSent = (int32_t)stats.framesSent;
-    nReceived = (int32_t)stats.framesReceived;
-    nChecksumErrors = (int32_t)stats.checksumErrors;
-    nFramingErrors = (int32_t)stats.framingErrors;
-    nNoiseBytes = (int32_t)stats.noiseBytes;
-    nReconnects = (int32_t)mb->reconnects();
+    nFrameSentCount = (int32_t)stats.framesSent;
+    nFrameReceivedCount = (int32_t)stats.framesReceived;
+    nChecksumErrorCount = (int32_t)stats.checksumErrors;
+    nFramingErrorCount = (int32_t)stats.framingErrors;
+    nNoiseByteCount = (int32_t)stats.noiseBytes;
+    nReconnectCount = (int32_t)mb->reconnects();
     sFramingReason = mb->framingReason();
-    return (bool)bLinkUp ? strucpp::E_MODBUSRESULT::OK : strucpp::E_MODBUSRESULT::LINKDOWN;
+    return (bool)bLinkOpen ? strucpp::E_MODBUSRESULT::OK : strucpp::E_MODBUSRESULT::LINKDOWN;
 }
 
 END_FUNCTION_BLOCK

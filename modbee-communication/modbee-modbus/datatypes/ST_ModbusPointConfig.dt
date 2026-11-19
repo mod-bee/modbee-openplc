@@ -1,16 +1,16 @@
 TYPE
   ST_ModbusPointConfig : STRUCT
-    nUnitId   : BYTE;                       (* the device's address, 1..247 *)
-    eFunction : E_ModbusPointFunction;      (* how: ReadCoils..ReadInputRegisters read; WriteSingleCoil, WriteSingleRegister, WriteMultipleRegisters write *)
-    nAddress  : UINT;                       (* the register or coil, as the device manual numbers it from 0 *)
-    eType     : E_ModbusPointType;          (* what it holds: Bit, Int16, UInt16, Int32, UInt32, Float32, RegisterBit *)
-    eOrder    : E_ModbusOrder;              (* word order of a 32-bit value, from the manual *)
-    nBit      : USINT;                      (* RegisterBit only: which bit of the register, 0..15 *)
-    fScale    : REAL := 1.0;                (* engineering value = raw x fScale + fOffset (0 is taken as 1) *)
-    fOffset   : REAL;
-    tPeriod   : TIME := T#1s;               (* how often to read it, or to send it again *)
-    tStale    : TIME;                       (* no answer for this long = lost (Bad); T#0s = 3 x tPeriod *)
-    tTimeout  : TIME;                       (* this device's answer time limit: seconds over radio; T#0s = measured *)
-    bEnable   : BOOL := TRUE;               (* FALSE = not fitted: never asked, never ok *)
+    nUnitId : BYTE; (* the device's address, 1..247 *)
+    eFunctionCode : E_ModbusPointFunction; (* how: ReadCoils..ReadInputRegisters read; WriteSingleCoil, WriteSingleRegister, WriteMultipleRegisters write *)
+    nStartAddress : UINT; (* the register or coil, as the device manual numbers it from 0 *)
+    eDataType : E_ModbusPointType; (* what it holds: Bit, Int16, UInt16, Int32, UInt32, Float32, RegisterBit *)
+    eWordOrder : E_ModbusOrder; (* word order of a 32-bit value, from the manual *)
+    nBitNumber : USINT; (* RegisterBit only: which bit of the register, 0..15 *)
+    fScale : REAL := 1.0; (* engineering value = raw x fScale + fOffset (0 is taken as 1) *)
+    fOffset : REAL; (* added after scaling, in engineering units *)
+    tUpdateInterval : TIME := T#1s; (* how often to read it, or to send it again *)
+    tLostAfter : TIME; (* no answer for this long = lost (Bad); T#0s = 3 x tUpdateInterval *)
+    tTimeout : TIME; (* this device's answer time limit (seconds over radio); leave T#0s = measured *)
+    bEnable : BOOL := TRUE; (* FALSE = not fitted: never asked, never ok *)
   END_STRUCT;
 END_TYPE

@@ -1,12 +1,12 @@
 TYPE
   ST_ModbusPointStatus : STRUCT
-    fWriteValue : REAL;                     (* your logic: the value to write (write points), in engineering units *)
-    fValue      : REAL;                     (* the value in engineering units; the last good one is held while not ok *)
-    bValue      : BOOL;                     (* fValue <> 0, for a bit *)
-    bOk         : BOOL;                     (* fValue is good or a little late; FALSE before the first answer and once lost *)
-    eQuality    : E_ModbusQuality;          (* Unknown never answered, Good, Uncertain late, Bad lost *)
-    tAge        : TIME;                     (* since the last good answer *)
-    nFailures   : UINT;                     (* failed attempts in a row *)
-    eResult     : E_ModbusResult;           (* the last attempt's result *)
+    fWriteValue : REAL; (* your logic: the value to write (write points), in engineering units *)
+    fValue : REAL; (* the value in engineering units; the last good one is held while not ok *)
+    bValue : BOOL; (* fValue <> 0, for a bit *)
+    bGood : BOOL; (* fValue is good or a little late; FALSE before the first answer and once lost *)
+    eQuality : E_ModbusQuality; (* Unknown never answered, Good, Uncertain late, Bad lost *)
+    tValueAge : TIME; (* since the last good answer *)
+    nConsecutiveFailureCount : UINT; (* failed attempts in a row *)
+    eLastResult : E_ModbusResult; (* the last attempt's result *)
   END_STRUCT;
 END_TYPE

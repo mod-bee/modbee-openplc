@@ -4,7 +4,7 @@ Arranged by what you are seeing, not by what is wrong.
 
 ## The node will not start
 
-**`bLinkUp` is `FALSE` and `bError` is `TRUE`.**
+**`bLinkOpen` is `FALSE` and `bError` is `TRUE`.**
 
 Read `sLastError` first. It carries the operating system's own words, which say
 far more than a code can:
@@ -15,20 +15,20 @@ far more than a code can:
 | *"Permission denied"* | the runtime user cannot open the port. On Linux, add it to the `dialout` group |
 | *"Address already in use"* | another program has the TCP port. Often a second copy of this one still running |
 | *"no stSerialConfig.sDevice named"* | `sDevice` was left empty on a serial transport |
-| *"a serial server needs stSerialConfig.nUnitId, 1 to 247"* | `eRole` is `Server` or `Both`, and `nUnitId` is 0 |
+| *"a serial server needs stSerialConfig.nServerUnitId, 1 to 247"* | `eRole` is `Server` or `Both`, and `nServerUnitId` is 0 |
 | *"a server needs a Map call"* | `eRole` is `Server` or `Both`, and no `node.Map` is called |
-| *"a TCP client needs sHost; leave it empty to be a server"* | `eRole` is `Client` on TCP with no `sHost` |
+| *"a TCP client needs sHostName; leave it empty to be a server"* | `eRole` is `Client` on TCP with no `sHostName` |
 | *"that eTransport needs a board, not the Runtime"* | `eTransport` is an `Arduino...` value on the Runtime. Use a `Runtime...` one |
 | *"eFraming Tcp (MBAP) has no meaning on a serial line"* | `stTimingConfig.eFraming := E_ModbusFraming.Tcp` on a serial transport |
 | *"eFraming Ascii inside a TCP stream is not a Modbus transport"* | `eFraming := E_ModbusFraming.Ascii` on a network transport |
 | *"eTransport and eFraming cannot change once started"* | something is writing those while the program runs |
 | *"out of memory for nMaxClients connections"* | the board cannot hold that many TCP clients. Lower `stTimingConfig.nMaxClients` (or the bridge's `nMaxClients`) |
-| *"out of memory for the request queue"* | the board cannot hold the queue `nMaxPending` / `nMaxPendingBytes` ask for. Lower them |
+| *"out of memory for the request queue"* | the board cannot hold the queue `nMaxPendingOperations` / `nMaxPendingWriteBytes` ask for. Lower them |
 
 The node retries every two seconds, so a fault you fix is picked up without a
 restart.
 
-**`bLinkUp` is `TRUE` but `bConnected` is `FALSE`, `eErrorId` `LinkDown`.**
+**`bLinkOpen` is `TRUE` but `bConnected` is `FALSE`, `eErrorId` `LinkDown`.**
 A TCP client whose device is not there - nothing listening on that address
 and port. `sLastError` says *"not connected"*; the node keeps trying on its
 own.
@@ -39,8 +39,8 @@ own.
 
 Work down this list. It is in the order that finds faults fastest.
 
-**1. Look at `node.Statistics`.** If `nChecksumErrors`, `nFramingErrors` and
-`nNoiseBytes` are **all flat** while `nSent` climbs, no bytes are arriving at
+**1. Look at `node.Statistics`.** If `nChecksumErrorCount`, `nFramingErrorCount` and
+`nNoiseByteCount` are **all flat** while `nFrameSentCount` climbs, no bytes are arriving at
 all. That is wiring, not protocol: wrong port, A and B swapped, transmit and
 receive swapped, or the device is off. Stop reading this list and check the
 wiring.
@@ -49,16 +49,16 @@ If any of them is climbing, bytes *are* arriving and you have a protocol or
 signal-quality problem. Carry on.
 
 **2. Baud rate and parity.** A mismatch produces a steady stream of
-`nChecksumErrors` - the bytes arrive, the maths does not agree, and the request
+`nChecksumErrorCount` - the bytes arrive, the maths does not agree, and the request
 waiting for them times out. Note that `E_ModbusParity.None` means **8N2**,
 which is what the specification requires when parity is off. A device set to
 8N1 needs `E_ModbusParity.None8N1`.
 
-**3. Unit id.** The commonest single mistake. Check `node.Device`'s `bSeen`:
+**3. Unit id.** The commonest single mistake. Check `node.Device`'s `bEverAnswered`:
 **`FALSE` means that unit id has never answered anything**, which is a wrong
 address rather than a dead device.
 
-**4. Termination and bias.** `nNoiseBytes` climbing steadily on an idle bus is
+**4. Termination and bias.** `nNoiseByteCount` climbing steadily on an idle bus is
 a floating line. 120 ohm at each far end, and bias resistors somewhere.
 
 **5. Is it RTU over TCP?** If you are on TCP and getting silence, it is very
@@ -117,13 +117,13 @@ same method share one variable, so they share one record and fight over its
 | `InvalidArgument` | a zero count, an `nQuantity` past the end of the variable, a quantity past what one request may carry (2000 bits or 125 registers for a read), or a `BOOL` aimed at a register table |
 | `Duplicate` | an identical request from another variable is already outstanding |
 | `Superseded` | a newer write to the same address replaced this one. **Not an error** |
-| `QueueFull` | you are asking faster than the bus can answer. Watch fewer things, or less often - or raise `stTimingConfig.nMaxPending` / `nMaxPendingBytes` if the bursts are expected |
-| `LinkDown` | the link is not open, or a TCP client's device is not connected. Check `node.bLinkUp`, `bConnected` and `sLastError` |
+| `QueueFull` | you are asking faster than the bus can answer. Watch fewer things, or less often - or raise `stTimingConfig.nMaxPendingOperations` / `nMaxPendingWriteBytes` if the bursts are expected |
+| `LinkDown` | the link is not open, or a TCP client's device is not connected. Check `node.bLinkOpen`, `bConnected` and `sLastError` |
 | `WrongTask` | see the last section |
 
 ## Frames go missing on RS-485
 
-**`nFramingErrors` climbing, or reads that work intermittently.**
+**`nFramingErrorCount` climbing, or reads that work intermittently.**
 
 Read `sFramingReason` from `node.Statistics`. It says which rule the link is
 using and why, in a sentence.
@@ -145,8 +145,8 @@ the bytes.
 
 **`eQuality` is `Bad`.**
 
-It was arriving and has stopped. Check `nFailures` - one is a hiccup, ten is a
-device that has gone - and `node.Device`'s `tSilent` for how long.
+It was arriving and has stopped. Check `nConsecutiveFailureCount` - one is a hiccup, ten is a
+device that has gone - and `node.Device`'s `tSinceLastHeard` for how long.
 
 Note the backoff: a device that stops answering is retried progressively less
 often, down to one attempt in sixteen, so that one dead unit does not consume
@@ -161,7 +161,7 @@ method's result says which.
 
 **`eQuality` flickers to `Uncertain`.**
 
-The value is arriving late. Either `tPeriod` is shorter than the bus can
+The value is arriving late. Either `tReadInterval` is shorter than the bus can
 manage, or the node's task is too slow, or there are too many watches. All
 three are in [10 - Scan rate](10-scan-rate.md).
 
@@ -169,7 +169,7 @@ three are in [10 - Scan rate](10-scan-rate.md).
 
 **`eRole`** must be `E_ModbusRole.Server` or `Both`.
 
-**`stSerialConfig.nUnitId`** must match what the client is asking for - on
+**`stSerialConfig.nServerUnitId`** must match what the client is asking for - on
 serial. On TCP the unit id does not matter.
 
 **`node.Map` must return `Ok`.** `InvalidArgument` means the variable and the
@@ -181,14 +181,14 @@ table disagree: a `BOOL` in a register table, a number in a coil table, a
 
 ## The failsafe never fires
 
-`eOnLoss` needs **`stTimingConfig.tFailsafe`** on the node. Without a silence
+`eActionOnWriterLoss` needs **`stTimingConfig.tWriterLossAfter`** on the node. Without a silence
 to measure there is no loss to act on, and `Map` cannot tell you that because
 nothing is wrong with it.
 
 `ResetToValue` applies to a **single value only** - a range has no one safe
 value. Map the few addresses that need a safe state individually.
 
-Test it by pulling the cable and watching `bSafeApplied`.
+Test it by pulling the cable and watching `bSafeValueApplied`.
 
 ## It works on the Runtime and not on the board
 
@@ -204,10 +204,10 @@ plain `#include` for it, and a header behind a conditional is invisible to that
 scanner. Add `MODBUS_ENABLE_ETHERNET` to the project's build flags and it
 compiles in.
 
-**The node will not start and says *"set stNetworkConfig.sIp, or 'dhcp' to ask
-for one"*.** A fixed address is required on Wi-Fi and on Ethernet - see
-[03 - The node block](03-the-node-block.md). Write `sIp := 'dhcp'` if you
-genuinely want a server-assigned one.
+**A board on DHCP keeps changing address.** `sIpAddress` is empty, so the node
+asks a DHCP server and takes whatever lease it gets; a SCADA package cannot
+poll an address that moves. Give it a fixed address - see
+[03 - The node block](03-the-node-block.md).
 
 **Ethernet says *"no Ethernet controller found on SPI"*.** The shield or module
 is not answering - usually the chip select pin, or it is not seated.

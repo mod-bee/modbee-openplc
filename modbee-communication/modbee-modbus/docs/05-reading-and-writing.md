@@ -27,7 +27,7 @@ takes its inputs at that edge, and returns an `E_ModbusResult`:
 
 ```
 eRead := node.ReadHoldingRegisters(anyData := aRegs, nUnitId := 2,
-                                   nAddress := 40, bExecute := bRead);
+                                   nStartAddress := 40, bExecute := bRead);
 ```
 
 | it returns | when |
@@ -51,7 +51,7 @@ END_IF;
 ```
 
 **Holding `bExecute` high is safe.** It reads once on the rising edge, not
-once a scan, and changing `nAddress` or the variable while it is high does
+once a scan, and changing `nStartAddress` or the variable while it is high does
 nothing until the next edge. A failing request is also named on the node's
 `bError` and `sLastError` until it succeeds.
 
@@ -69,9 +69,9 @@ One method for a single value or a whole range, and for values wider than a
 register. What you pass decides which:
 
 ```
-node.ReadCoils(anyData := aCoils, nUnitId := 2, nAddress := 0, bExecute := bRead);
-node.ReadInputRegisters(anyData := fFlowRate, nUnitId := 2, nAddress := 30,
-                        eOrder := E_ModbusOrder.CDAB, bExecute := bRead);
+node.ReadCoils(anyData := aCoils, nUnitId := 2, nStartAddress := 0, bExecute := bRead);
+node.ReadInputRegisters(anyData := fFlowRate, nUnitId := 2, nStartAddress := 30,
+                        eWordOrder := E_ModbusOrder.CDAB, bExecute := bRead);
 ```
 
 The coil and discrete-input reads take a `BOOL` or an array of `BOOL`; the
@@ -109,8 +109,8 @@ variable - is refused as `Duplicate` rather than queued twice.
 ```
 node.WriteSingleRegister(nValue := nSetpoint, nUnitId := 2, nAddress := 40, bExecute := bSend);
 node.WriteSingleCoil(bValue := bRun, nUnitId := 2, nAddress := 7, bExecute := bSend);
-node.WriteMultipleRegisters(anyData := aRecipe, nUnitId := 2, nAddress := 100, bExecute := bSend);
-node.WriteMultipleCoils(anyData := aLamps, nUnitId := 2, nAddress := 0, bExecute := bSend);
+node.WriteMultipleRegisters(anyData := aRecipe, nUnitId := 2, nStartAddress := 100, bExecute := bSend);
+node.WriteMultipleCoils(anyData := aLamps, nUnitId := 2, nStartAddress := 0, bExecute := bSend);
 ```
 
 The values are **copied at the edge**: change the variable while the write is
@@ -155,8 +155,8 @@ and reading back the result gets the result of the command it just sent:
 
 ```
 node.ReadWriteMultipleRegisters(anyReadData := aStatus, anyWriteData := aCommand,
-                                nUnitId := 2, nReadAddress := 200,
-                                nWriteAddress := 100, bExecute := bSend);
+                                nUnitId := 2, nReadStartAddress := 200,
+                                nWriteStartAddress := 100, bExecute := bSend);
 ```
 
 `WORD`, `INT` or `UINT` only, up to 125 read and 121 written.
@@ -176,8 +176,8 @@ register reads or to `WriteMultipleRegisters`, and the method reads or writes
 the two or four registers and converts them:
 
 ```
-node.ReadInputRegisters(anyData := fFlowRate, nUnitId := 2, nAddress := 30,
-                        eOrder := E_ModbusOrder.CDAB, bExecute := bRead);
+node.ReadInputRegisters(anyData := fFlowRate, nUnitId := 2, nStartAddress := 30,
+                        eWordOrder := E_ModbusOrder.CDAB, bExecute := bRead);
 ```
 
 An array works too, and is still one request: eight `REAL` setpoints are one
@@ -188,7 +188,7 @@ half-arrive**.
 
 **Nothing on the Modbus wire says which way round a device puts a 32-bit
 value.** There is no convention, no negotiation, and plenty of manuals do not
-say either. So it is an explicit parameter, `eOrder`, named the way vendor
+say either. So it is an explicit parameter, `eWordOrder`, named the way vendor
 manuals name it:
 
 | | |
@@ -208,19 +208,19 @@ to the default. If neither works, read the two registers as plain `WORD`s and
 look at them in the debugger - the bytes are all there, and one of the four
 arrangements will be a plausible number.
 
-`eOrder` is ignored for `BOOL` and the 16-bit types, which have nothing to
+`eWordOrder` is ignored for `BOOL` and the 16-bit types, which have nothing to
 reorder.
 
 ## Keeping a value fresh, and knowing whether to trust it
 
 ```
 eLevel := node.Watch(anyData := aTankLevel, nUnitId := 1,
-                     eTable := E_ModbusTable.InputRegister, nAddress := 30,
-                     tPeriod := T#2s, eQuality => eLevelQ, bSeen => bLevelSeen,
-                     tAge => tLevelAge, nFailures => nLevelFailures);
+                     eTable := E_ModbusTable.InputRegister, nStartAddress := 30,
+                     tReadInterval := T#2s, eQuality => eLevelQ, bValueEverReceived => bLevelSeen,
+                     tValueAge => tLevelAge, nConsecutiveFailureCount => nLevelFailures);
 ```
 
-No `bExecute`: call it every scan. Every `tPeriod` it decides a read is due
+No `bExecute`: call it every scan. Every `tReadInterval` it decides a read is due
 and hands it to the **same queue everything else uses**. The node transmits it
 on its next call. `eTable` says which table to read; the variable says how
 many, as for the requests.
@@ -232,7 +232,7 @@ contract rather than being a special case:
   **cannot flood the bus** however short its period;
 - a device that stops answering is backed off to as little as one attempt in
   sixteen, so one dead unit does not consume the segment;
-- every read reaches exactly one conclusion, which is what `nFailures` counts.
+- every read reaches exactly one conclusion, which is what `nConsecutiveFailureCount` counts.
 
 It returns the last read's result: `Ok`, or why the last read failed.
 
@@ -276,13 +276,13 @@ of the site:
 An alarm list that shows both as "no comms" throws that distinction away, and
 it is the most useful thing on the method.
 
-`bSeen` says the same as a `BOOL` a rung can read: `FALSE` means nothing has
-ever arrived. `tAge` is the time since the value last arrived - `T#0s` until it
-ever has, which `bSeen` tells apart from a fresh one.
+`bValueEverReceived` says the same as a `BOOL` a rung can read: `FALSE` means nothing has
+ever arrived. `tValueAge` is the time since the value last arrived - `T#0s` until it
+ever has, which `bValueEverReceived` tells apart from a fresh one.
 
-### Choosing tPeriod
+### Choosing tReadInterval
 
-`tPeriod` is what you asked for, and it is also **what `eQuality` is judged
+`tReadInterval` is what you asked for, and it is also **what `eQuality` is judged
 against**. Ask for 100 ms on a bus that cannot manage it and the value will
 read `Uncertain` for being exactly as late as you should have expected.
 
@@ -302,7 +302,7 @@ Every extra read is bus time a control word cannot have.
 one machine state costs nothing the rest of the time. Starting it reads at once
 rather than waiting out a period.
 
-**`nUnitId`, `eTable`, `nAddress` and `eOrder` may change while it runs** -
+**`nUnitId`, `eTable`, `nStartAddress` and `eWordOrder` may change while it runs** -
 from settings, say - and the watch follows: the same record is re-aimed,
 `eQuality` goes back to `Unknown` and the next read goes to the new place.
 `nQuantity` and the variable are fixed at the first call. For a value whose

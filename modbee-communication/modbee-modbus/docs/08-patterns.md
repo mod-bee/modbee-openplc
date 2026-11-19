@@ -18,7 +18,7 @@ Values cross between them through globals, each written by one task.
 PROGRAM net
 VAR
     node   : FB_ModbusNode;
-    serial : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200, nUnitId := 7);
+    serial : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200, nServerUnitId := 7);
 END_VAR
 
 node(eTransport := E_ModbusTransport.RuntimeSerial, eRole := E_ModbusRole.Both,
@@ -57,11 +57,11 @@ actually needs:
 ```
 (* a tank level: seconds is plenty *)
 node.Watch(anyData := nTankLevel, nUnitId := 1, eTable := E_ModbusTable.InputRegister,
-           nAddress := 30, tPeriod := T#2s, eQuality => eTankQ);
+           nStartAddress := 30, tReadInterval := T#2s, eQuality => eTankQ);
 
 (* a torque feedback in a closed loop: as fast as the bus will bear *)
 node.Watch(anyData := nMotorTorque, nUnitId := 2, eTable := E_ModbusTable.InputRegister,
-           nAddress := 10, tPeriod := T#100ms, eQuality => eTorqueQ);
+           nStartAddress := 10, tReadInterval := T#100ms, eQuality => eTorqueQ);
 ```
 
 **Stop watching what you are not using.** `bEnable` stops and starts a watch in
@@ -70,7 +70,7 @@ place, with no second record and no cost while it is off:
 ```
 (* the dryer's sensors matter only while the dryer runs *)
 node.Watch(anyData := aDryerTemps, nUnitId := 5, eTable := E_ModbusTable.InputRegister,
-           nAddress := 0, tPeriod := T#500ms, bEnable := bDryerRunning);
+           nStartAddress := 0, tReadInterval := T#500ms, bEnable := bDryerRunning);
 ```
 
 **Write only when the value changed.** A write is a request, so it goes on an
@@ -85,7 +85,7 @@ IF bSendSpeed THEN nLastSpeed := nNewSpeed; END_IF;
 
 Or, for a setpoint a device should be told again every so often - a remote
 relay with a watchdog - a write `Point`, which sends on change and every
-`tPeriod` ([11 - Points from settings](11-points-from-settings.md)).
+`tReadInterval` ([11 - Points from settings](11-points-from-settings.md)).
 
 **Read a range, not an address at a time.** One request for a hundred registers
 is one frame. A hundred requests is a hundred frames and a hundred turnarounds:
@@ -108,8 +108,8 @@ VAR
 END_VAR
 
 node.Watch(anyData := aFeedback, nUnitId := 2, eTable := E_ModbusTable.InputRegister,
-           nAddress := 10, tPeriod := T#200ms, eQuality => eFeedbackQ);
-node.Device(nUnitId := 2, bSeen => bDriveSeen, bAnswering => bDriveAnswers);
+           nStartAddress := 10, tReadInterval := T#200ms, eQuality => eFeedbackQ);
+node.Device(nUnitId := 2, bEverAnswered => bDriveSeen, bAnswering => bDriveAnswers);
 
 (* Two different faults, two different alarms, two different engineers *)
 bDriveMissing := NOT bDriveSeen;                      (* never answered: commissioning *)
@@ -132,11 +132,11 @@ VAR
 END_VAR
 
 node.Watch(anyData := fFlowRate, nUnitId := 3, eTable := E_ModbusTable.InputRegister,
-           nAddress := 30, tPeriod := T#1s, eOrder := E_ModbusOrder.CDAB,
+           nStartAddress := 30, tReadInterval := T#1s, eWordOrder := E_ModbusOrder.CDAB,
            eQuality => eFlowQ);
 ```
 
-If it reads `4.6e-41` instead of `1234.5`, the address is right and `eOrder` is
+If it reads `4.6e-41` instead of `1234.5`, the address is right and `eWordOrder` is
 wrong. Try `CDAB` first if you were on `ABCD`, and the other way round. See
 [05 - Reading and writing](05-reading-and-writing.md).
 
@@ -146,24 +146,24 @@ wrong. Try `CDAB` first if you were on `ABCD`, and the other way round. See
 PROGRAM net
 VAR
     node       : FB_ModbusNode;
-    serial     : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200, nUnitId := 7);
-    timing     : ST_ModbusTimingConfig := (tFailsafe := T#5s);
-    ident      : ST_ModbusIdentityConfig := (sVendor := 'Example Co', sProduct := 'Pump House');
+    serial     : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200, nServerUnitId := 7);
+    timing     : ST_ModbusTimingConfig := (tWriterLossAfter := T#5s);
+    ident      : ST_ModbusIdentityConfig := (sVendorName := 'Example Co', sProductCode := 'Pump House');
     aReadings  : ARRAY [0..15] OF WORD;
     aSetpoints : ARRAY [0..3] OF WORD;
-    bWritten   : BOOL;
+    bWrittenByClient  : BOOL;
 END_VAR
 
 node(eTransport := E_ModbusTransport.RuntimeSerial, eRole := E_ModbusRole.Both,
      stSerialConfig := serial, stTimingConfig := timing, stIdentityConfig := ident);
 
 (* Read-only to anyone outside: the table has no write function code *)
-node.Map(anyData := aReadings, eTable := E_ModbusTable.InputRegister, nAddress := 0);
+node.Map(anyData := aReadings, eTable := E_ModbusTable.InputRegister, nStartAddress := 0);
 
 (* Writable, and therefore validated *)
-node.Map(anyData := aSetpoints, eTable := E_ModbusTable.HoldingRegister, nAddress := 100,
-         bWritten => bWritten);
-IF bWritten THEN
+node.Map(anyData := aSetpoints, eTable := E_ModbusTable.HoldingRegister, nStartAddress := 100,
+         bWrittenByClient => bWrittenByClient);
+IF bWrittenByClient THEN
     IF aSetpoints[0] > 1500 THEN aSetpoints[0] := 1500; END_IF;
     bAcceptSetpoint := TRUE;
 END_IF;
@@ -184,10 +184,10 @@ VAR
     rtuOverTcp         : ST_ModbusTimingConfig := (eFraming := E_ModbusFraming.Rtu);
 END_VAR
 
-segmentA(eTransport := E_ModbusTransport.RuntimeTcp, sHost := '192.168.1.50',
-         nPort := 4001, stTimingConfig := rtuOverTcp);
-segmentB(eTransport := E_ModbusTransport.RuntimeTcp, sHost := '192.168.1.50',
-         nPort := 4002, stTimingConfig := rtuOverTcp);
+segmentA(eTransport := E_ModbusTransport.RuntimeTcp, sHostName := '192.168.1.50',
+         nTcpPort := 4001, stTimingConfig := rtuOverTcp);
+segmentB(eTransport := E_ModbusTransport.RuntimeTcp, sHostName := '192.168.1.50',
+         nTcpPort := 4002, stTimingConfig := rtuOverTcp);
 ```
 
 Both in the fast task. Two nodes are two independent buses, which is exactly
@@ -204,17 +204,17 @@ VAR
     segment : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200);
 END_VAR
 
-bridge(stSerialConfig := segment, nPort := 502, nFirstUnitId := 1, nLastUnitId := 32);
+bridge(stSerialConfig := segment, nTcpPort := 502, nFirstUnitId := 1, nLastUnitId := 32);
 
 (* Two alarms, because they send you to different places *)
-bGatewayFault := bridge.nNoPath > 0;      (* our routing is wrong *)
-bFieldFault   := bridge.nNoDevice > 0;    (* a device is not answering *)
+bGatewayFault := bridge.nGatewayPathUnavailableCount > 0;      (* our routing is wrong *)
+bFieldFault   := bridge.nGatewayTargetFailedCount > 0;    (* a device is not answering *)
 END_PROGRAM
 ```
 
 ## Habits worth keeping
 
-**Interlock on `eQuality` or `bOk`, never on a value alone.** A stale register
+**Interlock on `eQuality` or `bGood`, never on a value alone.** A stale register
 looks exactly like a steady process.
 
 **Give `Unknown` and `Bad` separate alarms.** One is a commissioning fault, the
@@ -233,7 +233,7 @@ permission somebody can alter later.
 belongs in your program.
 
 **Test the failsafe by pulling the cable**, on commissioning, and watch
-`bSafeApplied`. A failsafe nobody has seen fire is a failsafe nobody knows
+`bSafeValueApplied`. A failsafe nobody has seen fire is a failsafe nobody knows
 works.
 
 **Use `WORD` for registers, not `INT`.** `WORD` is what you can mask, shift and

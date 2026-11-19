@@ -10,13 +10,13 @@ Set the node's role, then say what lives where:
 ```
 VAR
     node   : FB_ModbusNode;
-    serial : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200, nUnitId := 7);
+    serial : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200, nServerUnitId := 7);
     aTrend : ARRAY [0..9] OF WORD;
 END_VAR
 
 node(eTransport := E_ModbusTransport.RuntimeSerial, eRole := E_ModbusRole.Both,
      stSerialConfig := serial);
-node.Map(anyData := aTrend, eTable := E_ModbusTable.InputRegister, nAddress := 100);
+node.Map(anyData := aTrend, eTable := E_ModbusTable.InputRegister, nStartAddress := 100);
 ```
 
 `aTrend` now **is** input registers 100 to 109.
@@ -28,8 +28,8 @@ nothing to keep in step. Call `Map` every scan, as every standing method: it
 returns `E_ModbusResult.Ok` while the range is bound, and `LinkDown` until the
 link is open.
 
-**The array's lower bound maps to `nAddress`, whatever that bound is.**
-`ARRAY [0..9]` at `nAddress := 100` is 100 to 109; so is `ARRAY [1..10]`.
+**The array's lower bound maps to `nStartAddress`, whatever that bound is.**
+`ARRAY [0..9]` at `nStartAddress := 100` is 100 to 109; so is `ARRAY [1..10]`.
 
 **A server needs at least one `Map`.** It hands the node its server half, and
 without one the node refuses to open as a server.
@@ -88,7 +88,7 @@ Publish a scaled integer instead, which is what a real device does:
 ```
 (* 4.7 mA becomes 470 - 0.01 mA of resolution, and the client divides *)
 nScaled := REAL_TO_INT(fMilliamps * 100.0);
-node.Map(anyData := nScaled, eTable := E_ModbusTable.InputRegister, nAddress := 0);
+node.Map(anyData := nScaled, eTable := E_ModbusTable.InputRegister, nStartAddress := 0);
 ```
 
 Say the scaling in your address list, the same way every instrument manual
@@ -102,25 +102,25 @@ Call `Map` once per range, each with its own variable. That is how
 non-consecutive ranges are expressed:
 
 ```
-node.Map(anyData := aReadings, eTable := E_ModbusTable.InputRegister, nAddress := 0);
-node.Map(anyData := aSetpoints, eTable := E_ModbusTable.HoldingRegister, nAddress := 100,
-         bWritten => bSetpointsWritten);
-node.Map(anyData := aLamps, eTable := E_ModbusTable.Coil, nAddress := 0);
+node.Map(anyData := aReadings, eTable := E_ModbusTable.InputRegister, nStartAddress := 0);
+node.Map(anyData := aSetpoints, eTable := E_ModbusTable.HoldingRegister, nStartAddress := 100,
+         bWrittenByClient => bSetpointsWritten);
+node.Map(anyData := aLamps, eTable := E_ModbusTable.Coil, nStartAddress := 0);
 ```
 
 Each call is found again by its variable's declared name, so each range is its
-own record with its own `bWritten`. A binding is made once: the same variable
+own record with its own `bWrittenByClient`. A binding is made once: the same variable
 moved to another table or address is refused with `InvalidArgument` rather
 than served from where nothing looks.
 
 ## Knowing when a client wrote
 
-`bWritten` is `TRUE` on the call after a client wrote **any** address in this
+`bWrittenByClient` is `TRUE` on the call after a client wrote **any** address in this
 range, whether or not the value changed:
 
 ```
 node.Map(anyData := aSetpoints, eTable := E_ModbusTable.HoldingRegister,
-         nAddress := 100, bWritten => bSetpointsWritten);
+         nStartAddress := 100, bWrittenByClient => bSetpointsWritten);
 
 IF bSetpointsWritten THEN
     (* validate before acting on anything a stranger sent *)
@@ -142,26 +142,26 @@ away". Two settings:
 
 ```
 VAR
-    timing : ST_ModbusTimingConfig := (tFailsafe := T#5s);
+    timing : ST_ModbusTimingConfig := (tWriterLossAfter := T#5s);
 END_VAR
 
 node(eTransport := E_ModbusTransport.RuntimeTcp, eRole := E_ModbusRole.Server,
      stTimingConfig := timing);
-node.Map(anyData := nDemandSpeed, eTable := E_ModbusTable.HoldingRegister, nAddress := 40,
-         eOnLoss := E_ModbusFailsafe.ResetToValue, nSafeValue := 0,
-         bSafeApplied => bSpeedSafed);
+node.Map(anyData := nDemandSpeed, eTable := E_ModbusTable.HoldingRegister, nStartAddress := 40,
+         eActionOnWriterLoss := E_ModbusFailsafe.ResetToValue, nSafeValue := 0,
+         bSafeValueApplied => bSpeedSafed);
 ```
 
-`stTimingConfig.tFailsafe` is the silence that counts as loss: no request
+`stTimingConfig.tWriterLossAfter` is the silence that counts as loss: no request
 from any client for that long - on TCP whether the client is still connected
-or has closed its connection. It fires once per loss. `eOnLoss` on
-the map says what that address does about it. `bSafeApplied` says when it
+or has closed its connection. It fires once per loss. `eActionOnWriterLoss` on
+the map says what that address does about it. `bSafeValueApplied` says when it
 happened.
 
-**Both are needed.** Without `tFailsafe` there is no silence to measure, so
-`eOnLoss` never fires - which is a quiet way to have no safety at all, and
+**Both are needed.** Without `tWriterLossAfter` there is no silence to measure, so
+`eActionOnWriterLoss` never fires - which is a quiet way to have no safety at all, and
 worth checking on commissioning by pulling the cable and watching
-`bSafeApplied`.
+`bSafeValueApplied`.
 
 `ResetToValue` applies to a **single value only**. A range has no one safe
 value, and guessing one would be worse than holding. Map the few addresses
@@ -178,8 +178,8 @@ A server answers function code 43 - what a handheld tool or another PLC's
 
 ```
 VAR
-    ident : ST_ModbusIdentityConfig := (sVendor := 'Example Co',
-                                        sProduct := 'Intake RTU', sRevision := '1.0');
+    ident : ST_ModbusIdentityConfig := (sVendorName := 'Example Co',
+                                        sProductCode := 'Intake RTU', sMajorMinorRevision := '1.0');
 END_VAR
 
 node(..., stIdentityConfig := ident);

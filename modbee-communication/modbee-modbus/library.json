@@ -1,7 +1,7 @@
 {
   "name": "modbee-modbus",
   "displayName": "Modbus",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "namespace": "modbee_modbus",
   "description": "Function blocks that put Modbus inside an OpenPLC program, one block per link with the work as its methods. FB_ModbusNode covers every combination - RTU, ASCII or TCP, client, server or both, on a board or on the Runtime - with option structures for the serial line, the timing and limits, the nameplate and a board's network, and a method per Modbus function: ReadCoils, ReadDiscreteInputs, ReadHoldingRegisters, ReadInputRegisters, WriteSingleCoil, WriteSingleRegister, WriteMultipleCoils, WriteMultipleRegisters, MaskWriteRegister, ReadWriteMultipleRegisters and ReadDeviceIdentification, 32- and 64-bit values in all four word orders. Watch keeps a value up to date with a data quality that says how much to believe it; Point and Points define a value - or a whole table of them - entirely by settings (unit, function, address, type, word order, scaling, timeout), so a sensor is changed from an HMI rather than in the program; Device says how one device is doing; Map binds your variables at Modbus addresses for others to read and write, with a failsafe; Statistics reports the link. FB_ModbusBridge puts TCP clients in front of a serial segment. Nothing here blocks, and nothing guesses a length: the variable you pass says how many.",
   "build": {

@@ -50,7 +50,7 @@ the link opens.
 For TCP instead:
 
 ```
-node(eTransport := E_ModbusTransport.RuntimeTcp, sHost := '192.168.1.50');
+node(eTransport := E_ModbusTransport.RuntimeTcp, sHostName := '192.168.1.50');
 ```
 
 ## Step 2 - give it a task of its own
@@ -79,13 +79,13 @@ round. [10 - Scan rate](10-scan-rate.md) has the numbers.
 
 ## Step 3 - check it opened
 
-`node.bLinkUp` is `TRUE` once the port opened. If it is `FALSE`,
+`node.bLinkOpen` is `TRUE` once the port opened. If it is `FALSE`,
 `node.eErrorId` says why in a code and **`node.sLastError` says it in the
 operating system's own words** - *"No such file or directory"* for a wrong
 path, *"Permission denied"* for a user who is not in the `dialout` group. Read
 that one first; it says far more than a code can.
 
-For a TCP client, `node.bConnected` says whether the device at `sHost` is
+For a TCP client, `node.bConnected` says whether the device at `sHostName` is
 actually there. When it is not, `eErrorId` is `LinkDown`, `sLastError` says
 *"not connected"*, and the node keeps trying.
 
@@ -99,12 +99,12 @@ VAR
     serial  : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200);
     aRegs   : ARRAY [0..3] OF WORD;
     bRead   : BOOL;
-    eResult : E_ModbusResult;
+    eLastResult : E_ModbusResult;
 END_VAR
 
 node(eTransport := E_ModbusTransport.RuntimeSerial, stSerialConfig := serial);
-eResult := node.ReadHoldingRegisters(anyData := aRegs, nUnitId := 1,
-                                     nAddress := 40, bExecute := bRead);
+eLastResult := node.ReadHoldingRegisters(anyData := aRegs, nUnitId := 1,
+                                     nStartAddress := 40, bExecute := bRead);
 ```
 
 A rising edge on `bRead` reads holding registers 40 to 43 from unit 1.
@@ -122,7 +122,7 @@ with the values in `aRegs`. It keeps returning that outcome until the next
 rising edge of `bRead`, so you can act on it whenever you look:
 
 ```
-IF eResult = E_ModbusResult.Ok THEN
+IF eLastResult = E_ModbusResult.Ok THEN
     nMotorSpeed := aRegs[0];
 END_IF;
 ```
@@ -134,7 +134,7 @@ it proves the wiring works. The node also names the failing call on
 succeeds.
 
 **Holding `bRead` high is safe.** It reads once on the edge, not once a scan,
-and changing `nAddress` while it is high does nothing until the next edge.
+and changing `nStartAddress` while it is high does nothing until the next edge.
 
 ## Step 5 - a value that keeps itself up to date
 
@@ -147,8 +147,8 @@ VAR
 END_VAR
 
 node.Watch(anyData := aTankLevel, nUnitId := 1,
-           eTable := E_ModbusTable.InputRegister, nAddress := 30,
-           tPeriod := T#2s, eQuality => eLevelQ);
+           eTable := E_ModbusTable.InputRegister, nStartAddress := 30,
+           tReadInterval := T#2s, eQuality => eLevelQ);
 ```
 
 No `bExecute`. Call it every scan; every two seconds it decides a read is due,
@@ -177,16 +177,16 @@ answer as well as ask, and say what lives where:
 ```
 VAR
     node   : FB_ModbusNode;
-    serial : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200, nUnitId := 7);
+    serial : ST_ModbusSerialConfig := (sDevice := '/dev/ttyUSB0', nBaudRate := 19200, nServerUnitId := 7);
     aTrend : ARRAY [0..9] OF WORD;
 END_VAR
 
 node(eTransport := E_ModbusTransport.RuntimeSerial, eRole := E_ModbusRole.Both,
      stSerialConfig := serial);
-node.Map(anyData := aTrend, eTable := E_ModbusTable.InputRegister, nAddress := 100);
+node.Map(anyData := aTrend, eTable := E_ModbusTable.InputRegister, nStartAddress := 100);
 ```
 
-`nUnitId := 7` is the address other devices call your PLC by. `aTrend` now
+`nServerUnitId := 7` is the address other devices call your PLC by. `aTrend` now
 *is* input registers 100 to 109 - a client reading them gets whatever the
 array holds at that instant. Nothing is copied and there is no `bExecute`,
 because once mapped the variable **is** the register.

@@ -54,10 +54,10 @@ PROGRAM net                                  (* NET_TASK *)
   END_VAR
   node(eTransport := E_ModbusTransport.RuntimeSerial, stSerialConfig := serial);
   node.Watch(anyData := fFlow, nUnitId := 2, eTable := E_ModbusTable.HoldingRegister,
-             nAddress := 100, tPeriod := T#500ms);
+             nStartAddress := 100, tReadInterval := T#500ms);
   node.Point(anyValue := fSpeed, nUnitId := 2,
-             eFunction := E_ModbusPointFunction.WriteMultipleRegisters,
-             nAddress := 200, eType := E_ModbusPointType.Float32, tPeriod := T#5s);
+             eFunctionCode := E_ModbusPointFunction.WriteMultipleRegisters,
+             nStartAddress := 200, eDataType := E_ModbusPointType.Float32, tUpdateInterval := T#5s);
   PLANT.rFlow := fFlow;
   fSpeed := PLANT.rSpeedSp;
 END_PROGRAM
@@ -129,7 +129,7 @@ there is none, and every write starts queueing behind a watch.
 **Signs you have overbooked the bus:**
 
 - `Watch`'s `eQuality` sitting at `Uncertain` - values arriving, but late;
-- `Statistics`' `nPending` climbing instead of hovering near zero;
+- `Statistics`' `nPendingOperations` climbing instead of hovering near zero;
 - `QueueFull` on requests that used to work;
 - a write that takes noticeably longer than it used to.
 
@@ -148,7 +148,7 @@ there is none, and every write starts queueing behind a watch.
 This is worth stating plainly, because it is what makes `Watch` safe to use
 freely.
 
-A watch asks for a read every `tPeriod`. If the previous read is **still
+A watch asks for a read every `tReadInterval`. If the previous read is **still
 outstanding** when the next falls due, the new one is not stacked behind it.
 So the worst a watch can do is have one request outstanding at a time, however
 short its period.
@@ -166,7 +166,7 @@ apart:
 | | how to tell |
 | --- | --- |
 | **the node's task interval** | it is slower than it needs to be. Check first, fix first |
-| **the bus is full** | `nPending` climbing, `eQuality` `Uncertain` |
+| **the bus is full** | `nPendingOperations` climbing, `eQuality` `Uncertain` |
 | **the device is slow** | `Device`'s `tRoundTrip` is high for that unit and normal for the others |
 | **the bus is slow** | `tRoundTrip` is high for every unit |
 

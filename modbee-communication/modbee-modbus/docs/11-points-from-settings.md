@@ -11,10 +11,10 @@ settings change and not a PLC change.
 
 ```
 eFlow := node.Point(anyValue := fFlowLps, nUnitId := nFlowUnit,
-                    eFunction := eFlowFunction, nAddress := nFlowAddress,
-                    eType := eFlowType, eOrder := eFlowOrder,
-                    fScale := fFlowScale, tPeriod := T#2s,
-                    bOk => bFlowOk, eQuality => eFlowQ);
+                    eFunctionCode := eFlowFunction, nStartAddress := nFlowAddress,
+                    eDataType := eFlowType, eWordOrder := eFlowOrder,
+                    fScale := fFlowScale, tUpdateInterval := T#2s,
+                    bGood => bFlowOk, eQuality => eFlowQ);
 IF bFlowOk THEN ... END_IF;
 ```
 
@@ -25,21 +25,21 @@ sends what it holds. Every other input is a setting, read every scan:
 | | |
 | --- | --- |
 | `nUnitId` | the device's address, 1..247 |
-| `eFunction` | `E_ModbusPointFunction.ReadCoils`, `ReadDiscreteInputs`, `ReadHoldingRegisters` (default), `ReadInputRegisters`; `WriteSingleCoil`, `WriteSingleRegister`, `WriteMultipleRegisters` |
-| `nAddress` | the register or coil, numbered from 0 |
-| `eType` | `E_ModbusPointType.Bit`, `Int16`, `UInt16` (default), `Int32`, `UInt32`, `Float32`, `RegisterBit` |
-| `eOrder` | word order of a 32-bit value (see [05](05-reading-and-writing.md)) |
-| `nBit` | `RegisterBit` only: which bit of the register |
+| `eFunctionCode` | `E_ModbusPointFunction.ReadCoils`, `ReadDiscreteInputs`, `ReadHoldingRegisters` (default), `ReadInputRegisters`; `WriteSingleCoil`, `WriteSingleRegister`, `WriteMultipleRegisters` |
+| `nStartAddress` | the register or coil, numbered from 0 |
+| `eDataType` | `E_ModbusPointType.Bit`, `Int16`, `UInt16` (default), `Int32`, `UInt32`, `Float32`, `RegisterBit` |
+| `eWordOrder` | word order of a 32-bit value (see [05](05-reading-and-writing.md)) |
+| `nBitNumber` | `RegisterBit` only: which bit of the register |
 | `fScale`, `fOffset` | value = raw x `fScale` + `fOffset` |
-| `tPeriod` | how often to read it - or to send a write again. `T#0s` = 1 s |
-| `tStale` | no good answer this long and it is lost; `T#0s` = 3 x `tPeriod` |
+| `tUpdateInterval` | how often to read it - or to send a write again. `T#0s` = 1 s |
+| `tLostAfter` | no good answer this long and it is lost; `T#0s` = 3 x `tUpdateInterval` |
 | `tTimeout` | this device's answer time limit; `T#0s` = measured |
 | `bEnable` | `FALSE` = not fitted here: never asked, never ok |
 
 It returns the last attempt's result, and `InvalidArgument` for settings that
 cannot work (a `Float32` with `WriteSingleRegister`, a bit above 15, a
-`RegisterBit` write). Outputs: `bOk` - good, or a little late, **interlock on
-this** - `eQuality`, `tAge` and `nFailures`.
+`RegisterBit` write). Outputs: `bGood` - good, or a little late, **interlock on
+this** - `eQuality`, `tValueAge` and `nConsecutiveFailureCount`.
 
 ## A table of field points
 
@@ -59,25 +59,27 @@ VAR
 END_VAR
 
 field(eTransport := E_ModbusTransport.ArduinoSerial, stSerialConfig := serial);
-field.Points(anySettings := FIELD_CFG, anyPoints := FIELD, sStatusText => sText);
+field.Points(anyPointSettings := FIELD_CFG, anyPointStatus := FIELD, sStatusText => sText);
 
-fFlowLps := FIELD[1].fValue;   bFlowOk := FIELD[1].bOk;
+fFlowLps := FIELD[1].fValue;   bFlowOk := FIELD[1].bGood;
 FIELD[4].fWriteValue := BOOL_TO_REAL(bValveOpen);   (* a remote relay, WriteSingleCoil *)
 ```
 
-`anySettings` is an `ARRAY OF ST_ModbusPointConfig` - one row a point:
-`nUnitId`, `eFunction`, `nAddress`, `eType`, `eOrder`, `nBit`, `fScale`,
-`fOffset`, `tPeriod`, `tStale`, `tTimeout`, `bEnable`, the same as `Point`'s
-inputs. `anyPoints` is an `ARRAY OF ST_ModbusPointStatus` of the same length:
-`fWriteValue` is your logic's, the value to write; `fValue`, `bValue`, `bOk`,
-`eQuality`, `tAge`, `nFailures`, `eResult` are each row's status. Anything
+`anyPointSettings` is an `ARRAY OF ST_ModbusPointConfig` - one row a point:
+`nUnitId`, `eFunctionCode`, `nStartAddress`, `eDataType`, `eWordOrder`, `nBitNumber`, `fScale`,
+`fOffset`, `tUpdateInterval`, `tLostAfter`, `tTimeout`, `bEnable`, the same as `Point`'s
+inputs. `anyPointStatus` is an `ARRAY OF ST_ModbusPointStatus` of the same length:
+`fWriteValue` is your logic's, the value to write; `fValue`, `bValue`, `bGood`,
+`eQuality`, `tValueAge`, `nConsecutiveFailureCount`, `eLastResult` are each row's status. Anything
 else on either is refused with `InvalidArgument` and *"not point tables"*.
 
 `Points` returns `Ok` while every enabled row is ok, else the first lost row's
-result. Its outputs: `nGoodCnt`, `nLostCnt`, `nFirstLost` (that row, counted
+result. Its outputs: `nGoodPoints`, `nLostPoints`, `nFirstLostPoint` (that row, counted
 from 1, 0 when none) and `sStatusText`, one line for a
-panel: *"pt 3 unit 5 lost"*, *"pt 2 unit 9 no answer"* (never answered: check
-the address), *"pt 4 bad settings"*, *"tables differ"*, *"field bus down"*.
+panel: *"point 3 unit 5 lost"*, *"point 2 unit 9 no answer"* (never answered: check
+the address), *"point 4 bad settings"*, *"tables differ"*, *"field bus down"*,
+*"point tables do not match"* (the library and its point structures are from
+different builds: reinstall modbee-modbus).
 
 Retain the settings, never the status: the status changes every scan, and a
 retained structure that changes every scan rewrites the retained store every
@@ -90,12 +92,12 @@ points the project can have; an unused row is `bEnable := FALSE`.
 
 The rule the IO map relies on:
 
-| | `bOk` | the value | `eQuality` |
+| | `bGood` | the value | `eQuality` |
 | --- | --- | --- | --- |
 | never answered | FALSE | `Point`: the variable as it was; a row's `fValue`: 0 | `Unknown` - a commissioning fault: check unit and address |
 | answered, on time | TRUE | the value | `Good` |
 | answered, late (one period's grace has gone, or one failure) | TRUE | the value | `Uncertain` |
-| no good answer for `tStale`, or two failures in a row | FALSE | **the last good value** | `Bad` |
+| no good answer for `tLostAfter`, or two failures in a row | FALSE | **the last good value** | `Bad` |
 | `bEnable` FALSE | FALSE | - | `Unknown` |
 | settings that cannot work | FALSE | - | `Unknown`, result `InvalidArgument` |
 
@@ -108,9 +110,9 @@ Every setting is read every scan. A new unit, function, address, type, word
 order or bit is a **different point**: its value, age and failures are dropped,
 `eQuality` goes back to `Unknown` and the next read goes to the new place. A
 reply still on its way for the old address is discarded. Scale, offset,
-`tPeriod`, `tStale` and `tTimeout` change in place.
+`tUpdateInterval`, `tLostAfter` and `tTimeout` change in place.
 
-`Watch` follows a new `nUnitId`, `eTable`, `nAddress` or `eOrder` the same way.
+`Watch` follows a new `nUnitId`, `eTable`, `nStartAddress` or `eWordOrder` the same way.
 
 ## Writes
 
@@ -118,9 +120,9 @@ reply still on its way for the old address is discarded. Scale, offset,
 `WriteMultipleRegisters` (one or two registers: any register type) write the
 point's value - `anyValue`, or a row's `fWriteValue` - scaled back:
 raw = (value - `fOffset`) / `fScale`, rounded and held to the type's range. A
-write goes as soon as the value changes, and again every `tPeriod`, so a remote
+write goes as soon as the value changes, and again every `tUpdateInterval`, so a remote
 output with a watchdog is kept alive and one that lost power is told again.
-`bOk` on a write point means the last write was acknowledged.
+`bGood` on a write point means the last write was acknowledged.
 
 A `RegisterBit` is never written: setting one bit of a register would be a
 read-modify-write that races every other writer of that register. Use a coil,
@@ -135,9 +137,9 @@ another unit on the same node - with answers that take seconds.
   2 to 5 s. The client then waits that long for that unit. Without it the
   client's first, generous timeout is about 200 ms and the device is never
   heard.
-- **Set `tPeriod`** to seconds or minutes: soil and rain sensors 60 s, a pond
+- **Set `tUpdateInterval`** to seconds or minutes: soil and rain sensors 60 s, a pond
   level 30 s, an irrigator fail-safe 10 to 15 s.
-- **Set `tStale`** to about 3 x `tPeriod`, so one lost reply is `Uncertain`,
+- **Set `tLostAfter`** to about 3 x `tUpdateInterval`, so one lost reply is `Uncertain`,
   not a trip.
 - The longest `tTimeout` among a unit's points is that unit's. Points without
   one are measured.
