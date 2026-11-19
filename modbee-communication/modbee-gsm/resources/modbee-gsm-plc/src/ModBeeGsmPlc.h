@@ -38,7 +38,7 @@
 // --- NAMING ---
 //
 // Every C++ POU of a project is emitted into ONE translation unit, and each
-// block's pins are #defines there - bError, sHost, nPort, stApnConfig and the
+// block's pins are #defines there - bError, sHostName, nHostPort, stApnConfig and the
 // rest. This header can be included under any block's defines, so it uses no
 // all-capitals identifier and no name with a lower-case type prefix followed
 // by a capital (internal/tools/check-names.py checks it).

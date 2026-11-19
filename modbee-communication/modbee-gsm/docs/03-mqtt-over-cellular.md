@@ -3,8 +3,8 @@
 `FB_MqttClient` from `modbee-mqtt` sends over the modem with one setting:
 
 ```
-mqtt(eTransport := E_MqttTransport.Cellular, sHost := 'broker.example.com',
-     nPort := 1883, sClientId := 'pump-station-4');
+mqtt(eTransport := E_MqttTransport.Cellular, sHostName := 'broker.example.com',
+     nHostPort := 1883, sClientId := 'pump-station-4');
 ```
 
 Everything else about MQTT - publishing, subscribing, the Will, Sparkplug - is
@@ -44,7 +44,7 @@ the client connects and each time it reconnects - not every scan. While it
 runs it holds the modem, and the modem block and its methods skip the modem
 for those scans; nothing is lost.
 
-Set `stSessionConfig.tMaxSilence` on cellular - three keep-alives - so a link
+Set `stSessionConfig.tReconnectAfterSilence` on cellular - three keep-alives - so a link
 that the network has silently dropped is found and reconnected.
 
 Data use is small: an MQTT connection costs a few hundred bytes to open and
@@ -58,8 +58,8 @@ The modem and the client in the network task:
 ```
 PROGRAM net_prg                (* task: 20 ms *)
   VAR
-    board  : UIO;
-    hat    : HAT_POWER;
+    board  : FB_NodeUio;
+    hat    : FB_HatPower;
     modem  : FB_GsmModemA7670;
     mqtt   : FB_MqttClient;
     every  : TON;
@@ -75,13 +75,13 @@ PROGRAM net_prg                (* task: 20 ms *)
   END_VAR
 
   board();
-  hat(ENABLE := TRUE);
+  hat(bHatPowerOn := TRUE);
   apn.sApn := apnName;
   modem(bConnect := TRUE, stApnConfig := apn);
-  result := modem.Status(tRefresh := T#30s, nRssi => rssi);
+  result := modem.Status(tReadInterval := T#30s, nSignalStrengthDbm => rssi);
 
-  mqtt(eTransport := E_MqttTransport.Cellular, sHost := 'broker.example.com',
-       nPort := 1883, sClientId := 'pump-station-4');
+  mqtt(eTransport := E_MqttTransport.Cellular, sHostName := 'broker.example.com',
+       nHostPort := 1883, sClientId := 'pump-station-4');
   every(IN := NOT every.Q, PT := T#60s);
   sent := mqtt.Publish(anyValue := rssi, sTopic := 'site/pump-station-4/rssi',
                        eQos := E_MqttQos.AtLeastOnceDelivery, bExecute := every.Q);
@@ -91,7 +91,7 @@ END_PROGRAM
 ## Sockets
 
 Every MQTT client over the modem holds one of its sockets, as each `Socket`
-record does. `stCapacityConfig.nSocketCnt` is 2 by default: one client and
+record does. `stCapacityConfig.nSockets` is 2 by default: one client and
 one socket fit; a second client needs it raised.
 
 ---

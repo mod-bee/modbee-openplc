@@ -9,7 +9,7 @@ the modem up and shows its signal.
   header's UART pins (the Node receives on GPIO 44 and transmits on GPIO 43),
   and the Node presses the module's power key on GPIO 10.
 - **The HAT's supply** is switched by the Node on GPIO 9, which belongs to
-  node-uio's `HAT_POWER` block. Put one in the program with `ENABLE := TRUE`.
+  node-uio's `FB_HatPower` block. Put one in the program with `bHatPowerOn := TRUE`.
 - **The antenna** goes on the module's main (LTE) connector before power is
   applied. A module transmitting with no antenna can be damaged, and one with
   a poor antenna is the commonest reason a site will not stay connected.
@@ -32,8 +32,8 @@ A7670, so the block is `FB_GsmModemA7670`; a SIM7070 module takes
 ```
 PROGRAM modem_prg
   VAR
-    board  : UIO;
-    hat    : HAT_POWER;
+    board  : FB_NodeUio;
+    hat    : FB_HatPower;
     modem  : FB_GsmModemA7670;
     result : E_GsmResult;
     rssi   : INT;
@@ -47,10 +47,10 @@ PROGRAM modem_prg
   END_VAR
 
   board();
-  hat(ENABLE := TRUE);
+  hat(bHatPowerOn := TRUE);
   apn.sApn := apnName;
   modem(bConnect := TRUE, stApnConfig := apn);
-  result := modem.Status(tRefresh := T#30s, nRssi => rssi, eQuality => quality);
+  result := modem.Status(tReadInterval := T#30s, nSignalStrengthDbm => rssi, eSignalQuality => quality);
 END_PROGRAM
 ```
 
@@ -72,8 +72,8 @@ takes effect without a download.
 | `modem.bRegistered` | the network has accepted the SIM. Text messages work from here |
 | `modem.bConnected` | the data connection is up. Sockets and MQTT work from here |
 | `modem.sLastError` | why it is not up, in words; or which method call failed |
-| `Status`'s `nRssi` | signal strength in dBm. Better than -95 is good, below -105 is poor |
-| `Status`'s `eQuality` | the same, judged |
+| `Status`'s `nSignalStrengthDbm` | signal strength in dBm. Better than -95 is good, below -105 is poor |
+| `Status`'s `eSignalQuality` | the same, judged |
 
 A first start takes from about twenty seconds to a few minutes, depending on
 the network. After that the modem looks after itself: if the network or the
@@ -83,7 +83,7 @@ data connection goes, it is brought back without the program doing anything.
 
 ```
 IF highLevel AND NOT highLevelWas THEN
-  result := modem.SendSms(sTo := '+64 21 000 001, +64 21 000 002',
+  result := modem.SendSms(anyPhoneNumbers := '+64 21 000 001, +64 21 000 002',
                           sText := modem.Format(sTemplate := 'Tank 3 high: {level:1} m',
                                                 anyData := tank));
 END_IF;
@@ -94,7 +94,7 @@ highLevelWas := highLevel;
 `InvalidArgument`, `QueueFull` or `RateLimited` with nothing queued. Call it
 once per message, on the scan the program decides to send. The block sends
 them one at a time once the network has the SIM, tries a failed one again,
-and counts them on `nSmsSent`, `nSmsFailed`, `nSmsDropped` and `nSmsQueued`.
+and counts them on `nSmsSentCount`, `nSmsSendFailureCount`, `nSmsDroppedCount` and `nPendingSms`.
 `stSmsConfig` sets the queue's depth, the most an hour (10 by default, every
 number counted) and the retries. Every message costs money on most plans.
 
@@ -102,8 +102,8 @@ number counted) and the retries. Every message costs money on most plans.
 decimal, `{run:hm}` as `2h00m`, `{mode|OFF|MANUAL|AUTO}` as a word - into at
 most 160 characters.
 
-To follow one message to the network instead, `SendSmsRequest(anyText,
-sNumber, bExecute)` returns `Queued` until the network has it, then `Ok`.
+To follow one message to the network instead, `SendSmsRequest(anyMessageText,
+sPhoneNumber, bExecute)` returns `Queued` until the network has it, then `Ok`.
 
 Every request method (`SendSmsRequest`, `AtCommand`, `Power`, `Socket`) works
 the same way: read its result only after its own `bExecute` edge. Before the
@@ -117,7 +117,7 @@ On another board, or a HAT wired differently, set `stSerialConfig` and
 
 ```
 serial.nUart := 0; serial.nRxPin := 44; serial.nTxPin := 43;
-power.nPowerKeyPin := 10; power.nRailPin := -1;
+power.nPowerKeyPin := 10; power.nSupplySwitchPin := -1;
 modem(bConnect := TRUE, stApnConfig := apn, stSerialConfig := serial,
       stPowerConfig := power);
 ```

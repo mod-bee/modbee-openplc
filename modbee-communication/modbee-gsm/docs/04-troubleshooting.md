@@ -8,8 +8,8 @@ its method and record: `SendSms sAlarm: NotReady`.
 
 The PLC cannot hear the module.
 
-- **The HAT is not powered.** On the Node UIO, `HAT_POWER` with `ENABLE :=
-  TRUE` must be in the program, and `UIO` must run.
+- **The HAT is not powered.** On the Node UIO, `FB_HatPower` with `bHatPowerOn :=
+  TRUE` must be in the program, and `FB_NodeUio` must run.
 - **The module is off.** The library presses the power key itself when the
   module does not answer, but only if it knows which GPIO that is
   (`stPowerConfig.nPowerKeyPin`, 10 on the Node). A board without one needs the
@@ -38,11 +38,11 @@ the SIM707x one. Use the block for the module on the board.
 
 The module is searching for, or being refused by, a network.
 
-- **Signal.** `Status`'s `nRssi` below about -105 dBm is too weak to hold a
+- **Signal.** `Status`'s `nSignalStrengthDbm` below about -105 dBm is too weak to hold a
   connection. Check the antenna and its cable first; move it up and away from
   metal.
 - **The SIM is not allowed on any network here.** A roaming IoT SIM needs a
-  contract with a local network. `eRegistration` shows
+  contract with a local network. `eRegistrationState` shows
   `E_GsmRegistration.Denied`.
 - **The wrong technology or bands** in `stRadioConfig`. Leave it at its
   defaults and let the module search everything.
@@ -52,13 +52,13 @@ The module is searching for, or being refused by, a network.
 ## bRegistered is TRUE but bConnected never comes
 
 The network has the SIM and will not give it a data connection: almost always
-the **APN**. Check `stApnConfig`'s `sApn`, `sUserName` and `sPassword` against
+the **APN**. Check `stApnConfig`'s `sApn`, `sUserName` and `sUserPassword` against
 the provider's details. Text messages already work at this point, which is a
 useful test.
 
 ## bConnected comes and goes
 
-`Status`'s `nBearerLossCnt` and `nRecoveryCnt` climbing by the hour mean a
+`Status`'s `nDataConnectionDropCount` and `nRecoveryCount` climbing by the hour mean a
 marginal connection: usually the antenna, sometimes a supply that sags when the
 module transmits. The modem recovers each time by itself; the counters are how
 you find out it is happening.
@@ -91,7 +91,7 @@ A PLC has one modem and one modem block. Remove the second; its methods return
 - The client connects and drops at once: check the broker's port, and that it
   accepts the client's login.
 - A socket or MQTT client never gets a socket while others are open: each one
-  holds a socket, and `stCapacityConfig.nSocketCnt` is 2 by default. Raise it.
+  holds a socket, and `stCapacityConfig.nSockets` is 2 by default. Raise it.
 
 ## MQTT over cellular stalls or is slow
 
@@ -101,12 +101,12 @@ internal-RAM ring (1 kB, twice a flash sector erase at 115200 baud), so no
 bytes are lost while the board erases or writes flash (the HAT has no RTS/CTS,
 and the Arduino core's own UART interrupt stops during flash work). A small
 task services the modem between scans and moves the bytes on into the
-`stSerialConfig.nRxBufferSize` ring in PSRAM, so an AT exchange does not wait
+`stSerialConfig.nReceiveBufferSize` ring in PSRAM, so an AT exchange does not wait
 for the next scan. Should a data notice or part of a reply still be lost, the
 library asks the module for unannounced data within two seconds, and a reply
 cut short ends the socket so the client reconnects at once. A stall longer
-than that is something else - check `Status`'s `nBearerLossCnt` and
-`nRecoveryCnt`.
+than that is something else - check `Status`'s `nDataConnectionDropCount` and
+`nRecoveryCount`.
 
 ## Wi-Fi will not join after switching from cellular
 
@@ -125,35 +125,35 @@ to TRUE.
 
 ## A text-message command is not acted on
 
-`SmsCommand`'s `nRefusedCnt` and `sLastRefused` say why: `not an allowed
-number` (check `sAllowed`; a portal's name is matched whole), `wrong PIN`,
-`needs the admin PIN`, `too many this hour` (`nMaxPerHour`). A message that
+`SmsCommand`'s `nCommandRefusedCount` and `sLastRefusalReason` say why: `not an allowed
+number` (check `sAllowedNumbers`; a portal's name is matched whole), `wrong PIN`,
+`needs the admin PIN`, `too many this hour` (`nMaxCommandsPerHour`). A message that
 names none of the commands is ignored, and not counted.
 
 ## SendSms returns InvalidArgument, QueueFull or RateLimited
 
 Nothing was queued; `sLastError` says why.
 
-- `InvalidArgument`: `'PTT NZ' is not a number` (a name cannot be texted),
-  `no number in sTo`, `sText is 172 GSM characters; one message is 160` (an
+- `InvalidArgument`: `'MyTelco' is not a number` (a name cannot be texted),
+  `no number in anyPhoneNumbers`, `172 GSM characters; one message is 160` (an
   escaped character - `{ } [ ] ~ ^ |`, the euro sign - counts two),
-  `character 12 of sText is not in the GSM alphabet`. Nothing is ever cut or
+  `character 12 is not in the GSM alphabet`. Nothing is ever cut or
   split into parts.
 - `QueueFull`: the messages waiting and these would pass
-  `stSmsConfig.nQueueDepth`. The modem is probably not registered: messages
+  `stSmsConfig.nMaxPendingSms`. The modem is probably not registered: messages
   wait for it.
-- `RateLimited`: `stSmsConfig.nMaxPerHour` would be passed, every number
+- `RateLimited`: `stSmsConfig.nMaxSmsPerHour` would be passed, every number
   counted. The hour restarts at boot.
 
-Each counts on `nSmsDropped`, beside the messages dropped after their retries.
+Each counts on `nSmsDroppedCount`, beside the messages dropped after their retries.
 
-## SendSms's messages fail: nSmsFailed climbs
+## SendSms's messages fail: nSmsSendFailureCount climbs
 
 `sSmsLastError` names the number and the network's reason:
 `send +6421000001: +CMS ERROR: 38, ...`. The usual ones: the number is not in
 international form (`+64...`), the SIM has no SMS on its plan (an IoT SIM
 taking texts only from its portal), or the network will not deliver to that
-number. Each message is tried `nRetries` more times, `tRetry` apart, then
+number. Each message is tried `nRetriesBeforeDrop` more times, `tRetryAfter` apart, then
 dropped.
 
 ## SendSmsRequest returns ModuleError
@@ -168,12 +168,12 @@ Nothing will change that but a module that has one.
 ## NetworkTime is never bValid
 
 The network the SIM is on does not send the time. It is read again on every
-`tRefresh`, so it becomes valid by itself on a network that does.
+`tReadInterval`, so it becomes valid by itself on a network that does.
 
 ## sLastError says "out of memory for the sockets"
 
-The board has no room for `nSocketCnt` x 2 x `nSocketBufferSize` bytes (or,
-for "... for the AT command queue", for `nAtQueueLen`). Lower them in
+The board has no room for `nSockets` x 2 x `nSocketBufferSize` bytes (or,
+for "... for the AT command queue", for `nMaxPendingAtCommands`). Lower them in
 `stCapacityConfig` and restart the PLC: they are taken once, when the modem is
 opened.
 
@@ -187,7 +187,7 @@ opened.
 | `InvalidArgument` | a setting or parameter that cannot be used - for `SendSms` a name, an empty list, a text over one message; `sLastError` names it |
 | `NotReady` | the modem cannot do it yet: not registered (SMS), not connected (Socket), the module not answered yet (AtCommand, Status) |
 | `NoBearer` | registered, but no data connection |
-| `NoSocketAvailable` | every socket is in use; raise `nSocketCnt` |
+| `NoSocketAvailable` | every socket is in use; raise `nSockets` |
 | `QueueFull` | too many commands waiting, `SendSms`'s queue full, or more than 64 records |
 | `Superseded`, `Cancelled` | a command replaced or abandoned, usually by a stop |
 | `TooLarge` | a text over its limit: 160 characters for SMS, 127 for an AT command |
@@ -200,7 +200,7 @@ opened.
 | `PoweredOff` | switched off by `Power` |
 | `RegistrationDenied` | the network refused the SIM |
 | `WrongTask` | a method called from another task than the block's |
-| `RateLimited` | `SendSms` would pass `stSmsConfig.nMaxPerHour`; nothing queued |
+| `RateLimited` | `SendSms` would pass `stSmsConfig.nMaxSmsPerHour`; nothing queued |
 
 ---
 

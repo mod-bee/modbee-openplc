@@ -596,10 +596,10 @@ const char* checkLink(const Link& link) {
         return "stSerialConfig: nRxPin and nTxPin must be -1 to 63";
     }
     if (link.rxBuffer < 256 || link.rxBuffer > 32768) {
-        return "stSerialConfig.nRxBufferSize must be 256 to 32768";
+        return "stSerialConfig.nReceiveBufferSize must be 256 to 32768";
     }
     if (key < -1 || key > 63 || rail < -1 || rail > 63) {
-        return "stPowerConfig: nPowerKeyPin and nRailPin must be -1 to 63";
+        return "stPowerConfig: nPowerKeyPin, nSupplySwitchPin -1 to 63";
     }
     if ((key >= 0 && (key == rx || key == tx)) ||
         (rail >= 0 && (rail == rx || rail == tx || rail == key))) {
@@ -608,7 +608,7 @@ const char* checkLink(const Link& link) {
 #endif
     if (link.sockets < 0 || link.sockets > 255 || link.socketBuffer < 0 ||
         link.atQueue < 0 || link.atQueue > 255) {
-        return "stCapacityConfig: nSocketCnt and nAtQueueLen 0 to 255";
+        return "stCapacityConfig: nSockets and nMaxPendingAtCommands 0 to 255";
     }
     return nullptr;
 }
@@ -627,14 +627,14 @@ bool open(const Link& link, const char** why) {
 #if defined(GSM_PLATFORM_ARDUINO)
   #if defined(ARDUINO_ARCH_ESP32)
     if (link.rxBuffer < 256 || link.rxBuffer > 32768) {
-        *why = "stSerialConfig.nRxBufferSize must be 256 to 32768";
+        *why = "stSerialConfig.nReceiveBufferSize must be 256 to 32768";
         return false;
     }
 
     // THE UART IS DRIVEN FROM AN IRAM INTERRUPT, NOT BY HardwareSerial - see
     // GsmPlcUart.h. The core's own interrupt cannot run while flash is being
     // erased or written, the HAT header has no RTS or CTS, and the bytes that
-    // arrived then were lost. The receive ring is nRxBufferSize bytes and the
+    // arrived then were lost. The receive ring is nReceiveBufferSize bytes and the
     // library is told exactly that, because every modem read is capped to it.
     //
     // Taken here and given back while the modem is switched off: see
@@ -671,7 +671,7 @@ bool open(const Link& link, const char** why) {
 
     if (link.sockets < 0 || link.sockets > 255 || link.socketBuffer < 0 ||
         link.atQueue < 0 || link.atQueue > 255) {
-        *why = "stCapacityConfig: nSocketCnt and nAtQueueLen 0 to 255";
+        *why = "stCapacityConfig: nSockets and nMaxPendingAtCommands 0 to 255";
         return false;
     }
     s.device->setCapacity((uint8_t)link.sockets, (size_t)link.socketBuffer,
@@ -813,7 +813,7 @@ bool parseBands(const char* text, uint8_t* out, uint8_t capacity, uint8_t* count
 const char* checkRadio(int mode, const char* operatorCode,
                        const char* catMBands, const char* nbIotBands) {
     if (mode < 0 || mode > (int)GsmRadioPreference::CatMAndNbIot) {
-        return "stRadioConfig.eMode is not a radio mode";
+        return "stRadioConfig.eRadioMode is not a radio mode";
     }
     const size_t length = operatorCode != nullptr ? strlen(operatorCode) : 0;
     if (length != 0) {
@@ -821,7 +821,7 @@ const char* checkRadio(int mode, const char* operatorCode,
         for (size_t i = 0; i < length; i++) {
             if (operatorCode[i] < '0' || operatorCode[i] > '9') { digits = false; }
         }
-        if (!digits) { return "stRadioConfig.sOperator must be five or six digits"; }
+        if (!digits) { return "stRadioConfig.sOperatorCode must be five or six digits"; }
     }
     uint8_t bands[32];
     uint8_t count = 0;

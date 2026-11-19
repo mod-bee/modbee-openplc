@@ -1,10 +1,10 @@
 TYPE
   ST_GsmSerialConfig : STRUCT
-    sDevice       : STRING(48);       (* the Runtime: the modem's serial port, '/dev/ttyUSB2' *)
-    nBaudRate     : DINT := 115200;   (* the serial speed both module families start at *)
-    nUart         : BYTE := 0;        (* a board: the UART peripheral, 0 to 2, not a pin. Node UIO: 0 *)
-    nRxPin        : INT := 44;        (* a board: the GPIO it receives on (the module's TX); -1 the UART's own *)
-    nTxPin        : INT := 43;        (* a board: the GPIO it transmits on (the module's RX); -1 the UART's own *)
-    nRxBufferSize : DINT := 4096;     (* a board: bytes of receive buffer, 256 to 32768 *)
+    sDevice : STRING(48); (* the Runtime: the modem's serial port, '/dev/ttyUSB2' *)
+    nBaudRate : DINT := 115200; (* the serial speed both module families start at *)
+    nUart : BYTE := 0; (* a board: the UART peripheral, 0 to 2, not a pin. Node UIO: 0 *)
+    nRxPin : INT := 44; (* a board: the GPIO it receives on (the module's TX); -1 the UART's own *)
+    nTxPin : INT := 43; (* a board: the GPIO it transmits on (the module's RX); -1 the UART's own *)
+    nReceiveBufferSize : DINT := 4096; (* a board: bytes of receive buffer, 256 to 32768 *)
   END_STRUCT;
 END_TYPE

@@ -606,7 +606,7 @@ int queueSmsCall(const Call& call, const char* to, size_t toLength,
 
     // --- the list and the text, checked whole before anything is queued ---
     if (to == nullptr || text == nullptr) {
-        return noteReason(c, kKey, kInvalidArgument, "sTo and sText must be STRINGs");
+        return noteReason(c, kKey, kInvalidArgument, "anyPhoneNumbers, anyMessageText: STRINGs only");
     }
     const char* end = to + toLength;
     uint16_t numbers = 0;
@@ -628,7 +628,7 @@ int queueSmsCall(const Call& call, const char* to, size_t toLength,
         if (number[0] != '\0') { numbers++; }
         p = next;
     }
-    if (numbers == 0) { return noteReason(c, kKey, kInvalidArgument, "no number in sTo"); }
+    if (numbers == 0) { return noteReason(c, kKey, kInvalidArgument, "no number in anyPhoneNumbers"); }
 
     // One message of the default alphabet: 160 septets, an escaped character
     // counting two. Never cut, never split into parts.
@@ -637,15 +637,15 @@ int queueSmsCall(const Call& call, const char* to, size_t toLength,
         uint8_t out[2];
         size_t produced = 0;
         if (!GsmSmsPdu::asciiToGsm7(text + i, 1, out, sizeof out, produced)) {
-            snprintf(why, sizeof why, "character %u of sText is not in the GSM alphabet",
+            snprintf(why, sizeof why, "character %u is not in the GSM alphabet",
                      (unsigned)(i + 1));
             return noteReason(c, kKey, kInvalidArgument, why);
         }
         septets += produced;
     }
-    if (textLength == 0) { return noteReason(c, kKey, kInvalidArgument, "sText is empty"); }
+    if (textLength == 0) { return noteReason(c, kKey, kInvalidArgument, "anyMessageText is empty"); }
     if (septets > 160) {
-        snprintf(why, sizeof why, "sText is %u GSM characters; one message is 160",
+        snprintf(why, sizeof why, "%u GSM characters; one message is 160",
                  (unsigned)septets);
         return noteReason(c, kKey, kInvalidArgument, why);
     }
@@ -1071,7 +1071,7 @@ void smsTail(const char* number, char* out) {
 // Whether `sender` is on the list ('*' = anybody, empty = nobody). Entries are
 // separated by commas or semicolons; spaces inside a number are part of it. A
 // phone number matches on its last 8 digits; a name or short code (fewer than 6
-// digits: 'PTT NZ', '2001') matches whole, upper or lower case.
+// digits: 'MyTelco', '2001') matches whole, upper or lower case.
 bool smsAllowed(const char* list, const char* sender) {
     char want[16];
     smsTail(sender, want);
@@ -1187,7 +1187,7 @@ bool smsDuration(const char* s, int64_t* ns) {
     return true;
 }
 
-// Whether a sender can be texted back: a number, not a name ('PTT NZ' cannot).
+// Whether a sender can be texted back: a number, not a name ('MyTelco' cannot).
 bool smsCanAnswer(const char* sender) {
     bool digit = false;
     for (; *sender != '\0'; ++sender) {
@@ -1594,7 +1594,7 @@ int timeCall(const Call& call, uint32_t refreshMs, TimeView& out) {
     int result = r->result == kNotSupported ? kNotSupported : kNotReady;
 
     // Asked once the network has had its chance to set the clock, again on
-    // every tRefresh, and again after anything that restarted the module.
+    // every tReadInterval, and again after anything that restarted the module.
     if (gsm.isRegistered()) {
         const bool due = !r->asked || r->generation != generation() ||
                          (refreshMs > 0 && (uint32_t)(now - r->askedAt) >= refreshMs);
