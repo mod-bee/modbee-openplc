@@ -265,7 +265,7 @@ The I2C addresses that answer, for commissioning.
 | `bExecute` | in, BOOL | rising edge: scan 16#08..16#77 |
 | `bBusy` | out, BOOL | scanning (about 30 scans) |
 | `bDone` | out, BOOL | the last scan finished |
-| `nAddressesFound` | out, USINT | addresses found, the board's 16#49 and 16#5F included |
+| `nAddressesFound` | out, USINT | addresses found on the expansion bus |
 | `bError` | out, BOOL | the bus is not up, or `aFoundAddresses` was too short |
 | `eErrorId` | out, E_UioResult | why |
 

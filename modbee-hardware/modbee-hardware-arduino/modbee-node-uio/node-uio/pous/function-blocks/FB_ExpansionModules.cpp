@@ -18,7 +18,7 @@ nFirstFaultyModule      the first such row (its index in aModules), 0 when none.
 bError          nFaultyModules > 0, or a row's settings cannot work.
 eErrorId       UIO_OK; UIO_UNSUPPORTED on the Runtime (no I2C bus there).
 sStatusText    that row in a few words: 'module 2 0x21 missing',
-               'module 1 0x20 no driver', 'module 3 0x49 in use',
+               'module 1 0x20 no driver', 'module 3 0x20 in use',
                'module 4 bad address', 'module 5 no room'.
 
 ---
@@ -52,8 +52,9 @@ not to trust them. Missing modules are asked again every five seconds, so one
 plugged back in is found by itself.
 
 ONE BUS TRANSACTION PER CALL, round the table, so the scan time stays flat
-however many modules there are. The bus is shared with the board's own ADC
-and DAC (0x49, 0x5F) under one lock, whatever task each runs in.
+however many modules there are. The board's own ADC and DAC (0x49, 0x5F) are
+on a bus of their own, so those addresses are free here; both buses take one
+lock, whatever task each runs in.
 
 I2C IS A CABINET BUS: keep modules within about a metre of the Node. Field
 devices belong on RS485 (modbee-modbus). *)

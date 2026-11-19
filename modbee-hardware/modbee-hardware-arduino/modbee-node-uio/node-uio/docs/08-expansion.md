@@ -1,8 +1,9 @@
 # 08 - I2C expansion
 
 More digital inputs and outputs, analog channels and temperature, on small I2C
-modules beside the Node: the same bus as the board's own ADC (16#49) and DAC
-(16#5F), brought out on the Grove connectors and the HAT header.
+modules beside the Node, on its expansion bus: the Grove connectors and the HAT
+header. The board's own ADC (16#49) and DAC (16#5F) are on a bus of their own,
+so every address 16#08..16#77 is free for modules.
 
 **No chip drivers are built in yet.** Everything here works today - the module
 table, detection, the images, the not-present handling - and a fitted module is
@@ -53,7 +54,8 @@ The drivers come one family at a time, each with a bench test (below).
 | `UIO_XK_TMP117_T`, `UIO_XK_MCP9808_T` | 1 (°C) | `aAnalogImage` |
 | `UIO_XK_SHT4X_TH` | 2 (°C, %RH) | `aAnalogImage` |
 
-A second ADS1115 must use 16#48, 16#4A or 16#4B: 16#49 is the board's.
+An ADS1115 module may use any of its four addresses, 16#48 to 16#4B: the board's own
+ADS1115 is on the other bus.
 
 ### The states
 
@@ -66,7 +68,7 @@ A second ADS1115 must use 16#48, 16#4A or 16#4B: 16#49 is the board's.
 | `UIO_XS_NO_DRIVER` | answers, but this firmware cannot read that kind yet |
 | `UIO_XS_FAILING` | answers, and its transactions fail |
 | `UIO_XS_BAD_ADDRESS` | not 16#08..16#77 |
-| `UIO_XS_IN_USE` | the board's own part (16#49, 16#5F), or another row's address |
+| `UIO_XS_IN_USE` | another row has the same address |
 | `UIO_XS_NO_ROOM` | its channels do not fit the image from `nFirstImageIndex` |
 
 ### `FB_I2cScan`
@@ -79,7 +81,8 @@ A second ADS1115 must use 16#48, 16#4A or 16#4B: 16#49 is the board's.
 | `nAddressesFound` | out, USINT | addresses found |
 | `bError`, `eErrorId` | out | the bus is not up, or `aFoundAddresses` was too short |
 
-A healthy board always shows 16#49 and 16#5F.
+The board's own ADC and DAC are on a bus of their own and never show: an empty
+list is a board with nothing fitted.
 
 ## Wiring it into the IO map
 

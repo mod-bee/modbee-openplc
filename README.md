@@ -100,17 +100,17 @@ Libraries are made to be installed side by side, so no two use the same
 block or type name: the editor checks a new name against every installed
 library, not only the ones a project uses.
 
-- The 0.2 libraries (`modbee-beebus`, `modbee-modbus`, `modbee-mqtt`,
-  `modbee-ota`, `modbee-gsm`, `modbee-devices`, `modbee-utilities`) use IEC
-  61131-3 names in the
-  TwinCAT 3 style: `FB_` for function blocks, `ST_` for structures and `E_`
-  for enumerations, with their subject in the name (`FB_ModbusNode`,
-  `ST_MqttTlsConfig`, `E_BeeBusResult`). The work is done by methods on the
-  block: `node.ReadHoldingRegisters(...)`. The utilities are named for the
-  equipment they drive (`FB_Motor`, `FB_Pump`).
-- `node-uio` uses the same style from 0.2.0, with the board's terminal labels in
-  its pins (`FB_DigitalInputs.bDI01`, `E_UioResult`); `node-webUI` keeps its
-  board names (`WEB_SERVER`).
+- The libraries (`modbee-beebus`, `modbee-modbus`, `modbee-mqtt`, `modbee-ota`,
+  `modbee-gsm`, `modbee-devices`, `modbee-utilities` and `node-uio`) use IEC
+  61131-3 names in the TwinCAT 3 style: `FB_` for function blocks, `ST_` for
+  structures and `E_` for enumerations, with their subject in the name
+  (`FB_ModbusNode`, `ST_MqttTlsConfig`, `E_BeeBusResult`). Pins and members
+  carry a lower-case type prefix and say what they do in whole words
+  (`bConnected`, `nStartAddress`, `tReadInterval`); `node-uio` keeps the
+  board's terminal labels in its pins (`FB_DigitalInputs.bDI01`). The work is
+  done by methods on the block: `node.ReadHoldingRegisters(...)`. The utilities
+  are named for the equipment they drive (`FB_Motor`, `FB_Pump`).
+- `node-webUI` keeps its board names (`WEB_SERVER`).
 
 ## Licence
 

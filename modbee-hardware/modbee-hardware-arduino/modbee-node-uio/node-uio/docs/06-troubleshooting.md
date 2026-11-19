@@ -95,8 +95,8 @@ meter or an RC filter.
 It answers at its address, and this firmware cannot read that kind of chip
 yet, so its channels are never trusted. See [08 I2C expansion](08-expansion.md).
 `UIO_XS_MISSING`: nothing answers - run `FB_I2cScan` and compare the address
-(most modules have address jumpers). `UIO_XS_IN_USE`: 16#49 and 16#5F are the
-board's own converters, or two rows share an address.
+(most modules have address jumpers). `UIO_XS_IN_USE`: two rows share an
+address.
 
 ## The board restarted by itself
 

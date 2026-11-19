@@ -1,7 +1,7 @@
 TYPE
   ST_ExpansionModule : STRUCT
     eModuleType : E_ExpansionModuleType; (* setting: what the module is; NONE = an empty row *)
-    nI2cAddress : BYTE; (* setting: its I2C address, 16#08..16#77 (not 16#49 or 16#5F: the board's own) *)
+    nI2cAddress : BYTE; (* setting: its I2C address on the expansion bus, 16#08..16#77 *)
     bFitted : BOOL := TRUE; (* setting: installed on this site *)
     nFirstImageIndex : INT; (* setting: the image row of its channel 1 - in XD for a digital kind, XA for an analog one *)
     nChannels : USINT; (* status: its channels *)

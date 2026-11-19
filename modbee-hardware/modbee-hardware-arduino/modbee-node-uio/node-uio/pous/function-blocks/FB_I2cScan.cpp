@@ -1,4 +1,5 @@
-(* Lists the I2C addresses that answer on the Node's I2C bus - for
+(* Lists the I2C addresses that answer on the Node's expansion bus (the Grove
+connectors and the HAT header) - for
 commissioning expansion modules.
 
 aFoundAddresses  the addresses that answered, lowest first: ARRAY OF BYTE. The rest of
@@ -7,7 +8,8 @@ bExecute  a rising edge starts a scan of 16#08..16#77.
 
 bBusy   scanning.
 bDone    the last scan has finished (stays TRUE until the next bExecute).
-nAddressesFound  addresses found, including the board's own ADC (16#49) and DAC (16#5F).
+nAddressesFound  addresses found. The board's own ADC and DAC are on a bus of their
+        own and never show.
 bError   the bus is not up, or aFoundAddresses was too short for them all.
 eErrorId  UIO_OK; UIO_NOT_READY before FB_NodeUio has started the board;
         UIO_TOO_LARGE when aFoundAddresses was too short; UIO_UNSUPPORTED on the Runtime.
@@ -16,9 +18,9 @@ eErrorId  UIO_OK; UIO_NOT_READY before FB_NodeUio has started the board;
 
   scan(bExecute := HMI.scanI2c, aFoundAddresses := i2cFound);
 
-A healthy board always shows 16#49 and 16#5F. A module that does not show is
+An empty list is a healthy board with nothing fitted. A module that does not show is
 not wired, not powered, or set to another address (most have address
-jumpers). Four addresses are asked each call, sharing the bus lock with the
+jumpers). Four addresses are asked each call, sharing the I2C lock with the
 board's converters and FB_ExpansionModules, so a scan takes about 30 scans and never
 holds the bus for long. *)
 
@@ -32,7 +34,7 @@ FUNCTION_BLOCK FB_I2cScan
   VAR_OUTPUT
     bBusy : BOOL; (* scanning *)
     bDone : BOOL; (* the last scan has finished; TRUE until the next start *)
-    nAddressesFound : USINT; (* addresses found, the board's own 16#49 and 16#5F included *)
+    nAddressesFound : USINT; (* addresses found on the expansion bus (the board's own ADC and DAC are on their own bus) *)
     bError : BOOL; (* the bus is not up, or aFoundAddresses was too short *)
     eErrorId : E_UioResult; (* UIO_OK, NOT_READY before FB_NodeUio started, TOO_LARGE, UNSUPPORTED on the Runtime *)
   END_VAR
