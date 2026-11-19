@@ -97,7 +97,10 @@ ends.
 `bDeliverEveryChange := TRUE` on the bind is for setpoints, settings and configuration:
 every change arrives, and one a lost frame took is sent again, as the current
 value, within a rotation or two. It costs about two bytes a rotation while
-values move, nothing while they do not.
+values move, nothing while they do not. After a long spell of loss the bind
+settles back on the PLC's value by itself once the link is clean: within seconds
+on a fast ring, up to a minute on a slow one (a scan of 100 ms or more), where a
+change whose answer was lost waits for its retry.
 
 Live values - levels, flows, speeds updated every scan - do not need it, and it
 is off by default. Bind or subscribe them Live: best effort, newest wins, an

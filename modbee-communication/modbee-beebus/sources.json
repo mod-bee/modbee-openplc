@@ -2,7 +2,7 @@
   "resources": {
     "modbee-beebus": {
       "repo": "mod-bee/modbee-beebus",
-      "ref": "b9c5e5a598a8cb46555dec0faea65f82cd2f9442",
+      "ref": "e48f9ee71710e24b0ab684630e6a26ee26f83150",
       "path": "",
       "include": [
         "library.properties",
