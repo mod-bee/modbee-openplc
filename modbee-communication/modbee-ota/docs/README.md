@@ -6,7 +6,7 @@ reboots. If the new firmware does not come back on MQTT, the board goes back
 to the old one by itself.
 
 One block, `FB_OtaNode`, on the `FB_MqttClient` of the MQTT library
-(modbee-mqtt 0.2.0):
+(modbee-mqtt 0.3.0):
 
 | | Does |
 |---|---|
@@ -20,10 +20,10 @@ One block, `FB_OtaNode`, on the `FB_MqttClient` of the MQTT library
 2. In the comms task (T#50ms or slower), next to the `FB_MqttClient`:
 
    ```
-   ota(fbClient := mqtt, sBaseTopic := 'modbee/pump-01/ota', sVersion := '1.4.0');
+   ota(fbClient := mqtt, sBaseTopic := 'modbee/pump-01/ota', sFirmwareVersion := '1.4.0');
    ```
 
-   `sVersion` is this program's version. Raise it for every release: an
+   `sFirmwareVersion` is this firmware build's version. Raise it for every release: an
    update for the same version is refused, and an older one unless
    `bAllowDowngrade`.
 3. Publish the update from the PC with `modbee_ota.py`, from the `tools/`
@@ -44,9 +44,9 @@ Firmware updates restart the PLC. Let the program decide the moment:
 
 | Pin | Then |
 |---|---|
-| `bAutoAccept := FALSE` | `eState` waits at `E_OtaState.Offered`. `bAccept` starts the download, `bReject` refuses it |
-| `bAutoApply := FALSE` | `eState` waits at `E_OtaState.Ready` with the update checked. `bApply` reboots into it |
-| `bAbort` | stops an update at any point before the reboot |
+| `bAutoAccept := FALSE` | `eState` waits at `E_OtaState.Offered`. `bAcceptOffer` starts the download, `bRejectOffer` refuses it |
+| `bAutoApply := FALSE` | `eState` waits at `E_OtaState.Ready` with the update checked. `bApplyUpdate` reboots into it |
+| `bAbortUpdate` | stops an update at any point before the reboot |
 
 Each command acts on its rising edge. While an update downloads, each 4 kB
 written to flash can delay a fast task by one release. Accepting only while
@@ -60,11 +60,11 @@ The new firmware is on trial (`eState = E_OtaState.Testing`) until
 | `eConfirmMode` | Kept when |
 |---|---|
 | `E_OtaConfirmMode.OnLinkUp` (default) | MQTT is back |
-| `E_OtaConfirmMode.Manual` | `bConfirm` rises in the program |
+| `E_OtaConfirmMode.Manual` | `bConfirmNewFirmware` rises in the program |
 | `E_OtaConfirmMode.OnBoot` | straight away |
 
 If it is not confirmed within `tConfirmTimeout` (2 minutes), or the board
-restarts three times on trial, the old firmware comes back and `eResult` says
+restarts three times on trial, the old firmware comes back and `eLastOutcomeReason` says
 `E_OtaResult.NotConfirmed` or `E_OtaResult.RolledBack`.
 
 ## Signing
@@ -81,22 +81,22 @@ python modbee_ota.py push ... --key ota-key.pem
 
 ```
 VAR
-  signing : ST_OtaSigningConfig := (sPublicKey := '9f3c...', bRequireSigned := TRUE);  (* 128 hex characters *)
+  signing : ST_OtaSigningConfig := (sPublicKey := '9f3c...', bRequireSignedFirmware := TRUE);  (* 128 hex characters *)
 END_VAR
-ota(fbClient := mqtt, sBaseTopic := 'modbee/pump-01/ota', sVersion := '1.4.0',
+ota(fbClient := mqtt, sBaseTopic := 'modbee/pump-01/ota', sFirmwareVersion := '1.4.0',
     stSigningConfig := signing);
 ```
 
 | `ST_OtaSigningConfig` | |
 |---|---|
 | `sPublicKey` | the P-256 public key, 128 hex characters; empty: no check |
-| `bRequireSigned` | refuse every update until `sPublicKey` holds a valid key - for a key that arrives after the first scan |
+| `bRequireSignedFirmware` | refuse every update until `sPublicKey` holds a valid key - for a key that arrives after the first scan |
 
-`bSigned` says the key is in use. A key that is set but cannot be used (not
+`bSignatureCheckActive` says the key is in use. A key that is set but cannot be used (not
 128 hex characters, or a board that cannot check signatures) fails safe: no
-update is taken until it is fixed, whatever `bRequireSigned` says, and `bError`
+update is taken until it is fixed, whatever `bRequireSignedFirmware` says, and `bError`
 with `eErrorId = E_OtaResult.InvalidArgument` says why (0.2.1; 0.2.0 still took
-unsigned updates). `bRequireSigned` covers a key that is not there yet. The
+unsigned updates). `bRequireSignedFirmware` covers a key that is not there yet. The
 check takes about 160 ms on a Node UIO, on the background task, never in a scan.
 
 ## Over Sparkplug
@@ -108,7 +108,7 @@ SCADA host needs to run the update from its own screens:
 
 ```
 sp (fbClient := mqtt, sGroupId := 'Plant1', sEdgeNodeId := 'pump-01');
-ota(fbClient := mqtt, sBaseTopic := 'modbee/pump-01/ota', sVersion := '1.4.0',
+ota(fbClient := mqtt, sBaseTopic := 'modbee/pump-01/ota', sFirmwareVersion := '1.4.0',
     bAutoApply := FALSE);
 otaSp := ota.Sparkplug(fbNode := sp);
 ```
@@ -121,8 +121,8 @@ status), and takes `Node Control/Firmware Accept`, `Reject`, `Apply`, `Abort`,
 | `Sparkplug` | |
 |---|---|
 | `fbNode` (in-out) | the `FB_SparkplugNode` to report on: on the same `FB_MqttClient`, or another in the same task |
-| `eCmdResult` (out) | the updater's answer to the last host command; a refused one also in the block's `sLastError` |
-| `nCmdCnt` (out) | host commands taken |
+| `eLastHostCommandResult` (out) | the updater's answer to the last host command; a refused one also in the block's `sLastError` |
+| `nHostCommandCount` (out) | host commands taken |
 | result | `Ok` while the metrics are declared and the node is born; `NotReady` while either block is still starting; `WrongTask`, `NoMemory` or `InvalidArgument` (a second `FB_OtaNode` on one node, or `fbNode` changed while running) |
 
 A program that never calls `Sparkplug` carries none of its code.
@@ -141,9 +141,9 @@ A program that never calls `Sparkplug` carries none of its code.
 
 | Pin | Means |
 |---|---|
-| `bActive` | running and listening |
+| `bUpdaterRunning` | the updater runs and takes offers |
 | `eState` | `Idle`, `Checking`, `Offered`, `Downloading`, `Verifying`, `Ready`, `Applying`, `Testing` |
-| `nProgress`, `nReceived`, `nSize` | how far |
-| `nJob`, `sOffered` | the server's number for the update, and its version |
-| `eOutcome`, `eResult` | how the last update ended, and why |
+| `nProgressPct`, `nBytesReceived`, `nFirmwareSizeBytes` | how far |
+| `nUpdateJobNumber`, `sOfferedVersion` | the server's number for the update, and its version |
+| `eLastOutcome`, `eLastOutcomeReason` | how the last update ended, and why |
 | `bError`, `eErrorId`, `sLastError` | the block cannot run, or the key cannot be used; in words, also a command the updater refused |
