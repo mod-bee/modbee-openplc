@@ -14,7 +14,7 @@ last-good copy): restored at power-up, a bad write put back. *)
 
 FUNCTION_BLOCK FB_ValveMotor EXTENDS FB_Valve IMPLEMENTS I_LocalChoice
   VAR_INPUT
-    bOpenTorqueTripped : BOOL; (* the open torque switch tripped *)
+    bOpenTorqueTripped : BOOL := FALSE; (* the open torque switch tripped *)
     bCloseTorqueTripped : BOOL; (* the close torque switch tripped *)
     refMotorisedData : REFERENCE TO ST_ValveMotorData; (* the motorised valve record *)
   END_VAR

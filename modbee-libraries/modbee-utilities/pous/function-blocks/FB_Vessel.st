@@ -29,7 +29,7 @@ Settings are kept by the block (a retained last-good copy): restored at power-up
 
 FUNCTION_BLOCK FB_Vessel EXTENDS FB_Object IMPLEMENTS I_Vessel
   VAR_INPUT
-    fTableVolume : REAL; (* Table: the volume at the present level, in eVolumeUnit (an FB_Linearise) *)
+    fTableVolume : REAL := 0.0; (* Table: the volume at the present level, in eVolumeUnit (an FB_Linearise) *)
     fTableArea : REAL; (* Table: the surface area at the present level, m2 (an FB_Linearise; optional) *)
     ipLevel : I_Measurement; (* required *)
     refData : REFERENCE TO ST_VesselData; (* the block's record *)

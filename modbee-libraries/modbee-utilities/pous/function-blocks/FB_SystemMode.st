@@ -21,7 +21,7 @@ bModeChanged is TRUE for one scan when the mode changes. *)
 
 FUNCTION_BLOCK FB_SystemMode EXTENDS FB_Object IMPLEMENTS I_SystemMode
   VAR_INPUT
-    bManualRunRequest : BOOL; (* manual run request (held) *)
+    bManualRunRequest : BOOL := FALSE; (* manual run request (held) *)
     bPlantReset : BOOL R_EDGE; (* the plant reset *)
     bSelectorManual : BOOL; (* the selector in Manual (set.eModeSource Switch / Remote) *)
     bSelectorAuto : BOOL; (* the selector in Auto *)

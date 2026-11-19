@@ -1,7 +1,7 @@
 (* FB_PulseMeter — a pulse flow meter or a hardware pulse counter.
 
 Pins: bPulse (each rising edge is one pulse: at most one pulse per two scans), nHardwareCount (a hardware counter,
-e.g. node-uio PULSE_COUNT: each count is one pulse; a wrap past 2^32 or set.nCounterWrapsAt is counted, a drop of
+e.g. node-uio FB_PulseCounter: each count is one pulse; a wrap past 2^32 or set.nCounterWrapsAt is counted, a drop of
 more than half the range is a counter restart), bInputGood (the input can be trusted), refData.
 set.eCountFrom picks the input; each pulse adds set.fVolumePerPulse to the total. Nothing is counted while the input is
 bad (a counter catches up when it is good again); bad past its delay is a warning and bIsGood FALSE.
@@ -18,8 +18,8 @@ bCmdPresetTotal (the total to fPresetTotal, 0 .. 1E12). *)
 
 FUNCTION_BLOCK FB_PulseMeter EXTENDS FB_Object IMPLEMENTS I_Meter
   VAR_INPUT
-    bPulse : BOOL; (* each rising edge is one pulse (at most one pulse per two scans) *)
-    nHardwareCount : UDINT; (* a hardware counter (e.g. node-uio PULSE_COUNT): each count is one pulse *)
+    bPulse : BOOL := FALSE; (* each rising edge is one pulse (at most one pulse per two scans) *)
+    nHardwareCount : UDINT; (* a hardware counter (e.g. node-uio FB_PulseCounter): each count is one pulse *)
     bInputGood : BOOL := TRUE; (* the input can be trusted *)
     bPumpRunning : BOOL := FALSE; (* optional: the pump runs; its fall keeps the totals *)
     bResetBatch : BOOL R_EDGE; (* the batch back to 0 *)
