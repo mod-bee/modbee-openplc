@@ -1,13 +1,13 @@
 TYPE
   ST_LinkSupervisorSet : STRUCT
-    tRestartAfter : TIME := T#30s; (* link down this long: restart the modem (0 = step off) *)
-    tPowerCycleAfter : TIME := T#5m; (* ... power cycle the modem (0 = step off) *)
-    tRebootAfter : TIME; (* ... reboot the controller once (0 = off, the default) *)
-    tPulse : TIME := T#1s; (* bRestartModem pulse length *)
-    tPowerOff : TIME := T#10s; (* bPowerCycle: how long the modem stays off *)
-    tMaxBackoff : TIME := T#10m; (* the longest wait between retries *)
+    tModemRestartAfter : TIME := T#30s; (* link down this long: restart the modem (0 = step off) *)
+    tModemPowerCycleAfter : TIME := T#5m; (* ... power cycle the modem (0 = step off) *)
+    tControllerRebootAfter : TIME; (* ... reboot the controller once (0 = off, the default) *)
+    tModemRestartPulseLength : TIME := T#1s; (* bRestartModem pulse length *)
+    tModemPowerOffTime : TIME := T#10s; (* bPowerCycleModem: how long the modem stays off *)
+    tMaxWaitBetweenRetries : TIME := T#10m; (* the longest wait between retries *)
     nMaxRebootsPerDay : INT := 3; (* 0 = never reboot *)
-    tRebootSaveWait : TIME := T#3s; (* the count is kept this long before bRebootReq *)
-    tCountWindow : TIME := T#24h; (* no clock: the count starts again this long after the first counted reboot *)
+    tSaveBeforeReboot : TIME := T#3s; (* the count is kept this long before bRebootRequest *)
+    tRebootCountWindow : TIME := T#24h; (* no clock: the count starts again this long after the first counted reboot *)
   END_STRUCT;
 END_TYPE

@@ -1,6 +1,6 @@
 TYPE
   ST_LevelFloatsTot : STRUCT
-    nHighEvents : UDINT; (* high float made (each time) *)
-    tHighTime : TIME; (* the high float's made time, summed (each event at its end) *)
+    nHighFloatCount : UDINT; (* high float made (each time) *)
+    tHighFloatTime : TIME; (* the high float's made time, summed (each event at its end) *)
   END_STRUCT;
 END_TYPE

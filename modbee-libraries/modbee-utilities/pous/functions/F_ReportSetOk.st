@@ -2,9 +2,9 @@
 
 FUNCTION F_ReportSetOk : BOOL
   VAR_IN_OUT
-    stS : ST_ReportSet;
+    stSettings : ST_ReportSet; (* the settings to check *)
   END_VAR
 
-F_ReportSetOk := F_ReportSetWhy(stS := stS) = E_UtError.None;
+F_ReportSetOk := F_ReportSetWhy(stSettings := stSettings) = E_UtError.None;
 
 END_FUNCTION

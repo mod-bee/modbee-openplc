@@ -1,12 +1,12 @@
 TYPE
   ST_ValveModSet : STRUCT
-    fOutMin : REAL; (* demand clamp, % *)
-    fOutMax : REAL := 100.0;
+    fMinDemandPct : REAL; (* demand clamp, % *)
+    fMaxDemandPct : REAL := 100.0; (* demand clamp, highest % *)
     fRampRate : REAL; (* % per eRateUnit (0 = off) *)
-    eRateUnit : E_RateUnit;
-    fTightShutoff : REAL; (* demand below this -> 0 % (0 = off) *)
-    fFullOpenAbove : REAL := 100.0; (* demand above this -> 100 % (100 = off) *)
-    bReverseActing : BOOL; (* air to close: fOut = 100 - demand *)
-    tStroke : TIME := T#60s; (* travel estimate without feedback (0 = at once) *)
+    eRateUnit : E_RateUnit; (* the time unit of the ramp rate *)
+    fTightShutoffBelowPct : REAL; (* demand below this -> 0 % (0 = off) *)
+    fFullOpenAbovePct : REAL := 100.0; (* demand above this -> 100 % (100 = off) *)
+    bReverseActing : BOOL; (* air to close: fOutputPct = 100 - demand *)
+    tFullStrokeTime : TIME := T#60s; (* travel estimate without feedback (0 = at once) *)
   END_STRUCT;
 END_TYPE

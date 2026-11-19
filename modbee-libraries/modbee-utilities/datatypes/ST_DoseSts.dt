@@ -1,17 +1,17 @@
 TYPE
   ST_DoseSts : STRUCT
-    ePhase : E_DosePhase;
+    eDosePhase : E_DosePhase; (* Idle, Fast, Slow, Settle, Held, Done, Aborted, Dosing or Waiting *)
     eStopReason : E_StopReason; (* why the last dose ended *)
-    bHeld : BOOL; (* a dose is paused *)
-    bQuantityHit : BOOL; (* fMaxQuantity ended a dose (until a reset) *)
-    fRate : REAL; (* % *)
-    fDelivered : LREAL; (* this dose so far *)
-    fLastDelivered : LREAL;
-    stMaxTime : ST_ProtectionSts;
-    stStockLow : ST_ProtectionSts;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    eMode : E_Mode; (* the mode in use *)
-    bHandRun : BOOL; (* a Hand run is on *)
+    bPaused : BOOL; (* a dose is paused *)
+    bMaxQuantityReached : BOOL; (* fMaxQuantityPerDose ended a dose (until a reset) *)
+    fPumpSpeedPct : REAL; (* % *)
+    fDeliveredThisDose : LREAL; (* this dose so far *)
+    fDeliveredLastDose : LREAL; (* delivered in the last dose *)
+    stMaxDoseTimeFault : ST_ProtectionSts; (* a dose lasted longer than the delay (default Off) *)
+    stStockLowFault : ST_ProtectionSts; (* the chemical stock is low (bStockLow) *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    eModeInUse : E_Mode; (* the mode in use *)
+    bHandRunActive : BOOL; (* a Hand run is on *)
   END_STRUCT;
 END_TYPE

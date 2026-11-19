@@ -1,15 +1,15 @@
 TYPE
   ST_ValvePosSts EXTENDS ST_EquipmentSts : STRUCT
-    fAim : REAL; (* where it is going, % *)
-    fDemand : REAL; (* the demand now (after shaping and ramp), % *)
-    fPosition : REAL; (* the position in use, % *)
-    fFeedback : REAL; (* the feedback (-1: none) *)
-    fEstimate : REAL;
-    bFbOk : BOOL;
-    bOpen : BOOL;
-    bClosed : BOOL;
-    bMoving : BOOL;
-    stDeviation : ST_ProtectionSts;
-    stPosFb : ST_ProtectionSts;
+    fPositionSetpointPct : REAL; (* where it is going, % *)
+    fDemandPct : REAL; (* the demand now (after shaping and ramp), % *)
+    fPositionPct : REAL; (* the position in use, % *)
+    fFeedbackPct : REAL; (* the feedback (-1: none) *)
+    fEstimatedPct : REAL; (* the travel estimate, % (-1 = not known until homed) *)
+    bFeedbackGood : BOOL; (* the position feedback can be trusted *)
+    bIsOpen : BOOL; (* open now *)
+    bIsClosed : BOOL; (* closed now *)
+    bTravelling : BOOL; (* travelling now *)
+    stDeviationFault : ST_ProtectionSts; (* position off its aim by more than fDeviationAbovePct *)
+    stPositionFeedbackFault : ST_ProtectionSts; (* the position feedback is bad *)
   END_STRUCT;
 END_TYPE

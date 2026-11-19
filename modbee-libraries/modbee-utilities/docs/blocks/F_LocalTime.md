@@ -6,10 +6,10 @@ Local time from a UTC clock: the offset plus daylight saving.
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `dtUtc` | `DT` | `DT#1970-01-01-00:00:00` | the controller clock (UTC), e.g. CURRENT_DT |
-| in | `nOffsetMin` | `INT` | `720` | standard offset, minutes east of UTC (NZ 720) |
-| in | `eDst` | `E_DstRule` | `E_DstRule.Nz` | the daylight saving rule |
-| out | *(result)* | `DT` | | Local time |
+| in | `dtClockUtc` | `DT` | `DT#1970-01-01-00:00:00` | the controller clock (UTC), e.g. CURRENT_DT |
+| in | `nUtcOffsetMinutes` | `INT` | `720` | standard offset, minutes east of UTC (NZ 720) |
+| in | `eDaylightSavingRule` | `E_DstRule` | `E_DstRule.Nz` | the daylight saving rule |
+| out | *(result)* | `DT` |  | the local time |
 
 ## Lists
 
@@ -17,7 +17,7 @@ Local time from a UTC clock: the offset plus daylight saving.
 
 ## How it works
 
-Local time: `dtUtc` + `nOffsetMin`, plus an hour while daylight saving is in force
+Local time: `dtClockUtc` + `nUtcOffsetMinutes`, plus an hour while daylight saving is in force
 
 ## Example
 
@@ -25,8 +25,8 @@ New Zealand local time from a UTC clock.
 
 | Pin | Wire |
 | --- | --- |
-| `dtUtc` | `dtUtcClock` |
-| `nOffsetMin` | 720 |
-| `eDst` | `E_DstRule.Nz` |
+| `dtClockUtc` | `dtUtcClock` |
+| `nUtcOffsetMinutes` | 720 |
+| `eDaylightSavingRule` | `E_DstRule.Nz` |
 
 **Back to** [the index](../README.md).

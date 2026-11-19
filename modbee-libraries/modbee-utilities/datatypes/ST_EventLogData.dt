@@ -1,7 +1,7 @@
 TYPE
   ST_EventLogData : STRUCT
-    bCmdClear : BOOL; (* empty the log and the kept copy (cleared by the block) *)
-    set : ST_EventLogSet;
-    sts : ST_EventLogSts;
+    bCmdClearLog : BOOL; (* empty the log and the kept copy (cleared by the block) *)
+    set : ST_EventLogSet; (* settings (kept) *)
+    sts : ST_EventLogSts; (* status *)
   END_STRUCT;
 END_TYPE

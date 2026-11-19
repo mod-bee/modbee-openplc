@@ -1,11 +1,11 @@
 TYPE
   ST_AlarmSettings : STRUCT
-    stRow : ST_AlarmSet; (* as an FB_AlarmTable row *)
-    bLatch : BOOL;
-    bAckRequired : BOOL := TRUE;
-    ePriority : E_AlarmPriority := E_AlarmPriority.Medium;
-    tMaxShelve : TIME := T#8h; (* 0 = shelving not allowed *)
-    tShelveFor : TIME; (* 0 = tMaxShelve *)
-    tRetryWindow : TIME := T#1h; (* Retry: from the first raise (0 = until a reset) *)
+    stRowSettings : ST_AlarmSet; (* as an FB_AlarmTable row *)
+    bLatchUntilAcknowledged : BOOL; (* the output stays on until acknowledged after the condition cleared *)
+    bAcknowledgeRequired : BOOL := TRUE; (* FALSE: an event that never needs acknowledging *)
+    ePriority : E_AlarmPriority := E_AlarmPriority.Medium; (* Low, Medium, High or Urgent: the annunciator's horn level *)
+    tMaxShelveTime : TIME := T#8h; (* 0 = shelving not allowed *)
+    tShelveTime : TIME; (* 0 = tMaxShelveTime *)
+    tRetryCountWindow : TIME := T#1h; (* Retry: from the first raise (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

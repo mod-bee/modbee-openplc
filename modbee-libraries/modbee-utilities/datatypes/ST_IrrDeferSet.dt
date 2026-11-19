@@ -1,12 +1,12 @@
 TYPE
   ST_IrrDeferSet : STRUCT
-    bUseRain : BOOL := TRUE;
-    bUseSoil : BOOL := TRUE;
-    tOnDelay : TIME := T#1m;
-    tClearDelay : TIME := T#1h;
-    bStorage : BOOL := TRUE; (* a storage is fitted: bToStorage follows bDefer *)
-    fSoilWet : REAL := 35.0; (* soil transmitter: wet at or above, % *)
-    fSoilDry : REAL := 30.0; (* dry again below *)
+    bRainSensorFitted : BOOL := TRUE; (* the rain sensor is fitted and used *)
+    bSoilSensorFitted : BOOL := TRUE; (* the soil sensor is fitted and used *)
+    tDeferDelay : TIME := T#1m; (* rain, wet soil or a lost sensor must last this long to defer *)
+    tClearDelay : TIME := T#1h; (* every weather cause must be gone this long before irrigation is allowed again (the soil drains) *)
+    bStorageFitted : BOOL := TRUE; (* a storage is fitted: bSendToStorage follows bDeferIrrigation *)
+    fSoilWetAtPct : REAL := 35.0; (* soil transmitter: wet at or above, % *)
+    fSoilDryBelowPct : REAL := 30.0; (* dry again below *)
     bManualDefer : BOOL; (* HMI defer *)
   END_STRUCT;
 END_TYPE

@@ -1,9 +1,9 @@
 TYPE
   ST_ProtectionSet : STRUCT
-    eResponse : E_Response := E_Response.Trip;
-    tDelay : TIME := T#1s;
-    eReset : E_ResetMode := E_ResetMode.Retry;
-    tRecover : TIME := T#10s;
-    nMaxRetries : INT := 3;
+    eActionOnFault : E_Response := E_Response.Trip; (* what it does when the condition lasts: Off, Warn, Trip or Signal *)
+    tTripDelay : TIME := T#1s; (* the condition must last this long before it acts *)
+    eResetMode : E_ResetMode := E_ResetMode.Retry; (* how it clears: Auto, Manual (held until a reset) or Retry (locks out after too many) *)
+    tAutoRecoverAfter : TIME := T#10s; (* the condition must be gone this long before it clears *)
+    nMaxRetriesBeforeLockout : INT := 3; (* Retry: trips within the retry window before it locks out *)
   END_STRUCT;
 END_TYPE

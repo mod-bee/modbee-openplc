@@ -1,12 +1,12 @@
 TYPE
   ST_ReportSts : STRUCT
-    fLastValue : REAL;
-    bLastGood : BOOL;
-    eReason : E_ReportReason;
-    nReports : UDINT;
-    nSuppressed : UDINT; (* held back by tMinInterval *)
-    tSinceLast : TIME;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    fReportedValue : REAL; (* the value last reported *)
+    bReportedGood : BOOL; (* the quality last reported *)
+    eReportReason : E_ReportReason; (* why it last reported *)
+    nSentCount : UDINT; (* reports sent *)
+    nSuppressedCount : UDINT; (* held back by tMinInterval *)
+    tSinceLastReport : TIME; (* time since the last report *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

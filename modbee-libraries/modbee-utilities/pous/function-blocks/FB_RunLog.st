@@ -1,18 +1,18 @@
 (* FB_RunLog — the last run's time, volume and end reason, and run counts by how they ended. An observer,
 not a part: it reads its run (ipRun) and changes nothing, so a missing rung never stops a run. Call it every scan
 after the run.
-When the run ends: tot.tLastRun (counted run time), tot.tLastWall (from start to end, pauses included),
-tot.fLastVolume (from ipMeter's total, optional), tot.eLastReason; tot.nRuns and one of nDone (Done), nStopped
-(Request, Manual, Off, Hand, Restart), nPowerCuts (PowerCut), nFaults (any other reason: a fault, an interlock, an
+When the run ends: tot.tLastRunTime (counted run time), tot.tLastRunStartToEnd (from start to end, pauses included),
+tot.fLastRunVolume (from ipMeter's total, optional), tot.eLastStopReason; tot.nRunCount and one of nDoneRunCount (Done), nStoppedRunCount
+(Request, Manual, Off, Hand, Restart), nPowerCutRunCount (PowerCut), nFaultedRunCount (any other reason: a fault, an interlock, an
 abort, a maximum). A restart (ipRun.nActRunId changes while it stays active) ends the run (Restart) and starts the
-next one. tot is kept over a power cut (written once per run end); bCmdResetCounts clears the counts.
+next one. tot is kept over a power cut (written once per run end); bCmdResetCounters clears the counts.
 Pins: ipRun (required), ipMeter, refData -> bRunEnded (one scan, at each run end), plus FB_Object's outputs. *)
 
 FUNCTION_BLOCK FB_RunLog EXTENDS FB_Object
   VAR_INPUT
     ipRun : I_Run; (* required *)
     ipMeter : I_Meter; (* optional: the volume of each run *)
-    refData : REFERENCE TO ST_RunLogData;
+    refData : REFERENCE TO ST_RunLogData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
     bRunEnded : BOOL; (* one scan at each run end *)
@@ -54,25 +54,25 @@ IF bFirstScan THEN
     stKeptTot := refData.tot;
     nKeptLayout := cLayout;
   END_IF;
-  bActPrev := ipRun.bIsActive;    (* a run resumed after a power cut is logged when it ends *)
+  bActPrev := ipRun.bIsBusy;    (* a run resumed after a power cut is logged when it ends *)
   nRunSeen := ipRun.nActRunId;
   tStartAt := tNow;
   IF ipMeter <> NULL THEN
     fStartTotal := ipMeter.fActTotal;
   END_IF;
 END_IF;
-IF refData.bCmdResetCounts AND NOT bCountSeen THEN
-  refData.tot.nRuns := 0;
-  refData.tot.nDone := 0;
-  refData.tot.nStopped := 0;
-  refData.tot.nFaults := 0;
-  refData.tot.nPowerCuts := 0;
+IF refData.bCmdResetCounters AND NOT bCountSeen THEN
+  refData.tot.nRunCount := 0;
+  refData.tot.nDoneRunCount := 0;
+  refData.tot.nStoppedRunCount := 0;
+  refData.tot.nFaultedRunCount := 0;
+  refData.tot.nPowerCutRunCount := 0;
   stKeptTot := refData.tot;
 END_IF;
-bCountSeen := refData.bCmdResetCounts;
-refData.bCmdResetCounts := FALSE;
+bCountSeen := refData.bCmdResetCounters;
+refData.bCmdResetCounters := FALSE;
 
-bAct := ipRun.bIsActive;
+bAct := ipRun.bIsBusy;
 bRestarted := bAct AND bActPrev AND ipRun.nActRunId <> nRunSeen;
 IF bActPrev AND (NOT bAct OR bRestarted) THEN
   (* the run ended (a restart ends it too) *)
@@ -81,25 +81,25 @@ IF bActPrev AND (NOT bAct OR bRestarted) THEN
   ELSE
     eWhy := ipRun.eActStopReason;
   END_IF;
-  refData.tot.nRuns := refData.tot.nRuns + 1;
+  refData.tot.nRunCount := refData.tot.nRunCount + 1;
   CASE eWhy OF
   E_StopReason.Done:
-    refData.tot.nDone := refData.tot.nDone + 1;
+    refData.tot.nDoneRunCount := refData.tot.nDoneRunCount + 1;
   E_StopReason.Request, E_StopReason.Manual, E_StopReason.Off, E_StopReason.Hand, E_StopReason.Restart:
-    refData.tot.nStopped := refData.tot.nStopped + 1;
+    refData.tot.nStoppedRunCount := refData.tot.nStoppedRunCount + 1;
   E_StopReason.PowerCut:
-    refData.tot.nPowerCuts := refData.tot.nPowerCuts + 1;
+    refData.tot.nPowerCutRunCount := refData.tot.nPowerCutRunCount + 1;
   ELSE
-    refData.tot.nFaults := refData.tot.nFaults + 1;
+    refData.tot.nFaultedRunCount := refData.tot.nFaultedRunCount + 1;
   END_CASE;
-  refData.tot.tLastRun := tElapsed;
-  refData.tot.tLastWall := tNow - tStartAt;
+  refData.tot.tLastRunTime := tElapsed;
+  refData.tot.tLastRunStartToEnd := tNow - tStartAt;
   IF ipMeter <> NULL THEN
-    refData.tot.fLastVolume := MAX(ipMeter.fActTotal - fStartTotal, 0.0);
+    refData.tot.fLastRunVolume := MAX(ipMeter.fActTotal - fStartTotal, 0.0);
   ELSE
-    refData.tot.fLastVolume := 0.0;
+    refData.tot.fLastRunVolume := 0.0;
   END_IF;
-  refData.tot.eLastReason := eWhy;
+  refData.tot.eLastStopReason := eWhy;
   stKeptTot := refData.tot;       (* kept once per run end *)
   bRunEnded := TRUE;
 END_IF;

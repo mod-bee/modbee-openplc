@@ -1,10 +1,10 @@
 TYPE
   ST_ReportItem : STRUCT
     fIn : REAL; (* the value (the project's; BOOL / INT: convert to REAL) *)
-    bInGood : BOOL := TRUE; (* its quality (the project's) *)
-    bCmdForce : BOOL; (* report this one now (cleared by the block) *)
-    stMem : ST_ReportMem; (* stMem.bReport, fValue, bGood, eReason: the results *)
-    sts : ST_ReportSts;
-    bCmdSeen : BOOL;
+    bInputGood : BOOL := TRUE; (* its quality (the project's) *)
+    bCmdReportNow : BOOL; (* report this one now (cleared by the block) *)
+    stResult : ST_ReportMem; (* stResult.bSendNow, fValue, bGood, eReportReason: the results *)
+    sts : ST_ReportSts; (* status *)
+    bCmdReportNowTaken : BOOL; (* engine memory: the command was taken *)
   END_STRUCT;
 END_TYPE

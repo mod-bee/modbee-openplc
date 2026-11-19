@@ -6,38 +6,38 @@ Finds a channel through the IO module table (used by the IO maps).
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `eKind` | `E_IoKind` |  | The kind |
-| in | `eSrc` | `E_IoSrc` |  | Where the channel is: `None` (not on this site), `Board`, `I2c`, `Field`, `Remote` |
-| in | `nModule` | `USINT` |  | The module number (0..127) |
-| in | `nCh` | `USINT` |  | The channel number on the module |
-| in | `nImgLo` | `DINT` |  | The image's first row |
-| in | `nImgHi` | `DINT` |  | The image's last row |
-| in-out | `aMods` | `ARRAY[*] OF ST_IoModule` |  | The module table |
-| out | `nMod` | `DINT` |  | the module row |
-| out | `nIdx` | `DINT` |  | the image row |
-| out | *(result)* | `E_IoQ` | | `Ok`, or why the channel is not found |
+| in | `eChannelKind` | `E_IoKind` |  | the kind of channel looked for |
+| in | `eSource` | `E_IoSrc` |  | where the channel is: None (not on this site), Board, I2c, Field or Remote |
+| in | `nModuleNumber` | `USINT` |  | the module number within that source (0..127) |
+| in | `nChannel` | `USINT` |  | the channel number on the module |
+| in | `nImageFirstRow` | `DINT` |  | the image's first row |
+| in | `nImageLastRow` | `DINT` |  | the image's last row |
+| in-out | `aModules` | `ARRAY[*] OF ST_IoModule` |  | the module table |
+| out | `nModuleRow` | `DINT` |  | the module row found |
+| out | `nImageRow` | `DINT` |  | the image row found |
+| out | *(result)* | `E_IoQ` |  | the channel's quality, or why it was not found |
 
-## Rows `ST_IoModule` (pin `aMods`)
+## Rows `ST_IoModule` (pin `aModules`)
 
-`aMods` is an array the project declares (any size, any lower bound): one row per item.
+`aModules` is an array the project declares (any size, any lower bound): one row per item.
 
 **One row** (`ST_IoModule`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `eKind` | `E_IoKind` |  | The kind |
-| `eSrc` | `E_IoSrc` |  | Where the channel is: `None` (not on this site), `Board`, `I2c`, `Field`, `Remote` |
-| `nModule` | `USINT` |  | its number within that source (1 = the first) |
-| `nFirst` | `INT` |  | the image row of its channel 1 |
-| `nCount` | `USINT` |  | how many channels it has |
-| `bFitted` | `BOOL` | `TRUE` | installed on this site |
-| `bOk` | `BOOL` |  | present and answering: its driver / comms sets this every scan |
-| `eState` | `E_IoQ` |  | status: Ok, NotFitted or Missing (Unused for an empty row) |
-| `nUsed` | `USINT` |  | status: functions mapped to it |
+| `eChannelKind` | `E_IoKind` |  | the kind of channels it has |
+| `eSource` | `E_IoSrc` |  | where the channel is: None (not on this site), Board, I2c, Field or Remote |
+| `nModuleNumber` | `USINT` |  | its number within that source (1 = the first) |
+| `nFirstImageRow` | `INT` |  | the image row of its channel 1 |
+| `nChannels` | `USINT` |  | how many channels it has |
+| `bModuleFitted` | `BOOL` | `TRUE` | installed on this site |
+| `bAnswering` | `BOOL` |  | present and answering: its driver / comms sets this every scan |
+| `eModuleState` | `E_IoQ` |  | status: Ok, NotFitted or Missing (Unused for an empty row) |
+| `nFunctionsMapped` | `USINT` |  | status: functions mapped to it |
 
 ## How it works
 
-A channel through the module table: Unused (`eSrc` None), NoModule (no module of that kind, source and number), NoChannel (no such channel, or outside the image `nImgLo`..nImgHi), else Ok with `nMod` (the module row) and `nIdx` (the image row). The caller then checks the module's fitted / ok and the channel's bad bit.
+A channel through the module table: Unused (`eSource` None), NoModule (no module of that kind, source and number), NoChannel (no such channel, or outside the image `nImageFirstRow`..nImageLastRow), else Ok with `nModuleRow` (the module row) and `nImageRow` (the image row). The caller then checks the module's fitted / ok and the channel's bad bit.
 
 ## Example
 

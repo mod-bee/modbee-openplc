@@ -1,8 +1,8 @@
 TYPE
   ST_Motor2SpeedData : STRUCT
-    bCmdLow : BOOL; (* Hand low (and start); cleared by the block *)
-    bCmdHigh : BOOL; (* Hand high (and start); cleared by the block *)
-    set : ST_Motor2SpeedSet;
-    sts : ST_Motor2SpeedSts;
+    bCmdHandLowSpeed : BOOL; (* Hand low (and start); cleared by the block *)
+    bCmdHandHighSpeed : BOOL; (* Hand high (and start); cleared by the block *)
+    set : ST_Motor2SpeedSet; (* settings (kept) *)
+    sts : ST_Motor2SpeedSts; (* status *)
   END_STRUCT;
 END_TYPE

@@ -1,9 +1,9 @@
 TYPE
   ST_WatchdogData : STRUCT
-    bCmdReset : BOOL; (* reset a held failure (cleared by the block; a held write acts once) *)
-    bCmdResetCount : BOOL; (* clear the failure count and down time (as bCmdReset) *)
-    set : ST_WatchdogSet;
-    sts : ST_WatchdogSts;
-    det : ST_WatchdogDet;
+    bCmdResetFaults : BOOL; (* reset a held failure (cleared by the block; a held write acts once) *)
+    bCmdResetCounters : BOOL; (* clear the failure count and down time (as bCmdResetFaults) *)
+    set : ST_WatchdogSet; (* settings (kept) *)
+    sts : ST_WatchdogSts; (* status *)
+    det : ST_WatchdogDet; (* details *)
   END_STRUCT;
 END_TYPE

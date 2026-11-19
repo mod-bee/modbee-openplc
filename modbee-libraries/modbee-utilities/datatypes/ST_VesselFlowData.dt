@@ -1,6 +1,6 @@
 TYPE
   ST_VesselFlowData : STRUCT
-    set : ST_VesselFlowSet;
-    sts : ST_VesselFlowSts;
+    set : ST_VesselFlowSet; (* the settings (kept) *)
+    sts : ST_VesselFlowSts; (* the status *)
   END_STRUCT;
 END_TYPE

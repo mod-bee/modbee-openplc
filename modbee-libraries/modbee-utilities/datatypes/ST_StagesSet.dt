@@ -1,6 +1,6 @@
 TYPE
   ST_StagesSet : STRUCT
-    aStage : ARRAY [2..4] OF ST_Stage; (* 0 / 0 = not used *)
+    aExtraPumpLevels : ARRAY [2..4] OF ST_Stage; (* 0 / 0 = not used *)
     nDemandPumps : INT := 1; (* pumps on a demand (at least) *)
   END_STRUCT;
 END_TYPE

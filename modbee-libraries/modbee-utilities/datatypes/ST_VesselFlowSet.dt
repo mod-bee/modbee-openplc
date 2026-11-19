@@ -1,5 +1,5 @@
 TYPE
   ST_VesselFlowSet : STRUCT
-    tRateWindow : TIME := T#1m;
+    tRateWindow : TIME := T#1m; (* the window the rise per hour is worked out over *)
   END_STRUCT;
 END_TYPE

@@ -1,11 +1,11 @@
 TYPE
   ST_StarDeltaSts : STRUCT
-    bInStar : BOOL;
-    bInDelta : BOOL;
-    tStarLeft : TIME;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    stChangeover : ST_ProtectionSts;
-    bCurrentRisen : BOOL; (* the star current has risen to fStarCurrentPct in this start *)
+    bInStar : BOOL; (* the star contactor is on *)
+    bInDelta : BOOL; (* the delta contactor is on *)
+    tStarTimeLeft : TIME; (* time left in star *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    stAuxFeedbackFault : ST_ProtectionSts; (* an aux did not follow its coil (contactor fault); default Manual reset *)
+    bStarCurrentRisen : BOOL; (* the star current has risen to fToDeltaBelowPct in this start *)
   END_STRUCT;
 END_TYPE

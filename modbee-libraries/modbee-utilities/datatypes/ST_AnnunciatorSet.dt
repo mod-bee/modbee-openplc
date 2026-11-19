@@ -1,10 +1,10 @@
 TYPE
   ST_AnnunciatorSet : STRUCT
-    eHornPriority : E_AlarmPriority := E_AlarmPriority.Low; (* only alarms at or above this sound the horn *)
-    tHornTimeout : TIME; (* the horn stops by itself after this (0 = never) *)
-    tReHorn : TIME; (* sound again after this while still unacknowledged (0 = off) *)
-    tFastFlash : TIME := T#250ms;
-    tSlowFlash : TIME := T#1s;
-    bRelayOnWarning : BOOL; (* bHealthy drops for a warning alarm too *)
+    eHornFromPriority : E_AlarmPriority := E_AlarmPriority.Low; (* only alarms at or above this sound the horn *)
+    tHornStopsAfter : TIME; (* the horn stops by itself after this (0 = never) *)
+    tHornAgainAfter : TIME; (* sound again after this while still unacknowledged (0 = off) *)
+    tFastFlash : TIME := T#250ms; (* lamp flash period for a new alarm *)
+    tSlowFlash : TIME := T#1s; (* lamp flash period for an alarm that has cleared but is not acknowledged *)
+    bRelayDropsOnWarning : BOOL; (* bFailSafeRelay drops for a warning alarm too *)
   END_STRUCT;
 END_TYPE

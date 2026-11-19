@@ -8,11 +8,11 @@ TIME. The parts are simply added, so they may exceed their natural range
 
 FUNCTION F_TimeBuild : TIME
   VAR_INPUT
-    nDays : UDINT := 0;
-    nHours : UDINT := 0;
-    nMinutes : UDINT := 0;
-    nSeconds : UDINT := 0;
-    nMillis : UDINT := 0;
+    nDays : UDINT := 0; (* days *)
+    nHours : UDINT := 0; (* hours *)
+    nMinutes : UDINT := 0; (* minutes *)
+    nSeconds : UDINT := 0; (* seconds *)
+    nMilliseconds : UDINT := 0; (* milliseconds *)
   END_VAR
   VAR
     nMs : LINT; (* the total in milliseconds (cannot overflow) *)
@@ -23,7 +23,7 @@ nMs := UDINT_TO_LINT(nDays) * 86400000
     + UDINT_TO_LINT(nHours) * 3600000
     + UDINT_TO_LINT(nMinutes) * 60000
     + UDINT_TO_LINT(nSeconds) * 1000
-    + UDINT_TO_LINT(nMillis);
+    + UDINT_TO_LINT(nMilliseconds);
 IF nMs > 9223372036854 THEN
   F_TimeBuild := T#1d * 106751 + T#23h47m16s854ms775us807ns;
 ELSE

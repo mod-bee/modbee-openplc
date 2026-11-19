@@ -1,9 +1,6 @@
 TYPE
   ST_BeaconData : STRUCT
-    set : ST_BeaconSet;
-    nActive : INT; (* status *)
-    nCode : INT;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    set : ST_BeaconSet; (* settings (kept) *)
+    sts : ST_BeaconSts; (* the status *)
   END_STRUCT;
 END_TYPE

@@ -1,32 +1,32 @@
 (* FB_Changeover — switch between two contactors A / B that must never be on together (reversing, two-speed, star
 -> delta). The motor variants' shared piece; usable on its own.
-bRun with bWantB FALSE drives A, with bWantB TRUE drives B. Changing over: the energised side drops first, then
-the dead time (tGapAB from A to B, tGapBA from B to A) runs and, with bUseFb, the other contactor's aux must have
-opened, before the new side closes. bQA and bQB are never TRUE together. At the first scan both sides wait one
+bRun with bSelectSideB FALSE drives A, with bSelectSideB TRUE drives B. Changing over: the energised side drops first, then
+the dead time (tAToBDeadTime from A to B, tBToADeadTime from B to A) runs and, with bContactorFeedbackFitted, the other contactor's aux must have
+opened, before the new side closes. bSideAOutput and bSideBOutput are never TRUE together. At the first scan both sides wait one
 full gap (the motor may still be turning).
-bCause: with bUseFb, an aux that does not follow its coil within tOpenTime (welded, not pulled in): the owner's
-changeover protection. bInGap: a planned gap (and tOpenTime after a side closes), so the owner keeps its
-feedback supervision quiet. bStartBlock: the dead time, or the other contactor not open yet. *)
+bAuxWrong: with bContactorFeedbackFitted, an aux that does not follow its coil within tAuxFeedbackTimeout (welded, not pulled in): the owner's
+changeover protection. bPlannedGap: a planned gap (and tAuxFeedbackTimeout after a side closes), so the owner keeps its
+feedback supervision quiet. bStartHeld: the dead time, or the other contactor not open yet. *)
 
 FUNCTION_BLOCK FB_Changeover
   VAR_INPUT
-    bRun : BOOL;
-    bWantB : BOOL; (* FALSE: side A (fwd / low / star), TRUE: side B (rev / high / delta) *)
-    bFbA : BOOL; (* A contactor aux *)
-    bFbB : BOOL; (* B contactor aux *)
-    bUseFb : BOOL; (* supervise the auxes *)
-    tGapAB : TIME; (* dead time A off -> B on *)
-    tGapBA : TIME; (* dead time B off -> A on *)
-    tOpenTime : TIME := T#1s; (* a contactor must open / close within this *)
+    bRun : BOOL; (* run: side A, or side B with bSelectSideB *)
+    bSelectSideB : BOOL; (* FALSE: side A (fwd / low / star), TRUE: side B (rev / high / delta) *)
+    bSideAFeedback : BOOL; (* A contactor aux *)
+    bSideBFeedback : BOOL; (* B contactor aux *)
+    bContactorFeedbackFitted : BOOL; (* supervise the auxes *)
+    tAToBDeadTime : TIME; (* dead time A off -> B on *)
+    tBToADeadTime : TIME; (* dead time B off -> A on *)
+    tAuxFeedbackTimeout : TIME := T#1s; (* a contactor must open / close within this *)
   END_VAR
   VAR_OUTPUT
-    bQA : BOOL;
-    bQB : BOOL;
-    bInGap : BOOL; (* a planned gap: the owner keeps feedback supervision quiet *)
-    bStartBlock : BOOL; (* dead time, or the other contactor not open yet *)
-    bCause : BOOL; (* an aux wrong for the sequence *)
-    bDeadTime : BOOL; (* waiting out the dead time *)
-    bWaitOpen : BOOL; (* waiting for the other contactor to open *)
+    bSideAOutput : BOOL; (* contactor A *)
+    bSideBOutput : BOOL; (* contactor B (never with A) *)
+    bPlannedGap : BOOL; (* a planned gap: the owner keeps feedback supervision quiet *)
+    bStartHeld : BOOL; (* dead time, or the other contactor not open yet *)
+    bAuxWrong : BOOL; (* an aux wrong for the sequence *)
+    bInDeadTime : BOOL; (* waiting out the dead time *)
+    bWaitingOtherOpen : BOOL; (* waiting for the other contactor to open *)
     tTimeLeft : TIME; (* gap left *)
   END_VAR
   VAR
@@ -53,7 +53,7 @@ IF NOT bStarted THEN
 END_IF;
 IF NOT bRun THEN
   nTarget := 0;
-ELSIF bWantB THEN
+ELSIF bSelectSideB THEN
   nTarget := 2;
 ELSE
   nTarget := 1;
@@ -63,45 +63,45 @@ IF nSide <> 0 AND nSide <> nTarget THEN
   nSide := 0;
   tOffAt := tNow;
 END_IF;
-bDeadTime := FALSE;
-bWaitOpen := FALSE;
+bInDeadTime := FALSE;
+bWaitingOtherOpen := FALSE;
 tTimeLeft := T#0s;
 IF nSide = 0 AND nTarget <> 0 THEN
   IF nLastSide = 3 THEN
-    tGap := MAX(tGapAB, tGapBA);
+    tGap := MAX(tAToBDeadTime, tBToADeadTime);
   ELSIF nLastSide = 1 AND nTarget = 2 THEN
-    tGap := tGapAB;
+    tGap := tAToBDeadTime;
   ELSIF nLastSide = 2 AND nTarget = 1 THEN
-    tGap := tGapBA;
+    tGap := tBToADeadTime;
   ELSE
     tGap := T#0s;
   END_IF;
   IF nTarget = 1 THEN
-    bOtherOpen := NOT bUseFb OR NOT bFbB;
+    bOtherOpen := NOT bContactorFeedbackFitted OR NOT bSideBFeedback;
   ELSE
-    bOtherOpen := NOT bUseFb OR NOT bFbA;
+    bOtherOpen := NOT bContactorFeedbackFitted OR NOT bSideAFeedback;
   END_IF;
   IF tNow - tOffAt < tGap THEN
-    bDeadTime := TRUE;
+    bInDeadTime := TRUE;
     tTimeLeft := tGap - (tNow - tOffAt);
   ELSIF NOT bOtherOpen THEN
-    bWaitOpen := TRUE;
+    bWaitingOtherOpen := TRUE;
   ELSE
     nSide := nTarget;
     tOnAt := tNow;
     nLastSide := nTarget;
   END_IF;
 END_IF;
-bQA := nSide = 1;
-bQB := nSide = 2;
-bStartBlock := nSide = 0 AND nTarget <> 0;
-bInGap := bStartBlock OR (nSide <> 0 AND tNow - tOnAt < tOpenTime);
-bCause := FALSE;
-IF bUseFb THEN
-  IF bQA AND NOT bFbA AND tNow - tOnAt >= tOpenTime THEN bCause := TRUE; END_IF;
-  IF bQB AND NOT bFbB AND tNow - tOnAt >= tOpenTime THEN bCause := TRUE; END_IF;
-  IF NOT bQA AND bFbA AND tNow - tOffAt >= tOpenTime AND nLastSide <> 3 THEN bCause := TRUE; END_IF;
-  IF NOT bQB AND bFbB AND tNow - tOffAt >= tOpenTime AND nLastSide <> 3 THEN bCause := TRUE; END_IF;
+bSideAOutput := nSide = 1;
+bSideBOutput := nSide = 2;
+bStartHeld := nSide = 0 AND nTarget <> 0;
+bPlannedGap := bStartHeld OR (nSide <> 0 AND tNow - tOnAt < tAuxFeedbackTimeout);
+bAuxWrong := FALSE;
+IF bContactorFeedbackFitted THEN
+  IF bSideAOutput AND NOT bSideAFeedback AND tNow - tOnAt >= tAuxFeedbackTimeout THEN bAuxWrong := TRUE; END_IF;
+  IF bSideBOutput AND NOT bSideBFeedback AND tNow - tOnAt >= tAuxFeedbackTimeout THEN bAuxWrong := TRUE; END_IF;
+  IF NOT bSideAOutput AND bSideAFeedback AND tNow - tOffAt >= tAuxFeedbackTimeout AND nLastSide <> 3 THEN bAuxWrong := TRUE; END_IF;
+  IF NOT bSideBOutput AND bSideBFeedback AND tNow - tOffAt >= tAuxFeedbackTimeout AND nLastSide <> 3 THEN bAuxWrong := TRUE; END_IF;
 END_IF;
 
 END_FUNCTION_BLOCK

@@ -1,25 +1,25 @@
 (* FB_AnalogIn — a raw analog reading (or a remote / computed value) to an engineering value with its health. Wire
 the instance to any I_Measurement pin.
 
-Pins: fIn (the raw value, e.g. INT_TO_REAL(%IW0); the value itself with Direct), bInGood (the source is
-healthy: IO module, comms, device) -> fValue (engineering value), fPercent (of the span), bGood, plus
+Pins: fRawIn (the raw value, e.g. INT_TO_REAL(%IW0); the value itself with Direct), bInputGood (the source is
+healthy: IO module, comms, device) -> fValue (engineering value), fPctOfSpan (of the span), bGood, plus
 FB_Object's bError / bWarning / eErrorId / eState. refData: its record. stConfig: the engineering constants
 (signal type, raw span, unit, custom fail bands), set once at the declaration.
 
-Signal types (stConfig.eSignal); fRawMin / fRawMax are the raw values at the bottom and top of the signal:
+Signal types (stConfig.eSignalType); fRawAtSignalLow / fRawAtSignalHigh are the raw values at the bottom and top of the signal:
   Current4To20  NE43: <= 3.6 mA fail low, 3.6-3.8 under range, 3.8-20.5 measurement, 20.5-21 over range,
                 >= 21 fail high
   Current0To20, below 0 % / above 100 % of the span is under / over range (no fail bands: a live zero
   Voltage0To10  is needed to see a wire break)
-  Custom        as 0-20 mA, plus fail bands at fCustomLowFail / fCustomHighFail % of the span
-  Direct        fIn is already the engineering value (Modbus register, BeeBus value, a calculation): no raw
-                scaling; the custom fail bands around fEngMin..fEngMax and the trim still apply
-A failure (a fail band, not a number, bInGood FALSE) is ridden through for set.stFault.tDelay (the last good
-value held, still good, a warning), then per set.stFault: Trip = not good + error, Warn = good (held) + warning,
+  Custom        as 0-20 mA, plus fail bands at fCustomFailLowPct / fCustomFailHighPct % of the span
+  Direct        fRawIn is already the engineering value (Modbus register, BeeBus value, a calculation): no raw
+                scaling; the custom fail bands around fValueAtSignalLow..fValueAtSignalHigh and the trim still apply
+A failure (a fail band, not a number, bInputGood FALSE) is ridden through for set.stSignalFault.tTripDelay (the last good
+value held, still good, a warning), then per set.stSignalFault: Trip = not good + error, Warn = good (held) + warning,
 Signal = not good, no alarm. Under / over range is a warning only. fValue always holds the last good value.
-set.bFitted FALSE: this input is not on this site: not good, not fitted, no fault.
-Second unit: fValueAlt = fValue * set.fAltFactor + set.fAltOffset (bar to psi: factor 14.5038), also in
-sts.fValueAlt; it follows fValue (the held value while the signal has failed). A factor or offset that is not a
+set.bSensorFitted FALSE: this input is not on this site: not good, not fitted, no fault.
+Second unit: fValueSecondUnit = fValue * set.fSecondUnitFactor + set.fSecondUnitOffset (bar to psi: factor 14.5038), also in
+sts.fValueSecondUnit; it follows fValue (the held value while the signal has failed). A factor or offset that is not a
 finite number is a bad setting (put back).
 Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
 Placed after it when needed: FB_MeasFilter (filter, low cut-off, clamp), FB_MeasOverride (simulate,
@@ -27,16 +27,16 @@ substitute), FB_MeasFrozen (frozen check). *)
 
 FUNCTION_BLOCK FB_AnalogIn EXTENDS FB_Object IMPLEMENTS I_Measurement
   VAR_INPUT
-    fIn : REAL; (* raw value; the engineering value itself with Direct *)
-    bInGood : BOOL := TRUE; (* the source is healthy (IO module, comms, device) *)
-    refData : REFERENCE TO ST_AnalogInData;
+    fRawIn : REAL; (* raw value; the engineering value itself with Direct *)
+    bInputGood : BOOL := TRUE; (* the source is healthy (IO module, comms, device) *)
+    refData : REFERENCE TO ST_AnalogInData; (* the block's record *)
     stConfig : ST_AnalogInConfig; (* engineering constants (set at the declaration) *)
   END_VAR
   VAR_OUTPUT
     fValue : REAL; (* engineering value; the last good one while the signal has failed *)
-    fPercent : REAL; (* fValue as a % of fEngMin..fEngMax *)
-    fValueAlt : REAL; (* fValue in the second unit (set.fAltFactor, fAltOffset) *)
     bGood : BOOL; (* fValue is usable *)
+    fPctOfSpan : REAL; (* fValue as a % of fValueAtSignalLow..fValueAtSignalHigh *)
+    fValueSecondUnit : REAL; (* fValue in the second unit (set.fSecondUnitFactor, fSecondUnitOffset) *)
   END_VAR
   VAR RETAIN
     stKept : ST_AnalogInSet;
@@ -68,27 +68,27 @@ FUNCTION_BLOCK FB_AnalogIn EXTENDS FB_Object IMPLEMENTS I_Measurement
   END_VAR
 
 
-PROPERTY PUBLIC fActValue : REAL
+PROPERTY PUBLIC fActValue : REAL    // the value in its unit (held at the last good one while bad, when so set)
    GET
      fActValue := fValue;
    END_GET
  END_PROPERTY
- PROPERTY PUBLIC bIsGood : BOOL
+ PROPERTY PUBLIC bIsGood : BOOL    // the value can be trusted now
    GET
      bIsGood := bGood;
    END_GET
  END_PROPERTY
- PROPERTY PUBLIC bHasValue : BOOL
+ PROPERTY PUBLIC bHasValue : BOOL    // a continuous value (FALSE: switches only)
    GET
      bHasValue := TRUE;
    END_GET
  END_PROPERTY
- PROPERTY PUBLIC bIsFitted : BOOL
+ PROPERTY PUBLIC bIsFitted : BOOL    // the sensor is on this site (FALSE: no value, no bands, no fault)
    GET
      bIsFitted := bFittedNow;
    END_GET
  END_PROPERTY
- PROPERTY PUBLIC eUnit : E_Unit
+ PROPERTY PUBLIC eUnit : E_Unit    // the unit of the value
    GET
      eUnit := stConfig.eUnit;
    END_GET
@@ -97,7 +97,7 @@ PROPERTY PUBLIC fActValue : REAL
 (FB_LevelCheck compares its value) *)
  METHOD PUBLIC Band : BOOL
    VAR_INPUT
-     eBand : E_Band;
+     eBand : E_Band;    // the band asked about (LowLow, Low, High, HighHigh); returns TRUE while the value is in it
    END_VAR
    Band := FALSE;
  END_METHOD
@@ -106,7 +106,7 @@ PROPERTY PUBLIC fActValue : REAL
    VAR_INPUT
      stP : REFERENCE TO ST_ProtectionSet;
    END_VAR
-   ProtOk := stP.tDelay >= T#0s AND stP.tRecover >= T#0s AND stP.nMaxRetries >= 0;
+   ProtOk := stP.tTripDelay >= T#0s AND stP.tAutoRecoverAfter >= T#0s AND stP.nMaxRetriesBeforeLockout >= 0;
  END_METHOD
 
  (* the settings are usable *)
@@ -115,18 +115,20 @@ PROPERTY PUBLIC fActValue : REAL
      stS : REFERENCE TO ST_AnalogInSet;
    END_VAR
    SetWhy := E_UtError.None;
-   IF NOT (ABS(stS.fEngMax - stS.fEngMin) > 0.0) THEN   // no span
+   IF NOT (ABS(stS.fValueAtSignalHigh - stS.fValueAtSignalLow) > 0.0) THEN   // no span
      SetWhy := E_UtError.LimitsBad;
-   ELSIF NOT (ABS(stS.fEngMax - stS.fEngMin) <= 3.4E38) THEN
+   ELSIF NOT (ABS(stS.fValueAtSignalHigh - stS.fValueAtSignalLow) <= 3.4E38) THEN
      SetWhy := E_UtError.ValueBad;
-   ELSIF NOT (ABS(stS.fTrim) <= 3.4E38) THEN
+   ELSIF NOT (ABS(stS.fZeroTrim) <= 3.4E38) THEN
      SetWhy := E_UtError.ValueBad;
-   ELSIF NOT (ABS(stS.fAltFactor) <= 3.4E38) THEN
+   ELSIF NOT (ABS(stS.fSecondUnitFactor) <= 3.4E38) THEN
      SetWhy := E_UtError.ValueBad;
-   ELSIF NOT (ABS(stS.fAltOffset) <= 3.4E38) THEN
+   ELSIF NOT (ABS(stS.fSecondUnitOffset) <= 3.4E38) THEN
      SetWhy := E_UtError.ValueBad;
-   ELSIF NOT (ProtOk(stP := stS.stFault)) THEN
+   ELSIF NOT (ProtOk(stP := stS.stSignalFault)) THEN
      SetWhy := E_UtError.ProtectionBad;
+   ELSIF NOT (stS.tRetryCountWindow >= T#0s) THEN
+     SetWhy := E_UtError.TimeBad;
    END_IF;
  END_METHOD
 
@@ -139,19 +141,18 @@ PROPERTY PUBLIC fActValue : REAL
 
  (* the engineering constants are usable *)
  METHOD PRIVATE CfgOk : BOOL
-   CASE stConfig.eSignal OF
+   CASE stConfig.eSignalType OF
      E_AiSignal.Current4To20, E_AiSignal.Current0To20, E_AiSignal.Voltage0To10, E_AiSignal.Custom:
-       CfgOk := ABS(stConfig.fRawMax - stConfig.fRawMin) > 0.0
-                AND ABS(stConfig.fRawMax - stConfig.fRawMin) <= 3.4E38;
+       CfgOk := ABS(stConfig.fRawAtSignalHigh - stConfig.fRawAtSignalLow) > 0.0
+                AND ABS(stConfig.fRawAtSignalHigh - stConfig.fRawAtSignalLow) <= 3.4E38;
      E_AiSignal.Direct:
        CfgOk := TRUE;
    ELSE
      CfgOk := FALSE;
    END_CASE;
-   IF stConfig.eSignal = E_AiSignal.Custom OR stConfig.eSignal = E_AiSignal.Direct THEN
-     CfgOk := CfgOk AND stConfig.fCustomLowFail < stConfig.fCustomHighFail;
+   IF stConfig.eSignalType = E_AiSignal.Custom OR stConfig.eSignalType = E_AiSignal.Direct THEN
+     CfgOk := CfgOk AND stConfig.fCustomFailLowPct < stConfig.fCustomFailHighPct;
    END_IF;
-   CfgOk := CfgOk AND stConfig.tRetryWindow >= T#0s;
  END_METHOD
 
  IF NOT __ISVALIDREF(refData) THEN
@@ -177,39 +178,39 @@ PROPERTY PUBLIC fActValue : REAL
  IF bOk THEN
    stKept := refData.set;
  ELSIF SetOk(stS := stKept) THEN
-   refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+   refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
    refData.set := stKept;
-   refData.sts.bRefused := TRUE;
+   refData.sts.bSettingRefused := TRUE;
    bOk := TRUE;
  END_IF;
  bCfgOk := CfgOk();
  bOk := bOk AND bCfgOk;
 
  bReset := SystemReset();
- IF refData.bCmdReset THEN
+ IF refData.bCmdResetFaults THEN
    bReset := TRUE;
-   refData.bCmdReset := FALSE;
-   refData.sts.bRefused := FALSE;
-   refData.sts.eRefusedWhy := E_UtError.None;
+   refData.bCmdResetFaults := FALSE;
+   refData.sts.bSettingRefused := FALSE;
+   refData.sts.eSettingRefusedErrorId := E_UtError.None;
  END_IF;
- bFittedNow := refData.set.bFitted;
+ bFittedNow := refData.set.bSensorFitted;
 
  (* scaling and the signal checks *)
- refData.det.fRaw := fIn;
- bNaN := NOT (ABS(fIn) <= 3.4E38);
+ refData.det.fRawValue := fRawIn;
+ bNaN := NOT (ABS(fRawIn) <= 3.4E38);
  eSig := E_AiStatus.Ok;
  fEng := 0.0;
- fSpan := refData.set.fEngMax - refData.set.fEngMin;
+ fSpan := refData.set.fValueAtSignalHigh - refData.set.fValueAtSignalLow;
  IF bOk AND NOT bNaN THEN
-   IF stConfig.eSignal = E_AiSignal.Direct THEN
-     fEng := fIn;
-     fPos := (fIn - refData.set.fEngMin) / fSpan;
+   IF stConfig.eSignalType = E_AiSignal.Direct THEN
+     fEng := fRawIn;
+     fPos := (fRawIn - refData.set.fValueAtSignalLow) / fSpan;
    ELSE
-     fPos := (fIn - stConfig.fRawMin) / (stConfig.fRawMax - stConfig.fRawMin);
-     fEng := refData.set.fEngMin + fPos * fSpan;
+     fPos := (fRawIn - stConfig.fRawAtSignalLow) / (stConfig.fRawAtSignalHigh - stConfig.fRawAtSignalLow);
+     fEng := refData.set.fValueAtSignalLow + fPos * fSpan;
    END_IF;
-   fEng := fEng + refData.set.fTrim;
-   CASE stConfig.eSignal OF
+   fEng := fEng + refData.set.fZeroTrim;
+   CASE stConfig.eSignalType OF
      E_AiSignal.Current0To20, E_AiSignal.Voltage0To10:
        IF fPos < 0.0 THEN
          eSig := E_AiStatus.UnderRange;
@@ -218,9 +219,9 @@ PROPERTY PUBLIC fActValue : REAL
        END_IF;
      E_AiSignal.Custom, E_AiSignal.Direct:
        fPct := fPos * 100.0;
-       IF fPct <= stConfig.fCustomLowFail THEN
+       IF fPct <= stConfig.fCustomFailLowPct THEN
          eSig := E_AiStatus.FailLow;
-       ELSIF fPct >= stConfig.fCustomHighFail THEN
+       ELSIF fPct >= stConfig.fCustomFailHighPct THEN
          eSig := E_AiStatus.FailHigh;
        ELSIF fPos < 0.0 THEN
          eSig := E_AiStatus.UnderRange;
@@ -241,7 +242,7 @@ PROPERTY PUBLIC fActValue : REAL
      END_IF;
    END_CASE;
  END_IF;
- IF NOT bInGood THEN
+ IF NOT bInputGood THEN
    eSig := E_AiStatus.InputBad;
  ELSIF bNaN THEN
    eSig := E_AiStatus.FailLow;
@@ -253,9 +254,9 @@ PROPERTY PUBLIC fActValue : REAL
  END_IF;
 
  (* the fault: ridden through for its delay *)
- bTrip := F_Protect(tNow := tNow, bCause := bFailing AND bOk, bResetReq := bReset,
-                    tRetryWindow := stConfig.tRetryWindow, stSet := refData.set.stFault,
-                    stSts := refData.sts.stFault, stWork := stWFault);
+ bTrip := F_Protect(tNow := tNow, bConditionPresent := bFailing AND bOk, bResetRequest := bReset,
+                    tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stSignalFault,
+                    stStatus := refData.sts.stSignalFault, stWorking := stWFault);
 
  (* the value: the last good one is held *)
  IF bOk AND bFittedNow AND NOT bFailing THEN
@@ -263,11 +264,11 @@ PROPERTY PUBLIC fActValue : REAL
    bHaveGood := TRUE;
  END_IF;
  IF bOk THEN
-   fPercent := (fValue - refData.set.fEngMin) / fSpan * 100.0;
+   fPctOfSpan := (fValue - refData.set.fValueAtSignalLow) / fSpan * 100.0;
  ELSE
-   fPercent := 0.0;
+   fPctOfSpan := 0.0;
  END_IF;
- bGood := bOk AND bFittedNow AND bHaveGood AND NOT bTrip AND NOT stWFault.bSignal;
+ bGood := bOk AND bFittedNow AND bHaveGood AND NOT bTrip AND NOT stWFault.bSignalling;
 
  (* errors *)
  CASE eSig OF
@@ -288,18 +289,18 @@ PROPERTY PUBLIC fActValue : REAL
  END_IF;
  bTripWas := bTrip;
  bError := NOT bOk OR bTrip;
- bWarning := NOT bError AND ((eCause <> E_UtError.None AND NOT stWFault.bSignal) OR stWFault.bWarn
-                             OR stWFault.bBadSetting OR refData.sts.bRefused);
+ bWarning := NOT bError AND ((eCause <> E_UtError.None AND NOT stWFault.bSignalling) OR stWFault.bWarning
+                             OR stWFault.bSettingBad OR refData.sts.bSettingRefused);
 
  IF NOT bOk THEN
    eErrorId := E_UtError.BadSetting;
  ELSIF bTrip THEN
    eErrorId := eFirst;
- ELSIF eCause <> E_UtError.None AND NOT stWFault.bSignal THEN
+ ELSIF eCause <> E_UtError.None AND NOT stWFault.bSignalling THEN
    eErrorId := eCause;
- ELSIF stWFault.bBadSetting THEN
+ ELSIF stWFault.bSettingBad THEN
    eErrorId := E_UtError.BadSetting;
- ELSIF refData.sts.bRefused THEN
+ ELSIF refData.sts.bSettingRefused THEN
    eErrorId := E_UtError.SettingRefused;
  ELSE
    eErrorId := E_UtError.None;
@@ -310,18 +311,18 @@ PROPERTY PUBLIC fActValue : REAL
    eState := E_State.Off;
  ELSIF NOT bHaveGood THEN
    eState := E_State.Waiting;
- ELSIF bFailing OR stWFault.bSignal THEN
+ ELSIF bFailing OR stWFault.bSignalling THEN
    eState := E_State.Held;
  ELSE
    eState := E_State.Running;
  END_IF;
 
- fValueAlt := fValue * refData.set.fAltFactor + refData.set.fAltOffset;
+ fValueSecondUnit := fValue * refData.set.fSecondUnitFactor + refData.set.fSecondUnitOffset;
  refData.sts.fValue := fValue;
- refData.sts.fValueAlt := fValueAlt;
+ refData.sts.fValueSecondUnit := fValueSecondUnit;
  refData.sts.bGood := bGood;
- refData.sts.eSignal := eSig;
- refData.det.fPercent := fPercent;
+ refData.sts.eSignalStatus := eSig;
+ refData.det.fPctOfSpan := fPctOfSpan;
  bFirstScan := FALSE;
 
 END_FUNCTION_BLOCK

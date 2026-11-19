@@ -8,35 +8,38 @@ Offers `I_Measurement`: wire this instance to another block's `ip…` pin of tha
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `ipIn` | `I_Measurement` |  | A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
-| in | `refData` | `REFERENCE TO ST_MeasFilterData` |  | Its record (a variable of this type) |
-| in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
-| out | `fValue` | `REAL` |  | The filtered value |
-| out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
+| in | `ipMeasurement` | `I_Measurement` |  | the measurement block it works on (FB_AnalogIn, FB_SwitchSet, FB_Vessel ...). An instance of a block that offers I_Measurement (FB_AnalogIn, FB_FlowTotal, FB_LevelMeter, FB_MeasFilter, FB_MeasFrozen, ...) |
+| in | `refData` | `REFERENCE TO ST_MeasFilterData` |  | the block's record |
+| in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
+| out | `fValue` | `REAL` |  | the filtered value |
+| out | `bGood` | `BOOL` |  | fValue can be trusted (the source's bIsGood) |
+| out | `bError` | `BOOL` |  | TRUE while a trip or setting fault is active *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
-| out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
-| out | `eState` | `E_State` |  | What it is doing now (Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault) *(from FB_Object)* |
+| out | `eErrorId` | `E_UtError` |  | which error: the first since the last reset, else the first warning; None when all is well *(from FB_Object)* |
+| out | `eState` | `E_State` |  | what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault *(from FB_Object)* |
 
 `bError`, `bWarning`, `eErrorId`, `eState` work as in every block: see [errors and state](../conventions.md#errors-and-state).
 
 ## Record `ST_MeasFilterData` (pin `refData`)
 
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `fValue` | `REAL` |  | detail: the value out |
-| `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
-| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
-
 **Settings `set`** (`ST_MeasFilterSet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `tFilter` | `TIME` |  | 0 = no filter |
-| `eMode` | `E_FilterMode` |  | The operator's choice Off / Hand / Auto, kept over a power cut |
-| `fLowCutoff` | `REAL` |  | \|value\| below this reads 0 (0 = off) |
-| `bClamp` | `BOOL` |  |  |
-| `fClampMin` | `REAL` |  |  |
-| `fClampMax` | `REAL` | `100.0` |  |
+| `tFilterTime` | `TIME` |  | 0 = no filter |
+| `eFilterType` | `E_FilterMode` |  | Lowpass, Average or BlockAvg |
+| `fZeroBelow` | `REAL` |  | \|value\| below this reads 0 (0 = off) |
+| `bClampOn` | `BOOL` |  | clamp the value to fMinValue..fMaxValue |
+| `fMinValue` | `REAL` |  | lowest value passed on (bClampOn) |
+| `fMaxValue` | `REAL` | `100.0` | highest value passed on (bClampOn) |
+
+**Status `sts`** (`ST_MeasFilterSts`)
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `fValue` | `REAL` |  | detail: the value out |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and the last good value put back (until a reset) |
+| `eSettingRefusedErrorId` | `E_UtError` |  | why the last write was refused (cleared with bSettingRefused) |
 
 ## Lists
 
@@ -44,7 +47,7 @@ Offers `I_Measurement`: wire this instance to another block's `ip…` pin of tha
 
 ## How it works
 
-Smooths and shapes a measurement: `set.tFilter` ([`FB_Filter`](FB_Filter.md), `set.eMode`), then below `set.fLowCutoff` (> 0) reads 0 (a flow meter's creep), then with `set.bClamp` held to `fClampMin`..fClampMax. A bad input holds the filter (the time not counted); `bIsGood` is the input's.
+Smooths and shapes a measurement: `set.tFilterTime` ([`FB_Filter`](FB_Filter.md), `set.eFilterType`), then below `set.fZeroBelow` (> 0) reads 0 (a flow meter's creep), then with `set.bClampOn` held to `fMinValue`..fMaxValue. A bad input holds the filter (the time not counted); `bIsGood` is the input's.
 
 ## Example
 
@@ -52,7 +55,7 @@ Smooth a noisy flow reading before the loop uses it.
 
 | Pin | Wire |
 | --- | --- |
-| `ipIn` | `fbFlowRaw` |
+| `ipMeasurement` | `fbFlowRaw` |
 | `refData` | `stFlowFilter` |
 
 Wire `fbFlowFilter` (not `fbFlowRaw`) to the consumers.
@@ -60,12 +63,11 @@ Wire `fbFlowFilter` (not `fbFlowRaw`) to the consumers.
 ## Read from ST (methods and properties)
 
 Ladder uses the pins above. These are for ST code and for other blocks (through the interface pins):
-
-- property `fActValue : REAL`
-- property `bIsGood : BOOL`
-- property `bHasValue : BOOL`
-- property `bIsFitted : BOOL`
-- property `eUnit : E_Unit`
-- method `Band(eBand) : BOOL`
-
 **Back to** [the index](../README.md).
+
+- property `fActValue : REAL`: the value in its unit (held at the last good one while bad, when so set)
+- property `bIsGood : BOOL`: the value can be trusted now
+- property `bHasValue : BOOL`: a continuous value (FALSE: switches only)
+- property `bIsFitted : BOOL`: the sensor is on this site (FALSE: no value, no bands, no fault)
+- property `eUnit : E_Unit`: the unit of the value
+- method `Band(eBand) : BOOL`

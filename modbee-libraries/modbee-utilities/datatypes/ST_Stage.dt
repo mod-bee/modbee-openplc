@@ -1,6 +1,6 @@
 TYPE
   ST_Stage : STRUCT
-    fStart : REAL;
-    fStop : REAL;
+    fStartLevel : REAL; (* this pump starts at this level *)
+    fStopLevel : REAL; (* this pump stops at this level *)
   END_STRUCT;
 END_TYPE

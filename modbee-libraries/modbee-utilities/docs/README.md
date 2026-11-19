@@ -50,7 +50,7 @@ The rules are in [conventions.md](conventions.md).
 ### The system and the panel door
 
 - **[FB_SystemMode](blocks/FB_SystemMode.md)**: The plant's own mode: Off / Manual / Auto, the auto type, a manual run, the power-on delay and the plant-wide reset. Every other block can read it through its `ipSystem` pin.
-- **[FB_LocalControl](blocks/FB_LocalControl.md)**: The panel-door controls of one motor, pump or valve: an Off / Hand / Auto selector and start / stop push-buttons. It drives the equipment through its `ipOwner` pin.
+- **[FB_LocalControl](blocks/FB_LocalControl.md)**: The panel-door controls of one motor, pump or valve: an Off / Hand / Auto selector and start / stop push-buttons. It drives the equipment through its `ipEquipment` pin.
 - **[FB_Cmd](blocks/FB_Cmd.md)**: Arbitrates commands from two masters, the local panel HMI and a remote SCADA / IoT system: stop bits win, local wins over remote, and remote control can be switched off.
 
 ### Motors
@@ -94,10 +94,11 @@ The rules are in [conventions.md](conventions.md).
 - **[FB_DoseBatch](blocks/FB_DoseBatch.md)**: Doses a batch to a target quantity: fast then slow feed, an early stop for what is still in flight (learned), a settle time and a tolerance check; Hand runs the dosing pump at a set rate.
 - **[FB_DoseFlow](blocks/FB_DoseFlow.md)**: Doses in proportion to the carrier flow (fertigation, chlorination): the dosing pump's speed follows the flow, or stroke pulses go to a pulse pump; Hand runs it at a set rate.
 - **[FB_DoseTimed](blocks/FB_DoseTimed.md)**: Timed dosing: the dosing pump on for a set time, off for a set time, over and over, while the carrier runs; Hand runs it at a set rate.
+- **[FB_Dose](blocks/FB_Dose.md)**: The engine every dosing block shares (FB_DoseBatch, FB_DoseFlow, FB_DoseTimed): written once. bRun / bStart / bStop / bResetFaults and the record's commands (bCmdStart, bCmdStop, bCmdPause, bCmdResetFaults: once per write); bInterlock FALSE stops the pump in every variant (Flow / Timed resume by themselves, a Batch is held); bPermissive FALSE holds back a dose start; bPause and bCmdPause (until the next start) pause; bStop, bCmdStop, bAbortWhileHeld, the record's bCmdAbort (stop reason Abort), set.bDosingEnabled FALSE end a dose (a held bRun must drop before it doses again); bStockLowSwitch -> set.stStockLowFault; set.stMaxDoseTimeFault and set.fMaxQuantityPerDose cap a dose. ipDosingPump (optional): Request(bRun := bPumpRunCommand, bPause := NOT bInterlock, fSpeedSetpointPct := fPumpSpeedPct); dosing counts only while it runs.
 
 ### Runs
 
-- **[FB_Run](blocks/FB_Run.md)**: One run of any equipment: a held request or a latched start, ended by its time target, a stop, an abort, its maximum time, the interlock, a part or a power cut. Its `bRunCmd` drives the equipment.
+- **[FB_Run](blocks/FB_Run.md)**: One run of any equipment: a held request or a latched start, ended by its time target, a stop, an abort, its maximum time, the interlock, a part or a power cut. Its `bRunCommand` drives the equipment.
 - **[FB_RunVolume](blocks/FB_RunVolume.md)**: A volume target for a run, added to it: the run ends when the target has been delivered; a meter that stops counting trips the run.
 - **[FB_RunPause](blocks/FB_RunPause.md)**: An operator pause and resume for a run, added to it. The pause ends with the run.
 - **[FB_RunGate](blocks/FB_RunGate.md)**: A run waits for a permissive (a tank, a valve's open confirmation, a pressure), with a maximum wait.
@@ -120,6 +121,7 @@ The rules are in [conventions.md](conventions.md).
 - **[FB_Valve3Pos](blocks/FB_Valve3Pos.md)**: A three-position valve: a 3-way diverter, a spring-centred double solenoid, a three-coil valve or a motorised valve with a mid position.
 - **[FB_ValveMod](blocks/FB_ValveMod.md)**: A modulating valve or damper with a positioner (4-20 mA / 0-10 V): the position from its owner, shaped, clamped and ramped.
 - **[FB_ValveFloat](blocks/FB_ValveFloat.md)**: A floating (three-point) valve or damper with raise / lower contacts only: positioned by drive time, re-synced at the ends, homed at power-up.
+- **[FB_ValvePos](blocks/FB_ValvePos.md)**: ABSTRACT base of the positioning valves (FB_ValveMod, FB_ValveFloat).
 
 ### Measurements
 
@@ -156,7 +158,7 @@ The rules are in [conventions.md](conventions.md).
 - **[FB_Alarm](blocks/FB_Alarm.md)**: One alarm as its own block, the ISA-18.2 way: shelving, suppression, out of service, priority and time stamps. Use FB_Annunciator for the group's horn and lamp.
 - **[FB_Annunciator](blocks/FB_Annunciator.md)**: The horn, alarm lamp and first-out for a group of FB_Alarm blocks.
 - **[FB_AlarmBeacon](blocks/FB_AlarmBeacon.md)**: Flashes alarm numbers on a single lamp, for sites with one fault lamp and no HMI.
-- **[FB_Interlock](blocks/FB_Interlock.md)**: All the conditions that must be healthy before a device may run, as one `bOk`, with first-out and maintenance bypasses.
+- **[FB_Interlock](blocks/FB_Interlock.md)**: All the conditions that must be healthy before a device may run, as one `bPermissive`, with first-out and maintenance bypasses.
 - **[FB_MsgQueue](blocks/FB_MsgQueue.md)**: A message ticker and site-status board for an HMI: each source's state and error code, queued or as a list of what is wrong now.
 - **[FB_EventLog](blocks/FB_EventLog.md)**: The last events (trips, stops, end reasons) with their time, newest first, optionally kept over a power cut: "what happened overnight".
 
@@ -218,6 +220,8 @@ The rules are in [conventions.md](conventions.md).
 - **[F_CheckInt](blocks/F_CheckInt.md)**: The settings-check rule for an INT: why a value is refused, or `None`.
 - **[F_BitPut](blocks/F_BitPut.md)**: Sets one bit of a DWORD.
 - **[F_HoursAdd](blocks/F_HoursAdd.md)**: Whole milliseconds of running to add this scan, exact over years (for your own run-hour counts).
+- **[FB_Equipment](blocks/FB_Equipment.md)**: The engine every equipment block shares (motor, pump, valve): written once.
+- **[FB_Object](blocks/FB_Object.md)**: The base of every block: the error outputs and the system link. bError: a trip is active now. bWarning: a warning is active now. eErrorId: the first error since the last reset (first-out), else the first warning; None when nothing is active. eState: what the block is doing.
 
 ---
 
@@ -231,41 +235,41 @@ The rules are in [conventions.md](conventions.md).
 (`ipOwner := fbPump1`). An [FB_Group](blocks/FB_Group.md) shares the duty
 (`ipMember1 := fbPump1`, `ipMember2 := fbPump2`), and an
 [FB_LevelControl](blocks/FB_LevelControl.md) in EMPTY mode drives the group
-(`ipLevel := fbSumpLevel`, `ipTarget := fbGroup`). [FB_LevelFloats](blocks/FB_LevelFloats.md)
+(`ipTransducer := fbSumpLevel`, `ipEquipment := fbGroup`). [FB_LevelFloats](blocks/FB_LevelFloats.md)
 (`ipFloats := fbFloats`, `ipOwner := fbLevelCtl`) runs the pumps on the floats if the
 transmitter fails, and checks it against the high float.
 [FB_AlarmTable](blocks/FB_AlarmTable.md) drives the panel's lamps and siren.
 
 **Station with a booster pump.** When the duty pumps push through a series booster,
 make the booster its own FB_Pump (not a group member) and add an
-[FB_Booster](blocks/FB_Booster.md) (`ipBooster := fbBoosterPump`,
+[FB_Booster](blocks/FB_Booster.md) (`ipBoosterPump := fbBoosterPump`,
 `ipOwner := fbLevelCtl`). It starts the booster a delay after the duty pumps, or on low
 pressure (`ipPressure`). The booster stops at once at the end of a cycle, so give each
 duty FB_Pump a `set.tStopDelay` to stop that much later.
 
 **Pumping on a timer.** With no level to keep (a circulation pump, a timed transfer),
-set the FB_LevelControl's `set.eMode := Timed`: it runs the pump `set.tOnTime`, rests
-`set.tOffTime`, over and over while `bRun` is on. `ipLevel` may stay unwired.
+set the FB_LevelControl's `set.eControlMode := Timed`: it runs the pump `set.tOnTime`, rests
+`set.tOffTime`, over and over while `bEnable` is on. `ipLevel` may stay unwired.
 
 **Tank to tank transfer.** An [FB_Run](blocks/FB_Run.md) is one transfer: started from
-the HMI or a schedule, its `bRunCmd` goes to an FB_LevelControl's `bDemand` (with
-`set.bDemandOnly`), and the level control's `bRunning` back to the run's
-`bEquipRunning`. [FB_RunVolume](blocks/FB_RunVolume.md) (`ipRun := fbTransfer`,
+the HMI or a schedule, its `bRunCommand` goes to an FB_LevelControl's `bDemand` (with
+`set.bRunOnDemandOnly`), and the level control's `bEquipmentRunning` back to the run's
+`bEquipmentRunning`. [FB_RunVolume](blocks/FB_RunVolume.md) (`ipRun := fbTransfer`,
 `ipMeter := fbFlowMeter`) ends it at a volume, with a safety time cap. Two
 [FB_LevelCheck](blocks/FB_LevelCheck.md) parts on the run: the source tank low
 (Signal: the transfer pauses until the level is back) and the destination full (Signal
-with `set.bDoneWhenReached`: the transfer ends normally).
+with `set.bEndsRunWhenReached`: the transfer ends normally).
 
 **Pressure set.** A pressure transmitter (FB_AnalogIn) feeds an
-[FB_SpeedLoop](blocks/FB_SpeedLoop.md) (`ipPv`), which drives an FB_Pump on an
+[FB_SpeedLoop](blocks/FB_SpeedLoop.md) (`ipProcessValue`), which drives an FB_Pump on an
 [FB_MotorVsd](blocks/FB_MotorVsd.md). For several pumps on one header the loop drives
 an FB_Group, and [FB_Cascade](blocks/FB_Cascade.md) sets how many pumps run
-(`nExtra` to the group's `nExtra`).
+(`nExtraPumps` to the group's `nExtraMembers`).
 
 **Pressure set with a jockey pump.** Add a small pump to the same FB_Group with its
-FB_Pump `set.eRole := Jockey`. The group never makes it the lead; wire the group's
+FB_Pump `set.ePumpRole := Jockey`. The group never makes it the lead; wire the group's
 `fJockeyCapacity` and `bJockeyReady` to the FB_Cascade, and the header flow to its
-`ipFlow`. At low demand the cascade asks for the jockey alone (`nExtra` -1); when the
+`ipHeaderFlow`. At low demand the cascade asks for the jockey alone (`nExtraPumps` -1); when the
 jockey falls short a duty pump takes over, and the jockey stays on until it runs.
 
 **Irrigation zones.** [FB_Schedule](blocks/FB_Schedule.md) starts an
@@ -275,15 +279,15 @@ its own [FB_Valve](blocks/FB_Valve.md). The program opens each valve, asks for t
 ([FB_PulseMeter](blocks/FB_PulseMeter.md) on the flow meter), with cycles and soak per
 zone and `set.repeats` passes of the whole program. A master valve goes on
 `ipMasterValve`: it opens with the first zone and closes `set.tMasterCloseDelay` after
-the last. For rain, wire [FB_IrrDefer](blocks/FB_IrrDefer.md)'s `bDefer` to the
-program's `bRainHold` and pick `set.eRainAction` (Pause, Skip, Cancel or Ignore).
+the last. For rain, wire [FB_IrrDefer](blocks/FB_IrrDefer.md)'s `bDeferIrrigation` to the
+program's `bDeferIrrigation` and pick `set.eActionOnDefer` (Pause, Skip, Cancel or Ignore).
 [FB_DoseFlow](blocks/FB_DoseFlow.md) can add fertiliser in proportion to the flow.
 
 **Conveyor chain.** Each machine is an FB_Motor (or
 [FB_MotorStarDelta](blocks/FB_MotorStarDelta.md)). [FB_Sequencer](blocks/FB_Sequencer.md)
 has one row per machine in start order; pull cords and guards go through
 [FB_Interlock](blocks/FB_Interlock.md) to each motor's `bInterlock`. Wire the e-stop
-healthy signal, inverted, to the sequencer's `bAbort`.
+healthy signal, inverted, to the sequencer's `bAbortWhileHeld`.
 
 **A motor with more fitted.** Parts go on their own rungs before the motor, each with
 `ipOwner := fbMotor1`: [FB_Protection](blocks/FB_Protection.md) for a thermistor or an
@@ -291,7 +295,7 @@ overload contact, [FB_MotorCurrent](blocks/FB_MotorCurrent.md) for a CT,
 [FB_StarterSoft](blocks/FB_StarterSoft.md) for a soft starter's top-of-ramp relay.
 [FB_MotorJog](blocks/FB_MotorJog.md) adds a held jog button in Hand.
 [FB_MotorSimulate](blocks/FB_MotorSimulate.md) sits between the field feedback and the
-motor's `bFeedback`, for testing without the plant.
+motor's `bRunFeedback`, for testing without the plant.
 
 **Remote site.** [FB_Watchdog](blocks/FB_Watchdog.md) watches the SCADA heartbeat;
 [FB_LinkSupervisor](blocks/FB_LinkSupervisor.md) restarts or power cycles the modem when

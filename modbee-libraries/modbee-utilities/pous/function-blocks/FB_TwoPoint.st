@@ -8,40 +8,40 @@ The setpoint order decides the direction, so there is no mode to set:
 A value exactly on a point is not past it, so nothing changes there.
 
 tOnDelay / tOffDelay: the value must stay past the point this long.
-tMinOn / tMinOff: anti-short-cycle. bQ stays on at least tMinOn, and stays off
-at least tMinOff before it may come on again. tMinOff is not applied at
+tMinOnTime / tMinOffTime: anti-short-cycle. bOutputOn stays on at least tMinOnTime, and stays off
+at least tMinOffTime before it may come on again. tMinOffTime is not applied at
 start-up. The points are re-evaluated every scan, so changing or swapping
 them while running takes effect cleanly (through the delays).
 
-bEnable FALSE turns bQ off at once, even inside tMinOn; tMinOff then counts from
+bEnable FALSE turns bOutputOn off at once, even inside tMinOnTime; tMinOffTime then counts from
 that moment.
 
-A value that is not a number (fIn or a point NaN or infinite) holds bQ as it
-is and sets bBadInput; the delays start again once it is good.
+A value that is not a number (fIn or a point NaN or infinite) holds bOutputOn as it
+is and sets bInputNotANumber; the delays start again once it is good.
 
-tRemaining is the time left before bQ changes: the delay and the tMinOn /
-tMinOff still to run while the value is past the point that changes it
-(T#0s otherwise). bWaiting is TRUE while the value is past that point and
-its delay is over, but tMinOn / tMinOff still holds bQ as it is. *)
+tTimeLeft is the time left before bOutputOn changes: the delay and the tMinOnTime /
+tMinOffTime still to run while the value is past the point that changes it
+(T#0s otherwise). bHeldByMinTime is TRUE while the value is past that point and
+its delay is over, but tMinOnTime / tMinOffTime still holds bOutputOn as it is. *)
 
 FUNCTION_BLOCK FB_TwoPoint
   VAR_INPUT
     fIn : REAL; (* measured value *)
     bEnable : BOOL := TRUE; (* FALSE = output off *)
-    eDir : E_TwoPointDir; (* ByOrder (the points decide), OnBelow (fill / heat), OnAbove (empty / cool) *)
-    fOnPoint : REAL := 20.0;
-    fOffPoint : REAL := 80.0;
+    eDirection : E_TwoPointDir; (* ByOrder (the points decide), OnBelow (fill / heat), OnAbove (empty / cool) *)
+    fOnPoint : REAL := 20.0; (* the value at which bOutputOn comes on *)
+    fOffPoint : REAL := 80.0; (* the value at which bOutputOn goes off *)
     tOnDelay : TIME; (* value must stay past fOnPoint this long *)
     tOffDelay : TIME; (* value must stay past fOffPoint this long *)
-    tMinOn : TIME; (* shortest time on *)
-    tMinOff : TIME; (* shortest time off before coming on again *)
+    tMinOnTime : TIME; (* shortest time on *)
+    tMinOffTime : TIME; (* shortest time off before coming on again *)
   END_VAR
   VAR_OUTPUT
-    bQ : BOOL;
-    bBadInput : BOOL; (* fIn or a point is NaN or infinite: bQ is held *)
-    bBadOrder : BOOL; (* the points are the wrong way round for eDir (or eDir is not a direction): bQ off *)
-    tRemaining : TIME; (* time left before bQ changes (delay, tMinOn / tMinOff) *)
-    bWaiting : BOOL; (* past the point, delay over, but tMinOn / tMinOff holds bQ *)
+    bOutputOn : BOOL; (* the output *)
+    bInputNotANumber : BOOL; (* fIn or a point is NaN or infinite: bOutputOn is held *)
+    bPointsWrongWay : BOOL; (* the points are the wrong way round for eDirection (or eDirection is not a direction): bOutputOn off *)
+    tTimeLeft : TIME; (* time left before bOutputOn changes (delay, tMinOnTime / tMinOffTime) *)
+    bHeldByMinTime : BOOL; (* past the point, delay over, but tMinOnTime / tMinOffTime holds bOutputOn *)
   END_VAR
   VAR
     tNow : TIME;
@@ -51,35 +51,35 @@ FUNCTION_BLOCK FB_TwoPoint
     tOffSince : TIME;
     bWantOnPrev : BOOL;
     bWantOffPrev : BOOL;
-    tSwitchedAt : TIME; (* when bQ last changed *)
-    bBeenOff : BOOL; (* bQ has switched off at least once (tMinOff applies) *)
+    tSwitchedAt : TIME; (* when bOutputOn last changed *)
+    bBeenOff : BOOL; (* bOutputOn has switched off at least once (tMinOffTime applies) *)
     dLeft : TIME; (* delay still to run *)
-    tMLeft : TIME; (* tMinOn / tMinOff still to run *)
+    tMLeft : TIME; (* tMinOnTime / tMinOffTime still to run *)
     bBelow : BOOL; (* on below fOnPoint (fill / heat) *)
     bEn : BOOL;
   END_VAR
 
 
 tNow := TIME();
-bBadInput := NOT (fIn = fIn) OR fIn > 3.4E38 OR fIn < -3.4E38
+bInputNotANumber := NOT (fIn = fIn) OR fIn > 3.4E38 OR fIn < -3.4E38
             OR NOT (fOnPoint = fOnPoint) OR fOnPoint > 3.4E38 OR fOnPoint < -3.4E38
             OR NOT (fOffPoint = fOffPoint) OR fOffPoint > 3.4E38 OR fOffPoint < -3.4E38;
-bBadOrder := FALSE;
-CASE eDir OF
+bPointsWrongWay := FALSE;
+CASE eDirection OF
   E_TwoPointDir.ByOrder:
     bBelow := NOT (fOnPoint > fOffPoint);
   E_TwoPointDir.OnBelow:
     bBelow := TRUE;
-    bBadOrder := NOT bBadInput AND fOnPoint > fOffPoint;
+    bPointsWrongWay := NOT bInputNotANumber AND fOnPoint > fOffPoint;
   E_TwoPointDir.OnAbove:
     bBelow := FALSE;
-    bBadOrder := NOT bBadInput AND fOnPoint < fOffPoint;
+    bPointsWrongWay := NOT bInputNotANumber AND fOnPoint < fOffPoint;
 ELSE
   bBelow := TRUE;
-  bBadOrder := TRUE;
+  bPointsWrongWay := TRUE;
 END_CASE;
-bEn := bEnable AND NOT bBadOrder;
-IF bBadInput OR bBadOrder THEN
+bEn := bEnable AND NOT bPointsWrongWay;
+IF bInputNotANumber OR bPointsWrongWay THEN
   bWantOn := FALSE;
   bWantOff := FALSE;
 ELSIF bBelow THEN
@@ -100,34 +100,34 @@ END_IF;
 bWantOffPrev := bWantOff;
 
 IF NOT bEn THEN
-  IF bQ THEN
-    bQ := FALSE;
+  IF bOutputOn THEN
+    bOutputOn := FALSE;
     tSwitchedAt := tNow;
     bBeenOff := TRUE;
   END_IF;
-ELSIF bQ THEN
-  IF bWantOff AND tNow - tOffSince >= tOffDelay AND tNow - tSwitchedAt >= tMinOn THEN
-    bQ := FALSE;
+ELSIF bOutputOn THEN
+  IF bWantOff AND tNow - tOffSince >= tOffDelay AND tNow - tSwitchedAt >= tMinOnTime THEN
+    bOutputOn := FALSE;
     tSwitchedAt := tNow;
     bBeenOff := TRUE;
   END_IF;
 ELSE
-  IF bWantOn AND tNow - tOnSince >= tOnDelay AND (NOT bBeenOff OR tNow - tSwitchedAt >= tMinOff) THEN
-    bQ := TRUE;
+  IF bWantOn AND tNow - tOnSince >= tOnDelay AND (NOT bBeenOff OR tNow - tSwitchedAt >= tMinOffTime) THEN
+    bOutputOn := TRUE;
     tSwitchedAt := tNow;
   END_IF;
 END_IF;
 
-(* what still holds bQ as it is *)
+(* what still holds bOutputOn as it is *)
 dLeft := T#0s;
 tMLeft := T#0s;
-IF bEn AND bQ AND bWantOff THEN
+IF bEn AND bOutputOn AND bWantOff THEN
   dLeft := tOffDelay - (tNow - tOffSince);
-  tMLeft := tMinOn - (tNow - tSwitchedAt);
-ELSIF bEn AND NOT bQ AND bWantOn THEN
+  tMLeft := tMinOnTime - (tNow - tSwitchedAt);
+ELSIF bEn AND NOT bOutputOn AND bWantOn THEN
   dLeft := tOnDelay - (tNow - tOnSince);
   IF bBeenOff THEN
-    tMLeft := tMinOff - (tNow - tSwitchedAt);
+    tMLeft := tMinOffTime - (tNow - tSwitchedAt);
   END_IF;
 END_IF;
 IF dLeft < T#0s THEN
@@ -136,11 +136,11 @@ END_IF;
 IF tMLeft < T#0s THEN
   tMLeft := T#0s;
 END_IF;
-bWaiting := dLeft = T#0s AND tMLeft > T#0s;
+bHeldByMinTime := dLeft = T#0s AND tMLeft > T#0s;
 IF tMLeft > dLeft THEN
-  tRemaining := tMLeft;
+  tTimeLeft := tMLeft;
 ELSE
-  tRemaining := dLeft;
+  tTimeLeft := dLeft;
 END_IF;
 
 END_FUNCTION_BLOCK

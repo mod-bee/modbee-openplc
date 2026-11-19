@@ -1,13 +1,13 @@
 TYPE
   ST_SystemModeSts : STRUCT
-    eMode : E_SysMode;
-    nAutoType : INT; (* the type in use (0 = invalid setting) *)
-    bManualRun : BOOL;
-    bPowerUpHold : BOOL;
-    eStopReason : E_StopReason; (* why the last manual run ended *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    eSystemModeInUse : E_SysMode; (* Off, Manual or Auto now *)
+    nAutoModeInUse : INT; (* the type in use (0 = invalid setting) *)
+    bManualRun : BOOL; (* the manual run is on *)
+    bPowerUpHold : BOOL; (* TRUE for tPowerOnDelay after power-up: automatic starts wait *)
+    eManualRunStopReason : E_StopReason; (* why the last manual run ended *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
     bSelectorFault : BOOL; (* both selector contacts made *)
-    bForcedOff : BOOL;
+    bForcedOffByInput : BOOL; (* the bForceOff input holds the plant Off *)
   END_STRUCT;
 END_TYPE

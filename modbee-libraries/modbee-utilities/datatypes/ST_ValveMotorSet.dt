@@ -1,8 +1,8 @@
 TYPE
   ST_ValveMotorSet : STRUCT
-    tReversal : TIME := T#500ms; (* pause between the two directions *)
-    bDriveHold : BOOL; (* keep the drive on at the end *)
-    bCloseOnTorque : BOOL; (* the close torque at the end of a close = seated (closed) *)
-    stTorque : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Retry, tRecover := T#1m, nMaxRetries := 3);
+    tReversingDeadTime : TIME := T#500ms; (* pause between the two directions *)
+    bKeepDriveAtEnd : BOOL; (* keep the drive on at the end *)
+    bSeatedOnCloseTorque : BOOL; (* the close torque at the end of a close = seated (closed) *)
+    stTorqueFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#0s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#1m, nMaxRetriesBeforeLockout := 3);
   END_STRUCT;
 END_TYPE

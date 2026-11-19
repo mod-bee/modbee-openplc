@@ -1,15 +1,18 @@
+(* F_CheckTime — checks a TIME setting: within tLowestAllowed..tHighestAllowed (BelowMin / AboveMax, LimitsBad when
+the limits are the wrong way round). Returns None when it is good. *)
+
 FUNCTION F_CheckTime : E_UtError
   VAR_INPUT
-    tValue : TIME;
-    tMin : TIME;
-    tMax : TIME;
+    tValue : TIME; (* the value to check *)
+    tLowestAllowed : TIME; (* lowest value allowed *)
+    tHighestAllowed : TIME; (* highest value allowed *)
   END_VAR
 
-IF tMin > tMax THEN
+IF tLowestAllowed > tHighestAllowed THEN
   F_CheckTime := E_UtError.LimitsBad;
-ELSIF tValue < tMin THEN
+ELSIF tValue < tLowestAllowed THEN
   F_CheckTime := E_UtError.BelowMin;
-ELSIF tValue > tMax THEN
+ELSIF tValue > tHighestAllowed THEN
   F_CheckTime := E_UtError.AboveMax;
 ELSE
   F_CheckTime := E_UtError.None;

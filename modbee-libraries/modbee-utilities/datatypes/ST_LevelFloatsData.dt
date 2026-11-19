@@ -1,9 +1,9 @@
 TYPE
   ST_LevelFloatsData : STRUCT
-    bCmdReset : BOOL; (* clear the transducer fault (cleared by the block) *)
-    set : ST_LevelFloatsSet;
-    sts : ST_LevelFloatsSts;
-    tot : ST_LevelFloatsTot;
-    bCmdResetStats : BOOL; (* zero tot (cleared by the block) *)
+    bCmdResetTransducerFault : BOOL; (* clear the transducer fault (cleared by the block) *)
+    set : ST_LevelFloatsSet; (* settings (kept) *)
+    sts : ST_LevelFloatsSts; (* status *)
+    tot : ST_LevelFloatsTot; (* totals (kept) *)
+    bCmdResetTotals : BOOL; (* zero tot (cleared by the block) *)
   END_STRUCT;
 END_TYPE

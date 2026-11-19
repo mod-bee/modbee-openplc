@@ -1,8 +1,8 @@
 TYPE
   ST_Msg : STRUCT
-    dtStamp : DT; (* dtClock when it came (or changed) *)
-    nSrc : INT; (* the source (0 = empty) *)
-    eState : E_State;
-    eError : E_UtError;
+    dtTimeStamp : DT; (* dtLocalTime when it came (or changed) *)
+    nSource : INT; (* the source (0 = empty) *)
+    eSourceState : E_State; (* the source's state *)
+    eSourceErrorId : E_UtError; (* the source's error *)
   END_STRUCT;
 END_TYPE

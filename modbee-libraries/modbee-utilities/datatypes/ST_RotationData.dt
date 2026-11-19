@@ -1,8 +1,8 @@
 TYPE
   ST_RotationData : STRUCT
-    bCmdReset : BOOL; (* reset a latched fault (once per write; cleared by the block) *)
-    set : ST_RotationSet;
-    sts : ST_RotationSts;
-    det : ST_RotationDet;
+    bCmdResetFaults : BOOL; (* reset a latched fault (once per write; cleared by the block) *)
+    set : ST_RotationSet; (* settings (kept) *)
+    sts : ST_RotationSts; (* status *)
+    det : ST_RotationDet; (* details *)
   END_STRUCT;
 END_TYPE

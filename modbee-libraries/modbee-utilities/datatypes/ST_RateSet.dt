@@ -1,10 +1,10 @@
 TYPE
   ST_RateSet : STRUCT
-    eUnit : E_RateUnit := E_RateUnit.PerMin; (* fRate is change per second, minute, hour or day *)
-    tWindow : TIME := T#10s; (* rate measured over this window (0 = off) *)
-    tFilter : TIME; (* smooths fRate (low-pass time constant), 0 = none *)
-    fRiseLimit : REAL; (* bRisingFast above this rate (0 = off) *)
-    fFallLimit : REAL; (* bFallingFast when falling faster than this (0 = off) *)
+    eRateUnit : E_RateUnit := E_RateUnit.PerMin; (* fRate is change per second, minute, hour or day *)
+    tRateWindow : TIME := T#10s; (* rate measured over this window (0 = off) *)
+    tFilterTime : TIME; (* smooths fRate (low-pass time constant), 0 = none *)
+    fRisingFastAbove : REAL; (* bRisingFast above this rate (0 = off) *)
+    fFallingFastAbove : REAL; (* bFallingFast when falling faster than this (0 = off) *)
     tAlarmDelay : TIME := T#5s; (* the rate must stay past a limit this long *)
   END_STRUCT;
 END_TYPE

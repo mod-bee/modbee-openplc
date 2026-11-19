@@ -1,17 +1,17 @@
 TYPE
   ST_LevelControlSts : STRUCT
-    eState : E_State;
-    eErrorId : E_UtError;
-    bCall : BOOL;
-    bDemandActive : BOOL;
-    bAtStop : BOOL;
-    bHighHigh : BOOL;
-    bLowLow : BOOL;
-    bRequest : BOOL; (* what it asks of the pump *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    stLevelBad : ST_ProtectionSts;
-    fStartNow : REAL; (* the start level in use (with its variation) *)
-    bRunOn : BOOL; (* running on a failed level *)
+    eState : E_State; (* what it is doing now *)
+    eErrorId : E_UtError; (* the first error since the last reset (first-out) *)
+    bLevelCalls : BOOL; (* the level calls for pumping *)
+    bDemandActive : BOOL; (* a demand is running (for FB_Stages' demand pumps) *)
+    bAtStopLevel : BOOL; (* at or past the stop level *)
+    bHighHigh : BOOL; (* at or past the high-high level *)
+    bLowLow : BOOL; (* at or past the low-low level *)
+    bRunCommand : BOOL; (* what it asks of the pump *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    stLevelBadFault : ST_ProtectionSts; (* the level measurement is bad *)
+    fStartLevelInUse : REAL; (* the start level in use (with its variation) *)
+    bRunningOnBadLevel : BOOL; (* running on a failed level *)
   END_STRUCT;
 END_TYPE

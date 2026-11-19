@@ -8,149 +8,151 @@ It extends [FB_Motor](FB_Motor.md): everything of it (pins, record, protections)
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `bDriveReady` | `BOOL` | `TRUE` | the drive's ready relay: lost while running is a protection; not ready holds a new start |
-| in | `fSpeedFb` | `REAL` | `-1.0` | actual speed %, < 0 = not wired |
-| in | `refVsd` | `REFERENCE TO ST_VsdData` |  | its record |
-| in | `bFeedback` | `BOOL` |  | run feedback contact *(from FB_Motor)* |
-| in | `bOverload` | `BOOL` |  | TRUE = the overload relay has tripped *(from FB_Motor)* |
-| in | `refData` | `REFERENCE TO ST_MotorData` |  | Its record (a variable of this type) *(from FB_Motor)* |
+| in | `bDriveReady` | `BOOL` | `TRUE` | the drive's ready relay: lost while running is a fault; not ready holds a new start |
+| in | `fSpeedFeedbackPct` | `REAL` | `-1.0` | the actual speed %; below 0 = not wired |
+| in | `refDriveData` | `REFERENCE TO ST_VsdData` |  | the drive record |
+| in | `bRunFeedback` | `BOOL` |  | run feedback contact *(from FB_Motor)* |
+| in | `bOverloadTripped` | `BOOL` |  | TRUE = the overload relay has tripped *(from FB_Motor)* |
+| in | `refData` | `REFERENCE TO ST_MotorData` |  | the block's record *(from FB_Motor)* |
 | in | `bInterlock` | `BOOL` | `TRUE` | FALSE stops it in every mode *(from FB_Equipment)* |
 | in | `bPermissive` | `BOOL` | `TRUE` | FALSE blocks a start *(from FB_Equipment)* |
-| in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
-| out | `fSpeedRef` | `REAL` |  | % after clamp, skip band, ramp |
-| out | `nSpeedRefRaw` | `UINT` |  | scaled to set.fRawMin..fRawMax, a Modbus register |
-| out | `bDriveReset` | `BOOL` |  | a pulse on an operator reset |
-| out | `bAtSpeed` | `BOOL` |  | The speed reference has reached its target |
-| out | `bQ` | `BOOL` |  | run output *(from FB_Motor)* |
-| out | `bHoldOff` | `BOOL` |  | TRUE: the overload or the thermistor is tripped: hold the output off, even forced *(from FB_Motor)* |
-| out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
+| in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
+| out | `fSpeedReferencePct` | `REAL` |  | the speed reference, % after clamp, skip band and ramp |
+| out | `nSpeedReferenceRaw` | `UINT` |  | the speed reference scaled to fRawAtZeroPct..fRawAtFullPct (a Modbus register, %QW) |
+| out | `bDriveResetPulse` | `BOOL` |  | a pulse to the drive's reset input on an operator reset |
+| out | `bAtSpeed` | `BOOL` |  | the speed reference has reached its target |
+| out | `bRunOutput` | `BOOL` |  | run output *(from FB_Motor)* |
+| out | `bHoldOutputOff` | `BOOL` |  | TRUE: the overload or the thermistor is tripped: hold the output off, even forced *(from FB_Motor)* |
+| out | `bError` | `BOOL` |  | TRUE while a trip or setting fault is active *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
-| out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
-| out | `eState` | `E_State` |  | What it is doing now (Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault) *(from FB_Object)* |
+| out | `eErrorId` | `E_UtError` |  | which error: the first since the last reset, else the first warning; None when all is well *(from FB_Object)* |
+| out | `eState` | `E_State` |  | what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault *(from FB_Object)* |
 
 `bError`, `bWarning`, `eErrorId`, `eState` work as in every block: see [errors and state](../conventions.md#errors-and-state).
 
-## Record `ST_VsdData` (pin `refVsd`)
+## Record `ST_VsdData` (pin `refDriveData`)
 
 **Settings `set`** (`ST_VsdSet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `fMinSpeed` | `REAL` |  |  |
-| `fMaxSpeed` | `REAL` | `100.0` |  |
-| `fAccelRate` | `REAL` |  | % per second (0 = the drive ramps) |
-| `fDecelRate` | `REAL` |  | % per set.eRateUnit: second by default, minute, hour or day; 0 = the drive ramps |
-| `fSkipLow` | `REAL` |  | resonance band (equal = off) |
-| `fSkipHigh` | `REAL` |  |  |
-| `fHandSpeed` | `REAL` | `50.0` |  |
-| `fAutoSpeed` | `REAL` | `100.0` |  |
-| `fRawMin` | `REAL` |  |  |
-| `fRawMax` | `REAL` | `65535.0` |  |
-| `tResetPulse` | `TIME` | `T#500ms` |  |
-| `fDevBand` | `REAL` | `10.0` | speed deviation, % |
-| `stDriveNotReady` | `ST_ProtectionSet` | `(eResponse := E_Response.Trip, tDelay := T#1s, eReset := E_ResetMode.Retry, tRecover := T#10s, nMaxRetries := 3)` | a protection's settings ([protections](../conventions.md#protections)) |
-| `stSpeedDev` | `ST_ProtectionSet` | `(eResponse := E_Response.Warn, tDelay := T#10s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0)` | a protection's settings ([protections](../conventions.md#protections)) |
-| `tDriveRamp` | `TIME` |  | the drive's own 0 -> 100 % time: bAtSpeed / speedDev wait for it |
-| `fRatedHz` | `REAL` |  | the motor's frequency at 100 % (display; 0 = none) |
+| `fMinSpeedPct` | `REAL` |  | lowest speed while running, % |
+| `fMaxSpeedPct` | `REAL` | `100.0` | highest speed, % |
+| `fAccelPctPerSec` | `REAL` |  | % per second (0 = the drive ramps) |
+| `fDecelPctPerSec` | `REAL` |  | speed fall, % per second (0 = the drive ramps) |
+| `fSkipBandLow` | `REAL` |  | resonance band (equal = off) |
+| `fSkipBandHigh` | `REAL` |  | top of the speed band to skip |
+| `fHandSpeedPct` | `REAL` | `50.0` | speed in Hand, % |
+| `fAutoSpeedPct` | `REAL` | `100.0` | speed in Auto when the owner gives none, % |
+| `fRawAtZeroPct` | `REAL` |  | raw speed reference at 0 % (a register or card value) |
+| `fRawAtFullPct` | `REAL` | `65535.0` | raw speed reference at 100 % |
+| `tDriveResetPulse` | `TIME` | `T#500ms` | length of the bDriveReset pulse on an operator reset |
+| `fSpeedDeviationPct` | `REAL` | `10.0` | speed deviation, % |
+| `stDriveNotReadyFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Trip, tTripDelay := T#1s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3)` | the drive's ready relay lost while running; a protection's settings ([protections](../conventions.md#protections)) |
+| `stSpeedDeviationFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Warn, tTripDelay := T#10s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#5s, nMaxRetriesBeforeLockout := 0)` | the speed feedback is off the reference by more than fSpeedDeviationPct; a protection's settings ([protections](../conventions.md#protections)) |
+| `tDriveOwnRampTime` | `TIME` |  | the drive's own 0 -> 100 % time: bAtSpeed / speedDev wait for it |
+| `fRatedFrequency` | `REAL` |  | the motor's frequency at 100 % (display; 0 = none) |
 | `fRatedRpm` | `REAL` |  | its speed at 100 % (display; 0 = none) |
-| `fJogSpeed` | `REAL` |  | the speed while jogging (FB_MotorJog), % (0 = fHandSpeed) |
-| `eRateUnit` | `E_RateUnit` |  | fAccelRate / fDecelRate: % per second (default), minute, hour or day |
+| `fJogSpeedPct` | `REAL` |  | the speed while jogging (FB_MotorJog), % (0 = fHandSpeedPct) |
+| `eRateUnit` | `E_RateUnit` |  | fAccelPctPerSec / fDecelPctPerSec: % per second (default), minute, hour or day |
 
 **Status `sts`** (`ST_VsdSts`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `fSpeedRef` | `REAL` |  | % after clamp, skip band, ramp |
-| `fSpeedFb` | `REAL` |  | actual speed %, < 0 = not wired |
-| `bAtSpeed` | `BOOL` |  |  |
-| `bDriveReady` | `BOOL` |  | the drive's ready relay: lost while running is a protection; not ready holds a new start |
-| `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
-| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
-| `stDriveNotReady` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
-| `stSpeedDev` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
-| `fSpeedHz` | `REAL` |  | the speed in Hz (set.fRatedHz) |
+| `fSpeedReferencePct` | `REAL` |  | the speed reference sent, % after clamp, skip band and ramp |
+| `fSpeedFeedbackPct` | `REAL` |  | the actual speed %; below 0 = not wired |
+| `bAtSpeed` | `BOOL` |  | the speed reference has reached its target |
+| `bDriveReady` | `BOOL` |  | the drive's ready relay |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and the last good value put back (until a reset) |
+| `eSettingRefusedErrorId` | `E_UtError` |  | why the last write was refused (cleared with bSettingRefused) |
+| `stDriveNotReadyFault` | `ST_ProtectionSts` |  | the drive's ready relay lost while running; a protection's status ([protections](../conventions.md#protections)) |
+| `stSpeedDeviationFault` | `ST_ProtectionSts` |  | the speed feedback is off the reference by more than fSpeedDeviationPct; a protection's status ([protections](../conventions.md#protections)) |
+| `fSpeedHz` | `REAL` |  | the speed in Hz (set.fRatedFrequency) |
 | `fSpeedRpm` | `REAL` |  | the speed in rpm (set.fRatedRpm) |
 
 ## Record `ST_MotorData` (pin `refData`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `nCmdMode` | `INT` | `-1` | 0 Off, 1 Hand, 2 Auto, 3 OutOfService: once, then -1 (cleared; SMS, SCADA) |
+| `nCmdEquipmentMode` | `INT` | `-1` | 0 Off, 1 Hand, 2 Auto, 3 OutOfService: once, then -1 (cleared; SMS, SCADA) |
 | `bCmdStart` | `BOOL` |  | Hand start (rising edge, cleared by the block) |
 | `bCmdStop` | `BOOL` |  | stop in Hand and Auto (rising edge, cleared) |
-| `bCmdReset` | `BOOL` |  | reset trips whose cause has gone (rising edge, cleared) |
-| `bCmdPreset` | `BOOL` |  | set the totals to the preset values (rising edge, cleared) |
-| `fPresetHours` | `LREAL` |  | The run hours `bCmdPreset` writes (a replacement motor) |
-| `nPresetStarts` | `UDINT` |  | The starts `bCmdPreset` writes |
+| `bCmdResetFaults` | `BOOL` |  | reset trips whose cause has gone (rising edge, cleared) |
+| `bCmdPresetTotals` | `BOOL` |  | set the totals to the preset values (rising edge, cleared) |
+| `fPresetRunHours` | `LREAL` |  | the run hours bCmdPresetTotals writes (a replacement motor) |
+| `nPresetStartCount` | `UDINT` |  | the starts bCmdPresetTotals writes |
 
 **Settings `set`** (`ST_MotorSet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `eMode` | `E_Mode` |  | the operator's choice, kept over a power cut |
-| `ePowerUp` | `E_PowerUp` |  | `Last`: back in the mode it had; `Off`: Off after every power-up |
-| `tRetryWindow` | `TIME` | `T#1h` | RETRY protections count trips within this window |
-| `bResetByOff` | `BOOL` | `TRUE` | switching to Off resets trips whose cause has gone |
-| `tHandMax` | `TIME` |  | longest Hand run (0 = no limit) |
-| `bRestartAfterReset` | `BOOL` | `TRUE` | After a reset clears a trip, run again at once while the owner still asks (default); FALSE: the owner's request must drop and come back first |
-| `bWarnNotAuto` | `BOOL` |  | the owner's request must drop and come back first warn NotAuto while not in Auto and the plant is in Auto |
-| `tRestartDelay` | `TIME` | `T#5s` | after a stop, before the next start |
-| `bUseFeedback` | `BOOL` | `TRUE` | Use the run feedback (`bFeedback`); FALSE: no feedback checks |
-| `stOverload` | `ST_ProtectionSet` | `(eResponse := E_Response.Trip, tDelay := T#100ms, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3)` | a protection's settings ([protections](../conventions.md#protections)) |
-| `stNoFeedback` | `ST_ProtectionSet` | `(eResponse := E_Response.Trip, tDelay := T#3s, eReset := E_ResetMode.Retry, tRecover := T#30s, nMaxRetries := 3)` | a protection's settings ([protections](../conventions.md#protections)) |
-| `stFeedbackLost` | `ST_ProtectionSet` | `(eResponse := E_Response.Trip, tDelay := T#500ms, eReset := E_ResetMode.Retry, tRecover := T#30s, nMaxRetries := 3)` | a protection's settings ([protections](../conventions.md#protections)) |
-| `stStuck` | `ST_ProtectionSet` | `(eResponse := E_Response.Trip, tDelay := T#3s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0)` | a protection's settings ([protections](../conventions.md#protections)) |
+| `eModeAtPowerUp` | `E_PowerUp` |  | which mode it starts in after a power cut |
+| `tRetryCountWindow` | `TIME` | `T#1h` | RETRY protections count trips within this window |
+| `bOffResetsFaults` | `BOOL` | `TRUE` | switching to Off resets trips whose cause has gone |
+| `tMaxHandRunTime` | `TIME` |  | longest Hand run (0 = no limit) |
+| `bRestartAfterReset` | `BOOL` | `TRUE` | after a reset clears a trip, run again at once; FALSE: the owner's request must drop and come back first |
+| `bWarnWhenNotAuto` | `BOOL` |  | warn NotAuto while not in Auto and the plant is in Auto |
+| `tMinOffTime` | `TIME` | `T#5s` | after a stop, before the next start |
+| `bRunFeedbackFitted` | `BOOL` | `TRUE` | use the run feedback (bFeedback); FALSE: no feedback checks |
+| `stOverloadFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Trip, tTripDelay := T#100ms, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3)` | overload relay tripped; a protection's settings ([protections](../conventions.md#protections)) |
+| `stNoRunFeedbackFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Trip, tTripDelay := T#3s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#30s, nMaxRetriesBeforeLockout := 3)` | the run feedback never came after a start; a protection's settings ([protections](../conventions.md#protections)) |
+| `stRunFeedbackLostFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Trip, tTripDelay := T#500ms, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#30s, nMaxRetriesBeforeLockout := 3)` | the run feedback went while running; a protection's settings ([protections](../conventions.md#protections)) |
+| `stStuckOnFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Trip, tTripDelay := T#3s, eResetMode := E_ResetMode.Manual, tAutoRecoverAfter := T#0s, nMaxRetriesBeforeLockout := 0)` | the run feedback stays after a stop (contactor stuck); a protection's settings ([protections](../conventions.md#protections)) |
 
 **Status `sts`** (`ST_MotorSts`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `eState` | `E_State` |  | What it is doing now (status) |
+| `eState` | `E_State` |  | what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault |
 | `eErrorId` | `E_UtError` |  | first-out: the first error since the last reset |
-| `eStopReason` | `E_StopReason` |  | Why it last stopped |
-| `bRunning` | `BOOL` |  | It runs (status) |
+| `eStopReason` | `E_StopReason` |  | why it last stopped |
+| `bRunning` | `BOOL` |  | running now |
 | `bReady` | `BOOL` |  | could start now if asked |
 | `bAvailable` | `BOOL` |  | in Auto, not tripped, not interlocked |
-| `bLinked` | `BOOL` |  | an owner is driving it |
-| `bInterlocked` | `BOOL` |  | The interlock is holding it off |
-| `bRefused` | `BOOL` |  | a setting write was refused and put back |
-| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
+| `bOwnerDriving` | `BOOL` |  | an owner is driving it |
+| `bInterlocked` | `BOOL` |  | the interlock is off: it cannot run |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and put back |
+| `eSettingRefusedErrorId` | `E_UtError` |  | why the last write was refused (cleared with bSettingRefused) |
 | `bJogging` | `BOOL` |  | jogging (FB_MotorJog, Hand only) |
-| `bMustCycle` | `BOOL` |  | a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) |
-| `stOverload` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
-| `stNoFeedback` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
-| `stFeedbackLost` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
-| `stStuck` | `ST_ProtectionSts` |  | a protection's status ([protections](../conventions.md#protections)) |
+| `bWaitRequestDrop` | `BOOL` |  | a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) |
+| `bFaulted` | `BOOL` |  | tripped now (as the bIsFaulted property) |
+| `eModeInUse` | `E_Mode` |  | the mode it is in now (as the eActMode property) |
+| `stOverloadFault` | `ST_ProtectionSts` |  | overload relay tripped; a protection's status ([protections](../conventions.md#protections)) |
+| `stNoRunFeedbackFault` | `ST_ProtectionSts` |  | the run feedback never came after a start; a protection's status ([protections](../conventions.md#protections)) |
+| `stRunFeedbackLostFault` | `ST_ProtectionSts` |  | the run feedback went while running; a protection's status ([protections](../conventions.md#protections)) |
+| `stStuckOnFault` | `ST_ProtectionSts` |  | the run feedback stays after a stop (contactor stuck); a protection's status ([protections](../conventions.md#protections)) |
 
 **Details `det`** (`ST_MotorDet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `tRestartIn` | `TIME` |  | Time left before a start is allowed (restart delay) |
-| `tRunTime` | `TIME` |  | this run |
+| `tMinOffTimeLeft` | `TIME` |  | time left before a start is allowed (restart delay) |
+| `tThisRunTime` | `TIME` |  | this run |
 | `tIdleTime` | `TIME` |  | since the last stop (0 while running) |
-| `tHandLeft` | `TIME` |  | a Hand run's time left under set.tHandMax (0 = none counting) |
+| `tHandTimeLeft` | `TIME` |  | a Hand run's time left under set.tMaxHandRunTime (0 = none counting) |
 
 **Totals `tot`** (`ST_MotorTot`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `fRunHours` | `LREAL` |  | Run hours, lifetime (kept) |
-| `nStarts` | `UDINT` |  | Starts, lifetime (kept) |
+| `fRunHours` | `LREAL` |  | run hours, lifetime (kept) |
+| `nStartCount` | `UDINT` |  | starts, lifetime (kept) |
 
 ## How it works
 
 A variable speed drive over hard-wired IO.
 
-Everything of [`FB_Motor`](FB_Motor.md) (modes, protections, the plug, totals, `refData`) plus the speed. `bQ` = the drive's run command; `bFeedback` = the drive's running relay.
+Everything of [`FB_Motor`](FB_Motor.md) (modes, protections, the plug, totals, `refData`) plus the speed. `bRunOutput` = the drive's run command; `bRunFeedback` = the drive's running relay.
 
-Speed asked for: Auto -> the owner's speed (Request `fSpeed`, < 0 = `set.fAutoSpeed`); Hand -> `set.fHandSpeed`.
+Speed asked for: Auto -> the owner's speed (Request `fSpeedSetpointPct`, < 0 = `set.fAutoSpeedPct`); Hand -> `set.fHandSpeedPct`.
 
-Clamped to `fMinSpeed`..fMaxSpeed; a target inside the skip band holds at its near edge; ramped by `fAccelRate` / `fDecelRate` (% per `set.eRateUnit`: second by default, minute, hour or day; 0 = the drive ramps); a start begins from `fMinSpeed`. A jog ([`FB_MotorJog`](FB_MotorJog.md)) runs at `set.fJogSpeed` (0 = `fHandSpeed`).
+Clamped to `fMinSpeedPct`..fMaxSpeedPct; a target inside the skip band holds at its near edge; ramped by `fAccelPctPerSec` / `fDecelPctPerSec` (% per `set.eRateUnit`: second by default, minute, hour or day; 0 = the drive ramps); a start begins from `fMinSpeedPct`. A jog ([`FB_MotorJog`](FB_MotorJog.md)) runs at `set.fJogSpeedPct` (0 = `fHandSpeedPct`).
 
-Drive protections: driveNotReady (the ready relay lost while running), speedDev (\|reference - `fSpeedFb`\| past `set.fDevBand` while running with the ramp done and `set.tDriveRamp` passed since the reference stopped changing, `fSpeedFb` wired). `bAtSpeed`: the ramp done, and by `fSpeedFb` within `fDevBand`, or without `fSpeedFb` once `set.tDriveRamp` (the drive's own 0 -> 100 % ramp time, 0 = none) has passed since the reference stopped changing.
+Drive protections: driveNotReady (the ready relay lost while running), speedDev (\|reference - `fSpeedFeedbackPct`\| past `set.fSpeedDeviationPct` while running with the ramp done and `set.tDriveOwnRampTime` passed since the reference stopped changing, `fSpeedFeedbackPct` wired). `bAtSpeed`: the ramp done, and by `fSpeedFeedbackPct` within `fSpeedDeviationPct`, or without `fSpeedFeedbackPct` once `set.tDriveOwnRampTime` (the drive's own 0 -> 100 % ramp time, 0 = none) has passed since the reference stopped changing.
 
-The speed in Hz and rpm (`sts.fSpeedHz`, `sts.fSpeedRpm`, for display): the feedback while running when wired, else the reference, x `set.fRatedHz` / `fRatedRpm` at 100 % (0 = not shown).
+The speed in Hz and rpm (`sts.fSpeedHz`, `sts.fSpeedRpm`, for display): the feedback while running when wired, else the reference, x `set.fRatedFrequency` / `fRatedRpm` at 100 % (0 = not shown).
 
 Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
 
@@ -160,34 +162,33 @@ A pump on a VSD with run, running and ready relays and a 0-10 V speed reference.
 
 | Pin | Wire |
 | --- | --- |
-| `bFeedback` | `DI_VSD1_Running` |
+| `bRunFeedback` | `DI_VSD1_Running` |
 | `bDriveReady` | `DI_VSD1_Ready` |
-| `bOverload` | `DI_VSD1_Fault` |
+| `bOverloadTripped` | `DI_VSD1_Fault` |
 | `refData` | `stMotor1` |
-| `refVsd` | `stVsd1` |
-| `bQ` | `DO_VSD1_Run` |
-| `nSpeedRefRaw` | the analog output `AO_VSD1_Speed` |
-| `bDriveReset` | `DO_VSD1_Reset` |
+| `refDriveData` | `stVsd1` |
+| `bRunOutput` | `DO_VSD1_Run` |
+| `nSpeedReferenceRaw` | the analog output `AO_VSD1_Speed` |
+| `bDriveResetPulse` | `DO_VSD1_Reset` |
 
 Its owner (an FB_Pump, an FB_SpeedLoop, an FB_Group) asks for the speed.
 
 ## Read from ST (methods and properties)
 
 Ladder uses the pins above. These are for ST code and for other blocks (through the interface pins):
-
-- property `fActSpeed : REAL`
-- method `Request(bRun, bHold, fSpeed, bUrgent) : E_UtError`
-- method `Command(eCmd)`
-- property `eActMode : E_Mode`
-- property `bIsRunning : BOOL`
-- property `bIsReady : BOOL`
-- property `tActIdleTime : TIME`
-- property `tActHandLeft : TIME`
-- property `bIsAvailable : BOOL`
-- property `bIsAuto : BOOL`
-- property `bIsFaulted : BOOL`
-- property `eActError : E_UtError`
-- property `eActStopReason : E_StopReason`
-- property `fActRunHours : REAL`
-
 **Back to** [the index](../README.md).
+
+- property `fActSpeedPct : REAL`: the speed now, % (0 when stopped)
+- method `Request(bRun, bHoldOff, fSpeedSetpointPct, bOverflowUrgent) : E_UtError`
+- method `Command(eCommand)`
+- property `eActMode : E_Mode`: the mode it is in now
+- property `bIsRunning : BOOL`: running now
+- property `bIsReady : BOOL`: could start now if asked
+- property `tActIdleTime : TIME`: time since the last stop (0 while running)
+- property `tActHandTimeLeft : TIME`: a Hand run's time left under set.tMaxHandRunTime (0 = none counting)
+- property `bIsAvailable : BOOL`: in Auto, not tripped, not interlocked
+- property `bIsAuto : BOOL`: in Auto now
+- property `bIsFaulted : BOOL`: a trip or setting fault is active
+- property `eActError : E_UtError`: the error shown now
+- property `eActStopReason : E_StopReason`: why it last stopped
+- property `fActRunHours : REAL`: run hours (0 where not counted): rotation by hours

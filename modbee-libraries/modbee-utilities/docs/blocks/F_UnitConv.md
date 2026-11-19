@@ -9,7 +9,7 @@ Converts a value from one engineering unit to another (bar to psi, L/s to m3/h .
 | in | `fIn` | `REAL` |  | the value, in unit eFromUnit |
 | in | `eFromUnit` | `E_Unit` |  | its unit |
 | in | `eToUnit` | `E_Unit` |  | the unit wanted |
-| out | *(result)* | `REAL` | | The converted value (unchanged when the units cannot be converted) |
+| out | *(result)* | `REAL` |  | the value in eToUnit |
 
 ## How it works
 

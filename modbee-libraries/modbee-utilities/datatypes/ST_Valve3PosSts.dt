@@ -1,11 +1,11 @@
 TYPE
   ST_Valve3PosSts EXTENDS ST_EquipmentSts : STRUCT
-    nTargetPos : INT; (* going to (0 = hold) *)
-    nActualPos : INT; (* reached (-1 not known) *)
-    stTravel : ST_ProtectionSts;
-    stBothLimits : ST_ProtectionSts;
-    stPositionLost : ST_ProtectionSts;
-    stNoMovement : ST_ProtectionSts;
-    tLastStroke : TIME; (* the last move's time (start to arrival) *)
+    nPositionSetpoint : INT; (* going to (0 = hold) *)
+    nPosition : INT; (* reached (-1 not known) *)
+    stStrokeTimeoutFault : ST_ProtectionSts; (* the end switch did not arrive within the travel time *)
+    stBothLimitsFault : ST_ProtectionSts; (* two position switches made at once (protection) *)
+    stPositionLostFault : ST_ProtectionSts; (* position lost: its position switch lost at rest (protection) *)
+    stNoMovementFault : ST_ProtectionSts; (* no movement: commanded away, the switch of the position it left still made (protection; off by default) *)
+    tLastStrokeTime : TIME; (* the last move's time (start to arrival) *)
   END_STRUCT;
 END_TYPE

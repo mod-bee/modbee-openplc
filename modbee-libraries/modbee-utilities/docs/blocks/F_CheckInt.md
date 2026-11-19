@@ -6,10 +6,10 @@ The settings-check rule for an INT: why a value is refused, or `None`.
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `nValue` | `DINT` |  | The value |
-| in | `nMin` | `DINT` |  | Lowest allowed |
-| in | `nMax` | `DINT` |  | Highest allowed |
-| out | *(result)* | `E_UtError` | | `None`, or why the value is refused |
+| in | `nValue` | `DINT` |  | the value to check |
+| in | `nLowestAllowed` | `DINT` |  | lowest value allowed |
+| in | `nHighestAllowed` | `DINT` |  | highest value allowed |
+| out | *(result)* | `E_UtError` |  | the first problem, None when the value is good |
 
 ## How it works
 
@@ -20,7 +20,7 @@ The settings-check rule for an INT: why `nValue` is refused (`LimitsBad`, `Below
 | Pin | Wire |
 | --- | --- |
 | `nValue` | `nNewCount` |
-| `nMin` | 0 |
-| `nMax` | 100 |
+| `nLowestAllowed` | 0 |
+| `nHighestAllowed` | 100 |
 
 **Back to** [the index](../README.md).

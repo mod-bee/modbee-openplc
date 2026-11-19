@@ -1,21 +1,21 @@
 (* FB_DoseFlow EXTENDS FB_Dose — flow-paced dosing (fertigation).
 While bRun (or a bStart latch) the dosing pump runs in proportion to the carrier: the meter's rate (per hour) x
-the ratio (fRatio pin for this run, <= 0 = set.fRatio); fRate = required / set.fPumpCapacity %, capped at
-set.fMaxRate (no capacity: fMaxRate, a pulse pump). It injects only while bCarrierRunning and the carrier flow has
-been at / above set.fMinFlow for set.tCarrierProven (Waiting, not a fault). bPulse: one stroke every
-set.fPulseVolume dosed (0 = none), set.tPulseWidth on and off. Asked for more than the pump can give:
-set.stOverCapacity (a trip holds the dose).
-Pins: FB_Dose's, bCarrierRunning, ipMeter (I_Meter: the carrier), fRatio, refData -> FB_Dose's outputs, bPulse. *)
+the ratio (fDosePerCarrierUnit pin for this run, <= 0 = set.fDosePerCarrierUnit); fPumpSpeedPct = required / set.fFlowAtFullSpeed %, capped at
+set.fMaxPumpSpeedPct (no capacity: fMaxPumpSpeedPct, a pulse pump). It injects only while bCarrierRunning and the carrier flow has
+been at / above set.fMinCarrierFlow for set.tCarrierProveDelay (Waiting, not a fault). bStrokePulse: one stroke every
+set.fDosePerStroke dosed (0 = none), set.tStrokePulseWidth on and off. Asked for more than the pump can give:
+set.stOverCapacityFault (a trip holds the dose).
+Pins: FB_Dose's, bCarrierRunning, ipCarrierMeter (I_Meter: the carrier), fDosePerCarrierUnit, refData -> FB_Dose's outputs, bStrokePulse. *)
 
 FUNCTION_BLOCK FB_DoseFlow EXTENDS FB_Dose
   VAR_INPUT
     bCarrierRunning : BOOL := TRUE; (* the carrier (irrigation) pump runs *)
-    ipMeter : I_Meter; (* the carrier meter *)
-    fRatio : REAL; (* this run's ratio (<= 0 = set.fRatio) *)
-    refData : REFERENCE TO ST_DoseFlowData;
+    ipCarrierMeter : I_Meter; (* the carrier meter *)
+    fDosePerCarrierUnit : REAL; (* this run's ratio (<= 0 = set.fDosePerCarrierUnit) *)
+    refData : REFERENCE TO ST_DoseFlowData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    bPulse : BOOL; (* stroke pulses *)
+    bStrokePulse : BOOL; (* stroke pulses *)
   END_VAR
   VAR RETAIN
     stKept : ST_DoseFlowSet;
@@ -55,25 +55,25 @@ METHOD PRIVATE SetWhy : E_UtError
   SetWhy := E_UtError.None;
   IF BaseSetWhy(refSet := stS) <> E_UtError.None THEN
     SetWhy := BaseSetWhy(refSet := stS);
-  ELSIF NOT (stS.fRatio >= 0.0) THEN
+  ELSIF NOT (stS.fDosePerCarrierUnit >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fRatio <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fDosePerCarrierUnit <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fMinFlow >= 0.0) THEN
+  ELSIF NOT (stS.fMinCarrierFlow >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fMinFlow <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fMinCarrierFlow <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.tCarrierProven >= T#0s) THEN
+  ELSIF NOT (stS.tCarrierProveDelay >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.fMaxRate >= 0.0) THEN
+  ELSIF NOT (stS.fMaxPumpSpeedPct >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fMaxRate <= 100.0) THEN
+  ELSIF NOT (stS.fMaxPumpSpeedPct <= 100.0) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fPulseVolume >= 0.0) THEN
+  ELSIF NOT (stS.fDosePerStroke >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fPulseVolume <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fDosePerStroke <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.tPulseWidth >= T#0s) THEN
+  ELSIF NOT (stS.tStrokePulseWidth >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
@@ -86,8 +86,8 @@ METHOD PRIVATE SetOk : BOOL
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
-  bPumpRun := FALSE;
-  fRate := 0.0;
+  bPumpRunCommand := FALSE;
+  fPumpSpeedPct := 0.0;
   bBusy := FALSE;
   bError := TRUE;
   eErrorId := E_UtError.NoRecord;
@@ -107,32 +107,32 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOk := TRUE;
 END_IF;
 
 (* the carrier *)
 fFlow := 0.0;
 bFlowGood := FALSE;
-IF ipMeter <> NULL THEN
-  fFlow := ipMeter.fActRate;
-  bFlowGood := ipMeter.bIsGood AND ABS(fFlow) <= REAL#3.4E38;
+IF ipCarrierMeter <> NULL THEN
+  fFlow := ipCarrierMeter.fActFlowPerHour;
+  bFlowGood := ipCarrierMeter.bIsGood AND ABS(fFlow) <= REAL#3.4E38;
 END_IF;
-bCarrier := bCarrierRunning AND bFlowGood AND fFlow >= refData.set.fMinFlow
-            AND (refData.set.fMinFlow > 0.0 OR fFlow > 0.0);
+bCarrier := bCarrierRunning AND bFlowGood AND fFlow >= refData.set.fMinCarrierFlow
+            AND (refData.set.fMinCarrierFlow > 0.0 OR fFlow > 0.0);
 IF NOT bCarrier THEN
   tCarrierSince := tNow;
 END_IF;
-bCarrierOk := bCarrier AND tNow - tCarrierSince >= refData.set.tCarrierProven;
+bCarrierOk := bCarrier AND tNow - tCarrierSince >= refData.set.tCarrierProveDelay;
 bTripHold := bTripHold OR bCapTrip;
 
 (* dose while the run request is on *)
 fReq := 0.0;
-fRatioUse := refData.set.fRatio;
-IF fRatio > 0.0 AND fRatio <= REAL#3.4E38 THEN
-  fRatioUse := fRatio;
+fRatioUse := refData.set.fDosePerCarrierUnit;
+IF fDosePerCarrierUnit > 0.0 AND fDosePerCarrierUnit <= REAL#3.4E38 THEN
+  fRatioUse := fDosePerCarrierUnit;
 END_IF;
 IF bOk AND bRunReq AND (bBusy OR bPermissive) THEN
   IF NOT bBusy THEN
@@ -142,29 +142,29 @@ IF bOk AND bRunReq AND (bBusy OR bPermissive) THEN
     fPulseAcc := 0.0;
     nOwed := 0;
   END_IF;
-  bPaused := bHold OR bHoldLatch OR NOT bInterlock OR bTripHold OR NOT bCarrierOk;
-  fCap := LIMIT(0.0, refData.set.fMaxRate, 100.0);
+  bPaused := bPause OR bHoldLatch OR NOT bInterlock OR bTripHold OR NOT bCarrierOk;
+  fCap := LIMIT(0.0, refData.set.fMaxPumpSpeedPct, 100.0);
   IF bCarrierOk THEN
     fReq := fFlow * fRatioUse;
   END_IF;
   IF NOT bPaused AND fReq > 0.0 THEN
     bPumpGo := TRUE;
-    IF refData.set.fPumpCapacity > 0.0 THEN
-      fPct := fReq / refData.set.fPumpCapacity * 100.0;
-      fRate := MIN(fPct, fCap);
+    IF refData.set.fFlowAtFullSpeed > 0.0 THEN
+      fPct := fReq / refData.set.fFlowAtFullSpeed * 100.0;
+      fPumpSpeedPct := MIN(fPct, fCap);
       IF bCounting THEN
-        fDosed := REAL_TO_LREAL(fRate / 100.0 * refData.set.fPumpCapacity) * fStepS / 3600.0;
+        fDosed := REAL_TO_LREAL(fPumpSpeedPct / 100.0 * refData.set.fFlowAtFullSpeed) * fStepS / 3600.0;
       END_IF;
     ELSE
-      fRate := fCap;
+      fPumpSpeedPct := fCap;
       IF bCounting THEN
         fDosed := REAL_TO_LREAL(fReq) * fStepS / 3600.0;   (* a pulse pump *)
       END_IF;
     END_IF;
   END_IF;
-  (* stroke pulses: one every fPulseVolume dosed *)
-  IF refData.set.fPulseVolume > 0.0 AND fDosed > 0.0 THEN
-    fPulseAcc := fPulseAcc + fDosed / REAL_TO_LREAL(refData.set.fPulseVolume);
+  (* stroke pulses: one every fDosePerStroke dosed *)
+  IF refData.set.fDosePerStroke > 0.0 AND fDosed > 0.0 THEN
+    fPulseAcc := fPulseAcc + fDosed / REAL_TO_LREAL(refData.set.fDosePerStroke);
     IF fPulseAcc >= 1.0 THEN
       IF fPulseAcc > 1.0E6 THEN
         fPulseAcc := 1.0E6;
@@ -180,7 +180,7 @@ IF bOk AND bRunReq AND (bBusy OR bPermissive) THEN
   fDlv := fDlv + fDosed;
 ELSE
   IF bBusy THEN
-    refData.sts.fLastDelivered := fDlv;
+    refData.sts.fDeliveredLastDose := fDlv;
     eEnd := EndWhy(refSet := refData.set);
   END_IF;
   bBusy := FALSE;
@@ -190,33 +190,33 @@ END_IF;
 
 (* the stroke pulse output *)
 IF bPulseOn THEN
-  IF tNow - tPulseAt >= refData.set.tPulseWidth THEN
+  IF tNow - tPulseAt >= refData.set.tStrokePulseWidth THEN
     bPulseOn := FALSE;
     tPulseAt := tNow;
   END_IF;
-ELSIF nOwed > 0 AND tNow - tPulseAt >= refData.set.tPulseWidth THEN
+ELSIF nOwed > 0 AND tNow - tPulseAt >= refData.set.tStrokePulseWidth THEN
   bPulseOn := TRUE;
   tPulseAt := tNow;
   nOwed := nOwed - 1;
-  refData.det.nPulses := refData.det.nPulses + 1;
+  refData.det.nStrokePulses := refData.det.nStrokePulses + 1;
 END_IF;
-bPulse := bPulseOn;
+bStrokePulse := bPulseOn;
 
-bCapTrip := F_Protect(tNow := tNow, bCause := bBusy AND refData.set.fPumpCapacity > 0.0
-                                              AND fReq > refData.set.fPumpCapacity * LIMIT(0.0, refData.set.fMaxRate, 100.0) / 100.0,
-                      bResetReq := bResetNow, tRetryWindow := refData.set.tRetryWindow, stSet := refData.set.stOverCapacity,
-                      stSts := refData.sts.stOverCapacity, stWork := stWCap);
-refData.sts.bCarrierOk := bCarrierOk;
+bCapTrip := F_Protect(tNow := tNow, bConditionPresent := bBusy AND refData.set.fFlowAtFullSpeed > 0.0
+                                              AND fReq > refData.set.fFlowAtFullSpeed * LIMIT(0.0, refData.set.fMaxPumpSpeedPct, 100.0) / 100.0,
+                      bResetRequest := bResetNow, tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stOverCapacityFault,
+                      stStatus := refData.sts.stOverCapacityFault, stWorking := stWCap);
+refData.sts.bCarrierProven := bCarrierOk;
 bHandCarrier := bCarrierOk;
-refData.sts.fRequired := fReq;
-refData.sts.fRatioActive := fRatioUse;
+refData.sts.fDoseRateNeeded := fReq;
+refData.sts.fRatioInUse := fRatioUse;
 IF bPumpGo THEN
   Finish(refCmd := refData, refSet := refData.set, refSts := refData.sts, bOk := bOk,
-         bVTrip := bCapTrip, eVTrip := E_UtError.OverCapacity, bVWarn := stWCap.bWarn OR stWCap.bBadSetting,
+         bVTrip := bCapTrip, eVTrip := E_UtError.OverCapacity, bVWarn := stWCap.bWarning OR stWCap.bSettingBad,
          eVWarn := E_UtError.OverCapacity, eVPhase := E_DosePhase.Dosing, tVLeft := T#0s);
 ELSE
   Finish(refCmd := refData, refSet := refData.set, refSts := refData.sts, bOk := bOk,
-         bVTrip := bCapTrip, eVTrip := E_UtError.OverCapacity, bVWarn := stWCap.bWarn OR stWCap.bBadSetting,
+         bVTrip := bCapTrip, eVTrip := E_UtError.OverCapacity, bVWarn := stWCap.bWarning OR stWCap.bSettingBad,
          eVWarn := E_UtError.OverCapacity, eVPhase := E_DosePhase.Waiting, tVLeft := T#0s);
 END_IF;
 

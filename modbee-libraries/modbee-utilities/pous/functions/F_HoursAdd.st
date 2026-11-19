@@ -3,11 +3,11 @@ running over it, and the part of a millisecond left is carried, so years of shor
 
 FUNCTION F_HoursAdd : LINT
   VAR_INPUT
-    bRunning : BOOL;
-    tNow : TIME;
+    bRunning : BOOL; (* it runs *)
+    tNow : TIME; (* TIME() of this scan *)
   END_VAR
   VAR_IN_OUT
-    stAcc : ST_HoursAcc;
+    stAccumulator : ST_HoursAcc; (* your accumulator (one per counter) *)
   END_VAR
   VAR
     tElapsed : TIME;
@@ -16,17 +16,17 @@ FUNCTION F_HoursAdd : LINT
 
 
 nMs := 0;
-IF stAcc.bStarted THEN
-  tElapsed := tNow - stAcc.tPrev;
-  IF stAcc.bRunningPrev AND tElapsed > T#0s THEN
-    stAcc.tRest := stAcc.tRest + tElapsed;
-    nMs := TIME_TO_LINT(stAcc.tRest);
-    stAcc.tRest := stAcc.tRest - LINT_TO_TIME(nMs);
+IF stAccumulator.bStarted THEN
+  tElapsed := tNow - stAccumulator.tLastScanAt;
+  IF stAccumulator.bRunningLastScan AND tElapsed > T#0s THEN
+    stAccumulator.tUncountedRemainder := stAccumulator.tUncountedRemainder + tElapsed;
+    nMs := TIME_TO_LINT(stAccumulator.tUncountedRemainder);
+    stAccumulator.tUncountedRemainder := stAccumulator.tUncountedRemainder - LINT_TO_TIME(nMs);
   END_IF;
 END_IF;
-stAcc.bStarted := TRUE;
-stAcc.tPrev := tNow;
-stAcc.bRunningPrev := bRunning;
+stAccumulator.bStarted := TRUE;
+stAccumulator.tLastScanAt := tNow;
+stAccumulator.bRunningLastScan := bRunning;
 F_HoursAdd := nMs;
 
 END_FUNCTION

@@ -1,13 +1,13 @@
 (* FB_DoseTimed EXTENDS FB_Dose — timed dosing.
-While bRun (or a bStart latch): the pump on at set.fRate % for set.tOnTime, off for set.tOffTime, over and over (on first);
-a pause stops the clock. It doses only while bCarrierRunning has been on for set.tCarrierProven (Waiting, not a
-fault). Dosed = set.fPumpCapacity x fRate % while the pump runs.
+While bRun (or a bStart latch): the pump on at set.fPumpSpeedPct % for set.tOnTime, off for set.tOffTime, over and over (on first);
+a pause stops the clock. It doses only while bCarrierRunning has been on for set.tCarrierProveDelay (Waiting, not a
+fault). Dosed = set.fFlowAtFullSpeed x fPumpSpeedPct % while the pump runs.
 Pins: FB_Dose's, bCarrierRunning, refData -> FB_Dose's outputs. *)
 
 FUNCTION_BLOCK FB_DoseTimed EXTENDS FB_Dose
   VAR_INPUT
     bCarrierRunning : BOOL := TRUE; (* the carrier (irrigation) pump runs *)
-    refData : REFERENCE TO ST_DoseTimedData;
+    refData : REFERENCE TO ST_DoseTimedData; (* the block's record *)
   END_VAR
   VAR RETAIN
     stKept : ST_DoseTimedSet;
@@ -40,11 +40,11 @@ METHOD PRIVATE SetWhy : E_UtError
     SetWhy := E_UtError.TimeBad;
   ELSIF NOT (stS.tOffTime >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.fRate >= 0.0) THEN
+  ELSIF NOT (stS.fPumpSpeedPct >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fRate <= 100.0) THEN
+  ELSIF NOT (stS.fPumpSpeedPct <= 100.0) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.tCarrierProven >= T#0s) THEN
+  ELSIF NOT (stS.tCarrierProveDelay >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
@@ -57,8 +57,8 @@ METHOD PRIVATE SetOk : BOOL
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
-  bPumpRun := FALSE;
-  fRate := 0.0;
+  bPumpRunCommand := FALSE;
+  fPumpSpeedPct := 0.0;
   bBusy := FALSE;
   bError := TRUE;
   eErrorId := E_UtError.NoRecord;
@@ -78,16 +78,16 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOk := TRUE;
 END_IF;
 
 IF NOT bCarrierRunning THEN
   tCarrierSince := tNow;
 END_IF;
-bCarrierOk := bCarrierRunning AND tNow - tCarrierSince >= refData.set.tCarrierProven;
+bCarrierOk := bCarrierRunning AND tNow - tCarrierSince >= refData.set.tCarrierProveDelay;
 
 tLeft := T#0s;
 IF bOk AND bRunReq AND (bBusy OR bPermissive) THEN
@@ -98,7 +98,7 @@ IF bOk AND bRunReq AND (bBusy OR bPermissive) THEN
     bCycOn := TRUE;
     tCycAcc := T#0s;
   END_IF;
-  bPaused := bHold OR bHoldLatch OR NOT bInterlock OR bTripHold OR NOT bCarrierOk;
+  bPaused := bPause OR bHoldLatch OR NOT bInterlock OR bTripHold OR NOT bCarrierOk;
   (* on for tOnTime, off for tOffTime; a pause stops the clock *)
   IF NOT bPaused THEN
     tCycAcc := tCycAcc + tStepT;
@@ -112,9 +112,9 @@ IF bOk AND bRunReq AND (bBusy OR bPermissive) THEN
   END_IF;
   IF bCycOn AND NOT bPaused AND refData.set.tOnTime > T#0s THEN
     bPumpGo := TRUE;
-    fRate := refData.set.fRate;
+    fPumpSpeedPct := refData.set.fPumpSpeedPct;
     IF bCounting THEN
-      fDosed := REAL_TO_LREAL(refData.set.fPumpCapacity * fRate / 100.0) * fStepS / 3600.0;
+      fDosed := REAL_TO_LREAL(refData.set.fFlowAtFullSpeed * fPumpSpeedPct / 100.0) * fStepS / 3600.0;
     END_IF;
   END_IF;
   fDlv := fDlv + fDosed;
@@ -125,13 +125,13 @@ IF bOk AND bRunReq AND (bBusy OR bPermissive) THEN
   END_IF;
 ELSE
   IF bBusy THEN
-    refData.sts.fLastDelivered := fDlv;
+    refData.sts.fDeliveredLastDose := fDlv;
     eEnd := EndWhy(refSet := refData.set);
   END_IF;
   bBusy := FALSE;
   bPaused := FALSE;
 END_IF;
-refData.sts.bCarrierOk := bCarrierOk;
+refData.sts.bCarrierProven := bCarrierOk;
 bHandCarrier := bCarrierOk;
 IF bPumpGo THEN
   Finish(refCmd := refData, refSet := refData.set, refSts := refData.sts, bOk := bOk, bVTrip := FALSE,

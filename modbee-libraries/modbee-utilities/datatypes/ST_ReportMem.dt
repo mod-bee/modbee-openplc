@@ -1,14 +1,14 @@
 TYPE
   ST_ReportMem : STRUCT
-    bReport : BOOL; (* one scan: send now *)
-    fValue : REAL; (* held from the report *)
-    bGood : BOOL;
-    eReason : E_ReportReason;
-    bStarted : BOOL;
-    fGoodV : REAL; (* the last fIn that was a number *)
-    tLastAt : TIME;
-    bForcePend : BOOL; (* a force waiting for tMinInterval *)
-    bChange : BOOL;
-    bHeld : BOOL; (* the wait is counted in nSuppressed *)
+    bSendNow : BOOL; (* one scan: send now *)
+    fReportedValue : REAL; (* held from the report *)
+    bReportedGood : BOOL; (* the quality held from the report *)
+    eReportReason : E_ReportReason; (* why it reported: Change, Heartbeat, Forced or First *)
+    bStarted : BOOL; (* engine memory: the first report has been made *)
+    fLastNumber : REAL; (* the last fIn that was a number *)
+    tLastReportAt : TIME; (* engine memory: when it last reported (TIME()) *)
+    bForcePending : BOOL; (* a force waiting for tMinInterval *)
+    bChangePending : BOOL; (* engine memory: a change is waiting to be reported *)
+    bHeldByMinInterval : BOOL; (* the wait is counted in nSuppressedCount *)
   END_STRUCT;
 END_TYPE

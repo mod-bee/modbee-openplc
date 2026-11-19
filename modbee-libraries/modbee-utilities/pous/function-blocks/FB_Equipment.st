@@ -1,10 +1,10 @@
 (* FB_Equipment — the engine every equipment block shares (motor, pump, valve): written once.
 
-Modes (the record's set.eMode, kept over a power cut; ePowerUp Off forces Off at power-up; the record's command
-nCmdMode 0 Off / 1 Hand / 2 Auto / 3 OutOfService writes it once (SMS, SCADA), a Command(ModeOff ...) the same):
-Off   nothing runs; switching to Off resets trips whose cause has gone (set.bResetByOff).
+Modes (the record's set.eMode, kept over a power cut; eModeAtPowerUp Off forces Off at power-up; the record's command
+nCmdEquipmentMode 0 Off / 1 Hand / 2 Auto / 3 OutOfService writes it once (SMS, SCADA), a Command(ModeOff ...) the same):
+Off   nothing runs; switching to Off resets trips whose cause has gone (set.bOffResetsFaults).
 Hand  bCmdStart / bCmdStop (the panel, or FB_LocalControl): a start while not permitted is dropped; a start
-waits out the restart delay; Hand never resumes after a power cut. No owner reaches it. set.tHandMax
+waits out the restart delay; Hand never resumes after a power cut. No owner reaches it. set.tMaxHandRunTime
 (0 = none) ends a Hand run after that long (stop reason MaxRun). Jog (Command(Jog) every scan, from
 FB_MotorJog; Hand only, not while a Hand run is latched): runs while held, past trips, delays and the
 permissive; only Off and bInterlock stop it.
@@ -16,10 +16,10 @@ warns (taken out for maintenance); it is not ready, not available.
 bInterlock FALSE stops it in every mode (not a fault). bPermissive FALSE blocks a start, never stops it.
 Trips (the block's own protections and its parts') stop it in every mode; the first one is eErrorId. After a
 reset clears a trip it runs again at once while its owner still asks (set.bRestartAfterReset FALSE: the owner's
-request must drop and come back first: for machines that must not restart unexpectedly). set.bWarnNotAuto: a
+request must drop and come back first: for machines that must not restart unexpectedly). set.bWarnWhenNotAuto: a
 warning (NotAuto) while it is not in Auto and the plant is (ipSystem; unwired: always expected in Auto).
 tActIdleTime: the time since it last stopped (0 while running; power-on time only, from power-up);
-tActHandLeft: a Hand run's time left under set.tHandMax (0 = none counting). A child shows both in its det.
+tActHandTimeLeft: a Hand run's time left under set.tMaxHandRunTime (0 = none counting). A child shows both in its det.
 
 A child calls, every scan:  bReset := Begin(refData, refData.set, refData.sts);
 (its own protections, with bReset)
@@ -64,7 +64,7 @@ FUNCTION_BLOCK ABSTRACT FB_Equipment EXTENDS FB_Object IMPLEMENTS I_Equipment
     bMustCycle : BOOL; (* a reset cleared a trip: the request must drop first *)
     bResetThisScan : BOOL; (* a reset this scan (Begin's result), for a variant's own record *)
     tIdleNow : TIME; (* since the last stop (0 while running) *)
-    tHandLeftNow : TIME; (* a Hand run's time left under set.tHandMax (0 = none counting) *)
+    tHandLeftNow : TIME; (* a Hand run's time left under set.tMaxHandRunTime (0 = none counting) *)
   END_VAR
 
 
@@ -100,28 +100,28 @@ END_METHOD
 (* ---- I_Equipment ---- *)
 METHOD PUBLIC FINAL Request : E_UtError
   VAR_INPUT
-    bRun : BOOL;
-    bHold : BOOL;
-    fSpeed : REAL := -1.0;
-    bUrgent : BOOL;
+    bRun : BOOL;    // run (open) wanted
+    bHoldOff : BOOL;    // held off, still linked to the owner
+    fSpeedSetpointPct : REAL := -1.0;    // speed or position wanted; below 0 = the device's own
+    bOverflowUrgent : BOOL;    // an overflow call: a part's start hold (starts limit ...) does not hold it
   END_VAR
   bReq := bRun;
-  bHoldReq := bHold;
-  fSpeedReq := fSpeed;
-  bUrgentReq := bUrgent;
+  bHoldReq := bHoldOff;
+  fSpeedReq := fSpeedSetpointPct;
+  bUrgentReq := bOverflowUrgent;
   bReqSeen := TRUE;
   Request := eFirstOut;
 END_METHOD
 
 METHOD PUBLIC FINAL Command
   VAR_INPUT
-    eCmd : E_EquipCmd;
+    eCommand : E_EquipCmd;    // a record command (Start, Stop, Reset ...) applied in the block's next cycle
   END_VAR
-  CASE eCmd OF
+  CASE eCommand OF
     E_EquipCmd.Start: bCmdStartIn := TRUE;
     E_EquipCmd.Stop: bCmdStopIn := TRUE;
     E_EquipCmd.Reset: bCmdResetIn := TRUE;
-    E_EquipCmd.ModeOff, E_EquipCmd.ModeHand, E_EquipCmd.ModeAuto: eModeIn := eCmd;
+    E_EquipCmd.ModeOff, E_EquipCmd.ModeHand, E_EquipCmd.ModeAuto: eModeIn := eCommand;
     E_EquipCmd.Jog: bJogIn := TRUE;
     E_EquipCmd.JogRev: bJogIn := TRUE; bJogRevIn := TRUE;
   ELSE
@@ -129,68 +129,68 @@ METHOD PUBLIC FINAL Command
   END_CASE;
 END_METHOD
 
-PROPERTY PUBLIC eActMode : E_Mode
+PROPERTY PUBLIC eActMode : E_Mode    // the mode it is in now
   GET
     eActMode := eModePrev;
   END_GET
 END_PROPERTY
 
-PROPERTY PUBLIC bIsRunning : BOOL
+PROPERTY PUBLIC bIsRunning : BOOL    // running now
   GET
     bIsRunning := bRunCmd AND FeedbackOk();
   END_GET
 END_PROPERTY
 
-PROPERTY PUBLIC bIsReady : BOOL
+PROPERTY PUBLIC bIsReady : BOOL    // could start now if asked
   GET
     bIsReady := eModePrev <> E_Mode.Off AND eModePrev <> E_Mode.OutOfService AND bInterlock AND bPermissive AND NOT bTripNow
                 AND NOT Unavailable();   (* e.g. an actuator in Local, a pump's motor in Hand *)
   END_GET
 END_PROPERTY
 
-PROPERTY PUBLIC tActIdleTime : TIME
+PROPERTY PUBLIC tActIdleTime : TIME    // time since the last stop (0 while running)
   GET
     tActIdleTime := tIdleNow;
   END_GET
 END_PROPERTY
 
-PROPERTY PUBLIC tActHandLeft : TIME
+PROPERTY PUBLIC tActHandTimeLeft : TIME    // a Hand run's time left under set.tMaxHandRunTime (0 = none counting)
   GET
-    tActHandLeft := tHandLeftNow;
+    tActHandTimeLeft := tHandLeftNow;
   END_GET
 END_PROPERTY
 
-PROPERTY PUBLIC bIsAvailable : BOOL
+PROPERTY PUBLIC bIsAvailable : BOOL    // in Auto, not tripped, not interlocked
   GET
     bIsAvailable := eModePrev = E_Mode.Auto AND bInterlock AND NOT bTripNow AND NOT Unavailable();
   END_GET
 END_PROPERTY
 
-PROPERTY PUBLIC bIsAuto : BOOL
+PROPERTY PUBLIC bIsAuto : BOOL    // in Auto now
   GET
     bIsAuto := eModePrev = E_Mode.Auto;
   END_GET
 END_PROPERTY
 
-PROPERTY PUBLIC bIsFaulted : BOOL
+PROPERTY PUBLIC bIsFaulted : BOOL    // a trip or setting fault is active
   GET
     bIsFaulted := bTripNow;
   END_GET
 END_PROPERTY
 
-PROPERTY PUBLIC eActError : E_UtError
+PROPERTY PUBLIC eActError : E_UtError    // the error shown now
   GET
     eActError := eErrorId;
   END_GET
 END_PROPERTY
 
-PROPERTY PUBLIC eActStopReason : E_StopReason
+PROPERTY PUBLIC eActStopReason : E_StopReason    // why it last stopped
   GET
     eActStopReason := eStop;
   END_GET
 END_PROPERTY
 
-PROPERTY PUBLIC fActRunHours : REAL
+PROPERTY PUBLIC fActRunHours : REAL    // run hours (0 where not counted): rotation by hours
   GET
     fActRunHours := RunHours();
   END_GET
@@ -227,7 +227,7 @@ METHOD PROTECTED FINAL Begin : BOOL
   tNow := TIME();
   bReset := FALSE;
   IF bFirstScan THEN
-    IF refSet.ePowerUp = E_PowerUp.Off THEN
+    IF refSet.eModeAtPowerUp = E_PowerUp.Off THEN
       refSet.eMode := E_Mode.Off;
     END_IF;
     eModePrev := refSet.eMode;
@@ -235,17 +235,17 @@ METHOD PROTECTED FINAL Begin : BOOL
     bHandRun := FALSE;
   END_IF;
   (* the record's mode command: once, then -1 *)
-  IF refCmd.nCmdMode >= 0 THEN
-    CASE refCmd.nCmdMode OF
+  IF refCmd.nCmdEquipmentMode >= 0 THEN
+    CASE refCmd.nCmdEquipmentMode OF
       0: refSet.eMode := E_Mode.Off;
       1: refSet.eMode := E_Mode.Hand;
       2: refSet.eMode := E_Mode.Auto;
       3: refSet.eMode := E_Mode.OutOfService;   // refused below where the block does not allow it
     ELSE
-      refSts.bRefused := TRUE;
-      refSts.eRefusedWhy := E_UtError.ChoiceBad;
+      refSts.bSettingRefused := TRUE;
+      refSts.eSettingRefusedErrorId := E_UtError.ChoiceBad;
     END_CASE;
-    refCmd.nCmdMode := -1;
+    refCmd.nCmdEquipmentMode := -1;
   END_IF;
   (* commands through Command: as the record's own *)
   CASE eModeIn OF
@@ -258,7 +258,7 @@ METHOD PROTECTED FINAL Begin : BOOL
   eModeIn := E_EquipCmd.None;
   IF bCmdStartIn THEN refCmd.bCmdStart := TRUE; bCmdStartIn := FALSE; END_IF;
   IF bCmdStopIn THEN refCmd.bCmdStop := TRUE; bCmdStopIn := FALSE; END_IF;
-  IF bCmdResetIn THEN refCmd.bCmdReset := TRUE; bCmdResetIn := FALSE; END_IF;
+  IF bCmdResetIn THEN refCmd.bCmdResetFaults := TRUE; bCmdResetIn := FALSE; END_IF;
   (* a mode outside the list is put back (a bad write) *)
   CASE refSet.eMode OF
     E_Mode.Off, E_Mode.Hand, E_Mode.Auto:
@@ -266,28 +266,28 @@ METHOD PROTECTED FINAL Begin : BOOL
     E_Mode.OutOfService:
       IF NOT AllowOos() THEN
         refSet.eMode := eModePrev;
-        refSts.bRefused := TRUE;
-        refSts.eRefusedWhy := E_UtError.ChoiceBad;
+        refSts.bSettingRefused := TRUE;
+        refSts.eSettingRefusedErrorId := E_UtError.ChoiceBad;
       END_IF;
   ELSE
     refSet.eMode := eModePrev;
-    refSts.bRefused := TRUE;
-    refSts.eRefusedWhy := E_UtError.ChoiceBad;
+    refSts.bSettingRefused := TRUE;
+    refSts.eSettingRefusedErrorId := E_UtError.ChoiceBad;
   END_CASE;
   IF refSet.eMode <> eModePrev THEN
     bHandRun := FALSE;
     bHandStartReq := FALSE;
     bStopLatch := FALSE;
-    IF refSet.eMode = E_Mode.Off AND refSet.bResetByOff THEN
+    IF refSet.eMode = E_Mode.Off AND refSet.bOffResetsFaults THEN
       bReset := TRUE;
     END_IF;
     eModePrev := refSet.eMode;
   END_IF;
-  IF refCmd.bCmdReset THEN
+  IF refCmd.bCmdResetFaults THEN
     bReset := TRUE;
-    refCmd.bCmdReset := FALSE;
-    refSts.bRefused := FALSE;
-    refSts.eRefusedWhy := E_UtError.None;
+    refCmd.bCmdResetFaults := FALSE;
+    refSts.bSettingRefused := FALSE;
+    refSts.eSettingRefusedErrorId := E_UtError.None;
   END_IF;
   IF SystemReset() THEN
     bReset := TRUE;
@@ -343,7 +343,7 @@ METHOD PROTECTED FINAL Finish
     bMustCycle := TRUE;
   END_IF;
   bTripWas := bTripNow;
-  IF refSet.bWarnNotAuto AND NotAuto(eMode := refSet.eMode) AND NOT bTripNow THEN
+  IF refSet.bWarnWhenNotAuto AND NotAuto(eMode := refSet.eMode) AND NOT bTripNow THEN
     IF ipSystem = NULL THEN
       bWarnNow := TRUE;
       IF eFirstWarn = E_UtError.None THEN eFirstWarn := E_UtError.NotAuto; END_IF;
@@ -415,7 +415,7 @@ METHOD PROTECTED FINAL Finish
         tHandSince := tNow;
       END_IF;
     END_IF;
-    IF bHandRun AND refSet.tHandMax > T#0s AND tNow - tHandSince >= refSet.tHandMax THEN
+    IF bHandRun AND refSet.tMaxHandRunTime > T#0s AND tNow - tHandSince >= refSet.tMaxHandRunTime THEN
       bHandRun := FALSE;          (* the Hand run limit *)
       eStop := E_StopReason.MaxRun;
     ELSIF bRunCmd AND NOT bHandRun THEN
@@ -446,8 +446,8 @@ METHOD PROTECTED FINAL Finish
   ELSE
     tIdleNow := tNow - tStoppedAt;
   END_IF;
-  IF bHandRun AND refSet.tHandMax > T#0s THEN
-    tHandLeftNow := MAX(T#0s, refSet.tHandMax - (tNow - tHandSince));
+  IF bHandRun AND refSet.tMaxHandRunTime > T#0s THEN
+    tHandLeftNow := MAX(T#0s, refSet.tMaxHandRunTime - (tNow - tHandSince));
   ELSE
     tHandLeftNow := T#0s;
   END_IF;
@@ -486,10 +486,12 @@ METHOD PROTECTED FINAL Finish
   refSts.bReady := refSet.eMode <> E_Mode.Off AND refSet.eMode <> E_Mode.OutOfService AND bInterlock AND bPermissive AND NOT bTripNow
                    AND NOT Unavailable();
   refSts.bAvailable := refSet.eMode = E_Mode.Auto AND bInterlock AND NOT bTripNow AND NOT Unavailable();
-  refSts.bLinked := bLinked;
+  refSts.bOwnerDriving := bLinked;
   refSts.bInterlocked := NOT bInterlock;
   refSts.bJogging := bJogging;
-  refSts.bMustCycle := bMustCycle;
+  refSts.bWaitRequestDrop := bMustCycle;
+  refSts.bFaulted := bTripNow;
+  refSts.eModeInUse := eModePrev;
   bFirstScan := FALSE;
 END_METHOD
 

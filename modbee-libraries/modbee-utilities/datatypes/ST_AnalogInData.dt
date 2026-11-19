@@ -1,8 +1,8 @@
 TYPE
   ST_AnalogInData : STRUCT
-    bCmdReset : BOOL; (* reset a latched fault (cleared by the block) *)
-    set : ST_AnalogInSet;
-    sts : ST_AnalogInSts;
-    det : ST_AnalogInDet;
+    bCmdResetFaults : BOOL; (* reset a latched fault (cleared by the block) *)
+    set : ST_AnalogInSet; (* settings (kept) *)
+    sts : ST_AnalogInSts; (* status *)
+    det : ST_AnalogInDet; (* details *)
   END_STRUCT;
 END_TYPE

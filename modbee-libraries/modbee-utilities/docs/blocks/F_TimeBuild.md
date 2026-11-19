@@ -6,12 +6,12 @@ Days, hours, minutes, seconds and milliseconds to a TIME (an HMI enters a delay 
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `nDays` | `UDINT` | `0` | Days |
-| in | `nHours` | `UDINT` | `0` | Hours |
-| in | `nMinutes` | `UDINT` | `0` | Minutes |
-| in | `nSeconds` | `UDINT` | `0` | Seconds |
-| in | `nMillis` | `UDINT` | `0` | Milliseconds |
-| out | *(result)* | `TIME` | | The TIME |
+| in | `nDays` | `UDINT` | `0` | days |
+| in | `nHours` | `UDINT` | `0` | hours |
+| in | `nMinutes` | `UDINT` | `0` | minutes |
+| in | `nSeconds` | `UDINT` | `0` | seconds |
+| in | `nMilliseconds` | `UDINT` | `0` | milliseconds |
+| out | *(result)* | `TIME` |  | the TIME the parts add up to |
 
 ## How it works
 

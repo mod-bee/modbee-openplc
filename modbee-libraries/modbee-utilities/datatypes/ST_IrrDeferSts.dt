@@ -1,11 +1,11 @@
 TYPE
   ST_IrrDeferSts : STRUCT
-    bDeferred : BOOL;
-    eReason : E_Defer;
-    fSoil : REAL; (* NaN = none *)
-    bSoilIsWet : BOOL;
-    tTimeLeft : TIME;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bDeferred : BOOL; (* irrigation is deferred now *)
+    eDeferReason : E_Defer; (* why: Manual, Remote, Rain, Soil, RainLost, SoilLost or Setting *)
+    fSoilMoisturePct : REAL; (* NaN = none *)
+    bSoilIsWet : BOOL; (* the soil reads wet *)
+    tTimeLeft : TIME; (* time left in the defer or clear delay *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

@@ -1,8 +1,8 @@
 TYPE
   ST_MsgQueueSet : STRUCT
-    eMode : E_MsgMode; (* Queue (each new message once) or Active (each source's current one) *)
-    tShowTime : TIME := T#3s; (* each message is on display this long *)
-    eMinKind : E_MsgKind := E_MsgKind.Held; (* only messages of this kind or worse (Normal = every change) *)
+    eQueueMode : E_MsgMode; (* Queue (each new message once) or Active (each source's current one) *)
+    tDisplayTime : TIME := T#3s; (* each message is on display this long *)
+    eMinMessageKind : E_MsgKind := E_MsgKind.Held; (* only messages of this kind or worse (Normal = every change) *)
     eWhenFull : E_MsgFull; (* DropOldest, or HoldNew (new ones wait for room) *)
     tClearFullAfter : TIME; (* Queue: a buffer full this long is emptied (0 = never) *)
   END_STRUCT;

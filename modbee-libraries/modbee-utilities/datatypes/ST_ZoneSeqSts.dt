@@ -1,21 +1,21 @@
 TYPE
   ST_ZoneSeqSts : STRUCT
-    eState : E_State;
-    eErrorId : E_UtError;
-    ePhase : E_ZonePhase;
-    nZone : INT;
-    bActive : BOOL;
-    eStopReason : E_StopReason;
-    nRunZone : INT; (* the one zone of this run (0 = the program) *)
-    nPass : INT; (* the pass running *)
-    bRainHold : BOOL;
-    bMasterWanted : BOOL;
-    bDoseOn : BOOL;
-    tPumpWait : TIME; (* the time with no water for want of the pump *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    eState : E_State; (* what it is doing now *)
+    eErrorId : E_UtError; (* the first error since the last reset (first-out) *)
+    eZonePhase : E_ZonePhase; (* Idle, Opening, Watering, Changing, Ending, Paused or Soaking *)
+    nZoneWatering : INT; (* the zone watering (0 = none) *)
+    bBusy : BOOL; (* the program is on *)
+    eStopReason : E_StopReason; (* why it last stopped *)
+    nRunOnlyZone : INT; (* the one zone of this run (0 = the program) *)
+    nPassRunning : INT; (* the pass running *)
+    bDeferIrrigation : BOOL; (* rain or wet soil holds the program (wire FB_IrrDefer.bDeferIrrigation) *)
+    bMasterValveOpenCommand : BOOL; (* the master valve is asked open *)
+    bDosingAllowed : BOOL; (* dosing is allowed now *)
+    tWaitingForPump : TIME; (* the time with no water for want of the pump *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
     bPaused : BOOL; (* held (bPause, bCmdPause, a rain pause, a resume wait) *)
-    nRuns : UDINT; (* programs started since power-up *)
-    fDelivered : LREAL; (* this program's water (the meter) *)
+    nRunCount : UDINT; (* programs started since power-up *)
+    fDeliveredThisRun : LREAL; (* this program's water (the meter) *)
   END_STRUCT;
 END_TYPE

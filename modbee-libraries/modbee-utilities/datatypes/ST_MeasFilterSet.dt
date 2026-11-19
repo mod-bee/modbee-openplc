@@ -1,10 +1,10 @@
 TYPE
   ST_MeasFilterSet : STRUCT
-    tFilter : TIME; (* 0 = no filter *)
-    eMode : E_FilterMode;
-    fLowCutoff : REAL; (* |value| below this reads 0 (0 = off) *)
-    bClamp : BOOL;
-    fClampMin : REAL;
-    fClampMax : REAL := 100.0;
+    tFilterTime : TIME; (* 0 = no filter *)
+    eFilterType : E_FilterMode; (* Lowpass, Average or BlockAvg *)
+    fZeroBelow : REAL; (* |value| below this reads 0 (0 = off) *)
+    bClampOn : BOOL; (* clamp the value to fMinValue..fMaxValue *)
+    fMinValue : REAL; (* lowest value passed on (bClampOn) *)
+    fMaxValue : REAL := 100.0; (* highest value passed on (bClampOn) *)
   END_STRUCT;
 END_TYPE

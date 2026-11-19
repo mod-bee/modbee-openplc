@@ -7,7 +7,7 @@ A duration as a short text for a simple display ('42 m 10 s').
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
 | in | `tIn` | `TIME` |  | any duration |
-| out | *(result)* | `STRING(16)` | | The text |
+| out | *(result)* | `STRING(16)` |  | the duration as short text |
 
 ## How it works
 

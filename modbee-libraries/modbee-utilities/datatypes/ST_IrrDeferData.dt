@@ -1,6 +1,6 @@
 TYPE
   ST_IrrDeferData : STRUCT
-    set : ST_IrrDeferSet;
-    sts : ST_IrrDeferSts;
+    set : ST_IrrDeferSet; (* settings (kept) *)
+    sts : ST_IrrDeferSts; (* status *)
   END_STRUCT;
 END_TYPE

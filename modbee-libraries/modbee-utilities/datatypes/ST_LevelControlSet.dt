@@ -1,18 +1,19 @@
 TYPE
   ST_LevelControlSet : STRUCT
-    eMode : E_LevelMode;
-    bDemandOnly : BOOL;
-    fStart : REAL;
-    fStop : REAL;
-    fDemandStop : REAL;
-    fHighHigh : REAL := 3.4E38; (* EMPTY: overflow run; FILL: full, no run (3.4E38 / -3.4E38: not used) *)
-    fLowLow : REAL := -3.4E38; (* EMPTY: cut-out; FILL: alarm only *)
-    eLevelFail : E_LevelFail;
-    stLevelBad : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#10s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0);
-    tRunOnMax : TIME := T#10m; (* RunOn: the longest run-on on a failed level *)
-    fStartVariation : REAL; (* the start moves at random by up to this each cycle (0 = off) *)
-    fDemandRestart : REAL; (* a held demand reruns at this level (0 = the start level) *)
+    eControlMode : E_LevelMode; (* Empty (sump, wet well), Fill (tank) or Timed *)
+    bRunOnDemandOnly : BOOL; (* the start / stop levels are not used: it runs on bDemand only (high-high still acts) *)
+    fStartLevel : REAL; (* start at this level (Empty: at or above; Fill: at or below) *)
+    fStopLevel : REAL; (* stop at this level (Empty: at or below; Fill: at or above) *)
+    fDemandStopLevel : REAL; (* a demand pumps down / fills to this level *)
+    fHighHighLevel : REAL := 3.4E38; (* EMPTY: overflow run; FILL: full, no run (3.4E38 / -3.4E38: not used) *)
+    fLowLowLevel : REAL := -3.4E38; (* EMPTY: cut-out; FILL: alarm only *)
+    eWhenLevelBad : E_LevelFail; (* the level measurement fails: Stop, or RunOn for up to tMaxRunOnTime *)
+    stLevelBadFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#10s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#5s, nMaxRetriesBeforeLockout := 0);
+    tMaxRunOnTime : TIME := T#10m; (* RunOn: the longest run-on on a failed level *)
+    fStartLevelVariation : REAL; (* the start moves at random by up to this each cycle (0 = off) *)
+    fDemandRestartLevel : REAL; (* a held demand reruns at this level (0 = the start level) *)
     tOnTime : TIME := T#5m; (* TIMED *)
-    tOffTime : TIME := T#5m;
+    tOffTime : TIME := T#5m; (* Timed: off time *)
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

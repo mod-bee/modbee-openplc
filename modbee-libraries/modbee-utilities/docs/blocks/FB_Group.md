@@ -8,25 +8,25 @@ Offers `I_Equipment`: wire this instance to another block's `ip…` pin of that 
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `ipMember1` | `I_Equipment` |  | The instance it drives (a motor, pump, valve or FB_Group) |
-| in | `ipMember2` | `I_Equipment` |  | The instance it drives (a motor, pump, valve or FB_Group) |
-| in | `ipMember3` | `I_Equipment` |  | The instance it drives (a motor, pump, valve or FB_Group) |
-| in | `ipMember4` | `I_Equipment` |  | the members, any I_Equipment: pumps, motors; unwired = none. The instance it drives (a motor, pump, valve or FB_Group) |
-| in | `nExtra` | `INT` |  | members wanted beyond the first while it is asked to run: assist / staging; -1 = the jockey alone |
-| in | `bRotate` | `BOOL R_EDGE` |  | rising edge: the lead moves on now Acts on its rising edge. |
-| in | `refData` | `REFERENCE TO ST_GroupData` |  | Its record (a variable of this type) |
-| in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
-| out | `bAnyRunning` | `BOOL` |  | A member runs |
-| out | `nDuty` | `INT` |  | duty members fitted (the jockey not counted): -> FB_Cascade.nMembers |
-| out | `nDutyRunning` | `INT` |  | duty members running: -> FB_Cascade.nRunning |
-| out | `fRunCapacity` | `REAL` |  | the running duty members' capacity (I_Pump.fActCapacity; 0 = not known) |
+| in | `ipMember1` | `I_Equipment` |  | member 1 (a pump, motor or valve; unwired = none) |
+| in | `ipMember2` | `I_Equipment` |  | member 2 (unwired = none) |
+| in | `ipMember3` | `I_Equipment` |  | member 3 (unwired = none) |
+| in | `ipMember4` | `I_Equipment` |  | member 4 (unwired = none) |
+| in | `nExtraMembers` | `INT` |  | members wanted beyond the first while it is asked to run; -1 = the jockey alone |
+| in | `bRotate` | `BOOL R_EDGE` |  | rising edge: the lead moves on now |
+| in | `refData` | `REFERENCE TO ST_GroupData` |  | the block's record |
+| in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
+| out | `bAnyMemberRunning` | `BOOL` |  | a member runs |
+| out | `nDutyMembers` | `INT` |  | duty members fitted (the jockey not counted): -> FB_Cascade.nDutyPumps |
+| out | `nDutyMembersRunning` | `INT` |  | duty members running: -> FB_Cascade.nDutyPumpsRunning |
+| out | `fRunningCapacity` | `REAL` |  | the running duty members' capacity (I_Pump.fActCapacity; 0 = not known) |
 | out | `fJockeyCapacity` | `REAL` |  | the jockey's capacity (0 = none, or not known) |
 | out | `bJockeyReady` | `BOOL` |  | a jockey is fitted and available |
-| out | `nRunning` | `INT` |  | Members running (wire to FB_Cascade's `nRunning`) |
-| out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
+| out | `nMembersRunning` | `INT` |  | members running now |
+| out | `bError` | `BOOL` |  | TRUE while a trip or setting fault is active *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
-| out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
-| out | `eState` | `E_State` |  | What it is doing now (Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault) *(from FB_Object)* |
+| out | `eErrorId` | `E_UtError` |  | which error: the first since the last reset, else the first warning; None when all is well *(from FB_Object)* |
+| out | `eState` | `E_State` |  | what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault *(from FB_Object)* |
 
 `bError`, `bWarning`, `eErrorId`, `eState` work as in every block: see [errors and state](../conventions.md#errors-and-state).
 
@@ -34,45 +34,45 @@ Offers `I_Equipment`: wire this instance to another block's `ip…` pin of that 
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `bCmdRotate` | `BOOL` |  |  |
-| `bCmdReset` | `BOOL` |  | Reset trips whose cause has gone (HMI command; cleared by the block) |
+| `bCmdRotateNow` | `BOOL` |  | HMI: the lead moves on now (acts once, cleared by the block) |
+| `bCmdResetFaults` | `BOOL` |  | HMI: reset trips and alarms whose cause has gone (acts once, cleared by the block) |
 
 **Settings `set`** (`ST_GroupSet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `eRotate` | `E_Rotate` |  |  |
-| `tRotateInterval` | `TIME` | `T#24h` |  |
-| `nFixedLead` | `INT` | `1` |  |
-| `tStageDelay` | `TIME` | `T#5s` |  |
-| `tDestageDelay` | `TIME` | `T#5s` |  |
-| `tFailover` | `TIME` | `T#10s` |  |
-| `nMaxRunning` | `INT` |  | most members running at once, Hand included (0 = no limit) |
-| `bHandCounts` | `BOOL` | `TRUE` | a member running in Hand counts toward the members wanted |
+| `eRotateBy` | `E_Rotate` |  | how the lead moves on: EachStart, Periodic, Fixed or Hours |
+| `tRotateInterval` | `TIME` | `T#24h` | Periodic: the lead moves on this often |
+| `nFixedLeadMember` | `INT` | `1` | Fixed: the member that always leads (1..4) |
+| `tAddMemberDelay` | `TIME` | `T#5s` | between member starts when more are wanted |
+| `tDropMemberDelay` | `TIME` | `T#5s` | between member stops when fewer are wanted |
+| `tFailoverAfter` | `TIME` | `T#10s` | a called member not running after this is skipped and the next one called |
+| `nMaxMembersRunning` | `INT` |  | most members running at once, Hand included (0 = no limit) |
+| `bHandRunCounts` | `BOOL` | `TRUE` | a member running in Hand counts toward the members wanted |
 | `bSwapWhileRunning` | `BOOL` |  | a rotation while running: start the next member, then stop the old one |
-| `eStop` | `E_GroupStop` |  | nothing asked any more: stop all at once, or one per tStopStep |
-| `tStopStep` | `TIME` | `T#3s` | Staged: between member stops |
-| `fHoursBand` | `REAL` | `1.0` | Hours: members this close in run hours (h) count as equal (rotation order) |
-| `tExerciseEvery` | `TIME` |  | run a member idle this long while nothing is asked (0 = off) |
-| `tExerciseTime` | `TIME` | `T#30s` | for this long |
+| `eStopOrder` | `E_GroupStop` |  | nothing asked any more: stop all at once, or one per tBetweenMemberStops |
+| `tBetweenMemberStops` | `TIME` | `T#3s` | Staged: between member stops |
+| `fEqualHoursBand` | `REAL` | `1.0` | Hours: members this close in run hours (h) count as equal (rotation order) |
+| `tExerciseAfterIdle` | `TIME` |  | run a member idle this long while nothing is asked (0 = off) |
+| `tExerciseRunTime` | `TIME` | `T#30s` | for this long |
 
 **Status `sts`** (`ST_GroupSts`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `eState` | `E_State` |  | What it is doing now (status) |
-| `eErrorId` | `E_UtError` |  | The first error since the last reset (first-out) |
-| `nLead` | `INT` |  |  |
-| `nRequired` | `INT` |  |  |
-| `nRunning` | `INT` |  |  |
-| `nCalled` | `INT` |  |  |
-| `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
-| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
-| `nExercising` | `INT` |  | members on an exercise run |
-| `tExerciseIn` | `TIME` |  | until the next exercise run (0: off, or one running) |
-| `nAvailable` | `INT` |  | duty members available (not skipped) |
-| `bShortfall` | `BOOL` |  | asked for more members than can run (none left, or nMaxRunning) |
-| `tRotateIn` | `TIME` |  | Periodic: until the next rotation (0 otherwise) |
+| `eState` | `E_State` |  | what it is doing now |
+| `eErrorId` | `E_UtError` |  | the first error since the last reset (first-out) |
+| `nLeadMember` | `INT` |  | the member that leads now (1..4) |
+| `nMembersRequired` | `INT` |  | members wanted now |
+| `nMembersRunning` | `INT` |  | members running now |
+| `nMembersCalled` | `INT` |  | members called to run now |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and the last good value put back (until a reset) |
+| `eSettingRefusedErrorId` | `E_UtError` |  | why the last write was refused (cleared with bSettingRefused) |
+| `nMembersExercising` | `INT` |  | members on an exercise run |
+| `tNextExerciseTimeLeft` | `TIME` |  | until the next exercise run (0: off, or one running) |
+| `nMembersAvailable` | `INT` |  | duty members available (not skipped) |
+| `bMembersShort` | `BOOL` |  | asked for more members than can run (none left, or nMaxMembersRunning) |
+| `tRotateTimeLeft` | `TIME` |  | Periodic: until the next rotation (0 otherwise) |
 | `bStopping` | `BOOL` |  | a staged stop is under way |
 
 ## Lists
@@ -86,25 +86,25 @@ Duty / standby / assist over up to four pumps or motors. It offers `I_Equipment`
 
 A member whose `I_Pump` role is Booster is left out ([`FB_Booster`](FB_Booster.md) runs it).
 
-Jockey: the first member that is an `I_Pump` with role Jockey is not a duty member (never the lead, never staged, swapped or counted in `nDuty`). With `nExtra` -1 ([`FB_Cascade`](FB_Cascade.md)'s low demand), or no duty member available, the group runs the jockey alone; with `nExtra` 0 or more it calls the duty members and keeps the jockey on until one of them runs (the hand-over). A staged stop releases it last.
+Jockey: the first member that is an `I_Pump` with role Jockey is not a duty member (never the lead, never staged, swapped or counted in `nDutyMembers`). With `nExtraMembers` -1 ([`FB_Cascade`](FB_Cascade.md)'s low demand), or no duty member available, the group runs the jockey alone; with `nExtraMembers` 0 or more it calls the duty members and keeps the jockey on until one of them runs (the hand-over). A staged stop releases it last.
 
 Parts: a part added to the group (e.g. [`FB_LevelCheck`](FB_LevelCheck.md) High on the header flow meter for a burst main) is evaluated every scan: a trip or a stop releases every member at once (`bError` and the part's `eErrorId` on a trip, stop reason Part), a hold lets none start, a warning shows.
 
-Asked to run: the lead first, then the next available members in rotation order up to 1 + `nExtra`, one per `set.tStageDelay`; released one per `set.tDestageDelay`, the most recent first. Failover: a called member that is not running after `set.tFailover` is skipped and the next one is called at once (until a reset or nothing is asked); a member that became unavailable is skipped until it is available again. Rotation (`set.eRotate`): EachStart (the lead moves on at each group start), Periodic (every `set.tRotateInterval`), Fixed (`set.nFixedLead`). The lead is kept over a power cut. Nobody available while asked: a warning (NoneAvailable).
+Asked to run: the lead first, then the next available members in rotation order up to 1 + `nExtraMembers`, one per `set.tAddMemberDelay`; released one per `set.tDropMemberDelay`, the most recent first. Failover: a called member that is not running after `set.tFailoverAfter` is skipped and the next one is called at once (until a reset or nothing is asked); a member that became unavailable is skipped until it is available again. Rotation (`set.eRotateBy`): EachStart (the lead moves on at each group start), Periodic (every `set.tRotateInterval`), Fixed (`set.nFixedLeadMember`). The lead is kept over a power cut. Nobody available while asked: a warning (NoneAvailable).
 
-Hours rotation (`set.eRotate` = Hours): each call takes the available member with the fewest run hours (each member's `fActRunHours`, e.g. [`FB_Pump`](FB_Pump.md) / [`FB_Motor`](FB_Motor.md)'s `tot.fRunHours`); members within `set.fHoursBand` hours of each other count as equal and go in rotation order, and the lead moves on at each group start, so equal members take turns.
+Hours rotation (`set.eRotateBy` = Hours): each call takes the available member with the fewest run hours (each member's `fActRunHours`, e.g. [`FB_Pump`](FB_Pump.md) / [`FB_Motor`](FB_Motor.md)'s `tot.fRunHours`); members within `set.fEqualHoursBand` hours of each other count as equal and go in rotation order, and the lead moves on at each group start, so equal members take turns.
 
-A member in Hand is never called (it is not available); while it runs it counts toward the members wanted (`set.bHandCounts`, default on) and always toward `set.nMaxRunning`, the most members running at once (0 = no limit).
+A member in Hand is never called (it is not available); while it runs it counts toward the members wanted (`set.bHandRunCounts`, default on) and always toward `set.nMaxMembersRunning`, the most members running at once (0 = no limit).
 
-Swap while running (`set.bSwapWhileRunning`): a rotation while the group runs (`bRotate`, `bCmdRotate`, Periodic) calls the next member first and releases the longest-running one (not the new lead) once the new one runs; nobody available, or no room under `nMaxRunning`: no swap.
+Swap while running (`set.bSwapWhileRunning`): a rotation while the group runs (`bRotate`, `bCmdRotateNow`, Periodic) calls the next member first and releases the longest-running one (not the new lead) once the new one runs; nobody available, or no room under `nMaxMembersRunning`: no swap.
 
-Stop (`set.eStop`): when nothing is asked any more, AllAtOnce releases every member; Staged releases the most recent first, one per `set.tStopStep`. A new request during a staged stop keeps those still running.
+Stop (`set.eStopOrder`): when nothing is asked any more, AllAtOnce releases every member; Staged releases the most recent first, one per `set.tBetweenMemberStops`. A new request during a staged stop keeps those still running.
 
-Exercise (`set.tExerciseEvery`, 0 = off): while nothing is asked, a member that has not run for `tExerciseEvery` (an available one, not skipped) runs for `set.tExerciseTime`; a request, the member going unavailable or the setting off ends it; `sts.nExercising`, `sts.tExerciseIn` (until the next one). Idle time counts power-on time only (no clock). A member that exercises itself, or an owner exercise ([`FB_Exercise`](FB_Exercise.md) on the level control: it asks the group, so the lead runs), leaves this off.
+Exercise (`set.tExerciseAfterIdle`, 0 = off): while nothing is asked, a member that has not run for `tExerciseAfterIdle` (an available one, not skipped) runs for `set.tExerciseRunTime`; a request, the member going unavailable or the setting off ends it; `sts.nMembersExercising`, `sts.tNextExerciseTimeLeft` (until the next one). Idle time counts power-on time only (no clock). A member that exercises itself, or an owner exercise ([`FB_Exercise`](FB_Exercise.md) on the level control: it asks the group, so the lead runs), leaves this off.
 
-Status: `sts.nAvailable` (duty members available), `sts.bShortfall` (asked for more members than can run: none left to call, or `nMaxRunning` reached), `sts.tRotateIn` (Periodic: until the next rotation), `sts.bStopping` (a staged stop).
+Status: `sts.nMembersAvailable` (duty members available), `sts.bMembersShort` (asked for more members than can run: none left to call, or `nMaxMembersRunning` reached), `sts.tRotateTimeLeft` (Periodic: until the next rotation), `sts.bStopping` (a staged stop).
 
-An invalid setting is refused and put back (`sts.bRefused` / `eRefusedWhy`, a warning until a reset).
+An invalid setting is refused and put back (`sts.bSettingRefused` / `eSettingRefusedErrorId`, a warning until a reset).
 
 ## Example
 
@@ -114,26 +114,25 @@ Two pumps sharing duty, called by a level control.
 | --- | --- |
 | `ipMember1` | `fbPump1` |
 | `ipMember2` | `fbPump2` |
-| `nExtra` | `fbStages.nExtra` (or 0) |
+| `nExtraMembers` | `fbStages.nExtraPumps` (or 0) |
 | `refData` | `stGroup` |
-| `nRunning` | a display |
+| `nMembersRunning` | a display |
 
-Then `ipTarget := fbGroup` on the FB_LevelControl.
+Then `ipEquipment := fbGroup` on the FB_LevelControl.
 
 ## Read from ST (methods and properties)
 
 Ladder uses the pins above. These are for ST code and for other blocks (through the interface pins):
-
-- method `Request(bRun, bHold, fSpeed, bUrgent) : E_UtError`
-- method `Command(eCmd)`
-- property `eActMode : E_Mode`
-- property `bIsRunning : BOOL`
-- property `bIsReady : BOOL`
-- property `bIsAvailable : BOOL`
-- property `bIsAuto : BOOL`
-- property `bIsFaulted : BOOL`
-- property `eActError : E_UtError`
-- property `eActStopReason : E_StopReason`
-- property `fActRunHours : REAL`: a group counts no hours of its own
-
 **Back to** [the index](../README.md).
+
+- method `Request(bRun, bHoldOff, fSpeedSetpointPct, bOverflowUrgent) : E_UtError`
+- method `Command(eCommand)`
+- property `eActMode : E_Mode`: the mode it is in now
+- property `bIsRunning : BOOL`: a member is running
+- property `bIsReady : BOOL`: could start now if asked
+- property `bIsAvailable : BOOL`: in Auto, not tripped, not interlocked
+- property `bIsAuto : BOOL`: in Auto now
+- property `bIsFaulted : BOOL`: a trip or setting fault is active
+- property `eActError : E_UtError`: the error shown now
+- property `eActStopReason : E_StopReason`: why it last stopped
+- property `fActRunHours : REAL`: a group counts no hours of its own

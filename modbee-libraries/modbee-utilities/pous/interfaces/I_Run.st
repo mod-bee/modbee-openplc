@@ -3,11 +3,11 @@
 INTERFACE I_Run EXTENDS I_PartOwner
 
 
-PROPERTY bIsActive : BOOL
+PROPERTY bIsBusy : BOOL    // a run is active now
   GET
   END_GET
 END_PROPERTY
-PROPERTY tActElapsed : TIME
+PROPERTY tActElapsed : TIME    // run time counted in this run
   GET
   END_GET
 END_PROPERTY

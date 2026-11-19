@@ -1,7 +1,7 @@
 TYPE
   ST_LevelMeterSet : STRUCT
-    bCountFalls : BOOL := TRUE;
-    fDeadband : REAL;
-    tRateWindow : TIME := T#1m;
+    bCountLevelFall : BOOL := TRUE; (* count the level's fall (a pump emptying the tank); FALSE: its rise *)
+    fMinRiseToCount : REAL; (* the moved volume must pass its highest value so far by this before it counts (waves never count twice) *)
+    tRateWindow : TIME := T#1m; (* the rate is worked out over this window *)
   END_STRUCT;
 END_TYPE

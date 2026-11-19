@@ -1,11 +1,11 @@
 TYPE
   ST_PumpPrimeSts : STRUCT
-    bPriming : BOOL;
+    bPriming : BOOL; (* priming now *)
     bPrimeNext : BOOL; (* the next start primes *)
     bPrimed : BOOL; (* the last prime was done (FALSE: it timed out) *)
     tTimeLeft : TIME; (* until the timeout (or the run time with RunTime) *)
-    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    stTimeout : ST_ProtectionSts;
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    stPrimeTimeoutFault : ST_ProtectionSts; (* the prime did not finish in time (default Trip, Retry after 2 min, 3 tries) *)
   END_STRUCT;
 END_TYPE

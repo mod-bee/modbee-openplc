@@ -1,5 +1,6 @@
 TYPE
   ST_ProtectionPartSet EXTENDS ST_ProtectionSet : STRUCT
-    eErrorId : E_UtError := E_UtError.Protection; (* the error the owner shows *)
+    eErrorRaised : E_UtError := E_UtError.Protection; (* the error the owner shows *)
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

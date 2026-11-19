@@ -1,8 +1,8 @@
 TYPE
   ST_IoAi : STRUCT
-    fV : REAL; (* the raw value for your logic *)
-    bOk : BOOL;
-    bFit : BOOL;
-    eWhy : E_IoQ;
+    fRawValue : REAL; (* the raw value for your logic *)
+    bGood : BOOL; (* the value comes from a good channel, or a force *)
+    bFitted : BOOL; (* mapped on this site (source not None, module fitted) *)
+    eQuality : E_IoQ; (* the quality and why it is not good (E_IoQ) *)
   END_STRUCT;
 END_TYPE

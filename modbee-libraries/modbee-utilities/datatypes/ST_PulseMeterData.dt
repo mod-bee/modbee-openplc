@@ -1,12 +1,12 @@
 TYPE
   ST_PulseMeterData : STRUCT
-    bCmdResetTotal : BOOL; (* the total back to 0 (rising edge, cleared) *)
+    bCmdResetTotals : BOOL; (* the total back to 0 (rising edge, cleared) *)
     bCmdResetBatch : BOOL; (* the batch back to 0 (cleared) *)
-    set : ST_PulseMeterSet;
-    sts : ST_PulseMeterSts;
-    tot : ST_PulseMeterTot;
-    bCmdConfirm : BOOL; (* confirms bCmdResetTotal (set.bConfirmReset); cleared by the block *)
-    bCmdPreset : BOOL; (* the total to fPresetTotal (cleared by the block) *)
-    fPresetTotal : LREAL;
+    set : ST_PulseMeterSet; (* settings (kept) *)
+    sts : ST_PulseMeterSts; (* status *)
+    tot : ST_PulseMeterTot; (* totals (kept) *)
+    bCmdConfirmReset : BOOL; (* confirms bCmdResetTotals (set.bResetNeedsConfirm); cleared by the block *)
+    bCmdPresetTotal : BOOL; (* the total to fPresetTotal (cleared by the block) *)
+    fPresetTotal : LREAL; (* the total bCmdPresetTotal writes, in the meter's unit *)
   END_STRUCT;
 END_TYPE

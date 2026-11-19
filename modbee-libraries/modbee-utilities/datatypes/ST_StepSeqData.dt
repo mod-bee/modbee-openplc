@@ -1,12 +1,12 @@
 TYPE
   ST_StepSeqData : STRUCT
     bCmdStart : BOOL; (* the HMI commands act once per write, then are cleared *)
-    bCmdStop : BOOL;
-    bCmdPause : BOOL;
-    bCmdNext : BOOL;
-    bCmdReset : BOOL;
-    nCmdJump : INT := -1; (* go to this position (start it there when idle); -1 = none *)
-    set : ST_StepSeqSet;
-    sts : ST_StepSeqSts;
+    bCmdStop : BOOL; (* HMI: stop (acts once, cleared by the block) *)
+    bCmdPause : BOOL; (* HMI: pause (acts once, cleared by the block) *)
+    bCmdNextStep : BOOL; (* HMI: end this step now (acts once) *)
+    bCmdResetFaults : BOOL; (* HMI: reset trips and alarms whose cause has gone (acts once, cleared by the block) *)
+    nCmdJumpToStep : INT := -1; (* go to this position (start it there when idle); -1 = none *)
+    set : ST_StepSeqSet; (* settings (kept) *)
+    sts : ST_StepSeqSts; (* status *)
   END_STRUCT;
 END_TYPE

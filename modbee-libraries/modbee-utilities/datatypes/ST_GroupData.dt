@@ -1,8 +1,8 @@
 TYPE
   ST_GroupData : STRUCT
-    bCmdRotate : BOOL;
-    bCmdReset : BOOL;
-    set : ST_GroupSet;
-    sts : ST_GroupSts;
+    bCmdRotateNow : BOOL; (* HMI: the lead moves on now (acts once, cleared by the block) *)
+    bCmdResetFaults : BOOL; (* HMI: reset trips and alarms whose cause has gone (acts once, cleared by the block) *)
+    set : ST_GroupSet; (* settings (kept) *)
+    sts : ST_GroupSts; (* status *)
   END_STRUCT;
 END_TYPE

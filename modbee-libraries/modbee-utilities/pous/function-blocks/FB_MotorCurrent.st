@@ -1,28 +1,28 @@
-(* FB_MotorCurrent — a motor's current from a CT, as a part of its motor. Off until set.fFullLoad (the motor's
+(* FB_MotorCurrent — a motor's current from a CT, as a part of its motor. Off until set.fFullLoadCurrent (the motor's
 full-load current, in the CT's unit) is set.
-- fPercent: the current as % of full load. bProvesRun: at or above set.fRunPercent; wire it to the motor's
+- fCurrentPct: the current as % of full load. bCurrentProvesRun: at or above set.fProvesRunAbovePct; wire it to the motor's
   bFeedback when the CT, not an auxiliary contact, proves the motor runs.
-- stHigh (overload by current, default Off) and stLow (dry run / broken belt, default Off): % of full load with
-  a deadband, checked once the motor runs (bIsRunning) and set.tStartMask has passed (sts.tMaskLeft: the time
+- stHighCurrentFault (overload by current, default Off) and stLowCurrentFault (dry run / broken belt, default Off): % of full load with
+  a deadband, checked once the motor runs (bIsRunning) and set.tMaskAfterStart has passed (sts.tStartMaskTimeLeft: the time
   left of the mask).
-- stStartTooLong (a locked rotor, default Off): the current still at or above its % while the motor's run
+- stLockedRotorFault (a locked rotor, default Off): the current still at or above its % while the motor's run
   command is on, for its delay.
-- stBad (default a warning): the current is not good while monitoring is wanted; high / low / start checks
+- stCurrentBadFault (default a warning): the current is not good while monitoring is wanted; high / low / start checks
   then wait (they never act on a bad reading).
-Pins: ipCurrent (the CT, I_Measurement), ipOwner (the motor, I_Equipment, required), refData -> fPercent,
-bProvesRun, plus FB_Object's outputs. It adds itself to its motor on its first call; the motor evaluates it
+Pins: ipCurrentSensor (the CT, I_Measurement), ipOwner (the motor, I_Equipment, required), refData -> fCurrentPct,
+bCurrentProvesRun, plus FB_Object's outputs. It adds itself to its motor on its first call; the motor evaluates it
 in its own cycle and stops on a trip. A check that is acting when this rung stops being called raises PartLost.
 Settings are kept (a retained last-good copy, a bad write put back). *)
 
 FUNCTION_BLOCK FB_MotorCurrent EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT
-    ipCurrent : I_Measurement; (* the CT *)
+    ipCurrentSensor : I_Measurement; (* the CT *)
     ipOwner : I_Equipment; (* the motor (required) *)
-    refData : REFERENCE TO ST_MotorCurrentData;
+    refData : REFERENCE TO ST_MotorCurrentData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    fPercent : REAL; (* of full load (0 while not monitoring or not good) *)
-    bProvesRun : BOOL; (* at or above set.fRunPercent: wire to the motor's bFeedback for run by current *)
+    fCurrentPct : REAL; (* of full load (0 while not monitoring or not good) *)
+    bCurrentProvesRun : BOOL; (* at or above set.fProvesRunAbovePct: wire to the motor's bFeedback for run by current *)
   END_VAR
   VAR RETAIN
     stKept : ST_MotorCurrentSet;
@@ -57,26 +57,28 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_MotorCurrentSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (stS.fFullLoad >= 0.0) THEN
+  IF NOT (stS.fFullLoadCurrent >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fFullLoad <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fFullLoadCurrent <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fRunPercent >= 0.0) THEN
+  ELSIF NOT (stS.fProvesRunAbovePct >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fRunPercent <= 1000.0) THEN
+  ELSIF NOT (stS.fProvesRunAbovePct <= 1000.0) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.tStartMask >= T#0s) THEN
+  ELSIF NOT (stS.tMaskAfterStart >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.stHigh.fPercent >= 0.0) THEN
+  ELSIF NOT (stS.stHighCurrentFault.fLevelPct >= 0.0) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stHigh.fDeadband >= 0.0) THEN
+  ELSIF NOT (stS.stHighCurrentFault.fClearDeadbandPct >= 0.0) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stLow.fPercent >= 0.0) THEN
+  ELSIF NOT (stS.stLowCurrentFault.fLevelPct >= 0.0) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stLow.fDeadband >= 0.0) THEN
+  ELSIF NOT (stS.stLowCurrentFault.fClearDeadbandPct >= 0.0) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stStartTooLong.fPercent >= 0.0) THEN
+  ELSIF NOT (stS.stLockedRotorFault.fLevelPct >= 0.0) THEN
     SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.tRetryCountWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
 
@@ -89,12 +91,12 @@ END_METHOD
 
 METHOD PUBLIC Evaluate : E_PartAction
   VAR_INPUT
-    bRunning : BOOL;
-    bResetWanted : BOOL;
-    bMasked : BOOL;
+    bOwnerRunCommand : BOOL;    // the owner is running (its run command)
+    bResetRequest : BOOL;    // the owner's reset request this scan
+    bStartMaskOn : BOOL;    // the owner's start mask is on (checks set to mask at start ignore their cause)
   END_VAR
   VAR_OUTPUT
-    eErrorId : E_UtError;
+    eErrorId : E_UtError;    // the error this part stands for (when it warns or trips)
   END_VAR
   VAR
     bReset : BOOL;
@@ -115,58 +117,58 @@ METHOD PUBLIC Evaluate : E_PartAction
   END_IF;
   bCalled := FALSE;
   tN := TIME();
-  bReset := bResetWanted OR refData.bCmdReset;
-  refData.bCmdReset := FALSE;
+  bReset := bResetRequest OR refData.bCmdResetFaults;
+  refData.bCmdResetFaults := FALSE;
   (* how long it has run (the motor's own running, confirmed) *)
   bRunOk := ipOwner.bIsRunning;
   IF bRunOk AND NOT bRunWas THEN
     tRunSince := tN;
   END_IF;
   bRunWas := bRunOk;
-  IF bRunOk AND tN - tRunSince < refData.set.tStartMask THEN
-    refData.sts.tMaskLeft := refData.set.tStartMask - (tN - tRunSince);
+  IF bRunOk AND tN - tRunSince < refData.set.tMaskAfterStart THEN
+    refData.sts.tStartMaskTimeLeft := refData.set.tMaskAfterStart - (tN - tRunSince);
   ELSE
-    refData.sts.tMaskLeft := T#0s;
+    refData.sts.tStartMaskTimeLeft := T#0s;
   END_IF;
-  bAnyLevel := refData.set.stHigh.eResponse <> E_Response.Off OR refData.set.stLow.eResponse <> E_Response.Off
-               OR refData.set.stStartTooLong.eResponse <> E_Response.Off;
-  bTrip := F_Protect(tNow := tN, bCause := bMon AND bAnyLevel AND NOT bGoodNow, bResetReq := bReset,
-                     tRetryWindow := T#1h, stSet := refData.set.stBad, stSts := refData.sts.stBad, stWork := stWBad);
-  bTrip := F_Protect(tNow := tN, bCause := bMon AND bGoodNow AND bRunOk AND tN - tRunSince >= refData.set.tStartMask
-                                           AND bHighNow AND NOT bMasked,
-                     bResetReq := bReset, tRetryWindow := T#1h, stSet := refData.set.stHigh,
-                     stSts := refData.sts.stHigh, stWork := stWHigh);
-  bTrip := F_Protect(tNow := tN, bCause := bMon AND bGoodNow AND bRunOk AND tN - tRunSince >= refData.set.tStartMask
-                                           AND bLowNow AND NOT bMasked,
-                     bResetReq := bReset, tRetryWindow := T#1h, stSet := refData.set.stLow,
-                     stSts := refData.sts.stLow, stWork := stWLow);
-  bTrip := F_Protect(tNow := tN, bCause := bMon AND bGoodNow AND bRunning
-                                           AND fPercent >= refData.set.stStartTooLong.fPercent,
-                     bResetReq := bReset, tRetryWindow := T#1h, stSet := refData.set.stStartTooLong,
-                     stSts := refData.sts.stStartTooLong, stWork := stWStart);
-  IF stWStart.bTrip THEN
+  bAnyLevel := refData.set.stHighCurrentFault.eActionOnFault <> E_Response.Off OR refData.set.stLowCurrentFault.eActionOnFault <> E_Response.Off
+               OR refData.set.stLockedRotorFault.eActionOnFault <> E_Response.Off;
+  bTrip := F_Protect(tNow := tN, bConditionPresent := bMon AND bAnyLevel AND NOT bGoodNow, bResetRequest := bReset,
+                     tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stCurrentBadFault, stStatus := refData.sts.stCurrentBadFault, stWorking := stWBad);
+  bTrip := F_Protect(tNow := tN, bConditionPresent := bMon AND bGoodNow AND bRunOk AND tN - tRunSince >= refData.set.tMaskAfterStart
+                                           AND bHighNow AND NOT bStartMaskOn,
+                     bResetRequest := bReset, tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stHighCurrentFault,
+                     stStatus := refData.sts.stHighCurrentFault, stWorking := stWHigh);
+  bTrip := F_Protect(tNow := tN, bConditionPresent := bMon AND bGoodNow AND bRunOk AND tN - tRunSince >= refData.set.tMaskAfterStart
+                                           AND bLowNow AND NOT bStartMaskOn,
+                     bResetRequest := bReset, tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stLowCurrentFault,
+                     stStatus := refData.sts.stLowCurrentFault, stWorking := stWLow);
+  bTrip := F_Protect(tNow := tN, bConditionPresent := bMon AND bGoodNow AND bOwnerRunCommand
+                                           AND fCurrentPct >= refData.set.stLockedRotorFault.fLevelPct,
+                     bResetRequest := bReset, tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stLockedRotorFault,
+                     stStatus := refData.sts.stLockedRotorFault, stWorking := stWStart);
+  IF stWStart.bTripping THEN
     eErrorId := E_UtError.StartTooLong;
     Evaluate := E_PartAction.Trip;
-  ELSIF stWHigh.bTrip THEN
+  ELSIF stWHigh.bTripping THEN
     eErrorId := E_UtError.CurrentHigh;
     Evaluate := E_PartAction.Trip;
-  ELSIF stWLow.bTrip THEN
+  ELSIF stWLow.bTripping THEN
     eErrorId := E_UtError.CurrentLow;
     Evaluate := E_PartAction.Trip;
-  ELSIF stWBad.bTrip THEN
+  ELSIF stWBad.bTripping THEN
     eErrorId := E_UtError.CurrentBad;
     Evaluate := E_PartAction.Trip;
-  ELSIF stWStart.bSignal OR stWHigh.bSignal OR stWLow.bSignal OR stWBad.bSignal THEN
+  ELSIF stWStart.bSignalling OR stWHigh.bSignalling OR stWLow.bSignalling OR stWBad.bSignalling THEN
     eErrorId := E_UtError.None;
     Evaluate := E_PartAction.Stop;
-  ELSIF stWStart.bWarn OR stWHigh.bWarn OR stWLow.bWarn OR stWBad.bWarn THEN
-    IF stWStart.bWarn THEN eErrorId := E_UtError.StartTooLong;
-    ELSIF stWHigh.bWarn THEN eErrorId := E_UtError.CurrentHigh;
-    ELSIF stWLow.bWarn THEN eErrorId := E_UtError.CurrentLow;
+  ELSIF stWStart.bWarning OR stWHigh.bWarning OR stWLow.bWarning OR stWBad.bWarning THEN
+    IF stWStart.bWarning THEN eErrorId := E_UtError.StartTooLong;
+    ELSIF stWHigh.bWarning THEN eErrorId := E_UtError.CurrentHigh;
+    ELSIF stWLow.bWarning THEN eErrorId := E_UtError.CurrentLow;
     ELSE eErrorId := E_UtError.CurrentBad;
     END_IF;
     Evaluate := E_PartAction.Warn;
-  ELSIF stWStart.bBadSetting OR stWHigh.bBadSetting OR stWLow.bBadSetting OR stWBad.bBadSetting THEN
+  ELSIF stWStart.bSettingBad OR stWHigh.bSettingBad OR stWLow.bSettingBad OR stWBad.bSettingBad THEN
     eErrorId := E_UtError.BadSetting;
     Evaluate := E_PartAction.Warn;
   ELSE
@@ -177,9 +179,9 @@ END_METHOD
 
 METHOD PUBLIC SetNext
   VAR_INPUT
-    ipNext : I_Part;
+    ipNextPart : I_Part;    // the next part in the owner's chain
   END_VAR
-  THIS^.ipNext := ipNext;
+  THIS^.ipNext := ipNextPart;
 END_METHOD
 
 METHOD PUBLIC GetNext : I_Part
@@ -187,8 +189,8 @@ METHOD PUBLIC GetNext : I_Part
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) OR ipOwner = NULL THEN
-  fPercent := 0.0;
-  bProvesRun := FALSE;
+  fCurrentPct := 0.0;
+  bCurrentProvesRun := FALSE;
   bError := TRUE;
   IF ipOwner = NULL THEN
     eErrorId := E_UtError.NoMotor;            // a part without an owner protects nothing
@@ -210,13 +212,13 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
 END_IF;
 IF SystemReset() THEN
-  refData.sts.bRefused := FALSE;
-  refData.sts.eRefusedWhy := E_UtError.None;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
 IF NOT bAdded THEN
   ipOwner.AddPart(ipPart := THIS^);
@@ -227,45 +229,45 @@ bCalled := TRUE;
 (* the reading *)
 fA := 0.0;
 bGoodNow := FALSE;
-IF ipCurrent <> NULL THEN
-  IF ipCurrent.bIsFitted THEN
-    fA := ipCurrent.fActValue;
-    bGoodNow := ipCurrent.bIsGood AND ABS(fA) <= REAL#3.4E38;
+IF ipCurrentSensor <> NULL THEN
+  IF ipCurrentSensor.bIsFitted THEN
+    fA := ipCurrentSensor.fActValue;
+    bGoodNow := ipCurrentSensor.bIsGood AND ABS(fA) <= REAL#3.4E38;
   END_IF;
 END_IF;
-bMon := ipCurrent <> NULL AND refData.set.fFullLoad > 0.0 AND refData.set.fFullLoad <= REAL#3.4E38;
+bMon := ipCurrentSensor <> NULL AND refData.set.fFullLoadCurrent > 0.0 AND refData.set.fFullLoadCurrent <= REAL#3.4E38;
 IF bMon AND bGoodNow THEN
-  fPercent := fA / refData.set.fFullLoad * 100.0;
+  fCurrentPct := fA / refData.set.fFullLoadCurrent * 100.0;
 ELSE
-  fPercent := 0.0;
+  fCurrentPct := 0.0;
 END_IF;
-bProvesRun := bMon AND bGoodNow AND fPercent >= refData.set.fRunPercent;
+bCurrentProvesRun := bMon AND bGoodNow AND fCurrentPct >= refData.set.fProvesRunAbovePct;
 (* the levels, with their deadbands *)
-IF fPercent >= refData.set.stHigh.fPercent THEN
+IF fCurrentPct >= refData.set.stHighCurrentFault.fLevelPct THEN
   bHighNow := TRUE;
-ELSIF fPercent < refData.set.stHigh.fPercent - refData.set.stHigh.fDeadband THEN
+ELSIF fCurrentPct < refData.set.stHighCurrentFault.fLevelPct - refData.set.stHighCurrentFault.fClearDeadbandPct THEN
   bHighNow := FALSE;
 END_IF;
-IF fPercent <= refData.set.stLow.fPercent THEN
+IF fCurrentPct <= refData.set.stLowCurrentFault.fLevelPct THEN
   bLowNow := TRUE;
-ELSIF fPercent > refData.set.stLow.fPercent + refData.set.stLow.fDeadband THEN
+ELSIF fCurrentPct > refData.set.stLowCurrentFault.fLevelPct + refData.set.stLowCurrentFault.fClearDeadbandPct THEN
   bLowNow := FALSE;
 END_IF;
 refData.sts.fCurrent := fA;
-refData.sts.fPercent := fPercent;
-refData.sts.bProvesRun := bProvesRun;
+refData.sts.fCurrentPct := fCurrentPct;
+refData.sts.bCurrentProvesRun := bCurrentProvesRun;
 
-bError := stWHigh.bTrip OR stWLow.bTrip OR stWStart.bTrip OR stWBad.bTrip;
-bWarning := NOT bError AND (stWHigh.bWarn OR stWLow.bWarn OR stWStart.bWarn OR stWBad.bWarn OR refData.sts.bRefused);
-IF stWStart.bTrip OR stWStart.bWarn THEN
+bError := stWHigh.bTripping OR stWLow.bTripping OR stWStart.bTripping OR stWBad.bTripping;
+bWarning := NOT bError AND (stWHigh.bWarning OR stWLow.bWarning OR stWStart.bWarning OR stWBad.bWarning OR refData.sts.bSettingRefused);
+IF stWStart.bTripping OR stWStart.bWarning THEN
   eErrorId := E_UtError.StartTooLong;
-ELSIF stWHigh.bTrip OR stWHigh.bWarn THEN
+ELSIF stWHigh.bTripping OR stWHigh.bWarning THEN
   eErrorId := E_UtError.CurrentHigh;
-ELSIF stWLow.bTrip OR stWLow.bWarn THEN
+ELSIF stWLow.bTripping OR stWLow.bWarning THEN
   eErrorId := E_UtError.CurrentLow;
-ELSIF stWBad.bTrip OR stWBad.bWarn THEN
+ELSIF stWBad.bTripping OR stWBad.bWarning THEN
   eErrorId := E_UtError.CurrentBad;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;
@@ -274,7 +276,7 @@ IF bError THEN
   eState := E_State.Fault;
 ELSIF NOT bMon THEN
   eState := E_State.Off;
-ELSIF bProvesRun THEN
+ELSIF bCurrentProvesRun THEN
   eState := E_State.Running;
 ELSE
   eState := E_State.Idle;

@@ -1,7 +1,7 @@
 TYPE
   ST_DoseDet : STRUCT
-    tDoseTime : TIME;
-    tTimeLeft : TIME;
-    nPulses : UDINT;
+    tThisDoseTime : TIME; (* time in this dose *)
+    tTimeLeft : TIME; (* time left in the delay or phase running now *)
+    nStrokePulses : UDINT; (* stroke pulses given in this dose *)
   END_STRUCT;
 END_TYPE

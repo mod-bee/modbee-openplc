@@ -1,6 +1,6 @@
 TYPE
   ST_ExerciseSet : STRUCT
-    tInterval : TIME := T#7d; (* 0 = off *)
-    tRun : TIME := T#30s;
+    tExerciseAfterIdle : TIME := T#7d; (* 0 = off *)
+    tExerciseRunTime : TIME := T#30s; (* how long each exercise run lasts *)
   END_STRUCT;
 END_TYPE

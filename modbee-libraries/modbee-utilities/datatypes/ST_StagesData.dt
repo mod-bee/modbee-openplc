@@ -1,8 +1,6 @@
 TYPE
   ST_StagesData : STRUCT
-    set : ST_StagesSet;
-    nExtra : INT; (* status *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    set : ST_StagesSet; (* settings (kept) *)
+    sts : ST_StagesSts; (* the status *)
   END_STRUCT;
 END_TYPE

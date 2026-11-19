@@ -1,8 +1,8 @@
 TYPE
   ST_MeterCycleTot : STRUCT
-    fThis : LREAL; (* this cycle so far, in the meter's total unit *)
-    fLast : LREAL; (* the last cycle *)
-    nCycles : UDINT; (* cycles closed (a sequence number for the last one) *)
-    dtLastEnd : DT; (* when the last cycle closed (dtClock; blank when unwired) *)
+    fThisCycle : LREAL; (* this cycle so far, in the meter's total unit *)
+    fLastCycle : LREAL; (* the last cycle *)
+    nCycleCount : UDINT; (* cycles closed (a sequence number for the last one) *)
+    dtLastCycleEnd : DT; (* when the last cycle closed (dtLocalTime; blank when unwired) *)
   END_STRUCT;
 END_TYPE

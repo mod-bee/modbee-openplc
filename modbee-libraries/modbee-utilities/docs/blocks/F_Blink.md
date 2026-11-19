@@ -6,9 +6,9 @@ A flashing lamp from the PLC clock: every lamp using it flashes in step.
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `tOnTime` | `TIME` | `T#500ms` | On time |
-| in | `tOffTime` | `TIME` | `T#500ms` | Off time |
-| out | *(result)* | `BOOL` | | TRUE in the on part of the flash |
+| in | `tOnTime` | `TIME` | `T#500ms` | on time |
+| in | `tOffTime` | `TIME` | `T#500ms` | off time |
+| out | *(result)* | `BOOL` |  | the flashing lamp: TRUE in the on time |
 
 ## How it works
 

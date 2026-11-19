@@ -1,11 +1,11 @@
 TYPE
   ST_ReportSet : STRUCT
-    fDeadband : REAL := 1.0;
-    eDeadbandMode : E_DeadbandMode;
+    fDeadband : REAL := 1.0; (* a change larger than this reports (in the unit eDeadbandMode gives) *)
+    eDeadbandMode : E_DeadbandMode; (* Abs (value units), PctValue (% of the last value sent) or PctSpan (% of fSpan) *)
     fSpan : REAL; (* PctSpan: the measuring span *)
-    fResolution : REAL; (* round to this step first (0 = off) *)
+    fRoundToStep : REAL; (* round to this step first (0 = off) *)
     tMinInterval : TIME; (* 0 = no rate cap *)
-    tHeartbeat : TIME; (* 0 = off *)
-    bReportOnStart : BOOL := TRUE;
+    tHeartbeatInterval : TIME; (* 0 = off *)
+    bReportOnStart : BOOL := TRUE; (* report when the block starts or bEnable comes back *)
   END_STRUCT;
 END_TYPE

@@ -1,8 +1,8 @@
 TYPE
   ST_IoAch : STRUCT
-    fV : REAL; (* the raw value (inputs: before scaling) *)
-    bBad : BOOL;
-    bForced : BOOL;
-    nFn : USINT;
+    fRawValue : REAL; (* the raw value (inputs: before scaling) *)
+    bChannelBad : BOOL; (* your IO code writes it: this channel cannot be trusted *)
+    bForced : BOOL; (* status: a force slot holds it *)
+    nFunctionRow : USINT; (* status: the function row on it (inputs: the first one); 0 = spare *)
   END_STRUCT;
 END_TYPE

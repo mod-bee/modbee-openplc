@@ -1,10 +1,10 @@
 TYPE
   ST_EventSrc : STRUCT
-    nCode : INT;
-    eStop : E_StopReason;
-    eFault : E_UtError;
-    nCount : UDINT;
-    bNewPrev : BOOL;
-    bSeen : BOOL;
+    nLastUserCode : INT; (* engine memory: the last code seen for this source *)
+    eLastStopReason : E_StopReason; (* engine memory: the last stop reason seen *)
+    eLastErrorId : E_UtError; (* engine memory: the last error seen *)
+    nLastCounter : UDINT; (* engine memory: the last counter value seen *)
+    bLogNowLastScan : BOOL; (* engine memory: bLogNow on the last scan *)
+    bEverHeard : BOOL; (* engine memory: this source has been seen *)
   END_STRUCT;
 END_TYPE

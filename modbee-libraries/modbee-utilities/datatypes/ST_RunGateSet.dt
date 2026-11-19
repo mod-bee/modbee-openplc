@@ -1,5 +1,5 @@
 TYPE
   ST_RunGateSet : STRUCT
-    tMaxWait : TIME; (* 0 = wait for ever *)
+    tPermissiveWaitTimeout : TIME; (* 0 = wait for ever *)
   END_STRUCT;
 END_TYPE

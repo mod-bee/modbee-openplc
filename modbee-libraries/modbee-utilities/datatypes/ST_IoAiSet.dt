@@ -1,8 +1,8 @@
 TYPE
   ST_IoAiSet : STRUCT
-    eSrc : E_IoSrc;
-    nModule : USINT;
-    nCh : USINT;
-    fFailSafe : REAL; (* fV when the channel is missing, bad or its module not fitted *)
+    eSource : E_IoSrc; (* where the channel is: None (not on this site), Board, I2c, Field or Remote *)
+    nModuleNumber : USINT; (* the module number within that source (0..127) *)
+    nChannel : USINT; (* the channel number on the module *)
+    fFailSafeValue : REAL; (* fV when the channel is missing, bad or its module not fitted *)
   END_STRUCT;
 END_TYPE

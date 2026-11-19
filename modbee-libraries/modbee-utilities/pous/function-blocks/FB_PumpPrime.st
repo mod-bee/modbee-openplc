@@ -1,17 +1,17 @@
 (* FB_PumpPrime — priming a pump at its start, as a part of its FB_Pump.
 
-Pins: ipOwner (the pump), ipPressure / ipFlow (optional: the measurement the prime is done by), bPrimeDone
-(the pipe is filled: a contact, for set.eDoneBy Input), refData -> bPriming, plus FB_Object's bError /
+Pins: ipOwner (the pump), ipPressure / ipFlow (optional: the measurement the prime is done by), bPipeFilled
+(the pipe is filled: a contact, for set.ePrimeDoneBy Input), refData -> bPriming, plus FB_Object's bError /
 bWarning / eErrorId / eState.
-- It primes on every start (set.bEveryStart) or on the next one (the record's bCmdPrimeNext; bCmdPrimeCancel
+- It primes on every start (set.bPrimeEveryStart) or on the next one (the record's bCmdPrimeNext; bCmdPrimeCancel
   withdraws it before that start, a prime already running carries on). A start is the owner's run command
   coming on (Evaluate's bRunning).
-- Done by (set.eDoneBy): Pressure / Flow: the measurement good and above set.fDoneLevel (a switch measurement
-  with no value: its Low band clear), held set.tHold; Input: bPrimeDone held set.tHold; RunTime: after running
-  set.tRunTime.
+- Done by (set.ePrimeDoneBy): Pressure / Flow: the measurement good and above set.fPrimedAbove (a switch measurement
+  with no value: its Low band clear), held set.tPrimedHoldTime; Input: bPipeFilled held set.tPrimedHoldTime; RunTime: after running
+  set.tPrimeRunTime.
 - While priming the part asks Mask: the pump's mask-at-start checks (low pressure, no flow) ignore their cause
   (the pump carries a part's Mask into the next scan).
-- Priming always ends at set.tTimeout (not with RunTime): PrimeTimeout per set.stTimeout (default Trip, Retry
+- Priming always ends at set.tPrimeTimeout (not with RunTime): PrimeTimeout per set.stPrimeTimeoutFault (default Trip, Retry
   after 2 min, 3 tries), its cause present until the pump stops.
 - Pressure / Flow with that measurement unwired or not fitted: a warning (BadSetting); the prime then ends at
   its timeout.
@@ -21,13 +21,13 @@ Settings are kept by the block (a retained last-good copy): restored at power-up
 FUNCTION_BLOCK FB_PumpPrime EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT
     ipOwner : I_PartOwner; (* required: the pump *)
-    ipPressure : I_Measurement;
-    ipFlow : I_Measurement;
-    bPrimeDone : BOOL; (* the pipe is filled (eDoneBy Input) *)
-    refData : REFERENCE TO ST_PumpPrimeData;
+    ipPressure : I_Measurement; (* the pressure the prime is proved by (optional) *)
+    ipFlow : I_Measurement; (* the flow the prime is proved by (optional) *)
+    bPipeFilled : BOOL; (* the pipe is filled (ePrimeDoneBy Input) *)
+    refData : REFERENCE TO ST_PumpPrimeData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    bPriming : BOOL;
+    bPriming : BOOL; (* priming now *)
   END_VAR
   VAR RETAIN
     stKept : ST_PumpPrimeSet;
@@ -56,12 +56,12 @@ FUNCTION_BLOCK FB_PumpPrime EXTENDS FB_Object IMPLEMENTS I_Part
 
 METHOD PUBLIC Evaluate : E_PartAction
   VAR_INPUT
-    bRunning : BOOL;
-    bResetWanted : BOOL;
-    bMasked : BOOL;
+    bOwnerRunCommand : BOOL;    // the owner is running (its run command)
+    bResetRequest : BOOL;    // the owner's reset request this scan
+    bStartMaskOn : BOOL;    // the owner's start mask is on (checks set to mask at start ignore their cause)
   END_VAR
   VAR_OUTPUT
-    eErrorId : E_UtError;
+    eErrorId : E_UtError;    // the error this part stands for (when it warns or trips)
   END_VAR
   VAR
     tN : TIME;
@@ -73,26 +73,26 @@ METHOD PUBLIC Evaluate : E_PartAction
     Evaluate := E_PartAction.Warn;
     RETURN;
   END_IF;
-  IF NOT bCalled AND (bPriming OR bTimedOut OR refData.sts.stTimeout.eState <> E_ProtState.Clear) THEN
+  IF NOT bCalled AND (bPriming OR bTimedOut OR refData.sts.stPrimeTimeoutFault.eFaultState <> E_ProtState.Clear) THEN
     eErrorId := E_UtError.PartLost;
     Evaluate := E_PartAction.Trip;
     RETURN;
   END_IF;
   bCalled := FALSE;
   tN := TIME();
-  IF bRunning AND NOT bRunPrev THEN
-    bThis := refData.set.bEveryStart OR refData.sts.bPrimeNext;   // a start
+  IF bOwnerRunCommand AND NOT bRunPrev THEN
+    bThis := refData.set.bPrimeEveryStart OR refData.sts.bPrimeNext;   // a start
     tStartAt := tN;
     bDone := FALSE;
     bCondPrev := FALSE;
   END_IF;
-  IF NOT bRunning THEN
+  IF NOT bOwnerRunCommand THEN
     bTimedOut := FALSE;           // the cause is gone once the pump has stopped
   END_IF;
-  bRunPrev := bRunning;
-  IF bThis AND bRunning AND NOT bDone THEN
-    IF refData.set.eDoneBy = E_PrimeDone.RunTime THEN
-      bNow := tN - tStartAt >= refData.set.tRunTime;
+  bRunPrev := bOwnerRunCommand;
+  IF bThis AND bOwnerRunCommand AND NOT bDone THEN
+    IF refData.set.ePrimeDoneBy = E_PrimeDone.RunTime THEN
+      bNow := tN - tStartAt >= refData.set.tPrimeRunTime;
     ELSE
       bNow := bCond;
     END_IF;
@@ -100,44 +100,44 @@ METHOD PUBLIC Evaluate : E_PartAction
       tCondAt := tN;
     END_IF;
     bCondPrev := bNow;
-    IF bNow AND (refData.set.eDoneBy = E_PrimeDone.RunTime OR tN - tCondAt >= refData.set.tHold) THEN
+    IF bNow AND (refData.set.ePrimeDoneBy = E_PrimeDone.RunTime OR tN - tCondAt >= refData.set.tPrimedHoldTime) THEN
       bDone := TRUE;
       refData.sts.bPrimed := TRUE;
       refData.sts.bPrimeNext := FALSE;
-    ELSIF refData.set.eDoneBy <> E_PrimeDone.RunTime AND tN - tStartAt >= refData.set.tTimeout THEN
+    ELSIF refData.set.ePrimeDoneBy <> E_PrimeDone.RunTime AND tN - tStartAt >= refData.set.tPrimeTimeout THEN
       bDone := TRUE;              // priming always ends at the timeout
       bTimedOut := TRUE;
       refData.sts.bPrimed := FALSE;
       refData.sts.bPrimeNext := FALSE;
     END_IF;
   END_IF;
-  bPriming := bThis AND bRunning AND NOT bDone;
+  bPriming := bThis AND bOwnerRunCommand AND NOT bDone;
   IF bPriming THEN
-    IF refData.set.eDoneBy = E_PrimeDone.RunTime THEN
-      refData.sts.tTimeLeft := refData.set.tRunTime - (tN - tStartAt);
+    IF refData.set.ePrimeDoneBy = E_PrimeDone.RunTime THEN
+      refData.sts.tTimeLeft := refData.set.tPrimeRunTime - (tN - tStartAt);
     ELSE
-      refData.sts.tTimeLeft := refData.set.tTimeout - (tN - tStartAt);
+      refData.sts.tTimeLeft := refData.set.tPrimeTimeout - (tN - tStartAt);
     END_IF;
   ELSE
     refData.sts.tTimeLeft := T#0s;
   END_IF;
   refData.sts.bPriming := bPriming;
-  bTrip := F_Protect(tNow := tN, bCause := bTimedOut, bResetReq := bResetWanted OR bOwnReset, tRetryWindow := T#1h,
-                     stSet := refData.set.stTimeout, stSts := refData.sts.stTimeout, stWork := stWTimeout);
+  bTrip := F_Protect(tNow := tN, bConditionPresent := bTimedOut, bResetRequest := bResetRequest OR bOwnReset, tRetryCountWindow := refData.set.tRetryCountWindow,
+                     stSettings := refData.set.stPrimeTimeoutFault, stStatus := refData.sts.stPrimeTimeoutFault, stWorking := stWTimeout);
   bOwnReset := FALSE;
-  IF stWTimeout.bTrip THEN
+  IF stWTimeout.bTripping THEN
     eErrorId := E_UtError.PrimeTimeout;
     Evaluate := E_PartAction.Trip;
   ELSIF bPriming THEN
     eErrorId := E_UtError.None;
     Evaluate := E_PartAction.Mask;
-  ELSIF stWTimeout.bSignal THEN
+  ELSIF stWTimeout.bSignalling THEN
     eErrorId := E_UtError.PrimeTimeout;
     Evaluate := E_PartAction.Stop;
-  ELSIF stWTimeout.bWarn THEN
+  ELSIF stWTimeout.bWarning THEN
     eErrorId := E_UtError.PrimeTimeout;
     Evaluate := E_PartAction.Warn;
-  ELSIF bCfgBad OR stWTimeout.bBadSetting THEN
+  ELSIF bCfgBad OR stWTimeout.bSettingBad THEN
     eErrorId := E_UtError.BadSetting;
     Evaluate := E_PartAction.Warn;
   ELSE
@@ -148,9 +148,9 @@ END_METHOD
 
 METHOD PUBLIC SetNext
   VAR_INPUT
-    ipNext : I_Part;
+    ipNextPart : I_Part;    // the next part in the owner's chain
   END_VAR
-  THIS^.ipNext := ipNext;
+  THIS^.ipNext := ipNextPart;
 END_METHOD
 
 METHOD PUBLIC GetNext : I_Part
@@ -159,19 +159,21 @@ END_METHOD
 
 METHOD PRIVATE SetWhy : E_UtError
   SetWhy := E_UtError.None;
-  IF NOT (refData.set.tHold >= T#0s) THEN
+  IF NOT (refData.set.tPrimedHoldTime >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (refData.set.tTimeout >= T#0s) THEN
+  ELSIF NOT (refData.set.tPrimeTimeout >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (refData.set.stTimeout.tDelay >= T#0s) THEN
+  ELSIF NOT (refData.set.stPrimeTimeoutFault.tTripDelay >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (refData.set.stTimeout.tRecover >= T#0s) THEN
+  ELSIF NOT (refData.set.stPrimeTimeoutFault.tAutoRecoverAfter >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (refData.set.stTimeout.nMaxRetries >= 0) THEN
+  ELSIF NOT (refData.set.stPrimeTimeoutFault.nMaxRetriesBeforeLockout >= 0) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (refData.set.fDoneLevel = refData.set.fDoneLevel) THEN   // NaN
+  ELSIF NOT (refData.set.fPrimedAbove = refData.set.fPrimedAbove) THEN   // NaN
     SetWhy := E_UtError.ValueBad;
-  ELSIF NOT (refData.set.eDoneBy <> E_PrimeDone.RunTime OR refData.set.tRunTime > T#0s) THEN
+  ELSIF NOT (refData.set.ePrimeDoneBy <> E_PrimeDone.RunTime OR refData.set.tPrimeRunTime > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tRetryCountWindow >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
@@ -190,7 +192,7 @@ METHOD PRIVATE MeasDone : BOOL
   ELSIF NOT ipM.bIsFitted OR NOT ipM.bIsGood THEN
     MeasDone := FALSE;
   ELSIF ipM.bHasValue THEN
-    MeasDone := ipM.fActValue > refData.set.fDoneLevel;
+    MeasDone := ipM.fActValue > refData.set.fPrimedAbove;
   ELSE
     MeasDone := NOT ipM.Band(eBand := E_Band.Low);
   END_IF;
@@ -213,9 +215,9 @@ IF bFirstScan THEN
 ELSIF SetOk() THEN
   stKept := refData.set;
 ELSE
-  refData.sts.eRefusedWhy := SetWhy();
+  refData.sts.eSettingRefusedErrorId := SetWhy();
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
 END_IF;
 IF NOT bAdded THEN
   ipOwner.AddPart(ipPart := THIS^);
@@ -231,15 +233,15 @@ IF refData.bCmdPrimeCancel THEN
   refData.sts.bPrimeNext := FALSE;   // a prime already running carries on
   refData.bCmdPrimeCancel := FALSE;
 END_IF;
-IF refData.bCmdReset THEN
+IF refData.bCmdResetFaults THEN
   bOwnReset := TRUE;
-  refData.bCmdReset := FALSE;
-  refData.sts.bRefused := FALSE;
-  refData.sts.eRefusedWhy := E_UtError.None;
+  refData.bCmdResetFaults := FALSE;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
 
 (* sample the done condition on this rung *)
-CASE refData.set.eDoneBy OF
+CASE refData.set.ePrimeDoneBy OF
   E_PrimeDone.Pressure:
     bCond := MeasDone(ipM := ipPressure);
     bCfgBad := ipPressure = NULL;
@@ -249,7 +251,7 @@ CASE refData.set.eDoneBy OF
     bCfgBad := ipFlow = NULL;
     IF NOT bCfgBad THEN bCfgBad := NOT ipFlow.bIsFitted; END_IF;
   E_PrimeDone.Input:
-    bCond := bPrimeDone;
+    bCond := bPipeFilled;
     bCfgBad := FALSE;
 ELSE
   bCond := FALSE;
@@ -258,13 +260,13 @@ END_CASE;
 bCalled := TRUE;
 
 (* status *)
-bError := stWTimeout.bTrip;
-bWarning := NOT bError AND (stWTimeout.bWarn OR bCfgBad OR stWTimeout.bBadSetting OR refData.sts.bRefused);
-IF stWTimeout.bTrip OR stWTimeout.bWarn THEN
+bError := stWTimeout.bTripping;
+bWarning := NOT bError AND (stWTimeout.bWarning OR bCfgBad OR stWTimeout.bSettingBad OR refData.sts.bSettingRefused);
+IF stWTimeout.bTripping OR stWTimeout.bWarning THEN
   eErrorId := E_UtError.PrimeTimeout;
-ELSIF bCfgBad OR stWTimeout.bBadSetting THEN
+ELSIF bCfgBad OR stWTimeout.bSettingBad THEN
   eErrorId := E_UtError.BadSetting;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;

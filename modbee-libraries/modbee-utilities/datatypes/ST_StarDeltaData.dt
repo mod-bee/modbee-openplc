@@ -1,6 +1,6 @@
 TYPE
   ST_StarDeltaData : STRUCT
-    set : ST_StarDeltaSet;
-    sts : ST_StarDeltaSts;
+    set : ST_StarDeltaSet; (* settings (kept) *)
+    sts : ST_StarDeltaSts; (* status *)
   END_STRUCT;
 END_TYPE

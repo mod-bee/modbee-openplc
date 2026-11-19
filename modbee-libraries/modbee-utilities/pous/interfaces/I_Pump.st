@@ -3,7 +3,7 @@
 INTERFACE I_Pump EXTENDS I_Motor
 
 
-PROPERTY eActRole : E_PumpRole
+PROPERTY eActRole : E_PumpRole    // its role in a station: Duty, Jockey or Booster
   GET
   END_GET
 END_PROPERTY

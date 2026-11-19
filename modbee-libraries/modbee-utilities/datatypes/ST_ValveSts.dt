@@ -1,17 +1,17 @@
 TYPE
   ST_ValveSts EXTENDS ST_EquipmentSts : STRUCT
-    bOpen : BOOL;
-    bClosed : BOOL;
-    bMoving : BOOL;
-    stTravel : ST_ProtectionSts;
-    stBothLimits : ST_ProtectionSts;
-    stPositionLost : ST_ProtectionSts;
-    tLastStroke : TIME; (* the last stroke confirmed by its end switch *)
-    bActLocal : BOOL; (* the actuator is in Local (bActRemote FALSE) *)
-    stSlowStroke : ST_ProtectionSts;
-    stActLocal : ST_ProtectionSts;
-    stNoMovement : ST_ProtectionSts;
-    tLastOpenStroke : TIME; (* the last open stroke confirmed by its end switch *)
-    tLastCloseStroke : TIME; (* the last close stroke confirmed by its end switch *)
+    bIsOpen : BOOL; (* open now *)
+    bIsClosed : BOOL; (* closed now *)
+    bTravelling : BOOL; (* travelling now *)
+    stStrokeTimeoutFault : ST_ProtectionSts; (* the end switch did not arrive within the travel time *)
+    stBothLimitsFault : ST_ProtectionSts; (* both end switches made at once *)
+    stPositionLostFault : ST_ProtectionSts; (* an end switch lost while the valve is at rest *)
+    tLastStrokeTime : TIME; (* the last stroke confirmed by its end switch *)
+    bActuatorInLocal : BOOL; (* the actuator is in Local (bActuatorRemote FALSE) *)
+    stSlowStrokeFault : ST_ProtectionSts; (* a stroke slower than tSlowStrokeAbove (default a warning) *)
+    stActuatorInLocalFault : ST_ProtectionSts; (* the actuator is switched to Local (default a warning) *)
+    stNoMovementFault : ST_ProtectionSts; (* no movement: commanded away, the switch of the position it left still made (protection; off by default) *)
+    tLastOpenStrokeTime : TIME; (* the last open stroke confirmed by its end switch *)
+    tLastCloseStrokeTime : TIME; (* the last close stroke confirmed by its end switch *)
   END_STRUCT;
 END_TYPE

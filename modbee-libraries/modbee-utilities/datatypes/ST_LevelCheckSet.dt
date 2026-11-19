@@ -1,14 +1,15 @@
 TYPE
   ST_LevelCheckSet EXTENDS ST_ProtectionSet : STRUCT
-    eDirection : E_LevelDir;
-    fSetpoint : REAL;
-    fDeadband : REAL;
-    eBand : E_Band; (* a switch band that also signals it (None: the value only) *)
-    bUseValue : BOOL := TRUE; (* FALSE: the band only *)
-    bOnlyWhenRunning : BOOL;
-    bMaskAtStart : BOOL;
-    tBadRide : TIME := T#5s;
-    eErrorId : E_UtError := E_UtError.Protection;
-    bDoneWhenReached : BOOL; (* with eResponse Signal: reaching the level ENDS the owner's run (Done) instead *)
+    eCheckAboveOrBelow : E_LevelDir; (* High: acts above the setpoint; Low: acts below it *)
+    fSetpoint : REAL; (* the level it acts at, in the measurement's unit *)
+    fDeadband : REAL; (* hysteresis: it clears this far back, in the measurement's unit *)
+    eSwitchBand : E_Band; (* a switch band that also signals it (None: the value only) *)
+    bUseMeasuredValue : BOOL := TRUE; (* FALSE: the band only *)
+    bCheckOnlyWhenRunning : BOOL; (* checked only while the owner runs *)
+    bUseStartMask : BOOL; (* ignored during the owner's start mask *)
+    tRideThroughBadValue : TIME := T#5s; (* a bad measurement holds the last state this long *)
+    eErrorRaised : E_UtError := E_UtError.Protection; (* the error the owner shows when this trips or warns *)
+    bEndsRunWhenReached : BOOL; (* with eActionOnFault Signal: reaching the level ENDS the owner's run (Done) instead *)
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

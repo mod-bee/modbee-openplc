@@ -1,10 +1,10 @@
 TYPE
   ST_MotorRevSts : STRUCT
-    bReverse : BOOL; (* running in reverse *)
-    bAtLimitFwd : BOOL;
-    bAtLimitRev : BOOL;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    stChangeover : ST_ProtectionSts;
+    bRunningReverse : BOOL; (* running in reverse *)
+    bAtForwardLimit : BOOL; (* the forward end of travel switch is made *)
+    bAtReverseLimit : BOOL; (* the reverse end of travel switch is made *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    stAuxFeedbackFault : ST_ProtectionSts; (* an aux did not follow its coil (contactor fault); default Manual reset *)
   END_STRUCT;
 END_TYPE

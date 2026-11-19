@@ -1,13 +1,13 @@
 TYPE
   ST_IoModule : STRUCT
-    eKind : E_IoKind;
-    eSrc : E_IoSrc;
-    nModule : USINT; (* its number within that source (1 = the first) *)
-    nFirst : INT; (* the image row of its channel 1 *)
-    nCount : USINT; (* how many channels it has *)
-    bFitted : BOOL := TRUE; (* installed on this site *)
-    bOk : BOOL; (* present and answering: its driver / comms sets this every scan *)
-    eState : E_IoQ; (* status: Ok, NotFitted or Missing (Unused for an empty row) *)
-    nUsed : USINT; (* status: functions mapped to it *)
+    eChannelKind : E_IoKind; (* the kind of channels it has *)
+    eSource : E_IoSrc; (* where the channel is: None (not on this site), Board, I2c, Field or Remote *)
+    nModuleNumber : USINT; (* its number within that source (1 = the first) *)
+    nFirstImageRow : INT; (* the image row of its channel 1 *)
+    nChannels : USINT; (* how many channels it has *)
+    bModuleFitted : BOOL := TRUE; (* installed on this site *)
+    bAnswering : BOOL; (* present and answering: its driver / comms sets this every scan *)
+    eModuleState : E_IoQ; (* status: Ok, NotFitted or Missing (Unused for an empty row) *)
+    nFunctionsMapped : USINT; (* status: functions mapped to it *)
   END_STRUCT;
 END_TYPE

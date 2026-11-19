@@ -1,19 +1,19 @@
 TYPE
   ST_IoForce : STRUCT
-    eKind : E_IoKind; (* the channel to force: DigitalIn, DigitalOut, AnalogIn or AnalogOut (None = not used) *)
-    eSrc : E_IoSrc;
-    nModule : USINT;
-    nCh : USINT;
-    bQ : BOOL; (* digital: the state (inputs: the terminal, as if the contact were made) *)
-    fV : REAL; (* analog: the raw value (inputs: before scaling) *)
-    bCmdForce : BOOL; (* force now, or start the time again (cleared by the map) *)
-    bCmdRelease : BOOL; (* release now (cleared by the map) *)
-    bActive : BOOL; (* status: forcing now *)
+    eChannelKind : E_IoKind; (* the channel to force: DigitalIn, DigitalOut, AnalogIn or AnalogOut (None = not used) *)
+    eSource : E_IoSrc; (* where the channel is: None (not on this site), Board, I2c, Field or Remote *)
+    nModuleNumber : USINT; (* the module number within that source (0..127) *)
+    nChannel : USINT; (* the channel number on the module *)
+    bForceState : BOOL; (* digital: the state (inputs: the terminal, as if the contact were made) *)
+    fForceValue : REAL; (* analog: the raw value (inputs: before scaling) *)
+    bCmdForceNow : BOOL; (* force now, or start the time again (cleared by the map) *)
+    bCmdReleaseNow : BOOL; (* release now (cleared by the map) *)
+    bForcing : BOOL; (* status: forcing now *)
     tTimeLeft : TIME; (* status: until it releases by itself *)
-    eState : E_IoQ; (* status: Forced, or why not (NoModule, NoChannel, NotPermitted) *)
-    nRow : INT; (* the map's: the image row it forces *)
-    bForceSeen : BOOL; (* the map's *)
-    bReleaseSeen : BOOL; (* the map's *)
-    tEndAt : TIME; (* the map's: when it releases *)
+    eForceState : E_IoQ; (* status: Forced, or why not (NoModule, NoChannel, NotPermitted) *)
+    nImageRow : INT; (* the map's: the image row it forces *)
+    bForceCommandTaken : BOOL; (* the map's *)
+    bReleaseCommandTaken : BOOL; (* the map's *)
+    tReleasesAt : TIME; (* the map's: when it releases *)
   END_STRUCT;
 END_TYPE

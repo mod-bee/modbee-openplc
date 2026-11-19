@@ -1,25 +1,25 @@
 (* FB_AlarmBeacon — flash alarm numbers on a single lamp, for sites with one fault lamp and no HMI.
 aAlarms (the project's array of BOOL, one per alarm; alarm number = index - lower bound + 1; write it with coils).
 The block steps through every active alarm in turn (from the lowest after an idle spell, then round again) and
-flashes its number: Count (that many short flashes) or Binary (set.nBits flashes, most significant bit first:
-long = 1, short = 0; a number too big for nBits uses as many bits as it needs, up to 15). Flashes are separated by
-tGap, numbers by tPause. A number that has started is always finished, even if its alarm clears meanwhile; each
-time lasts at least one scan. set.bSteadyWhenNone: the lamp on steady while no alarm is active.
-Pins: bEnable, refData, aAlarms -> bLamp, nCode (the number being shown, 0 = none), bActive (any alarm), plus
+flashes its number: Count (that many short flashes) or Binary (set.nBinaryBits flashes, most significant bit first:
+long = 1, short = 0; a number too big for nBinaryBits uses as many bits as it needs, up to 15). Flashes are separated by
+tGapBetweenFlashes, numbers by tGapBetweenNumbers. A number that has started is always finished, even if its alarm clears meanwhile; each
+time lasts at least one scan. set.bSteadyWhenNoAlarm: the lamp on steady while no alarm is active.
+Pins: bEnable, refData, aAlarms -> bLamp, nAlarmShown (the number being shown, 0 = none), bAnyAlarmActive (any alarm), plus
 FB_Object's outputs. Settings are kept (a retained last-good copy, a bad write put back). *)
 
 FUNCTION_BLOCK FB_AlarmBeacon EXTENDS FB_Object
   VAR_INPUT
-    bEnable : BOOL := TRUE;
-    refData : REFERENCE TO ST_BeaconData;
+    bEnable : BOOL := TRUE; (* FALSE: the lamp stays off *)
+    refData : REFERENCE TO ST_BeaconData; (* the beacon's record *)
   END_VAR
   VAR_IN_OUT
-    aAlarms : ARRAY [*] OF BOOL;
+    aAlarms : ARRAY [*] OF BOOL; (* the alarm bits; element n is alarm number n *)
   END_VAR
   VAR_OUTPUT
-    bLamp : BOOL;
-    nCode : INT; (* the alarm number being shown (0 = none) *)
-    bActive : BOOL; (* any alarm *)
+    bLamp : BOOL; (* the beacon lamp output *)
+    nAlarmShown : INT; (* the alarm number being shown (0 = none) *)
+    bAnyAlarmActive : BOOL; (* any alarm *)
   END_VAR
   VAR RETAIN
     stKept : ST_BeaconSet;
@@ -58,19 +58,19 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_BeaconSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (stS.eStyle = E_BeaconStyle.Count OR stS.eStyle = E_BeaconStyle.Binary) THEN
+  IF NOT (stS.eFlashStyle = E_BeaconStyle.Count OR stS.eFlashStyle = E_BeaconStyle.Binary) THEN
     SetWhy := E_UtError.ChoiceBad;
-  ELSIF NOT (stS.nBits >= 1) THEN
+  ELSIF NOT (stS.nBinaryBits >= 1) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.nBits <= 15) THEN
+  ELSIF NOT (stS.nBinaryBits <= 15) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.tShort > T#0s) THEN
+  ELSIF NOT (stS.tShortFlash > T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tLong > T#0s) THEN
+  ELSIF NOT (stS.tLongFlash > T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tGap > T#0s) THEN
+  ELSIF NOT (stS.tGapBetweenFlashes > T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tPause > T#0s) THEN
+  ELSIF NOT (stS.tGapBetweenNumbers > T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
@@ -105,14 +105,14 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF SystemReset() THEN
-  refData.bRefused := FALSE;
-  refData.eRefusedWhy := E_UtError.None;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
 nN := 0;
 FOR nI := nLo TO nHi DO
@@ -120,12 +120,12 @@ FOR nI := nLo TO nHi DO
     nN := nN + 1;
   END_IF;
 END_FOR;
-bActive := nN > 0;
-refData.nActive := nN;
+bAnyAlarmActive := nN > 0;
+refData.sts.nAlarmsActive := nN;
 bError := NOT bOk;
-bWarning := NOT bError AND refData.bRefused;
+bWarning := NOT bError AND refData.sts.bSettingRefused;
 IF NOT bOk THEN eErrorId := E_UtError.BadSetting;
-ELSIF refData.bRefused THEN eErrorId := E_UtError.SettingRefused;
+ELSIF refData.sts.bSettingRefused THEN eErrorId := E_UtError.SettingRefused;
 ELSE eErrorId := E_UtError.None;
 END_IF;
 IF NOT bEnable OR NOT bOk THEN
@@ -133,15 +133,15 @@ IF NOT bEnable OR NOT bOk THEN
   nCur := nLo - 1;
   nShown := 0;
   bLamp := FALSE;
-  nCode := 0;
-  refData.nCode := 0;
+  nAlarmShown := 0;
+  refData.sts.nAlarmShown := 0;
   IF bError THEN eState := E_State.Fault; ELSE eState := E_State.Off; END_IF;
   bFirstScan := FALSE;
   RETURN;
 END_IF;
 
 bStartPulse := FALSE;
-IF nPhase = 3 AND tNow - tPhaseStart >= refData.set.tPause THEN
+IF nPhase = 3 AND tNow - tPhaseStart >= refData.set.tGapBetweenNumbers THEN
   nPhase := 0;
 END_IF;
 IF nPhase = 0 THEN
@@ -159,7 +159,7 @@ IF nPhase = 0 THEN
     END_IF;
   END_FOR;
   IF bFound THEN
-    IF nShown = 0 AND refData.set.bSteadyWhenNone THEN
+    IF nShown = 0 AND refData.set.bSteadyWhenNoAlarm THEN
       nPhase := 2;                (* lamp off first, so the first flash shows *)
       tPhaseStart := tNow;
     ELSE
@@ -168,9 +168,9 @@ IF nPhase = 0 THEN
     nCur := nJ;
     nShown := DINT_TO_INT(nJ - nLo + 1);
     nPulse := 0;
-    bBinary := refData.set.eStyle = E_BeaconStyle.Binary;
+    bBinary := refData.set.eFlashStyle = E_BeaconStyle.Binary;
     IF bBinary THEN
-      nBitsNow := LIMIT(1, refData.set.nBits, 15);
+      nBitsNow := LIMIT(1, refData.set.nBinaryBits, 15);
       nWeight := 1;
       FOR nI := 2 TO INT_TO_DINT(nBitsNow) DO
         nWeight := nWeight * 2;
@@ -191,7 +191,7 @@ IF nPhase = 0 THEN
     nShown := 0;
     nCur := nLo - 1;              (* idle: start from the lowest next time *)
   END_IF;
-ELSIF nPhase = 2 AND tNow - tPhaseStart >= refData.set.tGap THEN
+ELSIF nPhase = 2 AND tNow - tPhaseStart >= refData.set.tGapBetweenFlashes THEN
   bStartPulse := TRUE;
 ELSIF nPhase = 1 AND tNow - tPhaseStart >= tOnLen THEN
   IF nPulse >= nPulses THEN
@@ -203,10 +203,10 @@ ELSIF nPhase = 1 AND tNow - tPhaseStart >= tOnLen THEN
 END_IF;
 IF bStartPulse THEN
   nPulse := nPulse + 1;
-  tOnLen := refData.set.tShort;
+  tOnLen := refData.set.tShortFlash;
   IF bBinary THEN
     IF nRest >= nWeight THEN
-      tOnLen := refData.set.tLong;
+      tOnLen := refData.set.tLongFlash;
       nRest := nRest - nWeight;
     END_IF;
     nWeight := nWeight / 2;
@@ -214,9 +214,9 @@ IF bStartPulse THEN
   nPhase := 1;
   tPhaseStart := tNow;
 END_IF;
-bLamp := nPhase = 1 OR (nPhase = 0 AND refData.set.bSteadyWhenNone);
-nCode := nShown;
-refData.nCode := nShown;
+bLamp := nPhase = 1 OR (nPhase = 0 AND refData.set.bSteadyWhenNoAlarm);
+nAlarmShown := nShown;
+refData.sts.nAlarmShown := nShown;
 IF nShown > 0 THEN eState := E_State.Running; ELSE eState := E_State.Idle; END_IF;
 bFirstScan := FALSE;
 

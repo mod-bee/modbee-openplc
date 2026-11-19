@@ -1,47 +1,47 @@
 (* FB_Rotation — shaft / belt speed monitor from a proximity sensor on the driven shaft, pulley or target wheel: the
-speed, a stall (no pulse for set.tStallTime while running: the sensor stuck on or stuck off, a broken coupling or
+speed, a stall (no pulse for set.tStalledAfterNoPulse while running: the sensor stuck on or stuck off, a broken coupling or
 belt), underspeed (belt slip, overload), overspeed, and pulses while the machine is stopped (a faulty sensor, or
 something else turning it).
 A part of its motor (ipOwner, optional): a trip stops the motor through its part list. Without an owner it is a
-plain monitor: wire bHealthy where it is needed.
-Running: the bMachineRun pin, or with an owner its run command (either).
+plain monitor: wire bNoFaultTripped where it is needed.
+Running: the bMachineRunning pin, or with an owner its run command (either).
 
 Speed, in set.eSpeedUnit, from the pulse rate f (pulses per second):
-  Rpm          rpm   = 60 x f / nPulsesPerRev  (the default)
-  RevPerSec    rev/s = f / nPulsesPerRev       (Hz of the shaft)
-  MetrePerMin  m/min = 60 x f x fDistPerPulse  (belt / chain line speed)
-  MetrePerSec  m/s   = f x fDistPerPulse
-fMinSpeed, fMaxSpeed and the speed are all in eSpeedUnit. f is measured from the first to the last pulse of a
-window at least set.tFilterTime long (one pulse period when the shaft is slower). Between pulses f falls as
+  Rpm          rpm   = 60 x f / nPulsesPerRevolution  (the default)
+  RevPerSec    rev/s = f / nPulsesPerRevolution       (Hz of the shaft)
+  MetrePerMin  m/min = 60 x f x fDistancePerPulse  (belt / chain line speed)
+  MetrePerSec  m/s   = f x fDistancePerPulse
+fUnderspeedBelow, fOverspeedAbove and the speed are all in eSpeedUnit. f is measured from the first to the last pulse of a
+window at least set.tMeasureSpeedOver long (one pulse period when the shaft is slower). Between pulses f falls as
 1 / (time since the last pulse) once that is longer than the last period, so a stopping shaft is seen slowing
-down; after tStallTime with no pulse it is 0. A pulse is seen once per scan: the fastest measurable rate is
-1 / (2 x scan time) pulses per second; sts.bTooFast (a warning, PulsesTooFast) for 5 s whenever pulses arrive at
+down; after tStalledAfterNoPulse with no pulse it is 0. A pulse is seen once per scan: the fastest measurable rate is
+1 / (2 x scan time) pulses per second; sts.bPulsesTooFast (a warning, PulsesTooFast) for 5 s whenever pulses arrive at
 that limit.
-An unknown eSpeedUnit, or a line speed with fDistPerPulse not above 0 (or not a number): sts.bUnitBad, a warning
+An unknown eSpeedUnit, or a line speed with fDistancePerPulse not above 0 (or not a number): sts.bSpeedUnitBad, a warning
 (BadSetting); the speed reads 0 and the under / over speed checks are off until it is fixed. The stall and
 sensor checks do not need the unit and still act.
 
 Protections (ST_ProtectionSet, F_Protect):
-  stStall       Trip, Manual  running, past tStartDelay and tStallTime, no pulse for tStallTime   -> Stall
-  stUnderspeed  Warn, Auto    running, past tStartDelay, below fMinSpeed (> 0) for tSpeedDelay   -> Underspeed
-  stOverspeed   Off           above fMaxSpeed (> 0) for tSpeedDelay                               -> Overspeed
-  stSensor      Warn, Auto    pulses while stopped, tCoastDown after the stop                     -> PulsesWhileStopped
-A trip or a signal acts on the owner (Trip / Stop); a warning shows on it. Reset: bReset (rising edge), the
-record's bCmdReset (once per write), the owner's reset, the system reset.
+  stStallFault       Trip, Manual  running, past tMaskAfterStart and tStalledAfterNoPulse, no pulse for tStalledAfterNoPulse   -> Stall
+  stUnderspeedFault  Warn, Auto    running, past tMaskAfterStart, below fUnderspeedBelow (> 0) for tSpeedFaultDelay   -> Underspeed
+  stOverspeedFault   Off           above fOverspeedAbove (> 0) for tSpeedFaultDelay                               -> Overspeed
+  stPulsesWhileStoppedFault      Warn, Auto    pulses while stopped, tCoastDownTime after the stop                     -> PulsesWhileStopped
+A trip or a signal acts on the owner (Trip / Stop); a warning shows on it. Reset: bResetFaults (rising edge), the
+record's bCmdResetFaults (once per write), the owner's reset, the system reset.
 Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back; a set
-never good is BadSetting (bError) and the checks go on with it (nPulsesPerRev below 1 counts as 1).
+never good is BadSetting (bError) and the checks go on with it (nPulsesPerRevolution below 1 counts as 1).
 Its rung stopping while a protection acts is PartLost on its owner. *)
 
 FUNCTION_BLOCK FB_Rotation EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT
-    bSensor : BOOL := FALSE; (* the proximity sensor *)
-    bMachineRun : BOOL; (* the machine runs (with an owner, its run command counts too) *)
-    bReset : BOOL R_EDGE; (* reset a latched fault *)
+    bProximitySensor : BOOL := FALSE; (* the proximity sensor *)
+    bMachineRunning : BOOL; (* the machine runs (with an owner, its run command counts too) *)
+    bResetFaults : BOOL R_EDGE; (* reset a latched fault *)
     ipOwner : I_PartOwner; (* optional: the motor it protects *)
-    refData : REFERENCE TO ST_RotationData;
+    refData : REFERENCE TO ST_RotationData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    bHealthy : BOOL; (* no protection tripped *)
+    bNoFaultTripped : BOOL; (* no protection tripped *)
     bRotating : BOOL; (* pulses being seen *)
     fSpeed : REAL; (* in set.eSpeedUnit (default rpm) *)
   END_VAR
@@ -103,47 +103,47 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_RotationSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (stS.nPulsesPerRev >= 1) THEN
+  IF NOT (stS.nPulsesPerRevolution >= 1) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.tStartDelay >= T#0s) THEN
+  ELSIF NOT (stS.tMaskAfterStart >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tStallTime > T#0s) THEN
+  ELSIF NOT (stS.tStalledAfterNoPulse > T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.fMinSpeed >= 0.0) THEN
+  ELSIF NOT (stS.fUnderspeedBelow >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fMaxSpeed >= 0.0) THEN
+  ELSIF NOT (stS.fOverspeedAbove >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.tSpeedDelay >= T#0s) THEN
+  ELSIF NOT (stS.tSpeedFaultDelay >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tFilterTime >= T#0s) THEN
+  ELSIF NOT (stS.tMeasureSpeedOver >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tCoastDown >= T#0s) THEN
+  ELSIF NOT (stS.tCoastDownTime >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tRetryWindow >= T#0s) THEN
+  ELSIF NOT (stS.tRetryCountWindow >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.stStall.tDelay >= T#0s) THEN
+  ELSIF NOT (stS.stStallFault.tTripDelay >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stStall.tRecover >= T#0s) THEN
+  ELSIF NOT (stS.stStallFault.tAutoRecoverAfter >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stStall.nMaxRetries >= 0) THEN
+  ELSIF NOT (stS.stStallFault.nMaxRetriesBeforeLockout >= 0) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stUnderspeed.tDelay >= T#0s) THEN
+  ELSIF NOT (stS.stUnderspeedFault.tTripDelay >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stUnderspeed.tRecover >= T#0s) THEN
+  ELSIF NOT (stS.stUnderspeedFault.tAutoRecoverAfter >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stUnderspeed.nMaxRetries >= 0) THEN
+  ELSIF NOT (stS.stUnderspeedFault.nMaxRetriesBeforeLockout >= 0) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stOverspeed.tDelay >= T#0s) THEN
+  ELSIF NOT (stS.stOverspeedFault.tTripDelay >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stOverspeed.tRecover >= T#0s) THEN
+  ELSIF NOT (stS.stOverspeedFault.tAutoRecoverAfter >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stOverspeed.nMaxRetries >= 0) THEN
+  ELSIF NOT (stS.stOverspeedFault.nMaxRetriesBeforeLockout >= 0) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stSensor.tDelay >= T#0s) THEN
+  ELSIF NOT (stS.stPulsesWhileStoppedFault.tTripDelay >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stSensor.tRecover >= T#0s) THEN
+  ELSIF NOT (stS.stPulsesWhileStoppedFault.tAutoRecoverAfter >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stSensor.nMaxRetries >= 0) THEN
+  ELSIF NOT (stS.stPulsesWhileStoppedFault.nMaxRetriesBeforeLockout >= 0) THEN
     SetWhy := E_UtError.ProtectionBad;
   END_IF;
 END_METHOD
@@ -160,11 +160,11 @@ METHOD PRIVATE ActingId : E_UtError
   VAR_INPUT
     bTrips : BOOL;                // TRUE: among the trips / signals, FALSE: among the warnings
   END_VAR
-  IF (bTrips AND (stWStall.bTrip OR stWStall.bSignal)) OR (NOT bTrips AND stWStall.bWarn) THEN
+  IF (bTrips AND (stWStall.bTripping OR stWStall.bSignalling)) OR (NOT bTrips AND stWStall.bWarning) THEN
     ActingId := E_UtError.Stall;
-  ELSIF (bTrips AND (stWOver.bTrip OR stWOver.bSignal)) OR (NOT bTrips AND stWOver.bWarn) THEN
+  ELSIF (bTrips AND (stWOver.bTripping OR stWOver.bSignalling)) OR (NOT bTrips AND stWOver.bWarning) THEN
     ActingId := E_UtError.Overspeed;
-  ELSIF (bTrips AND (stWUnder.bTrip OR stWUnder.bSignal)) OR (NOT bTrips AND stWUnder.bWarn) THEN
+  ELSIF (bTrips AND (stWUnder.bTripping OR stWUnder.bSignalling)) OR (NOT bTrips AND stWUnder.bWarning) THEN
     ActingId := E_UtError.Underspeed;
   ELSE
     ActingId := E_UtError.PulsesWhileStopped;
@@ -173,15 +173,15 @@ END_METHOD
 
 METHOD PUBLIC Evaluate : E_PartAction
   VAR_INPUT
-    bRunning : BOOL;
-    bResetWanted : BOOL;
-    bMasked : BOOL;
+    bOwnerRunCommand : BOOL;    // the owner is running (its run command)
+    bResetRequest : BOOL;    // the owner's reset request this scan
+    bStartMaskOn : BOOL;    // the owner's start mask is on (checks set to mask at start ignore their cause)
   END_VAR
   VAR_OUTPUT
-    eErrorId : E_UtError;
+    eErrorId : E_UtError;    // the error this part stands for (when it warns or trips)
   END_VAR
-  bOwnerRun := bRunning;
-  IF bResetWanted THEN
+  bOwnerRun := bOwnerRunCommand;
+  IF bResetRequest THEN
     bOwnerReset := TRUE;
   END_IF;
   IF NOT __ISVALIDREF(refData) THEN
@@ -189,22 +189,22 @@ METHOD PUBLIC Evaluate : E_PartAction
     Evaluate := E_PartAction.Warn;
     RETURN;
   END_IF;
-  IF NOT bCalled AND (refData.sts.stStall.eState <> E_ProtState.Clear
-                      OR refData.sts.stUnderspeed.eState <> E_ProtState.Clear
-                      OR refData.sts.stOverspeed.eState <> E_ProtState.Clear
-                      OR refData.sts.stSensor.eState <> E_ProtState.Clear) THEN
+  IF NOT bCalled AND (refData.sts.stStallFault.eFaultState <> E_ProtState.Clear
+                      OR refData.sts.stUnderspeedFault.eFaultState <> E_ProtState.Clear
+                      OR refData.sts.stOverspeedFault.eFaultState <> E_ProtState.Clear
+                      OR refData.sts.stPulsesWhileStoppedFault.eFaultState <> E_ProtState.Clear) THEN
     eErrorId := E_UtError.PartLost;           // its rung stopped while it was acting: never a silent clear
     Evaluate := E_PartAction.Trip;
     RETURN;
   END_IF;
   bCalled := FALSE;
-  IF stWStall.bTrip OR stWOver.bTrip OR stWUnder.bTrip OR stWSensor.bTrip THEN
+  IF stWStall.bTripping OR stWOver.bTripping OR stWUnder.bTripping OR stWSensor.bTripping THEN
     eErrorId := ActingId(bTrips := TRUE);
     Evaluate := E_PartAction.Trip;
-  ELSIF stWStall.bSignal OR stWOver.bSignal OR stWUnder.bSignal OR stWSensor.bSignal THEN
+  ELSIF stWStall.bSignalling OR stWOver.bSignalling OR stWUnder.bSignalling OR stWSensor.bSignalling THEN
     eErrorId := ActingId(bTrips := TRUE);
     Evaluate := E_PartAction.Stop;
-  ELSIF stWStall.bWarn OR stWOver.bWarn OR stWUnder.bWarn OR stWSensor.bWarn THEN
+  ELSIF stWStall.bWarning OR stWOver.bWarning OR stWUnder.bWarning OR stWSensor.bWarning THEN
     eErrorId := ActingId(bTrips := FALSE);
     Evaluate := E_PartAction.Warn;
   ELSE
@@ -215,9 +215,9 @@ END_METHOD
 
 METHOD PUBLIC SetNext
   VAR_INPUT
-    ipNext : I_Part;
+    ipNextPart : I_Part;    // the next part in the owner's chain
   END_VAR
-  THIS^.ipNext := ipNext;
+  THIS^.ipNext := ipNextPart;
 END_METHOD
 
 METHOD PUBLIC GetNext : I_Part
@@ -225,7 +225,7 @@ METHOD PUBLIC GetNext : I_Part
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
-  bHealthy := FALSE;
+  bNoFaultTripped := FALSE;
   bRotating := FALSE;
   fSpeed := 0.0;
   bError := TRUE;
@@ -234,7 +234,7 @@ IF NOT __ISVALIDREF(refData) THEN
   RETURN;
 END_IF;
 tNow := TIME();
-bRun := bMachineRun OR (ipOwner <> NULL AND bOwnerRun);
+bRun := bMachineRunning OR (ipOwner <> NULL AND bOwnerRun);
 IF bFirstScan THEN
   IF nKeptLayout = cLayout THEN
     refData.set := stKept;
@@ -246,16 +246,16 @@ IF bFirstScan THEN
   tRunStart := tNow;
   tStopAt := tNow;
   tFastUntil := tNow;
-  bSensorPrev := bSensor;
+  bSensorPrev := bProximitySensor;
   bRunPrev := bRun;
 END_IF;
 bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF NOT bAdded AND ipOwner <> NULL THEN
@@ -270,12 +270,12 @@ IF tStep < T#0s THEN
 END_IF;
 
 (* the unit *)
-nPpr := MAX(refData.set.nPulsesPerRev, 1);
+nPpr := MAX(refData.set.nPulsesPerRevolution, 1);
 CASE refData.set.eSpeedUnit OF
   E_SpeedUnit.Rpm: fK := 60.0 / INT_TO_REAL(nPpr);
   E_SpeedUnit.RevPerSec: fK := 1.0 / INT_TO_REAL(nPpr);
-  E_SpeedUnit.MetrePerMin: fK := 60.0 * refData.set.fDistPerPulse;
-  E_SpeedUnit.MetrePerSec: fK := refData.set.fDistPerPulse;
+  E_SpeedUnit.MetrePerMin: fK := 60.0 * refData.set.fDistancePerPulse;
+  E_SpeedUnit.MetrePerSec: fK := refData.set.fDistancePerPulse;
 ELSE
   fK := 0.0;
 END_CASE;
@@ -289,18 +289,18 @@ END_IF;
 bRunPrev := bRun;
 
 (* a pulse *)
-IF bSensor AND NOT bSensorPrev THEN
+IF bProximitySensor AND NOT bSensorPrev THEN
   IF bEdgeSeen AND tNow - tLastEdge <= tStep + tStep + tStep / 2 AND tStep > T#0s THEN
     tFastUntil := tNow + T#5s;    (* at the limit: one pulse every two scans *)
   END_IF;
-  IF NOT bEdgeSeen OR tNow - tLastEdge >= refData.set.tStallTime THEN
+  IF NOT bEdgeSeen OR tNow - tLastEdge >= refData.set.tStalledAfterNoPulse THEN
     tWinStart := tNow;            (* the first pulse after a stop: start measuring *)
     nWinEdges := 0;
     fMeasured := 0.0;
   ELSE
-    refData.det.tPeriod := tNow - tLastEdge;
+    refData.det.tTimeBetweenPulses := tNow - tLastEdge;
     nWinEdges := nWinEdges + 1;
-    IF tNow - tWinStart >= refData.set.tFilterTime THEN
+    IF tNow - tWinStart >= refData.set.tMeasureSpeedOver THEN
       fMeasured := 1000.0 * DINT_TO_REAL(nWinEdges) / LINT_TO_REAL(TIME_TO_LINT(tNow - tWinStart));
       tWinStart := tNow;
       nWinEdges := 0;
@@ -309,17 +309,17 @@ IF bSensor AND NOT bSensorPrev THEN
   bEdgeSeen := TRUE;
   tLastEdge := tNow;
 END_IF;
-bSensorPrev := bSensor;
-refData.sts.bTooFast := tNow < tFastUntil;
+bSensorPrev := bProximitySensor;
+refData.sts.bPulsesTooFast := tNow < tFastUntil;
 
-(* the speed shown: falls while no pulse comes, 0 after tStallTime *)
+(* the speed shown: falls while no pulse comes, 0 after tStalledAfterNoPulse *)
 fShown := fMeasured;
 IF bEdgeSeen THEN
   tSince := tNow - tLastEdge;
-  IF tSince >= refData.set.tStallTime THEN
+  IF tSince >= refData.set.tStalledAfterNoPulse THEN
     fShown := 0.0;
     fMeasured := 0.0;
-  ELSIF tSince > refData.det.tPeriod AND tSince > T#0s THEN
+  ELSIF tSince > refData.det.tTimeBetweenPulses AND tSince > T#0s THEN
     fDecay := 1000.0 / LINT_TO_REAL(TIME_TO_LINT(tSince));
     IF fDecay < fShown THEN
       fShown := fDecay;
@@ -331,64 +331,64 @@ IF bUnitBad THEN
 ELSE
   fShown := fShown * fK;          (* pulses / s -> the speed unit *)
 END_IF;
-bRotating := bEdgeSeen AND tNow - tLastEdge < refData.set.tStallTime;
+bRotating := bEdgeSeen AND tNow - tLastEdge < refData.set.tStalledAfterNoPulse;
 
 (* the conditions *)
-bPastStart := bRun AND tNow - tRunStart >= refData.set.tStartDelay;
-bBelow := bPastStart AND NOT bUnitBad AND refData.set.fMinSpeed > 0.0 AND fShown < refData.set.fMinSpeed;
+bPastStart := bRun AND tNow - tRunStart >= refData.set.tMaskAfterStart;
+bBelow := bPastStart AND NOT bUnitBad AND refData.set.fUnderspeedBelow > 0.0 AND fShown < refData.set.fUnderspeedBelow;
 IF NOT bBelow THEN
   tBelowSince := tNow;
 END_IF;
-bAbove := NOT bUnitBad AND refData.set.fMaxSpeed > 0.0 AND fShown > refData.set.fMaxSpeed;
+bAbove := NOT bUnitBad AND refData.set.fOverspeedAbove > 0.0 AND fShown > refData.set.fOverspeedAbove;
 IF NOT bAbove THEN
   tAboveSince := tNow;
 END_IF;
 
 (* the resets: the pin, the record (once per write), the owner, the system *)
-bResetReq := bReset OR (refData.bCmdReset AND NOT bCmdSeen) OR bOwnerReset OR SystemReset();
-bCmdSeen := refData.bCmdReset;
-refData.bCmdReset := FALSE;
+bResetReq := bResetFaults OR (refData.bCmdResetFaults AND NOT bCmdSeen) OR bOwnerReset OR SystemReset();
+bCmdSeen := refData.bCmdResetFaults;
+refData.bCmdResetFaults := FALSE;
 bOwnerReset := FALSE;
 IF bResetReq THEN
-  refData.sts.bRefused := FALSE;
-  refData.sts.eRefusedWhy := E_UtError.None;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
 
-F_Protect(tNow := tNow, bCause := bPastStart AND (NOT bEdgeSeen OR tNow - tLastEdge >= refData.set.tStallTime)
-                                  AND tNow - tRunStart >= refData.set.tStallTime,
-          bResetReq := bResetReq, tRetryWindow := refData.set.tRetryWindow, stSet := refData.set.stStall,
-          stSts := refData.sts.stStall, stWork := stWStall);
-F_Protect(tNow := tNow, bCause := bBelow AND tNow - tBelowSince >= refData.set.tSpeedDelay,
-          bResetReq := bResetReq, tRetryWindow := refData.set.tRetryWindow, stSet := refData.set.stUnderspeed,
-          stSts := refData.sts.stUnderspeed, stWork := stWUnder);
-F_Protect(tNow := tNow, bCause := bAbove AND tNow - tAboveSince >= refData.set.tSpeedDelay,
-          bResetReq := bResetReq, tRetryWindow := refData.set.tRetryWindow, stSet := refData.set.stOverspeed,
-          stSts := refData.sts.stOverspeed, stWork := stWOver);
-F_Protect(tNow := tNow, bCause := NOT bRun AND bRotating AND tNow - tStopAt >= refData.set.tCoastDown
-                                  AND tLastEdge - tStopAt >= refData.set.tCoastDown,
-          bResetReq := bResetReq, tRetryWindow := refData.set.tRetryWindow, stSet := refData.set.stSensor,
-          stSts := refData.sts.stSensor, stWork := stWSensor);
+F_Protect(tNow := tNow, bConditionPresent := bPastStart AND (NOT bEdgeSeen OR tNow - tLastEdge >= refData.set.tStalledAfterNoPulse)
+                                  AND tNow - tRunStart >= refData.set.tStalledAfterNoPulse,
+          bResetRequest := bResetReq, tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stStallFault,
+          stStatus := refData.sts.stStallFault, stWorking := stWStall);
+F_Protect(tNow := tNow, bConditionPresent := bBelow AND tNow - tBelowSince >= refData.set.tSpeedFaultDelay,
+          bResetRequest := bResetReq, tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stUnderspeedFault,
+          stStatus := refData.sts.stUnderspeedFault, stWorking := stWUnder);
+F_Protect(tNow := tNow, bConditionPresent := bAbove AND tNow - tAboveSince >= refData.set.tSpeedFaultDelay,
+          bResetRequest := bResetReq, tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stOverspeedFault,
+          stStatus := refData.sts.stOverspeedFault, stWorking := stWOver);
+F_Protect(tNow := tNow, bConditionPresent := NOT bRun AND bRotating AND tNow - tStopAt >= refData.set.tCoastDownTime
+                                  AND tLastEdge - tStopAt >= refData.set.tCoastDownTime,
+          bResetRequest := bResetReq, tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stPulsesWhileStoppedFault,
+          stStatus := refData.sts.stPulsesWhileStoppedFault, stWorking := stWSensor);
 
-bAnyTrip := stWStall.bTrip OR stWUnder.bTrip OR stWOver.bTrip OR stWSensor.bTrip;
-bAnyWarn := stWStall.bWarn OR stWUnder.bWarn OR stWOver.bWarn OR stWSensor.bWarn;
-bHealthy := NOT bAnyTrip;
+bAnyTrip := stWStall.bTripping OR stWUnder.bTripping OR stWOver.bTripping OR stWSensor.bTripping;
+bAnyWarn := stWStall.bWarning OR stWUnder.bWarning OR stWOver.bWarning OR stWSensor.bWarning;
+bNoFaultTripped := NOT bAnyTrip;
 fSpeed := fShown;
 refData.sts.fSpeed := fShown;
 refData.sts.bRotating := bRotating;
-refData.sts.bUnitBad := bUnitBad;
+refData.sts.bSpeedUnitBad := bUnitBad;
 
 (* the time left: the acting protection's, else the start delay's *)
 tLeft := T#0s;
 IF bAnyTrip OR bAnyWarn THEN
   CASE ActingId(bTrips := bAnyTrip) OF
-    E_UtError.Stall: tLeft := refData.sts.stStall.tTimeLeft;
-    E_UtError.Overspeed: tLeft := refData.sts.stOverspeed.tTimeLeft;
-    E_UtError.Underspeed: tLeft := refData.sts.stUnderspeed.tTimeLeft;
+    E_UtError.Stall: tLeft := refData.sts.stStallFault.tTimeLeft;
+    E_UtError.Overspeed: tLeft := refData.sts.stOverspeedFault.tTimeLeft;
+    E_UtError.Underspeed: tLeft := refData.sts.stUnderspeedFault.tTimeLeft;
   ELSE
-    tLeft := refData.sts.stSensor.tTimeLeft;
+    tLeft := refData.sts.stPulsesWhileStoppedFault.tTimeLeft;
   END_CASE;
 ELSIF bRun AND NOT bPastStart THEN
-  tLeft := refData.set.tStartDelay - (tNow - tRunStart);
+  tLeft := refData.set.tMaskAfterStart - (tNow - tRunStart);
 END_IF;
 IF tLeft < T#0s THEN
   tLeft := T#0s;
@@ -396,20 +396,20 @@ END_IF;
 refData.det.tTimeLeft := tLeft;
 
 bError := bAnyTrip OR NOT bOk;
-bWarning := NOT bError AND (bAnyWarn OR bUnitBad OR refData.sts.bTooFast OR refData.sts.bRefused
-                            OR stWStall.bBadSetting OR stWUnder.bBadSetting OR stWOver.bBadSetting
-                            OR stWSensor.bBadSetting);
+bWarning := NOT bError AND (bAnyWarn OR bUnitBad OR refData.sts.bPulsesTooFast OR refData.sts.bSettingRefused
+                            OR stWStall.bSettingBad OR stWUnder.bSettingBad OR stWOver.bSettingBad
+                            OR stWSensor.bSettingBad);
 IF bAnyTrip THEN
   eErrorId := ActingId(bTrips := TRUE);
 ELSIF NOT bOk THEN
   eErrorId := E_UtError.BadSetting;
 ELSIF bAnyWarn THEN
   eErrorId := ActingId(bTrips := FALSE);
-ELSIF bUnitBad OR stWStall.bBadSetting OR stWUnder.bBadSetting OR stWOver.bBadSetting OR stWSensor.bBadSetting THEN
+ELSIF bUnitBad OR stWStall.bSettingBad OR stWUnder.bSettingBad OR stWOver.bSettingBad OR stWSensor.bSettingBad THEN
   eErrorId := E_UtError.BadSetting;
-ELSIF refData.sts.bTooFast THEN
+ELSIF refData.sts.bPulsesTooFast THEN
   eErrorId := E_UtError.PulsesTooFast;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;

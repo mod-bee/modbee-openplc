@@ -1,9 +1,9 @@
 TYPE
   ST_PumpSts EXTENDS ST_EquipmentSts : STRUCT
-    bMotorInHand : BOOL;
-    bMotorFaulted : BOOL;
-    bMasked : BOOL; (* the start mask is on *)
-    stStartFail : ST_ProtectionSts;
-    stDropped : ST_ProtectionSts;
+    bMotorInHand : BOOL; (* its motor is in Hand *)
+    bMotorFaulted : BOOL; (* its motor has a trip *)
+    bStartMaskOn : BOOL; (* the start mask is on *)
+    stStartFailFault : ST_ProtectionSts; (* asked to run, motor ready, but it is not running *)
+    stDroppedOutFault : ST_ProtectionSts; (* the motor stopped by itself while asked to run *)
   END_STRUCT;
 END_TYPE

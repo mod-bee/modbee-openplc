@@ -1,9 +1,9 @@
 TYPE
   ST_StatsPrev : STRUCT
-    fMin : REAL;
-    fMax : REAL;
-    fAverage : REAL;
-    tDuration : TIME;
-    nSamples : UDINT;
+    fMinimum : REAL; (* the previous period's lowest value *)
+    fMaximum : REAL; (* the previous period's highest value *)
+    fAverage : REAL; (* the previous period's time-weighted average *)
+    tTimeCollected : TIME; (* time collected in the previous period *)
+    nSampleCount : UDINT; (* samples counted in the previous period *)
   END_STRUCT;
 END_TYPE

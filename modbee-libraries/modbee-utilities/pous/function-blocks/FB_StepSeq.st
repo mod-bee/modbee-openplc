@@ -1,21 +1,21 @@
 (* FB_StepSeq — a timed / conditional step sequence: backwash, CIP, fill-mix-drain, kiln and dryer cycles.
-Tables the project declares (VAR_IN_OUT): aStepSet (the recipe, one row per step, at most 16 kept), aStep (each
-step's live row: the project writes aStep[i].bCond, the step's wait condition), aOutputs (the outputs). Each step
-switches on the outputs in its nOutputs pattern (bit n = the n-th element of aOutputs, counted from the first)
-and lasts tDuration, or until its bCond when bWaitCond, or both (the time AND the condition); a step with neither
-ends on the next scan. tTimeout caps a step; eOnTimeout then holds there with a fault (outputs to set.nPauseOutputs
-until a reset or bNext: StepTimeout), carries on, or goes to the stop step.
-Positions count from 1 = the first element. nNext (0 = the following step) sends the sequence elsewhere; a jump
+Tables the project declares (VAR_IN_OUT): aStepSettings (the recipe, one row per step, at most 16 kept), aSteps (each
+step's live row: the project writes aSteps[i].bStepCondition, the step's wait condition), aOutputs (the outputs). Each step
+switches on the outputs in its nOutputBits pattern (bit n = the n-th element of aOutputs, counted from the first)
+and lasts tStepTime, or until its bStepCondition when bWaitForCondition, or both (the time AND the condition); a step with neither
+ends on the next scan. tStepTimeout caps a step; eWhenTimedOut then holds there with a fault (outputs to set.nOutputsWhilePaused
+until a reset or bNextStep: StepTimeout), carries on, or goes to the stop step.
+Positions count from 1 = the first element. nNextStep (0 = the following step) sends the sequence elsewhere; a jump
 back repeats nLoops times, then carries on (its count restarts each time the loop is left, so loops can nest); a
-jump back with nLoops 0 would never end and is refused (RecipeBad), as is an nNext or set.nStopStep outside the
-recipe; bSkip steps are passed over. A stop goes to set.nStopStep and carries on from there to the end (put the
-safe end steps last); nStopStep 0 ends at once with every output off. bDone pulses when the recipe completes
-without a stop (sts.nCycles counts them since power-up). sts.eLastResult: Done, Manual (a stop, after the stop
-steps), Abort, Fault (a step timeout sent to the stop steps, or a bad nNext met while running).
-bRun held runs it from step 1 and its drop is a stop; bInterlock FALSE acts as bAbort; bPermissive FALSE holds
-back a start. bAbort (a level) ends a run at once, every output off, no stop steps, and no start or jump while
-on. bPause (or bCmdPause, until a start) holds the step: outputs to nPauseOutputs, the step's time kept. After a
-power cut the sequence is idle with every output off and never resumes by itself (nCmdJump starts it at any step).
+jump back with nLoops 0 would never end and is refused (RecipeBad), as is an nNextStep or set.nSafeStopStep outside the
+recipe; bSkipStep steps are passed over. A stop goes to set.nSafeStopStep and carries on from there to the end (put the
+safe end steps last); nSafeStopStep 0 ends at once with every output off. bDone pulses when the recipe completes
+without a stop (sts.nCycleCount counts them since power-up). sts.eStopReason: Done, Manual (a stop, after the stop
+steps), Abort, Fault (a step timeout sent to the stop steps, or a bad nNextStep met while running).
+bRun held runs it from step 1 and its drop is a stop; bInterlock FALSE acts as bAbortWhileHeld; bPermissive FALSE holds
+back a start. bAbortWhileHeld (a level) ends a run at once, every output off, no stop steps, and no start or jump while
+on. bPause (or bCmdPause, until a start) holds the step: outputs to nOutputsWhilePaused, the step's time kept. After a
+power cut the sequence is idle with every output off and never resumes by itself (nCmdJumpToStep starts it at any step).
 HMI commands act once per write. Kept (a retained last-good copy, restored at power-up, a bad write put back):
 set, and the recipe rows (up to 16). *)
 
@@ -24,24 +24,24 @@ FUNCTION_BLOCK FB_StepSeq EXTENDS FB_Object
     bRun : BOOL; (* held: run from step 1; its drop = a stop *)
     bStart : BOOL R_EDGE; (* run from step 1 (resumes an HMI pause) *)
     bStop : BOOL R_EDGE; (* go to the stop step (or end) *)
-    bPause : BOOL; (* hold: outputs to nPauseOutputs, time kept *)
-    bNext : BOOL R_EDGE; (* end this step now (manual stepping) *)
-    bReset : BOOL R_EDGE; (* clear a fault *)
-    bAbort : BOOL; (* level: end at once, every output off, no stop steps *)
+    bPause : BOOL; (* hold: outputs to nOutputsWhilePaused, time kept *)
+    bNextStep : BOOL R_EDGE; (* end this step now (manual stepping) *)
+    bResetFaults : BOOL R_EDGE; (* clear a fault *)
+    bAbortWhileHeld : BOOL; (* level: end at once, every output off, no stop steps *)
     bInterlock : BOOL := TRUE; (* FALSE = abort *)
     bPermissive : BOOL := TRUE; (* FALSE holds back a start *)
-    refData : REFERENCE TO ST_StepSeqData;
+    refData : REFERENCE TO ST_StepSeqData; (* the block's record *)
   END_VAR
   VAR_IN_OUT
-    aStepSet : ARRAY [*] OF ST_STEPSET;
-    aStep : ARRAY [*] OF ST_STEP;
-    aOutputs : ARRAY [*] OF BOOL;
+    aStepSettings : ARRAY [*] OF ST_STEPSET; (* the recipe, one row per step (at most 16 kept) *)
+    aSteps : ARRAY [*] OF ST_STEP; (* each step's live row: the project writes aSteps[i].bStepCondition *)
+    aOutputs : ARRAY [*] OF BOOL; (* the outputs the steps switch *)
   END_VAR
   VAR_OUTPUT
-    bBusy : BOOL;
+    bBusy : BOOL; (* the recipe is running *)
     bDone : BOOL; (* one scan: the recipe completed *)
     nCurrentStep : INT; (* position running (0 = idle) *)
-    tRemaining : TIME; (* time left in this step *)
+    tTimeLeft : TIME; (* time left in this step *)
   END_VAR
   VAR RETAIN
     stKept : ST_StepSeqSet;
@@ -110,14 +110,14 @@ METHOD PRIVATE StepWhy : E_UtError
     stS : REFERENCE TO ST_StepSet;
   END_VAR
   StepWhy := E_UtError.None;
-  IF NOT (stS.tDuration >= T#0s) THEN
+  IF NOT (stS.tStepTime >= T#0s) THEN
     StepWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tTimeout >= T#0s) THEN
+  ELSIF NOT (stS.tStepTimeout >= T#0s) THEN
     StepWhy := E_UtError.TimeBad;
   ELSIF NOT (stS.nLoops >= 0) THEN
     StepWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.eOnTimeout = E_StepTimeout.Hold OR stS.eOnTimeout = E_StepTimeout.Next
-             OR stS.eOnTimeout = E_StepTimeout.Stop) THEN
+  ELSIF NOT (stS.eWhenTimedOut = E_StepTimeout.Hold OR stS.eWhenTimedOut = E_StepTimeout.Next
+             OR stS.eWhenTimedOut = E_StepTimeout.Stop) THEN
     StepWhy := E_UtError.ChoiceBad;
   END_IF;
 END_METHOD
@@ -136,9 +136,9 @@ IF NOT __ISVALIDREF(refData) THEN
   RETURN;
 END_IF;
 tNow := TIME();
-nLo := LOWER_BOUND(aStep, 1);
-nSLo := LOWER_BOUND(aStepSet, 1);
-nN := MIN(UPPER_BOUND(aStep, 1) - nLo + 1, UPPER_BOUND(aStepSet, 1) - nSLo + 1);
+nLo := LOWER_BOUND(aSteps, 1);
+nSLo := LOWER_BOUND(aStepSettings, 1);
+nN := MIN(UPPER_BOUND(aSteps, 1) - nLo + 1, UPPER_BOUND(aStepSettings, 1) - nSLo + 1);
 nOLo := LOWER_BOUND(aOutputs, 1);
 nOHi := UPPER_BOUND(aOutputs, 1);
 bDone := FALSE;
@@ -148,7 +148,7 @@ IF bFirstScan THEN
   IF nKeptLayout = cLayout THEN
     refData.set := stKept;
     FOR nI := 1 TO MIN(nN, INT_TO_DINT(nKeptRows)) DO
-      aStepSet[nSLo + nI - 1] := aKeptStep[nI];
+      aStepSettings[nSLo + nI - 1] := aKeptStep[nI];
     END_FOR;
   ELSE
     stKept := refData.set;
@@ -158,28 +158,28 @@ IF bFirstScan THEN
   tPrev := tNow;
   bRunPrev := bRun;               (* a bRun held at power-up does not start it *)
   FOR nI := 1 TO nN DO
-    aStep[nLo + nI - 1].bActive := FALSE;
-    aStep[nLo + nI - 1].nLoopCount := 0;
+    aSteps[nLo + nI - 1].bStepActive := FALSE;
+    aSteps[nLo + nI - 1].nLoopCount := 0;
   END_FOR;
 END_IF;
-bOkSet := refData.set.nStopStep >= 0;
+bOkSet := refData.set.nSafeStopStep >= 0;
 IF bOkSet THEN
   stKept := refData.set;
-ELSIF stKept.nStopStep >= 0 THEN
-  refData.sts.eRefusedWhy := E_UtError.BelowMin;   // nStopStep
+ELSIF stKept.nSafeStopStep >= 0 THEN
+  refData.sts.eSettingRefusedErrorId := E_UtError.BelowMin;   // nSafeStopStep
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOkSet := TRUE;
 END_IF;
 bRowsOk := TRUE;
 FOR nI := 1 TO nN DO
   nS := nSLo + nI - 1;
-  IF StepOk(stS := aStepSet[nS]) THEN
-    IF nI <= cMaxKept THEN aKeptStep[nI] := aStepSet[nS]; END_IF;
+  IF StepOk(stS := aStepSettings[nS]) THEN
+    IF nI <= cMaxKept THEN aKeptStep[nI] := aStepSettings[nS]; END_IF;
   ELSIF nI <= INT_TO_DINT(nKeptRows) THEN
-    refData.sts.eRefusedWhy := StepWhy(stS := aStepSet[nS]);
-    aStepSet[nS] := aKeptStep[nI];
-    refData.sts.bRefused := TRUE;
+    refData.sts.eSettingRefusedErrorId := StepWhy(stS := aStepSettings[nS]);
+    aStepSettings[nS] := aKeptStep[nI];
+    refData.sts.bSettingRefused := TRUE;
   ELSE
     bRowsOk := FALSE;
   END_IF;
@@ -210,56 +210,56 @@ IF NOT bPermissive AND NOT bGoing THEN
 END_IF;
 bStopSeen := refData.bCmdStop;
 refData.bCmdStop := FALSE;
-bNextReq := bNext OR (refData.bCmdNext AND NOT bNextSeen);
-bNextSeen := refData.bCmdNext;
-refData.bCmdNext := FALSE;
-bResetReq := bReset OR SystemReset() OR (refData.bCmdReset AND NOT bResetSeen);
-bResetSeen := refData.bCmdReset;
-refData.bCmdReset := FALSE;
+bNextReq := bNextStep OR (refData.bCmdNextStep AND NOT bNextSeen);
+bNextSeen := refData.bCmdNextStep;
+refData.bCmdNextStep := FALSE;
+bResetReq := bResetFaults OR SystemReset() OR (refData.bCmdResetFaults AND NOT bResetSeen);
+bResetSeen := refData.bCmdResetFaults;
+refData.bCmdResetFaults := FALSE;
 bPauseReq := refData.bCmdPause AND NOT bPauseSeen;
 bPauseSeen := refData.bCmdPause;
 refData.bCmdPause := FALSE;
 nJumpTo := 0;
-IF refData.nCmdJump >= 0 THEN
-  IF refData.nCmdJump >= 1 AND INT_TO_DINT(refData.nCmdJump) <= nN THEN
-    nJumpTo := INT_TO_DINT(refData.nCmdJump);
+IF refData.nCmdJumpToStep >= 0 THEN
+  IF refData.nCmdJumpToStep >= 1 AND INT_TO_DINT(refData.nCmdJumpToStep) <= nN THEN
+    nJumpTo := INT_TO_DINT(refData.nCmdJumpToStep);
   END_IF;
-  refData.nCmdJump := -1;
+  refData.nCmdJumpToStep := -1;
 END_IF;
 IF bResetReq THEN
   refData.sts.bRecipeBad := FALSE;
-  refData.sts.bRefused := FALSE;
-  refData.sts.eRefusedWhy := E_UtError.None;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
   IF bHeld THEN
     bHeld := FALSE;               (* the step carries on, with a fresh timeout *)
     tTmo := T#0s;
   END_IF;
-  refData.sts.bStepTimeout := FALSE;
+  refData.sts.bStepTimedOut := FALSE;
 END_IF;
 
 (* check the recipe before a start or a jump *)
 IF (bStartReq AND NOT bGoing) OR nJumpTo > 0 THEN
-  bCfgBad := nN < 1 OR refData.set.nStopStep < 0 OR INT_TO_DINT(refData.set.nStopStep) > nN;
+  bCfgBad := nN < 1 OR refData.set.nSafeStopStep < 0 OR INT_TO_DINT(refData.set.nSafeStopStep) > nN;
   nCfgStep := 0;
   FOR nI := 1 TO nN DO
     nS := nSLo + nI - 1;
-    nNx := INT_TO_DINT(aStepSet[nS].nNext);
-    IF NOT bCfgBad AND (nNx < 0 OR nNx > nN OR (nNx > 0 AND nNx <= nI AND aStepSet[nS].nLoops <= 0)
-                        OR NOT StepOk(stS := aStepSet[nS])) THEN
+    nNx := INT_TO_DINT(aStepSettings[nS].nNextStep);
+    IF NOT bCfgBad AND (nNx < 0 OR nNx > nN OR (nNx > 0 AND nNx <= nI AND aStepSettings[nS].nLoops <= 0)
+                        OR NOT StepOk(stS := aStepSettings[nS])) THEN
       bCfgBad := TRUE;
       nCfgStep := nI;
     END_IF;
   END_FOR;
   IF bCfgBad THEN
     refData.sts.bRecipeBad := TRUE;
-    refData.sts.nConfigStep := DINT_TO_INT(nCfgStep);
+    refData.sts.nBadRecipeStep := DINT_TO_INT(nCfgStep);
     bGoing := FALSE;
     bHeld := FALSE;
     bStopping := FALSE;
     bHmiPause := FALSE;
     nCur := 0;
     FOR nI := 1 TO nN DO
-      aStep[nLo + nI - 1].bActive := FALSE;
+      aSteps[nLo + nI - 1].bStepActive := FALSE;
     END_FOR;
     bStartReq := FALSE;
     nJumpTo := 0;
@@ -274,7 +274,7 @@ bToStop := FALSE;
 bFinish := FALSE;
 eResult := E_StopReason.None;
 nP := 0;                          (* position to enter this scan (0 = none) *)
-bAbortNow := bAbort OR NOT bInterlock;
+bAbortNow := bAbortWhileHeld OR NOT bInterlock;
 IF bAbortNow THEN
   bStartReq := FALSE;             (* everything off at once, no stop steps; nothing starts while on *)
   nJumpTo := 0;
@@ -289,11 +289,11 @@ IF NOT bGoing THEN
     bGoing := TRUE;
     bStopping := FALSE;
     bHeld := FALSE;
-    refData.sts.bStepTimeout := FALSE;
+    refData.sts.bStepTimedOut := FALSE;
     refData.sts.nTimedOutStep := 0;
     FOR nI := 1 TO nN DO
-      aStep[nLo + nI - 1].nLoopCount := 0;
-      aStep[nLo + nI - 1].bActive := FALSE;
+      aSteps[nLo + nI - 1].nLoopCount := 0;
+      aSteps[nLo + nI - 1].bStepActive := FALSE;
     END_FOR;
     IF nJumpTo > 0 THEN nP := nJumpTo; ELSE nP := 1; END_IF;
   END_IF;
@@ -307,14 +307,14 @@ ELSE
   ELSIF nJumpTo > 0 THEN
     bHeld := FALSE;
     bStopping := FALSE;           (* a jump leaves the stop steps: a stop works again *)
-    refData.sts.bStepTimeout := FALSE;
+    refData.sts.bStepTimedOut := FALSE;
     IF nCur >= 1 THEN
-      aStep[nLo + nCur - 1].bActive := FALSE;
+      aSteps[nLo + nCur - 1].bStepActive := FALSE;
     END_IF;
     nP := nJumpTo;
   ELSIF bNextReq THEN
     bHeld := FALSE;
-    refData.sts.bStepTimeout := FALSE;
+    refData.sts.bStepTimedOut := FALSE;
     bFinish := TRUE;
   ELSIF bStartReq THEN
     bHmiPause := FALSE;           (* a start resumes an HMI pause *)
@@ -331,13 +331,13 @@ IF bGoing AND nP = 0 AND NOT bToStop AND NOT bFinish AND NOT bHeld AND NOT refDa
   nS := nSLo + nCur - 1;
   tStepEl := tStepEl + tScan;
   tTmo := tTmo + tScan;
-  bComplete := (aStepSet[nS].tDuration <= T#0s OR tStepEl >= aStepSet[nS].tDuration)
-               AND (NOT aStepSet[nS].bWaitCond OR aStep[nLo + nCur - 1].bCond);
+  bComplete := (aStepSettings[nS].tStepTime <= T#0s OR tStepEl >= aStepSettings[nS].tStepTime)
+               AND (NOT aStepSettings[nS].bWaitForCondition OR aSteps[nLo + nCur - 1].bStepCondition);
   IF bComplete THEN
     bFinish := TRUE;
-  ELSIF aStepSet[nS].tTimeout > T#0s AND tTmo >= aStepSet[nS].tTimeout THEN
+  ELSIF aStepSettings[nS].tStepTimeout > T#0s AND tTmo >= aStepSettings[nS].tStepTimeout THEN
     refData.sts.nTimedOutStep := DINT_TO_INT(nCur);
-    CASE aStepSet[nS].eOnTimeout OF
+    CASE aStepSettings[nS].eWhenTimedOut OF
     E_StepTimeout.Next:
       bFinish := TRUE;
     E_StepTimeout.Stop:
@@ -349,7 +349,7 @@ IF bGoing AND nP = 0 AND NOT bToStop AND NOT bFinish AND NOT bHeld AND NOT refDa
       END_IF;
     ELSE
       bHeld := TRUE;
-      refData.sts.bStepTimeout := TRUE;
+      refData.sts.bStepTimedOut := TRUE;
     END_CASE;
   END_IF;
 END_IF;
@@ -358,21 +358,21 @@ END_IF;
 IF bFinish AND nCur >= 1 THEN
   nS := nSLo + nCur - 1;
   nI := nLo + nCur - 1;
-  aStep[nI].bActive := FALSE;
-  nNx := INT_TO_DINT(aStepSet[nS].nNext);
-  IF nNx < 0 OR nNx > nN OR (nNx > 0 AND nNx <= nCur AND aStepSet[nS].nLoops <= 0) THEN
+  aSteps[nI].bStepActive := FALSE;
+  nNx := INT_TO_DINT(aStepSettings[nS].nNextStep);
+  IF nNx < 0 OR nNx > nN OR (nNx > 0 AND nNx <= nCur AND aStepSettings[nS].nLoops <= 0) THEN
     refData.sts.bRecipeBad := TRUE;  (* changed while running: refuse it, outputs safe *)
-    refData.sts.nConfigStep := DINT_TO_INT(nCur);
+    refData.sts.nBadRecipeStep := DINT_TO_INT(nCur);
     bGoing := FALSE;
     bStopping := FALSE;
     nCur := 0;
     eResult := E_StopReason.Fault;
   ELSIF nNx > 0 AND nNx <= nCur THEN
-    IF aStep[nI].nLoopCount < aStepSet[nS].nLoops THEN
-      aStep[nI].nLoopCount := aStep[nI].nLoopCount + 1;
+    IF aSteps[nI].nLoopCount < aStepSettings[nS].nLoops THEN
+      aSteps[nI].nLoopCount := aSteps[nI].nLoopCount + 1;
       nP := nNx;
     ELSE
-      aStep[nI].nLoopCount := 0;
+      aSteps[nI].nLoopCount := 0;
       nP := nCur + 1;
     END_IF;
   ELSIF nNx > 0 THEN
@@ -385,10 +385,10 @@ IF bToStop THEN
   bStopping := TRUE;
   bHeld := FALSE;
   IF nCur >= 1 THEN
-    aStep[nLo + nCur - 1].bActive := FALSE;
+    aSteps[nLo + nCur - 1].bStepActive := FALSE;
   END_IF;
-  IF refData.set.nStopStep >= 1 AND INT_TO_DINT(refData.set.nStopStep) <= nN THEN
-    nP := INT_TO_DINT(refData.set.nStopStep);
+  IF refData.set.nSafeStopStep >= 1 AND INT_TO_DINT(refData.set.nSafeStopStep) <= nN THEN
+    nP := INT_TO_DINT(refData.set.nSafeStopStep);
   ELSE
     bEndNow := TRUE;
   END_IF;
@@ -400,7 +400,7 @@ IF bGoing AND nP > 0 AND NOT bEndNow THEN
     IF nP > nN THEN
       EXIT;
     END_IF;
-    IF NOT aStepSet[nSLo + nP - 1].bSkip THEN
+    IF NOT aStepSettings[nSLo + nP - 1].bSkipStep THEN
       EXIT;
     END_IF;
     nP := nP + 1;
@@ -414,7 +414,7 @@ IF bGoing AND nP > 0 AND NOT bEndNow THEN
     bEndNow := TRUE;
   ELSE
     nCur := nP;
-    aStep[nLo + nP - 1].bActive := TRUE;
+    aSteps[nLo + nP - 1].bStepActive := TRUE;
     tStepEl := T#0s;
     tTmo := T#0s;
   END_IF;
@@ -427,11 +427,11 @@ IF bEndNow AND bGoing AND eResult = E_StopReason.None THEN
   END_IF;
 END_IF;
 IF eResult <> E_StopReason.None THEN
-  refData.sts.eLastResult := eResult;
+  refData.sts.eStopReason := eResult;
 END_IF;
 IF bEndNow THEN
   IF nCur >= 1 THEN
-    aStep[nLo + nCur - 1].bActive := FALSE;
+    aSteps[nLo + nCur - 1].bStepActive := FALSE;
   END_IF;
   bGoing := FALSE;
   bStopping := FALSE;
@@ -442,7 +442,7 @@ END_IF;
 IF NOT bGoing THEN
   nCur := 0;
   bHeld := FALSE;
-  refData.sts.bStepTimeout := FALSE;
+  refData.sts.bStepTimedOut := FALSE;
 END_IF;
 refData.sts.bPaused := bGoing AND (bPause OR bHmiPause);
 
@@ -450,9 +450,9 @@ refData.sts.bPaused := bGoing AND (bPause OR bHmiPause);
 IF NOT bGoing OR nCur < 1 THEN
   nPattern := DWORD#0;
 ELSIF refData.sts.bPaused OR bHeld THEN
-  nPattern := refData.set.nPauseOutputs;
+  nPattern := refData.set.nOutputsWhilePaused;
 ELSE
-  nPattern := aStepSet[nSLo + nCur - 1].nOutputs;
+  nPattern := aStepSettings[nSLo + nCur - 1].nOutputBits;
 END_IF;
 FOR nJ := nOLo TO nOHi DO
   IF nJ - nOLo < 32 THEN
@@ -465,35 +465,35 @@ bBusy := bGoing;
 nCurrentStep := DINT_TO_INT(nCur);
 IF bGoing AND nCur >= 1 THEN
   nS := nSLo + nCur - 1;
-  refData.sts.tElapsed := tStepEl;
-  IF aStepSet[nS].tDuration > tStepEl THEN
-    tRemaining := aStepSet[nS].tDuration - tStepEl;
+  refData.sts.tElapsedTime := tStepEl;
+  IF aStepSettings[nS].tStepTime > tStepEl THEN
+    tTimeLeft := aStepSettings[nS].tStepTime - tStepEl;
   ELSE
-    tRemaining := T#0s;
+    tTimeLeft := T#0s;
   END_IF;
 ELSE
-  refData.sts.tElapsed := T#0s;
-  tRemaining := T#0s;
+  refData.sts.tElapsedTime := T#0s;
+  tTimeLeft := T#0s;
 END_IF;
-refData.sts.tRemaining := tRemaining;
-refData.sts.nActiveStep := nCurrentStep;
+refData.sts.tTimeLeft := tTimeLeft;
+refData.sts.nCurrentStep := nCurrentStep;
 refData.sts.bBusy := bGoing;
 refData.sts.bStopping := bStopping;
-refData.sts.nCycles := nCycles;
+refData.sts.nCycleCount := nCycles;
 IF NOT refData.sts.bRecipeBad THEN
-  refData.sts.nConfigStep := 0;
+  refData.sts.nBadRecipeStep := 0;
 END_IF;
 
 (* errors *)
-bError := refData.sts.bRecipeBad OR refData.sts.bStepTimeout OR NOT bRowsOk;
-bWarning := NOT bError AND (NOT bOkSet OR refData.sts.bRefused);
+bError := refData.sts.bRecipeBad OR refData.sts.bStepTimedOut OR NOT bRowsOk;
+bWarning := NOT bError AND (NOT bOkSet OR refData.sts.bSettingRefused);
 IF refData.sts.bRecipeBad OR NOT bRowsOk THEN
   eErrorId := E_UtError.RecipeBad;
-ELSIF refData.sts.bStepTimeout THEN
+ELSIF refData.sts.bStepTimedOut THEN
   eErrorId := E_UtError.StepTimeout;
 ELSIF NOT bOkSet THEN
   eErrorId := E_UtError.BadSetting;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;
@@ -509,7 +509,7 @@ ELSIF bStopping THEN
 ELSE
   eState := E_State.Running;
   IF nCur >= 1 THEN               (* IEC AND does not short-circuit: index only a real step *)
-    IF aStepSet[nSLo + nCur - 1].bWaitCond AND NOT aStep[nLo + nCur - 1].bCond AND tRemaining <= T#0s THEN
+    IF aStepSettings[nSLo + nCur - 1].bWaitForCondition AND NOT aSteps[nLo + nCur - 1].bStepCondition AND tTimeLeft <= T#0s THEN
       eState := E_State.Waiting;
     END_IF;
   END_IF;

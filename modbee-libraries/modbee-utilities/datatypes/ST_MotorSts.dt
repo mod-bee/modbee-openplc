@@ -1,8 +1,8 @@
 TYPE
   ST_MotorSts EXTENDS ST_EquipmentSts : STRUCT
-    stOverload : ST_ProtectionSts;
-    stNoFeedback : ST_ProtectionSts;
-    stFeedbackLost : ST_ProtectionSts;
-    stStuck : ST_ProtectionSts;
+    stOverloadFault : ST_ProtectionSts; (* overload relay tripped *)
+    stNoRunFeedbackFault : ST_ProtectionSts; (* the run feedback never came after a start *)
+    stRunFeedbackLostFault : ST_ProtectionSts; (* the run feedback went while running *)
+    stStuckOnFault : ST_ProtectionSts; (* the run feedback stays after a stop (contactor stuck) *)
   END_STRUCT;
 END_TYPE

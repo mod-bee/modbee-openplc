@@ -1,22 +1,22 @@
 TYPE
   ST_ZoneSeqSet : STRUCT
-    tPumpStartDelay : TIME := T#3s;
-    tValveOverlap : TIME := T#5s;
-    tValveCloseDelay : TIME := T#5s;
-    tValveProve : TIME := T#30s;
+    tPumpStartDelay : TIME := T#3s; (* after the first valve opens, the pump starts this long later *)
+    tValveOverlap : TIME := T#5s; (* the next zone's valve opens this long before the last one closes *)
+    tValveCloseDelay : TIME := T#5s; (* after the pump stops, the valve closes this long later *)
+    tValveProveTimeout : TIME := T#30s; (* a valve must prove open within this *)
     tMasterCloseDelay : TIME; (* the master valve closes this long after the last zone valve *)
     tFlushTime : TIME := T#2m; (* dosing stops this long before a zone cycle ends *)
-    tMaxPumpWait : TIME; (* no pump this long ends the program (0 = wait for ever) *)
-    bPumpWaitSkips : BOOL; (* ... or skips the zone *)
-    bDose : BOOL; (* runs dose by default (nDoseReq -1) *)
-    nRepeats : INT := 1; (* the program runs this many passes (1..100) *)
-    eRainAction : E_RainAction; (* what bRainHold does *)
-    fDefaultSp : REAL; (* the pressure setpoint of a zone with none of its own *)
-    eResume : E_RunResume := E_RunResume.Resume; (* a program that was on at a power cut *)
-    tResumeWindow : TIME := T#1m; (* a held run: its bRun must be back within this, else it ends *)
-    tMaxTime : TIME; (* the cap of a zone cycle whose only target is a volume (0 = worked out) *)
-    tDefaultCap : TIME := T#2h; (* ... when there is no tMaxTime and no zone minimum flow *)
-    tMaxPause : TIME; (* a pause this long ends the program (0 = no limit) *)
-    tProgressSave : TIME; (* keep the zone's progress this often while watering (0 = on events only) *)
+    tPumpWaitTimeout : TIME; (* no pump this long ends the program (0 = wait for ever) *)
+    bPumpWaitSkipsZone : BOOL; (* ... or skips the zone *)
+    bDoseByDefault : BOOL; (* runs dose by default (nDoseRequest -1) *)
+    nPasses : INT := 1; (* the program runs this many passes (1..100) *)
+    eActionOnDefer : E_RainAction; (* what bDeferIrrigation does *)
+    fDefaultPressureSetpoint : REAL; (* the pressure setpoint of a zone with none of its own *)
+    eAfterPowerCut : E_RunResume := E_RunResume.Resume; (* a program that was on at a power cut *)
+    tHeldRunTimeout : TIME := T#1m; (* a held run: its bRun must be back within this, else it ends *)
+    tMaxVolumeCycleTime : TIME; (* the cap of a zone cycle whose only target is a volume (0 = worked out) *)
+    tDefaultTimeCap : TIME := T#2h; (* ... when there is no tMaxVolumeCycleTime and no zone minimum flow *)
+    tMaxPauseBeforeEnd : TIME; (* a pause this long ends the program (0 = no limit) *)
+    tProgressSaveInterval : TIME; (* keep the zone's progress this often while watering (0 = on events only) *)
   END_STRUCT;
 END_TYPE

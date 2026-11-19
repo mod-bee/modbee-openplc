@@ -1,6 +1,6 @@
 TYPE
   ST_CmdData : STRUCT
-    set : ST_CmdSet;
-    sts : ST_CmdSts;
+    set : ST_CmdSet; (* settings (kept) *)
+    sts : ST_CmdSts; (* status *)
   END_STRUCT;
 END_TYPE

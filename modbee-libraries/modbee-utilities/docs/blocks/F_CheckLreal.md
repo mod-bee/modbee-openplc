@@ -6,10 +6,10 @@ The settings-check rule for an LREAL: why a value is refused, or `None`.
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `fValue` | `LREAL` |  | The value |
-| in | `fMin` | `LREAL` |  | Lowest value allowed |
-| in | `fMax` | `LREAL` |  | Highest value allowed |
-| out | *(result)* | `E_UtError` | | `None`, or why the value is refused |
+| in | `fValue` | `LREAL` |  | the value to check |
+| in | `fLowestAllowed` | `LREAL` |  | lowest value allowed |
+| in | `fHighestAllowed` | `LREAL` |  | highest value allowed |
+| out | *(result)* | `E_UtError` |  | the first problem, None when the value is good |
 
 ## How it works
 
@@ -20,7 +20,7 @@ The settings-check rule for an LREAL: why `fValue` is refused (`ValueBad`, `Limi
 | Pin | Wire |
 | --- | --- |
 | `fValue` | `fNewTotal` |
-| `fMin` | 0.0 |
-| `fMax` | 1.0E9 |
+| `fLowestAllowed` | 0.0 |
+| `fHighestAllowed` | 1.0E9 |
 
 **Back to** [the index](../README.md).

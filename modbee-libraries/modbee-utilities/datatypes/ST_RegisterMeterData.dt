@@ -1,11 +1,11 @@
 TYPE
   ST_RegisterMeterData : STRUCT
-    bCmdResetTotal : BOOL; (* the total back to 0 (cleared by the block) *)
-    set : ST_RegisterMeterSet;
-    sts : ST_RegisterMeterSts;
-    tot : ST_RegisterMeterTot;
-    bCmdConfirm : BOOL; (* confirms bCmdResetTotal (set.bConfirmReset); cleared by the block *)
-    bCmdPreset : BOOL; (* the total to fPresetTotal (cleared by the block) *)
-    fPresetTotal : LREAL;
+    bCmdResetTotals : BOOL; (* the total back to 0 (cleared by the block) *)
+    set : ST_RegisterMeterSet; (* settings (kept) *)
+    sts : ST_RegisterMeterSts; (* status *)
+    tot : ST_RegisterMeterTot; (* totals (kept) *)
+    bCmdConfirmReset : BOOL; (* confirms bCmdResetTotals (set.bResetNeedsConfirm); cleared by the block *)
+    bCmdPresetTotal : BOOL; (* the total to fPresetTotal (cleared by the block) *)
+    fPresetTotal : LREAL; (* the total bCmdPresetTotal writes, in the meter's unit *)
   END_STRUCT;
 END_TYPE

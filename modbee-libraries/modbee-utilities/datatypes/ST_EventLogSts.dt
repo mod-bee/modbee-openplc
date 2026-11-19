@@ -1,12 +1,12 @@
 TYPE
   ST_EventLogSts : STRUCT
-    stLast : ST_Event; (* the newest event *)
-    nEvents : INT;
-    nLogged : UDINT;
-    nLost : UDINT;
-    bWrnConfig : BOOL; (* aBuffer has no element, or more than 16 while kept *)
-    bWrnSrc : BOOL; (* a call this scan had an nSrc outside aSources (ignored) *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    stNewestEvent : ST_Event; (* the newest event *)
+    nEventsInLog : INT; (* events in the log now *)
+    nEventLoggedCount : UDINT; (* events logged since power-up *)
+    nEventLostCount : UDINT; (* events that pushed an old one out of a full log *)
+    bBufferSizeBad : BOOL; (* aEvents has no element, or more than 16 while kept *)
+    bSourceOutOfRange : BOOL; (* a call this scan had an nSource outside aSources (ignored) *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

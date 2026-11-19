@@ -1,14 +1,14 @@
 TYPE
   ST_SelectSet : STRUCT
-    eSelect : E_SelectMode; (* combine the agreeing sensors *)
-    eTwoDisagree : E_SelectMode := E_SelectMode.Highest; (* two that disagree: Highest or Lowest *)
-    fWarnSpread : REAL := 1.0;
-    fFaultSpread : REAL := 2.0; (* sensors further apart than this do not agree *)
-    stDeviation : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#0s, nMaxRetries := 3);
-    stNoAgree : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#10s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
-    tRetryWindow : TIME := T#1h;
-    tFilter : TIME;
-    eNoGood : E_NoGood; (* fOut while not good *)
-    fSubstitute : REAL;
+    eCombineBy : E_SelectMode; (* combine the agreeing sensors *)
+    eWhenTwoDisagree : E_SelectMode := E_SelectMode.Highest; (* two that disagree: Highest or Lowest *)
+    fWarnSpreadAbove : REAL := 1.0; (* sensors further apart than this warn (stDeviation) *)
+    fDisagreeSpreadAbove : REAL := 2.0; (* sensors further apart than this do not agree *)
+    stDeviationFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#5s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#0s, nMaxRetriesBeforeLockout := 3);
+    stNoAgreementFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#10s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
+    tRetryCountWindow : TIME := T#1h; (* Retry counts trips within this window (0 = until a reset) *)
+    tFilterTime : TIME; (* filter time on the voted value (0 = none) *)
+    eWhenNoneGood : E_NoGood; (* fValue while not good *)
+    fSubstituteValue : REAL; (* the value used by Substitute *)
   END_STRUCT;
 END_TYPE

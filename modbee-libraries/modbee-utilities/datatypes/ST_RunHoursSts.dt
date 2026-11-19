@@ -1,11 +1,11 @@
 TYPE
   ST_RunHoursSts : STRUCT
-    fHours : LREAL; (* lifetime *)
-    fServiceHours : LREAL; (* since the last service *)
-    fServiceLeft : LREAL;
-    bServiceDue : BOOL;
-    tLastRun : TIME; (* written at each run end *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    fRunHours : LREAL; (* lifetime *)
+    fHoursSinceService : LREAL; (* since the last service *)
+    fHoursToService : LREAL; (* run hours left until the next service *)
+    bServiceDue : BOOL; (* the service is due (a warning, ServiceDue) *)
+    tLastRunTime : TIME; (* written at each run end *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

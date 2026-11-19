@@ -1,5 +1,5 @@
 TYPE
   ST_DoseTimedSts EXTENDS ST_DoseSts : STRUCT
-    bCarrierOk : BOOL;
+    bCarrierProven : BOOL; (* the carrier is proven *)
   END_STRUCT;
 END_TYPE

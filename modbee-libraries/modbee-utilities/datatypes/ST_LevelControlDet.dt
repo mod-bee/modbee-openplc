@@ -1,6 +1,6 @@
 TYPE
   ST_LevelControlDet : STRUCT
     tTimeLeft : TIME; (* RunOn: the run-on left; TIMED: the on / off time left *)
-    tPhaseTime : TIME; (* since the request last changed (pumping / idle) *)
+    tInPhaseFor : TIME; (* since the request last changed (pumping / idle) *)
   END_STRUCT;
 END_TYPE

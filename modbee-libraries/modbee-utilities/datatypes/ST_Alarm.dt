@@ -1,16 +1,16 @@
 TYPE
   ST_Alarm : STRUCT
-    bIn : BOOL; (* the condition (the project's rung) *)
-    eState : E_AlarmState;
-    bQ : BOOL; (* on: Active, Latched or Locked *)
-    bUnacked : BOOL;
-    nRetries : USINT;
-    bCond : BOOL; (* the condition after the delays *)
-    bInPrev : BOOL;
-    bSilenced : BOOL;
-    tChange : TIME; (* when bIn last changed *)
-    tWin : TIME; (* when the retry window started *)
-    tAck : TIME; (* when it was silenced or acknowledged *)
-    bSounding : BOOL; (* it calls for the siren now *)
+    bConditionPresent : BOOL; (* the condition (the project's rung) *)
+    eRowState : E_AlarmState; (* the engine's state: Normal, Active, Latched, Locked *)
+    bAlarmOn : BOOL; (* on: Active, Latched or Locked *)
+    bUnacknowledged : BOOL; (* an alarm is waiting to be acknowledged *)
+    nRetriesUsed : INT; (* trips counted in the current retry window *)
+    bConditionConfirmed : BOOL; (* the condition after the delays *)
+    bConditionLastScan : BOOL; (* engine memory: the condition on the last scan *)
+    bSilenced : BOOL; (* silenced: the horn stays off for this alarm *)
+    tConditionChangedAt : TIME; (* when bConditionPresent last changed *)
+    tRetryWindowStartedAt : TIME; (* when the retry window started *)
+    tSilencedOrAcknowledgedAt : TIME; (* when it was silenced or acknowledged *)
+    bCallsForHorn : BOOL; (* it calls for the horn now *)
   END_STRUCT;
 END_TYPE

@@ -1,11 +1,11 @@
 TYPE
   ST_RunSet : STRUCT
-    bByTime : BOOL;
-    tRunTime : TIME := T#1h;
-    tMaxTime : TIME; (* 0 = no cap *)
-    tMaxPause : TIME; (* 0 = no limit *)
-    eResume : E_RunResume;
-    tResumeWindow : TIME := T#1m;
-    tProgressSave : TIME := T#1h;
+    bStopAfterRunTime : BOOL; (* the run ends after tRunTime of running *)
+    tRunTime : TIME := T#1h; (* run time for bStopAfterRunTime *)
+    tMaxTimeFromStart : TIME; (* 0 = no cap *)
+    tMaxPauseBeforeEnd : TIME; (* 0 = no limit *)
+    eAfterPowerCut : E_RunResume; (* Resume (go on from the kept progress), Restart or None (the run ends) *)
+    tHeldRunTimeout : TIME := T#1m; (* after a power cut a held run goes on only if its request is back within this *)
+    tProgressSaveInterval : TIME := T#1h; (* the progress is kept on events and at least this often *)
   END_STRUCT;
 END_TYPE

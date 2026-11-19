@@ -1,7 +1,7 @@
 TYPE
   ST_SwitchSetData : STRUCT
-    bCmdReset : BOOL; (* reset a latched fault (cleared by the block) *)
-    set : ST_SwitchSetSet;
-    sts : ST_SwitchSetSts;
+    bCmdResetFaults : BOOL; (* reset a latched fault (cleared by the block) *)
+    set : ST_SwitchSetSet; (* settings (kept) *)
+    sts : ST_SwitchSetSts; (* status *)
   END_STRUCT;
 END_TYPE

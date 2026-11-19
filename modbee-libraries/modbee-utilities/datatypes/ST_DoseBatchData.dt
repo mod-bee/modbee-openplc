@@ -1,6 +1,6 @@
 TYPE
   ST_DoseBatchData EXTENDS ST_DoseData : STRUCT
-    set : ST_DoseBatchSet;
-    sts : ST_DoseBatchSts;
+    set : ST_DoseBatchSet; (* settings (kept) *)
+    sts : ST_DoseBatchSts; (* status *)
   END_STRUCT;
 END_TYPE

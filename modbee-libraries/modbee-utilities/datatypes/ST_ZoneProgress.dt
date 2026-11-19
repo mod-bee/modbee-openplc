@@ -1,10 +1,10 @@
 TYPE
   ST_ZoneProgress : STRUCT
-    bDone : BOOL;
-    nCycle : INT;
-    tWatered : TIME;
-    fWatered : LREAL;
-    tBase : TIME; (* the watered time / volume when the running cycle began *)
-    fBase : LREAL;
+    bZoneDone : BOOL; (* kept progress: the zone is done in this program *)
+    nCycleCount : INT; (* kept progress: cycles finished *)
+    tWateredTime : TIME; (* kept progress: watering time so far *)
+    fWateredVolume : LREAL; (* kept progress: volume so far *)
+    tWateredAtCycleStart : TIME; (* the watered time / volume when the running cycle began *)
+    fWateredAtCycleStart : LREAL; (* kept progress: the watered volume when the running cycle began *)
   END_STRUCT;
 END_TYPE

@@ -1,20 +1,20 @@
 (* FB_RunHours — a run-hour and start meter with a service interval, for anything that runs (a blower, a heater, a
-drive not driven through FB_Motor). Hours are counted exactly (whole milliseconds, the rest
-carried: F_HoursAdd) into the lifetime and since-service totals, kept hourly and at each stop.
-Pins: bRunning, bResetService (the service is done) -> fHours (lifetime), bServiceDue, plus FB_Object's outputs.
-bServiceDue (a warning, ServiceDue) when the hours since the last service reach set.fServiceInterval (0 = off).
-bCmdPreset sets the lifetime hours (a replacement). No day totals: the board has no clock; SCADA makes days.
+drive not driven through FB_Motor). Hours are counted in whole milliseconds (the rest
+carried: F_HoursAdd) into the lifetime and since-service totals (LREAL hours, as FB_Motor), kept hourly and at each stop.
+Pins: bRunning, bServiceDone (the service is done) -> fRunHours (lifetime), bServiceDue, plus FB_Object's outputs.
+bServiceDue (a warning, ServiceDue) when the hours since the last service reach set.fServiceIntervalHours (0 = off).
+bCmdPresetHours sets the lifetime hours (a replacement). No day totals: the board has no clock; SCADA makes days.
 Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back. *)
 
 FUNCTION_BLOCK FB_RunHours EXTENDS FB_Object
   VAR_INPUT
-    bRunning : BOOL;
-    bResetService : BOOL R_EDGE;
-    refData : REFERENCE TO ST_RunHoursData;
+    bRunning : BOOL; (* it runs *)
+    bServiceDone : BOOL R_EDGE; (* rising edge: the service is done *)
+    refData : REFERENCE TO ST_RunHoursData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    fHours : LREAL;
-    bServiceDue : BOOL;
+    fRunHours : LREAL; (* run hours, lifetime *)
+    bServiceDue : BOOL; (* the service is due (a warning) *)
   END_VAR
   VAR RETAIN
     stKept : ST_RunHoursSet;
@@ -38,9 +38,9 @@ FUNCTION_BLOCK FB_RunHours EXTENDS FB_Object
 (* the first bad setting (None: all good) *)
 METHOD PRIVATE SetWhy : E_UtError
   SetWhy := E_UtError.None;
-  IF NOT (refData.set.fServiceInterval >= 0.0) THEN
+  IF NOT (refData.set.fServiceIntervalHours >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (refData.set.fServiceInterval <= LREAL#1.0E7) THEN
+  ELSIF NOT (refData.set.fServiceIntervalHours <= LREAL#1.0E7) THEN
     SetWhy := E_UtError.AboveMax;
   END_IF;
 END_METHOD
@@ -65,38 +65,38 @@ IF bFirstScan THEN
 ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
-  refData.sts.eRefusedWhy := SetWhy();
+  refData.sts.eSettingRefusedErrorId := SetWhy();
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
 END_IF;
 
 (* count *)
-nMs := F_HoursAdd(bRunning := bRunning, tNow := tNow, stAcc := stAcc);
-refData.tot.nTotalMs := refData.tot.nTotalMs + nMs;
-refData.tot.nServiceMs := refData.tot.nServiceMs + nMs;
+nMs := F_HoursAdd(bRunning := bRunning, tNow := tNow, stAccumulator := stAcc);
+refData.tot.fRunHours := refData.tot.fRunHours + LINT_TO_LREAL(nMs) / 3600000.0;
+refData.tot.fRunHoursSinceService := refData.tot.fRunHoursSinceService + LINT_TO_LREAL(nMs) / 3600000.0;
 IF bRunning AND NOT bRunPrev THEN
   tRunAt := tNow;
-  refData.tot.nStarts := refData.tot.nStarts + 1;
+  refData.tot.nStartCount := refData.tot.nStartCount + 1;
 END_IF;
 IF bRunning THEN
-  refData.tCurrentRun := tNow - tRunAt;
+  refData.tThisRunTime := tNow - tRunAt;
 ELSIF bRunPrev THEN
-  refData.sts.tLastRun := tNow - tRunAt;
-  refData.tCurrentRun := T#0s;
+  refData.sts.tLastRunTime := tNow - tRunAt;
+  refData.tThisRunTime := T#0s;
 END_IF;
 
 (* commands *)
-IF bResetService OR refData.bCmdResetService THEN
-  refData.bCmdResetService := FALSE;
-  refData.tot.nServiceMs := 0;
-  refData.sts.bRefused := FALSE;
-  refData.sts.eRefusedWhy := E_UtError.None;
+IF bServiceDone OR refData.bCmdServiceDone THEN
+  refData.bCmdServiceDone := FALSE;
+  refData.tot.fRunHoursSinceService := 0.0;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
   stKeptTot := refData.tot;
 END_IF;
-IF refData.bCmdPreset THEN
-  refData.bCmdPreset := FALSE;
-  IF refData.fPresetHours >= 0.0 AND refData.fPresetHours <= LREAL#1.0E7 THEN
-    refData.tot.nTotalMs := LREAL_TO_LINT(refData.fPresetHours * 3600000.0);
+IF refData.bCmdPresetHours THEN
+  refData.bCmdPresetHours := FALSE;
+  IF refData.fPresetRunHours >= 0.0 AND refData.fPresetRunHours <= LREAL#1.0E7 THEN
+    refData.tot.fRunHours := refData.fPresetRunHours;
     stKeptTot := refData.tot;
   END_IF;
 END_IF;
@@ -107,22 +107,22 @@ END_IF;
 bRunPrev := bRunning;
 
 (* status *)
-fHours := LINT_TO_LREAL(refData.tot.nTotalMs) / 3600000.0;
-refData.sts.fHours := fHours;
-refData.sts.fServiceHours := LINT_TO_LREAL(refData.tot.nServiceMs) / 3600000.0;
-IF refData.set.fServiceInterval > 0.0 THEN
-  refData.sts.fServiceLeft := MAX(0.0, refData.set.fServiceInterval - refData.sts.fServiceHours);
-  bServiceDue := refData.sts.fServiceHours >= refData.set.fServiceInterval;
+fRunHours := refData.tot.fRunHours;
+refData.sts.fRunHours := fRunHours;
+refData.sts.fHoursSinceService := refData.tot.fRunHoursSinceService;
+IF refData.set.fServiceIntervalHours > 0.0 THEN
+  refData.sts.fHoursToService := MAX(0.0, refData.set.fServiceIntervalHours - refData.sts.fHoursSinceService);
+  bServiceDue := refData.sts.fHoursSinceService >= refData.set.fServiceIntervalHours;
 ELSE
-  refData.sts.fServiceLeft := 0.0;
+  refData.sts.fHoursToService := 0.0;
   bServiceDue := FALSE;
 END_IF;
 refData.sts.bServiceDue := bServiceDue;
 bError := FALSE;
-bWarning := bServiceDue OR refData.sts.bRefused;
+bWarning := bServiceDue OR refData.sts.bSettingRefused;
 IF bServiceDue THEN
   eErrorId := E_UtError.ServiceDue;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;

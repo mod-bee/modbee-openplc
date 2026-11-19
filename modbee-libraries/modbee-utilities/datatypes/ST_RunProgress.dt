@@ -1,7 +1,7 @@
 TYPE
   ST_RunProgress : STRUCT
-    bActive : BOOL;
-    bLatched : BOOL;
-    tElapsed : TIME;
+    bBusy : BOOL; (* kept progress: a run was active *)
+    bLatched : BOOL; (* kept progress: the run was a latched one (started by bStart) *)
+    tElapsedTime : TIME; (* kept progress: run time counted so far *)
   END_STRUCT;
 END_TYPE

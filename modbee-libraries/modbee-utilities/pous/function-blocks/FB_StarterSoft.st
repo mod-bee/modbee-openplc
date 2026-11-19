@@ -1,21 +1,21 @@
 (* FB_StarterSoft — a soft starter's top-of-ramp check, as a part of its motor. The starter's run relay is the
 motor's bFeedback, its fault relay an FB_Protection (eErrorId DriveFault). This part watches the top-of-ramp
-relay: the motor's run command on and no top of ramp for set.stStartTooLong's delay is a trip (StartTooLong: the
+relay: the motor's run command on and no top of ramp for set.stStartTooLongFault's delay is a trip (StartTooLong: the
 ramp never finished, a stalled or overloaded start). bTopOfRamp is the starter's top-of-ramp / bypass relay, TRUE
 = at full speed.
-A soft stop: set the motor's stStuck delay longer than the starter's stop ramp (the run relay stays on while
+A soft stop: set the motor's stStuckOnFault delay longer than the starter's stop ramp (the run relay stays on while
 it ramps down).
-Pins: bTopOfRamp, ipOwner (the motor, required), refData -> bAtSpeed, plus FB_Object's outputs. It adds itself
+Pins: bTopOfRamp, ipOwner (the motor, required), refData -> bAtTopOfRamp, plus FB_Object's outputs. It adds itself
 to its motor on its first call; a check that is acting when its rung stops being called raises PartLost. *)
 
 FUNCTION_BLOCK FB_StarterSoft EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT
     bTopOfRamp : BOOL := FALSE; (* the starter's top-of-ramp relay (TRUE = at full speed) *)
     ipOwner : I_Equipment; (* the motor (required) *)
-    refData : REFERENCE TO ST_StarterSoftData;
+    refData : REFERENCE TO ST_StarterSoftData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    bAtSpeed : BOOL;
+    bAtTopOfRamp : BOOL; (* the starter is at full speed *)
   END_VAR
   VAR RETAIN
     stKept : ST_StarterSoftSet;
@@ -36,21 +36,23 @@ FUNCTION_BLOCK FB_StarterSoft EXTENDS FB_Object IMPLEMENTS I_Part
 (* the first bad setting (None: all good) *)
 METHOD PRIVATE SetWhy : E_UtError
   SetWhy := E_UtError.None;
-  IF NOT (refData.set.stStartTooLong.tDelay >= T#0s) THEN
+  IF NOT (refData.set.stStartTooLongFault.tTripDelay >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (refData.set.stStartTooLong.tRecover >= T#0s) THEN
+  ELSIF NOT (refData.set.stStartTooLongFault.tAutoRecoverAfter >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (refData.set.tRetryCountWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
 
 METHOD PUBLIC Evaluate : E_PartAction
   VAR_INPUT
-    bRunning : BOOL;
-    bResetWanted : BOOL;
-    bMasked : BOOL;
+    bOwnerRunCommand : BOOL;    // the owner is running (its run command)
+    bResetRequest : BOOL;    // the owner's reset request this scan
+    bStartMaskOn : BOOL;    // the owner's start mask is on (checks set to mask at start ignore their cause)
   END_VAR
   VAR_OUTPUT
-    eErrorId : E_UtError;
+    eErrorId : E_UtError;    // the error this part stands for (when it warns or trips)
   END_VAR
   VAR
     bTrip : BOOL;
@@ -68,17 +70,17 @@ METHOD PUBLIC Evaluate : E_PartAction
     RETURN;
   END_IF;
   bCalled := FALSE;
-  bReset := bResetWanted OR refData.bCmdReset;
-  refData.bCmdReset := FALSE;
-  bTrip := F_Protect(tNow := TIME(), bCause := bRunning AND NOT bTopNow, bResetReq := bReset, tRetryWindow := T#1h,
-                     stSet := refData.set.stStartTooLong, stSts := refData.stStartTooLong, stWork := stWork);
-  IF stWork.bTrip THEN
+  bReset := bResetRequest OR refData.bCmdResetFaults;
+  refData.bCmdResetFaults := FALSE;
+  bTrip := F_Protect(tNow := TIME(), bConditionPresent := bOwnerRunCommand AND NOT bTopNow, bResetRequest := bReset, tRetryCountWindow := refData.set.tRetryCountWindow,
+                     stSettings := refData.set.stStartTooLongFault, stStatus := refData.sts.stStartTooLongFault, stWorking := stWork);
+  IF stWork.bTripping THEN
     Evaluate := E_PartAction.Trip;
-  ELSIF stWork.bSignal THEN
+  ELSIF stWork.bSignalling THEN
     Evaluate := E_PartAction.Stop;
-  ELSIF stWork.bWarn THEN
+  ELSIF stWork.bWarning THEN
     Evaluate := E_PartAction.Warn;
-  ELSIF stWork.bBadSetting THEN
+  ELSIF stWork.bSettingBad THEN
     eErrorId := E_UtError.BadSetting;
     Evaluate := E_PartAction.Warn;
   ELSE
@@ -89,9 +91,9 @@ END_METHOD
 
 METHOD PUBLIC SetNext
   VAR_INPUT
-    ipNext : I_Part;
+    ipNextPart : I_Part;    // the next part in the owner's chain
   END_VAR
-  THIS^.ipNext := ipNext;
+  THIS^.ipNext := ipNextPart;
 END_METHOD
 
 METHOD PUBLIC GetNext : I_Part
@@ -99,7 +101,7 @@ METHOD PUBLIC GetNext : I_Part
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) OR ipOwner = NULL THEN
-  bAtSpeed := FALSE;
+  bAtTopOfRamp := FALSE;
   bError := TRUE;
   IF ipOwner = NULL THEN
     eErrorId := E_UtError.NoMotor;
@@ -119,13 +121,13 @@ IF bFirstScan THEN
 ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
-  refData.eRefusedWhy := SetWhy();
+  refData.sts.eSettingRefusedErrorId := SetWhy();
   refData.set := stKept;
-  refData.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
 END_IF;
 IF SystemReset() THEN
-  refData.bRefused := FALSE;
-  refData.eRefusedWhy := E_UtError.None;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
 IF NOT bAdded THEN
   ipOwner.AddPart(ipPart := THIS^);
@@ -133,13 +135,13 @@ IF NOT bAdded THEN
 END_IF;
 bCalled := TRUE;
 bTopNow := bTopOfRamp;
-bAtSpeed := bTopOfRamp;
-refData.bAtSpeed := bTopOfRamp;
-bError := stWork.bTrip;
-bWarning := NOT bError AND (stWork.bWarn OR refData.bRefused);
-IF stWork.bTrip OR stWork.bWarn THEN
+bAtTopOfRamp := bTopOfRamp;
+refData.sts.bAtTopOfRamp := bTopOfRamp;
+bError := stWork.bTripping;
+bWarning := NOT bError AND (stWork.bWarning OR refData.sts.bSettingRefused);
+IF stWork.bTripping OR stWork.bWarning THEN
   eErrorId := E_UtError.StartTooLong;
-ELSIF refData.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;

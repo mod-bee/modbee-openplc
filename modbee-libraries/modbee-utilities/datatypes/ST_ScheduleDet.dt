@@ -1,7 +1,7 @@
 TYPE
   ST_ScheduleDet : STRUCT
-    tOverrideLeft : TIME;
-    tNextChangeIn : TIME;
-    dtLocal : DT;
+    tOverrideTimeLeft : TIME; (* time left in the override *)
+    tNextChangeTimeLeft : TIME; (* time until the schedule next changes *)
+    dtLocalTime : DT; (* the local time the schedule uses (clock plus tUtcOffset) *)
   END_STRUCT;
 END_TYPE

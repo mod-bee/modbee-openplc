@@ -1,10 +1,10 @@
 TYPE
   ST_VesselFlowSts : STRUCT
-    bGood : BOOL;
-    fInflow : REAL; (* per hour: fRise + fOutflow *)
-    fRise : REAL; (* the volume's change per hour *)
-    fOutflow : REAL; (* the outflow meter's rate per hour *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bGood : BOOL; (* the flows can be trusted *)
+    fInflowPerHour : REAL; (* per hour: fRisePerHour + fOutflowPerHour *)
+    fRisePerHour : REAL; (* the volume's change per hour *)
+    fOutflowPerHour : REAL; (* the outflow meter's rate per hour *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

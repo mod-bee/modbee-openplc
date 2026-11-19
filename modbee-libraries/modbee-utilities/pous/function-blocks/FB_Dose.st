@@ -1,20 +1,20 @@
 (* FB_Dose — the engine every dosing block shares (FB_DoseBatch, FB_DoseFlow, FB_DoseTimed): written once.
-bRun / bStart / bStop / bReset and the record's commands (bCmdStart, bCmdStop, bCmdHold, bCmdReset: once per
+bRun / bStart / bStop / bResetFaults and the record's commands (bCmdStart, bCmdStop, bCmdPause, bCmdResetFaults: once per
 write); bInterlock FALSE stops the pump in every variant (Flow / Timed resume by themselves, a Batch is held);
-bPermissive FALSE holds back a dose start; bHold and bCmdHold (until the next start) pause; bStop, bCmdStop, bAbort,
-the record's bCmdAbort (stop reason Abort), set.bEnabled FALSE end a dose (a held bRun must drop before it doses again); bStockLow -> set.stStockLow;
-set.stMaxTime and set.fMaxQuantity cap a dose. ipPump (optional): Request(bRun := bPumpRun, bHold := NOT bInterlock,
-fSpeed := fRate); dosing counts only while it runs.
-Modes (set.eMode, kept; the record's nCmdMode 0 Off / 1 Hand / 2 Auto, once, or a Command from FB_LocalControl,
+bPermissive FALSE holds back a dose start; bPause and bCmdPause (until the next start) pause; bStop, bCmdStop, bAbortWhileHeld,
+the record's bCmdAbort (stop reason Abort), set.bDosingEnabled FALSE end a dose (a held bRun must drop before it doses again); bStockLowSwitch -> set.stStockLowFault;
+set.stMaxDoseTimeFault and set.fMaxQuantityPerDose cap a dose. ipDosingPump (optional): Request(bRun := bPumpRunCommand, bPause := NOT bInterlock,
+fSpeed := fPumpSpeedPct); dosing counts only while it runs.
+Modes (set.eMode, kept; the record's nCmdDoseMode 0 Off / 1 Hand / 2 Auto, once, or a Command from FB_LocalControl,
 which drives a dose like a pump: IMPLEMENTS I_Equipment): Auto doses as above; Hand: a start (bStart, bCmdStart,
-the panel's start button) runs the pump at set.fHandRate % until a stop, set.tHandMax (0 = no limit), the
-interlock FALSE, an abort, set.bEnabled FALSE, a stop-trip or the mode left; with set.bHandNeedsCarrier the carrier
+the panel's start button) runs the pump at set.fHandSpeedPct % until a stop, set.tMaxHandRunTime (0 = no limit), the
+interlock FALSE, an abort, set.bDosingEnabled FALSE, a stop-trip or the mode left; with set.bHandNeedsCarrier the carrier
 must be proven (Flow / Timed; a Batch has none), else the pump waits (Held); a Hand run counts into the totals but
-is no dose (nDoses); Off: nothing doses. Hand never resumes after a power cut. An owner's Request(bRun) is a
-bRun (bHold = not asked); a variant's own pins and records work in Auto only.
+is no dose (nDoseCount); Off: nothing doses. Hand never resumes after a power cut. An owner's Request(bRun) is a
+bRun (bPause = not asked); a variant's own pins and records work in Auto only.
 tot (millionths of a unit, and the doses) is kept at each dose end and every hour.
-A variant calls, every scan:  bReset := Begin(refCmd := refData, refSet := refData.set, refSts := refData.sts);
-                              (its settings, its dosing: bBusy, bPaused, bPumpGo, fRate, fDosed, fDlv, eEnd,
+A variant calls, every scan:  bResetFaults := Begin(refCmd := refData, refSet := refData.set, refSts := refData.sts);
+                              (its settings, its dosing: bBusy, bPaused, bPumpGo, fPumpSpeedPct, fDosed, fDlv, eEnd,
                                bDoneNow, its protections)
                               Finish(refCmd, refSet, refSts, bOk, its trip / warning and codes, its phase,
                                      its time left); *)
@@ -24,17 +24,17 @@ FUNCTION_BLOCK ABSTRACT FB_Dose EXTENDS FB_Object IMPLEMENTS I_Equipment
     bRun : BOOL; (* Batch: rising starts a dose; Flow / Timed: doses while TRUE *)
     bStart : BOOL; (* rising: Batch starts / resumes; Flow / Timed: a run latched until a stop *)
     bStop : BOOL; (* rising: ends the dose (a held bRun must drop first) *)
-    bReset : BOOL; (* rising: resets trips whose cause has gone *)
+    bResetFaults : BOOL; (* rising: resets trips whose cause has gone *)
     bInterlock : BOOL := TRUE; (* FALSE: the pump off *)
     bPermissive : BOOL := TRUE; (* FALSE: holds back a dose start *)
-    bStockLow : BOOL;
-    bHold : BOOL; (* pause *)
-    bAbort : BOOL; (* end, refuse a start *)
-    ipPump : I_Equipment; (* optional: the dosing pump *)
+    bStockLowSwitch : BOOL; (* the chemical stock is low (a level switch) *)
+    bPause : BOOL; (* pause *)
+    bAbortWhileHeld : BOOL; (* end, refuse a start *)
+    ipDosingPump : I_Equipment; (* optional: the dosing pump *)
   END_VAR
   VAR_OUTPUT
-    bPumpRun : BOOL;
-    fRate : REAL; (* % *)
+    bPumpRunCommand : BOOL; (* run the dosing pump *)
+    fPumpSpeedPct : REAL; (* % *)
     bBusy : BOOL; (* a dose is on *)
     bDone : BOOL; (* a Batch dose completed (one scan) *)
   END_VAR
@@ -46,7 +46,7 @@ FUNCTION_BLOCK ABSTRACT FB_Dose EXTENDS FB_Object IMPLEMENTS I_Equipment
     cTotLayout : UINT := 1;
   END_VAR
   VAR
-    bAbortNow : BOOL; (* bAbort or the record's bCmdAbort, this scan *)
+    bAbortNow : BOOL; (* bAbortWhileHeld or the record's bCmdAbort, this scan *)
     tPrevAt : TIME;
     tStepT : TIME; (* this scan's time step *)
     fStepS : LREAL; (* the same in seconds *)
@@ -75,7 +75,7 @@ FUNCTION_BLOCK ABSTRACT FB_Dose EXTENDS FB_Object IMPLEMENTS I_Equipment
     eEnd : E_StopReason;
     bBusyPrev : BOOL;
     tDoseStart : TIME;
-    bQtyEnd : BOOL; (* fMaxQuantity reached: end the dose next scan *)
+    bQtyEnd : BOOL; (* fMaxQuantityPerDose reached: end the dose next scan *)
     bMaxTrip : BOOL;
     bStockTrip : BOOL;
     bTripHold : BOOL; (* a trip holds the dose (the variant adds its own) *)
@@ -103,59 +103,59 @@ FUNCTION_BLOCK ABSTRACT FB_Dose EXTENDS FB_Object IMPLEMENTS I_Equipment
 (* I_Equipment: an owner's request, a Command (FB_LocalControl) and the state, as a pump's *)
 METHOD PUBLIC Request : E_UtError
   VAR_INPUT
-    bRun : BOOL;
-    bHold : BOOL;
-    fSpeed : REAL := -1.0;
-    bUrgent : BOOL;
+    bRun : BOOL;    // run wanted
+    bHoldOff : BOOL;    // held off, still linked to the owner
+    fSpeedSetpointPct : REAL := -1.0;    // speed wanted; below 0 = its own
+    bOverflowUrgent : BOOL;    // an overflow call: a part's start hold does not hold it
   END_VAR
-  bOwnRun := bRun AND NOT bHold;
+  bOwnRun := bRun AND NOT bHoldOff;
   bOwnSeen := TRUE;
   Request := eErrorId;
 END_METHOD
 
 METHOD PUBLIC Command
   VAR_INPUT
-    eCmd : E_EquipCmd;
+    eCommand : E_EquipCmd;    // a record command applied in the block's next cycle
   END_VAR
-  eCmdPend := eCmd;
+  eCmdPend := eCommand;
 END_METHOD
 
-PROPERTY PUBLIC eActMode : E_Mode
+PROPERTY PUBLIC eActMode : E_Mode    // the mode it is in now
   GET
     eActMode := eModeNow;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bIsRunning : BOOL
+PROPERTY PUBLIC bIsRunning : BOOL    // running now
   GET
     bIsRunning := bBusy AND bPumpGo;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bIsReady : BOOL
+PROPERTY PUBLIC bIsReady : BOOL    // could start now if asked
   GET
     bIsReady := NOT bError AND eModeNow <> E_Mode.Off;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bIsAvailable : BOOL
+PROPERTY PUBLIC bIsAvailable : BOOL    // in Auto, not tripped, not interlocked
   GET
     bIsAvailable := NOT bError AND eModeNow = E_Mode.Auto;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bIsAuto : BOOL
+PROPERTY PUBLIC bIsAuto : BOOL    // in Auto now
   GET
     bIsAuto := eModeNow = E_Mode.Auto;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bIsFaulted : BOOL
+PROPERTY PUBLIC bIsFaulted : BOOL    // a trip or setting fault is active
   GET
     bIsFaulted := bError;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC eActError : E_UtError
+PROPERTY PUBLIC eActError : E_UtError    // the error shown now
   GET
     eActError := eErrorId;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC eActStopReason : E_StopReason
+PROPERTY PUBLIC eActStopReason : E_StopReason    // why it last stopped (None while one runs)
   GET
     eActStopReason := eStopShown;
   END_GET
@@ -172,23 +172,23 @@ METHOD PROTECTED FINAL BaseSetWhy : E_UtError
     refSet : REFERENCE TO ST_DoseSet;
   END_VAR
   BaseSetWhy := E_UtError.None;
-  IF NOT (refSet.fPumpCapacity >= 0.0) THEN
+  IF NOT (refSet.fFlowAtFullSpeed >= 0.0) THEN
     BaseSetWhy := E_UtError.BelowMin;
-  ELSIF NOT (refSet.fPumpCapacity <= REAL#3.4E38) THEN
+  ELSIF NOT (refSet.fFlowAtFullSpeed <= REAL#3.4E38) THEN
     BaseSetWhy := E_UtError.AboveMax;
-  ELSIF NOT (refSet.fMaxQuantity >= 0.0) THEN
+  ELSIF NOT (refSet.fMaxQuantityPerDose >= 0.0) THEN
     BaseSetWhy := E_UtError.BelowMin;
-  ELSIF NOT (refSet.fMaxQuantity <= 1.0E15) THEN
+  ELSIF NOT (refSet.fMaxQuantityPerDose <= 1.0E15) THEN
     BaseSetWhy := E_UtError.AboveMax;
-  ELSIF NOT (refSet.tRetryWindow >= T#0s) THEN
+  ELSIF NOT (refSet.tRetryCountWindow >= T#0s) THEN
     BaseSetWhy := E_UtError.TimeBad;
   ELSIF NOT (refSet.eMode = E_Mode.Off OR refSet.eMode = E_Mode.Hand OR refSet.eMode = E_Mode.Auto) THEN
     BaseSetWhy := E_UtError.ChoiceBad;
-  ELSIF NOT (refSet.fHandRate >= 0.0) THEN
+  ELSIF NOT (refSet.fHandSpeedPct >= 0.0) THEN
     BaseSetWhy := E_UtError.BelowMin;
-  ELSIF NOT (refSet.fHandRate <= 100.0) THEN
+  ELSIF NOT (refSet.fHandSpeedPct <= 100.0) THEN
     BaseSetWhy := E_UtError.AboveMax;
-  ELSIF NOT (refSet.tHandMax >= T#0s) THEN
+  ELSIF NOT (refSet.tMaxHandRunTime >= T#0s) THEN
     BaseSetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
@@ -211,7 +211,7 @@ METHOD PROTECTED FINAL EndWhy : E_StopReason
     EndWhy := E_StopReason.MaxQuantity;
   ELSIF bAbortNow THEN
     EndWhy := E_StopReason.Abort;
-  ELSIF NOT refSet.bEnabled THEN
+  ELSIF NOT refSet.bDosingEnabled THEN
     EndWhy := E_StopReason.Off;
   ELSIF bStopReq THEN
     EndWhy := E_StopReason.Manual;
@@ -265,17 +265,17 @@ METHOD PROTECTED FINAL Begin : BOOL
   bStopPrev := bStop;
   bStopSeen := refCmd.bCmdStop;
   refCmd.bCmdStop := FALSE;
-  bAbortNow := bAbort OR refCmd.bCmdAbort;
+  bAbortNow := bAbortWhileHeld OR refCmd.bCmdAbort;
   refCmd.bCmdAbort := FALSE;
-  IF refCmd.bCmdHold AND NOT bHoldSeen THEN
+  IF refCmd.bCmdPause AND NOT bHoldSeen THEN
     bHoldLatch := TRUE;
   END_IF;
-  bHoldSeen := refCmd.bCmdHold;
-  refCmd.bCmdHold := FALSE;
-  bResetReq := (bReset AND NOT bResetPrev) OR (refCmd.bCmdReset AND NOT bResetSeen) OR SystemReset();
-  bResetPrev := bReset;
-  bResetSeen := refCmd.bCmdReset;
-  refCmd.bCmdReset := FALSE;
+  bHoldSeen := refCmd.bCmdPause;
+  refCmd.bCmdPause := FALSE;
+  bResetReq := (bResetFaults AND NOT bResetPrev) OR (refCmd.bCmdResetFaults AND NOT bResetSeen) OR SystemReset();
+  bResetPrev := bResetFaults;
+  bResetSeen := refCmd.bCmdResetFaults;
+  refCmd.bCmdResetFaults := FALSE;
   CASE eCmdPend OF
     E_EquipCmd.Start: bStartReq := TRUE;
     E_EquipCmd.Stop: bStopReq := TRUE;
@@ -284,16 +284,16 @@ METHOD PROTECTED FINAL Begin : BOOL
     ;
   END_CASE;
   (* the mode: the record's command or a Command (applied once) *)
-  IF refCmd.nCmdMode >= 0 THEN
-    CASE refCmd.nCmdMode OF
+  IF refCmd.nCmdDoseMode >= 0 THEN
+    CASE refCmd.nCmdDoseMode OF
       0: refSet.eMode := E_Mode.Off;
       1: refSet.eMode := E_Mode.Hand;
       2: refSet.eMode := E_Mode.Auto;
     ELSE
-      refSts.bRefused := TRUE;    (* a dose has no other mode *)
-      refSts.eRefusedWhy := E_UtError.ChoiceBad;
+      refSts.bSettingRefused := TRUE;    (* a dose has no other mode *)
+      refSts.eSettingRefusedErrorId := E_UtError.ChoiceBad;
     END_CASE;
-    refCmd.nCmdMode := -1;
+    refCmd.nCmdDoseMode := -1;
   END_IF;
   CASE eCmdPend OF
     E_EquipCmd.ModeOff: refSet.eMode := E_Mode.Off;
@@ -312,15 +312,15 @@ METHOD PROTECTED FINAL Begin : BOOL
     bHoldLatch := FALSE;
   END_IF;
   IF bResetReq THEN
-    refSts.bQuantityHit := FALSE;
-    refSts.bRefused := FALSE;
-    refSts.eRefusedWhy := E_UtError.None;
+    refSts.bMaxQuantityReached := FALSE;
+    refSts.bSettingRefused := FALSE;
+    refSts.eSettingRefusedErrorId := E_UtError.None;
   END_IF;
   bRunEdge := bRunIn AND NOT bRunPrev AND refSet.eMode = E_Mode.Auto;
   bRunPrev := bRunIn;
 
   (* the end of a dose, and the Flow / Timed run request (a held bRun must drop after a stop) *)
-  bEndReq := bStopReq OR bAbortNow OR bMaxTrip OR bQtyEnd OR NOT refSet.bEnabled;
+  bEndReq := bStopReq OR bAbortNow OR bMaxTrip OR bQtyEnd OR NOT refSet.bDosingEnabled;
   IF bStartReq AND NOT bEndReq THEN
     bStartLatch := TRUE;
   END_IF;
@@ -333,10 +333,10 @@ METHOD PROTECTED FINAL Begin : BOOL
   IF NOT bRunIn THEN
     bRunBlocked := FALSE;
   END_IF;
-  bRunReq := refSet.bEnabled AND NOT bEndReq AND ((bRunIn AND NOT bRunBlocked) OR bStartLatch)
+  bRunReq := refSet.bDosingEnabled AND NOT bEndReq AND ((bRunIn AND NOT bRunBlocked) OR bStartLatch)
              AND refSet.eMode = E_Mode.Auto;
 
-  (* Hand: a start runs the pump at fHandRate until a stop, tHandMax, the interlock ... *)
+  (* Hand: a start runs the pump at fHandSpeedPct until a stop, tMaxHandRunTime, the interlock ... *)
   bHandWas := bHandRun;
   IF refSet.eMode = E_Mode.Hand THEN
     IF bHandRun THEN
@@ -348,7 +348,7 @@ METHOD PROTECTED FINAL Begin : BOOL
           eHandEnd := E_StopReason.MaxRun;
         ELSIF bQtyEnd THEN
           eHandEnd := E_StopReason.MaxQuantity;
-        ELSIF NOT refSet.bEnabled THEN
+        ELSIF NOT refSet.bDosingEnabled THEN
           eHandEnd := E_StopReason.Off;
         ELSE
           eHandEnd := E_StopReason.Manual;
@@ -356,11 +356,11 @@ METHOD PROTECTED FINAL Begin : BOOL
       ELSIF NOT bInterlock THEN
         bHandRun := FALSE;
         eHandEnd := E_StopReason.Interlock;
-      ELSIF refSet.tHandMax > T#0s AND tNow - tHandAt >= refSet.tHandMax THEN
+      ELSIF refSet.tMaxHandRunTime > T#0s AND tNow - tHandAt >= refSet.tMaxHandRunTime THEN
         bHandRun := FALSE;
         eHandEnd := E_StopReason.MaxRun;
       END_IF;
-    ELSIF bStartHand AND NOT bEndReq AND bInterlock AND refSet.bEnabled THEN
+    ELSIF bStartHand AND NOT bEndReq AND bInterlock AND refSet.bDosingEnabled THEN
       bHandRun := TRUE;
       tHandAt := tNow;
       fDlv := 0.0;
@@ -374,16 +374,16 @@ METHOD PROTECTED FINAL Begin : BOOL
   END_IF;
 
   (* stock low holds every variant *)
-  bStockTrip := F_Protect(tNow := tNow, bCause := bStockLow, bResetReq := bResetReq,
-                          tRetryWindow := refSet.tRetryWindow, stSet := refSet.stStockLow,
-                          stSts := refSts.stStockLow, stWork := stWStock);
+  bStockTrip := F_Protect(tNow := tNow, bConditionPresent := bStockLowSwitch, bResetRequest := bResetReq,
+                          tRetryCountWindow := refSet.tRetryCountWindow, stSettings := refSet.stStockLowFault,
+                          stStatus := refSts.stStockLowFault, stWorking := stWStock);
   bTripHold := bStockTrip;
   bCounting := TRUE;
-  IF ipPump <> NULL THEN
-    bCounting := ipPump.bIsRunning;
+  IF ipDosingPump <> NULL THEN
+    bCounting := ipDosingPump.bIsRunning;
   END_IF;
   bPumpGo := FALSE;
-  fRate := 0.0;
+  fPumpSpeedPct := 0.0;
   fDosed := 0.0;
   bDoneNow := FALSE;
   Begin := bResetReq;
@@ -411,49 +411,49 @@ METHOD PROTECTED FINAL Finish
   IF bHandRun THEN
     bBusy := TRUE;
     bHandShow := TRUE;
-    bPaused := bHold OR bHoldLatch OR bTripHold OR (refSet.bHandNeedsCarrier AND NOT bHandCarrier);
+    bPaused := bPause OR bHoldLatch OR bTripHold OR (refSet.bHandNeedsCarrier AND NOT bHandCarrier);
     bPumpGo := NOT bPaused;
-    fRate := 0.0;
+    fPumpSpeedPct := 0.0;
     fDosed := 0.0;
     IF bPumpGo THEN
-      fRate := LIMIT(0.0, refSet.fHandRate, 100.0);
+      fPumpSpeedPct := LIMIT(0.0, refSet.fHandSpeedPct, 100.0);
       IF bCounting THEN
-        fDosed := REAL_TO_LREAL(refSet.fPumpCapacity * fRate / 100.0) * fStepS / 3600.0;
+        fDosed := REAL_TO_LREAL(refSet.fFlowAtFullSpeed * fPumpSpeedPct / 100.0) * fStepS / 3600.0;
       END_IF;
     END_IF;
     fDlv := fDlv + fDosed;
   ELSIF bHandWas THEN
     eEnd := eHandEnd;
-    refSts.fLastDelivered := fDlv;
+    refSts.fDeliveredLastDose := fDlv;
   END_IF;
-  (* caps: fMaxQuantity, stMaxTime *)
+  (* caps: fMaxQuantityPerDose, stMaxDoseTimeFault *)
   bQtyEnd := FALSE;
-  IF bBusy AND refSet.fMaxQuantity > 0.0 AND fDlv >= refSet.fMaxQuantity THEN
-    refSts.bQuantityHit := TRUE;
+  IF bBusy AND refSet.fMaxQuantityPerDose > 0.0 AND fDlv >= refSet.fMaxQuantityPerDose THEN
+    refSts.bMaxQuantityReached := TRUE;
     bQtyEnd := TRUE;              (* the dose ends next scan *)
   END_IF;
   IF bBusy AND NOT bBusyPrev THEN
     tDoseStart := tNow;
   END_IF;
   IF bBusy OR bBusyPrev THEN
-    refCmd.det.tDoseTime := tNow - tDoseStart;
+    refCmd.det.tThisDoseTime := tNow - tDoseStart;
   END_IF;
-  bMaxTrip := F_Protect(tNow := tNow, bCause := bBusy, bResetReq := bResetReq, tRetryWindow := refSet.tRetryWindow,
-                        stSet := refSet.stMaxTime, stSts := refSts.stMaxTime, stWork := stWMax);
+  bMaxTrip := F_Protect(tNow := tNow, bConditionPresent := bBusy, bResetRequest := bResetReq, tRetryCountWindow := refSet.tRetryCountWindow,
+                        stSettings := refSet.stMaxDoseTimeFault, stStatus := refSts.stMaxDoseTimeFault, stWorking := stWMax);
   bEnded := (NOT bBusy AND bBusyPrev) OR bDoneNow;
   IF bEnded THEN
     refSts.eStopReason := eEnd;
   END_IF;
   IF NOT bBusy THEN
     bPumpGo := FALSE;
-    fRate := 0.0;
+    fPumpSpeedPct := 0.0;
   END_IF;
   bBusyPrev := bBusy;
 
   (* the pump *)
-  bPumpRun := bPumpGo AND bInterlock;
-  IF ipPump <> NULL THEN
-    eReqErr := ipPump.Request(bRun := bPumpRun, bHold := NOT bInterlock, fSpeed := fRate);
+  bPumpRunCommand := bPumpGo AND bInterlock;
+  IF ipDosingPump <> NULL THEN
+    eReqErr := ipDosingPump.Request(bRun := bPumpRunCommand, bHoldOff := NOT bInterlock, fSpeedSetpointPct := fPumpSpeedPct);
   END_IF;
 
   (* totals: millionths in a LINT; kept at each dose end and every hour *)
@@ -463,11 +463,11 @@ METHOD PROTECTED FINAL Finish
     IF LINT_TO_LREAL(nW) > fTotFrac THEN
       nW := nW - 1;
     END_IF;
-    refCmd.tot.nDosed := refCmd.tot.nDosed + nW;
+    refCmd.tot.nDosedMillionths := refCmd.tot.nDosedMillionths + nW;
     fTotFrac := fTotFrac - LINT_TO_LREAL(nW);
   END_IF;
   IF bDoneNow THEN
-    refCmd.tot.nDoses := refCmd.tot.nDoses + 1;
+    refCmd.tot.nDoseCount := refCmd.tot.nDoseCount + 1;
   END_IF;
   IF bEnded OR tNow - tTotKeptAt >= T#1h THEN
     stKeptTot := refCmd.tot;
@@ -478,25 +478,25 @@ METHOD PROTECTED FINAL Finish
   bDone := bDoneNow;
   IF NOT bBusy THEN
     IF refSts.eStopReason = E_StopReason.Done THEN
-      refSts.ePhase := E_DosePhase.Done;
+      refSts.eDosePhase := E_DosePhase.Done;
     ELSIF refSts.eStopReason <> E_StopReason.None AND refSts.eStopReason <> E_StopReason.Request THEN
-      refSts.ePhase := E_DosePhase.Aborted;
+      refSts.eDosePhase := E_DosePhase.Aborted;
     ELSE
-      refSts.ePhase := E_DosePhase.Idle;
+      refSts.eDosePhase := E_DosePhase.Idle;
     END_IF;
   ELSIF bPaused THEN
-    refSts.ePhase := E_DosePhase.Held;
+    refSts.eDosePhase := E_DosePhase.Held;
   ELSIF bHandRun THEN
-    refSts.ePhase := E_DosePhase.Dosing;
+    refSts.eDosePhase := E_DosePhase.Dosing;
   ELSE
-    refSts.ePhase := eVPhase;
+    refSts.eDosePhase := eVPhase;
   END_IF;
-  refSts.bHeld := bBusy AND bPaused;
-  refSts.eMode := refSet.eMode;
-  refSts.bHandRun := bHandRun;
+  refSts.bPaused := bBusy AND bPaused;
+  refSts.eModeInUse := refSet.eMode;
+  refSts.bHandRunActive := bHandRun;
   eStopShown := refSts.eStopReason;
-  refSts.fRate := fRate;
-  refSts.fDelivered := fDlv;
+  refSts.fPumpSpeedPct := fPumpSpeedPct;
+  refSts.fDeliveredThisDose := fDlv;
   IF tVLeft > T#0s THEN
     refCmd.det.tTimeLeft := tVLeft;
   ELSE
@@ -504,8 +504,8 @@ METHOD PROTECTED FINAL Finish
   END_IF;
 
   bError := NOT bOk OR bStockTrip OR bMaxTrip OR bVTrip;
-  bWarning := NOT bError AND (refSts.bQuantityHit OR stWStock.bWarn OR stWMax.bWarn OR bVWarn
-                              OR stWStock.bBadSetting OR stWMax.bBadSetting OR refSts.bRefused);
+  bWarning := NOT bError AND (refSts.bMaxQuantityReached OR stWStock.bWarning OR stWMax.bWarning OR bVWarn
+                              OR stWStock.bSettingBad OR stWMax.bSettingBad OR refSts.bSettingRefused);
   IF NOT bOk THEN
     eErrorId := E_UtError.BadSetting;
   ELSIF bStockTrip THEN
@@ -514,24 +514,24 @@ METHOD PROTECTED FINAL Finish
     eErrorId := E_UtError.MaxRun;
   ELSIF bVTrip THEN
     eErrorId := eVTrip;
-  ELSIF refSts.bQuantityHit THEN
+  ELSIF refSts.bMaxQuantityReached THEN
     eErrorId := E_UtError.MaxQuantity;
-  ELSIF stWStock.bWarn THEN
+  ELSIF stWStock.bWarning THEN
     eErrorId := E_UtError.StockLow;
-  ELSIF stWMax.bWarn THEN
+  ELSIF stWMax.bWarning THEN
     eErrorId := E_UtError.MaxRun;
   ELSIF bVWarn THEN
     eErrorId := eVWarn;
-  ELSIF stWStock.bBadSetting OR stWMax.bBadSetting THEN
+  ELSIF stWStock.bSettingBad OR stWMax.bSettingBad THEN
     eErrorId := E_UtError.BadSetting;
-  ELSIF refSts.bRefused THEN
+  ELSIF refSts.bSettingRefused THEN
     eErrorId := E_UtError.SettingRefused;
   ELSE
     eErrorId := E_UtError.None;
   END_IF;
   IF bError THEN
     eState := E_State.Fault;
-  ELSIF NOT refSet.bEnabled OR refSet.eMode = E_Mode.Off THEN
+  ELSIF NOT refSet.bDosingEnabled OR refSet.eMode = E_Mode.Off THEN
     eState := E_State.Off;
   ELSIF bBusy AND bPaused THEN
     eState := E_State.Held;

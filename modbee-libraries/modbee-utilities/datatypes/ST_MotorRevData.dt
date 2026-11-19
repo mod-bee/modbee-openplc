@@ -1,8 +1,8 @@
 TYPE
   ST_MotorRevData : STRUCT
-    bCmdFwd : BOOL; (* Hand forward (and start); cleared by the block *)
-    bCmdRev : BOOL; (* Hand reverse (and start); cleared by the block *)
-    set : ST_MotorRevSet;
-    sts : ST_MotorRevSts;
+    bCmdHandForward : BOOL; (* Hand forward (and start); cleared by the block *)
+    bCmdHandReverse : BOOL; (* Hand reverse (and start); cleared by the block *)
+    set : ST_MotorRevSet; (* settings (kept) *)
+    sts : ST_MotorRevSts; (* status *)
   END_STRUCT;
 END_TYPE

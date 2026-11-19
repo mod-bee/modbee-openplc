@@ -8,16 +8,16 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `ipCurrent` | `I_Measurement` |  | the CT. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
-| in | `ipOwner` | `I_Equipment` |  | the motor (required). The instance it drives (a motor, pump, valve or FB_Group) |
-| in | `refData` | `REFERENCE TO ST_MotorCurrentData` |  | Its record (a variable of this type) |
-| in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
-| out | `fPercent` | `REAL` |  | of full load (0 while not monitoring or not good) |
-| out | `bProvesRun` | `BOOL` |  | at or above set.fRunPercent: wire to the motor's bFeedback for run by current |
-| out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
+| in | `ipCurrentSensor` | `I_Measurement` |  | the CT. An instance of a block that offers I_Measurement (FB_AnalogIn, FB_FlowTotal, FB_LevelMeter, FB_MeasFilter, FB_MeasFrozen, ...) |
+| in | `ipOwner` | `I_Equipment` |  | the motor (required) |
+| in | `refData` | `REFERENCE TO ST_MotorCurrentData` |  | the block's record |
+| in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
+| out | `fCurrentPct` | `REAL` |  | of full load (0 while not monitoring or not good) |
+| out | `bCurrentProvesRun` | `BOOL` |  | at or above set.fProvesRunAbovePct: wire to the motor's bFeedback for run by current |
+| out | `bError` | `BOOL` |  | TRUE while a trip or setting fault is active *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
-| out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
-| out | `eState` | `E_State` |  | What it is doing now (Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault) *(from FB_Object)* |
+| out | `eErrorId` | `E_UtError` |  | which error: the first since the last reset, else the first warning; None when all is well *(from FB_Object)* |
+| out | `eState` | `E_State` |  | what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault *(from FB_Object)* |
 
 `bError`, `bWarning`, `eErrorId`, `eState` work as in every block: see [errors and state](../conventions.md#errors-and-state).
 
@@ -25,55 +25,56 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `bCmdReset` | `BOOL` |  | reset its trips whose cause has gone (cleared by the block) |
+| `bCmdResetFaults` | `BOOL` |  | reset its trips whose cause has gone (cleared by the block) |
 
 **Settings `set`** (`ST_MotorCurrentSet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `fFullLoad` | `REAL` |  | full-load current, in the CT's unit (0 = no monitoring) |
-| `fRunPercent` | `REAL` | `20.0` | bProvesRun at or above this % of full load |
-| `tStartMask` | `TIME` | `T#5s` | high / low wait this long after the motor runs |
-| `stHigh` | `ST_CurrentLevelSet` | `(eResponse := E_Response.Off, tDelay := T#5s, eReset := E_ResetMode.Retry, tRecover := T#5m, nMaxRetries := 3, fPercent := 115.0, fDeadband := 5.0)` | overload by current, default Off; fields below |
-| `stLow` | `ST_CurrentLevelSet` | `(eResponse := E_Response.Off, tDelay := T#5s, eReset := E_ResetMode.Retry, tRecover := T#5m, nMaxRetries := 3, fPercent := 40.0, fDeadband := 5.0)` | dry run / broken belt, default Off; fields below |
-| `stStartTooLong` | `ST_CurrentLevelSet` | `(eResponse := E_Response.Off, tDelay := T#15s, eReset := E_ResetMode.Manual, fPercent := 150.0, fDeadband := 0.0)` | a locked rotor, default Off; fields below |
-| `stBad` | `ST_ProtectionSet` | `(eResponse := E_Response.Warn, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3)` | default a warning; a protection's settings ([protections](../conventions.md#protections)) |
+| `fFullLoadCurrent` | `REAL` |  | full-load current, in the CT's unit (0 = no monitoring) |
+| `fProvesRunAbovePct` | `REAL` | `20.0` | bCurrentProvesRun at or above this % of full load |
+| `tMaskAfterStart` | `TIME` | `T#5s` | high / low wait this long after the motor runs |
+| `stHighCurrentFault` | `ST_CurrentLevelSet` | `(eActionOnFault := E_Response.Off, tTripDelay := T#5s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#5m, nMaxRetriesBeforeLockout := 3, fLevelPct := 115.0, fClearDeadbandPct := 5.0)` | overload by current (default Off); fields below |
+| `stLowCurrentFault` | `ST_CurrentLevelSet` | `(eActionOnFault := E_Response.Off, tTripDelay := T#5s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#5m, nMaxRetriesBeforeLockout := 3, fLevelPct := 40.0, fClearDeadbandPct := 5.0)` | dry run or broken belt (default Off); fields below |
+| `stLockedRotorFault` | `ST_CurrentLevelSet` | `(eActionOnFault := E_Response.Off, tTripDelay := T#15s, eResetMode := E_ResetMode.Manual, fLevelPct := 150.0, fClearDeadbandPct := 0.0)` | start current lasts too long: a locked rotor (default Off); fields below |
+| `stCurrentBadFault` | `ST_ProtectionSet` | `(eActionOnFault := E_Response.Warn, tTripDelay := T#5s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3)` | the current signal is bad (default a warning); a protection's settings ([protections](../conventions.md#protections)) |
+| `tRetryCountWindow` | `TIME` | `T#1h` | a Retry protection counts its trips within this window (0 = until a reset) |
 
-**`stHigh`, `stLow`, `stStartTooLong` (each; its own defaults are in the column above)** (`ST_CurrentLevelSet`)
+**`stHighCurrentFault`, `stLowCurrentFault`, `stLockedRotorFault` (each; its own defaults are in the column above)** (`ST_CurrentLevelSet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `eResponse` | `E_Response` | `E_Response.Trip` | `Off`, `Warn`, `Trip` or `Signal` (see conventions) |
-| `tDelay` | `TIME` | `T#1s` | The condition must last this long |
-| `eReset` | `E_ResetMode` | `E_ResetMode.Retry` | `Auto`, `Manual` or `Retry` (see conventions) |
-| `tRecover` | `TIME` | `T#10s` | The cause must be gone this long before it clears |
-| `nMaxRetries` | `INT` | `3` | Retry: trips in the window before it locks out |
-| `fPercent` | `REAL` |  | % of full load |
-| `fDeadband` | `REAL` | `5.0` | % of full load: clears this far back |
+| `eActionOnFault` | `E_Response` | `E_Response.Trip` | what it does when the condition lasts: Off, Warn, Trip or Signal |
+| `tTripDelay` | `TIME` | `T#1s` | the condition must last this long before it acts |
+| `eResetMode` | `E_ResetMode` | `E_ResetMode.Retry` | how it clears: Auto, Manual (held until a reset) or Retry (locks out after too many) |
+| `tAutoRecoverAfter` | `TIME` | `T#10s` | the condition must be gone this long before it clears |
+| `nMaxRetriesBeforeLockout` | `INT` | `3` | Retry: trips within the retry window before it locks out |
+| `fLevelPct` | `REAL` |  | % of full load |
+| `fClearDeadbandPct` | `REAL` | `5.0` | % of full load: clears this far back |
 
 **Status `sts`** (`ST_MotorCurrentSts`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `fCurrent` | `REAL` |  | in the CT's unit |
-| `fPercent` | `REAL` |  | of full load |
-| `bProvesRun` | `BOOL` |  |  |
-| `stHigh` | `ST_ProtectionSts` |  | overload by current, default Off; a protection's status ([protections](../conventions.md#protections)) |
-| `stLow` | `ST_ProtectionSts` |  | dry run / broken belt, default Off; a protection's status ([protections](../conventions.md#protections)) |
-| `stStartTooLong` | `ST_ProtectionSts` |  | a locked rotor, default Off; a protection's status ([protections](../conventions.md#protections)) |
-| `stBad` | `ST_ProtectionSts` |  | default a warning; a protection's status ([protections](../conventions.md#protections)) |
-| `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
-| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
-| `tMaskLeft` | `TIME` |  | running: the start mask's time left (0 when past it or stopped) |
+| `fCurrentPct` | `REAL` |  | of full load |
+| `bCurrentProvesRun` | `BOOL` |  | the current is at or above fProvesRunAbovePct |
+| `stHighCurrentFault` | `ST_ProtectionSts` |  | overload by current (default Off); a protection's status ([protections](../conventions.md#protections)) |
+| `stLowCurrentFault` | `ST_ProtectionSts` |  | dry run or broken belt (default Off); a protection's status ([protections](../conventions.md#protections)) |
+| `stLockedRotorFault` | `ST_ProtectionSts` |  | start current lasts too long: a locked rotor (default Off); a protection's status ([protections](../conventions.md#protections)) |
+| `stCurrentBadFault` | `ST_ProtectionSts` |  | the current signal is bad (default a warning); a protection's status ([protections](../conventions.md#protections)) |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and the last good value put back (until a reset) |
+| `eSettingRefusedErrorId` | `E_UtError` |  | why the last write was refused (cleared with bSettingRefused) |
+| `tStartMaskTimeLeft` | `TIME` |  | running: the start mask's time left (0 when past it or stopped) |
 
 ## How it works
 
-A motor's current from a CT, as a part of its motor. Off until `set.fFullLoad` (the motor's full-load current, in the CT's unit) is set.
+A motor's current from a CT, as a part of its motor. Off until `set.fFullLoadCurrent` (the motor's full-load current, in the CT's unit) is set.
 
-- `fPercent`: the current as % of full load. `bProvesRun`: at or above `set.fRunPercent`; wire it to the motor's `bFeedback` when the CT, not an auxiliary contact, proves the motor runs.
-- `stHigh` (overload by current, default Off) and `stLow` (dry run / broken belt, default Off): % of full load with a deadband, checked once the motor runs (`bIsRunning`) and `set.tStartMask` has passed (`sts.tMaskLeft`: the time left of the mask).
-- `stStartTooLong` (a locked rotor, default Off): the current still at or above its % while the motor's run command is on, for its delay.
-- `stBad` (default a warning): the current is not good while monitoring is wanted; high / low / start checks then wait (they never act on a bad reading).
+- `fCurrentPct`: the current as % of full load. `bCurrentProvesRun`: at or above `set.fProvesRunAbovePct`; wire it to the motor's `bRunFeedback` when the CT, not an auxiliary contact, proves the motor runs.
+- `stHighCurrentFault` (overload by current, default Off) and `stLowCurrentFault` (dry run / broken belt, default Off): % of full load with a deadband, checked once the motor runs (`bIsRunning`) and `set.tMaskAfterStart` has passed (`sts.tStartMaskTimeLeft`: the time left of the mask).
+- `stLockedRotorFault` (a locked rotor, default Off): the current still at or above its % while the motor's run command is on, for its delay.
+- `stCurrentBadFault` (default a warning): the current is not good while monitoring is wanted; high / low / start checks then wait (they never act on a bad reading).
 
 Settings are kept (a retained last-good copy, a bad write put back).
 
@@ -83,11 +84,11 @@ A pump motor's current from a 4-20 mA CT transmitter.
 
 | Pin | Wire |
 | --- | --- |
-| `ipCurrent` | `fbCt` (an FB_AnalogIn in amps) |
+| `ipCurrentSensor` | `fbCt` (an FB_AnalogIn in amps) |
 | `ipOwner` | `fbMotor1` |
 | `refData` | `stCurrent1` |
-| `fPercent` | a display |
+| `fCurrentPct` | a display |
 
-Set `stCurrent1.set.fFullLoad` to the motor's full-load current; the checks are off until it is set. Put this rung before the motor's rung.
+Set `stCurrent1.set.fFullLoadCurrent` to the motor's full-load current; the checks are off until it is set. Put this rung before the motor's rung.
 
 **Back to** [the index](../README.md).

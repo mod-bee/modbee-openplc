@@ -1,6 +1,6 @@
 TYPE
   ST_AnalogInDet : STRUCT
-    fRaw : REAL;
-    fPercent : REAL;
+    fRawValue : REAL; (* the raw input value as read *)
+    fPctOfSpan : REAL; (* the value as a % of the span *)
   END_STRUCT;
 END_TYPE

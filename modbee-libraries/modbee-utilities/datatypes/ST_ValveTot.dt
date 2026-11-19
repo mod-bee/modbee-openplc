@@ -1,5 +1,5 @@
 TYPE
   ST_ValveTot : STRUCT
-    nStrokes : UDINT;
+    nStrokeCount : UDINT; (* strokes, lifetime (kept hourly) *)
   END_STRUCT;
 END_TYPE

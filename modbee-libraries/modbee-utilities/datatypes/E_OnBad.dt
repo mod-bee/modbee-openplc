@@ -1,5 +1,0 @@
-TYPE
-  {attribute 'qualified_only'}
-  {attribute 'strict'}
-  E_OnBad : (Hold, Fixed, Stop) := Hold;
-END_TYPE

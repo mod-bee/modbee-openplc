@@ -6,20 +6,20 @@ Report by exception: decides when one value is worth sending (a change past a de
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `fIn` | `REAL` |  | The value (BOOL / INT: convert to REAL) |
-| in | `bInGood` | `BOOL` | `TRUE` | Its quality |
-| in | `bForce` | `BOOL R_EDGE` |  | report now Acts on its rising edge. |
+| in | `fIn` | `REAL` |  | the value (BOOL / INT: convert to REAL) |
+| in | `bInputGood` | `BOOL` | `TRUE` | its quality |
+| in | `bReportNow` | `BOOL R_EDGE` |  | report now |
 | in | `bEnable` | `BOOL` | `TRUE` | link up / born: on again = report First |
-| in | `refData` | `REFERENCE TO ST_ReportData` |  | Its record (a variable of this type) |
-| in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
-| out | `bReport` | `BOOL` |  | one scan: send now |
-| out | `fValue` | `REAL` |  | held from the report |
-| out | `bGood` | `BOOL` |  | its quality |
-| out | `eReason` | `E_ReportReason` |  | held from the report |
-| out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
+| in | `refData` | `REFERENCE TO ST_ReportData` |  | the block's record |
+| in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
+| out | `bSendNow` | `BOOL` |  | one scan: send now |
+| out | `fReportedValue` | `REAL` |  | held from the report |
+| out | `bReportedGood` | `BOOL` |  | its quality |
+| out | `eReportReason` | `E_ReportReason` |  | held from the report |
+| out | `bError` | `BOOL` |  | TRUE while a trip or setting fault is active *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
-| out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
-| out | `eState` | `E_State` |  | What it is doing now (Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault) *(from FB_Object)* |
+| out | `eErrorId` | `E_UtError` |  | which error: the first since the last reset, else the first warning; None when all is well *(from FB_Object)* |
+| out | `eState` | `E_State` |  | what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault *(from FB_Object)* |
 
 `bError`, `bWarning`, `eErrorId`, `eState` work as in every block: see [errors and state](../conventions.md#errors-and-state).
 
@@ -27,32 +27,32 @@ Report by exception: decides when one value is worth sending (a change past a de
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `bCmdForce` | `BOOL` |  | report now (cleared by the block; a held write acts once) |
+| `bCmdReportNow` | `BOOL` |  | report now (cleared by the block; a held write acts once) |
 
 **Settings `set`** (`ST_ReportSet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `fDeadband` | `REAL` | `1.0` | Hysteresis / deadband, in the value's unit |
-| `eDeadbandMode` | `E_DeadbandMode` |  | `Abs` (value units), `PctValue` (% of the last value sent) or `PctSpan` (% of `fSpan`) |
+| `fDeadband` | `REAL` | `1.0` | a change larger than this reports (in the unit eDeadbandMode gives) |
+| `eDeadbandMode` | `E_DeadbandMode` |  | Abs (value units), PctValue (% of the last value sent) or PctSpan (% of fSpan) |
 | `fSpan` | `REAL` |  | PctSpan: the measuring span |
-| `fResolution` | `REAL` |  | round to this step first (0 = off) |
+| `fRoundToStep` | `REAL` |  | round to this step first (0 = off) |
 | `tMinInterval` | `TIME` |  | 0 = no rate cap |
-| `tHeartbeat` | `TIME` |  | 0 = off |
-| `bReportOnStart` | `BOOL` | `TRUE` | Report when the block starts or `bEnable` comes back |
+| `tHeartbeatInterval` | `TIME` |  | 0 = off |
+| `bReportOnStart` | `BOOL` | `TRUE` | report when the block starts or bEnable comes back |
 
 **Status `sts`** (`ST_ReportSts`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `fLastValue` | `REAL` |  | The value last reported |
-| `bLastGood` | `BOOL` |  | The quality last reported |
-| `eReason` | `E_ReportReason` |  | Why (status) |
-| `nReports` | `UDINT` |  | Reports sent |
-| `nSuppressed` | `UDINT` |  | held back by tMinInterval |
-| `tSinceLast` | `TIME` |  | Time since the last report |
-| `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
-| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
+| `fReportedValue` | `REAL` |  | the value last reported |
+| `bReportedGood` | `BOOL` |  | the quality last reported |
+| `eReportReason` | `E_ReportReason` |  | why it last reported |
+| `nSentCount` | `UDINT` |  | reports sent |
+| `nSuppressedCount` | `UDINT` |  | held back by tMinInterval |
+| `tSinceLastReport` | `TIME` |  | time since the last report |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and the last good value put back (until a reset) |
+| `eSettingRefusedErrorId` | `E_UtError` |  | why the last write was refused (cleared with bSettingRefused) |
 
 ## Lists
 
@@ -61,16 +61,16 @@ Report by exception: decides when one value is worth sending (a change past a de
 
 ## How it works
 
-Report by exception: decides when one value is worth sending to SCADA / IoT. `bReport` pulses for one scan when:
+Report by exception: decides when one value is worth sending to SCADA / IoT. `bSendNow` pulses for one scan when:
 
 ```
   First      the block starts, or bEnable comes back (link up), with set.bReportOnStart
-  Change     fIn moved more than the deadband from the last value sent, or bInGood changed
-  Heartbeat  set.tHeartbeat passed since the last report (0 = off, the default)
-  Forced     bForce / bCmdForce
+  Change     fIn moved more than the deadband from the last value sent, or bInputGood changed
+  Heartbeat  set.tHeartbeatInterval passed since the last report (0 = off, the default)
+  Forced     bReportNow / bCmdReportNow
 ```
 
-`set.tMinInterval` (0 = none, the default: no rate cap) keeps two reports apart; a change or a force during it is sent when it ends, with the value then (`sts.nSuppressed` counts them). An `fIn` that is not a number is sent as not good with the last good value. The deadband is in the value's units (Abs), a % of the last value sent (PctValue), or a % of `set.fSpan` (PctSpan); `set.fResolution` rounds the value first (0 = off).
+`set.tMinInterval` (0 = none, the default: no rate cap) keeps two reports apart; a change or a force during it is sent when it ends, with the value then (`sts.nSuppressedCount` counts them). An `fIn` that is not a number is sent as not good with the last good value. The deadband is in the value's units (Abs), a % of the last value sent (PctValue), or a % of `set.fSpan` (PctSpan); `set.fRoundToStep` rounds the value first (0 = off).
 
 ## Example
 
@@ -79,8 +79,8 @@ Report a tank level when it moves more than 0.05 m.
 | Pin | Wire |
 | --- | --- |
 | `fIn` | `fbTank.fValue` |
-| `bInGood` | `fbTank.bGood` |
+| `bInputGood` | `fbTank.bGood` |
 | `refData` | `stRepLevel` |
-| `bReport` | the send trigger |
+| `bSendNow` | the send trigger |
 
 **Back to** [the index](../README.md).

@@ -1,8 +1,8 @@
 TYPE
   ST_AnnunciatorData : STRUCT
-    bCmdAck : BOOL; (* HMI commands, once per write, cleared by the block *)
-    bCmdSilence : BOOL;
-    set : ST_AnnunciatorSet;
-    sts : ST_AnnunciatorSts;
+    bCmdAcknowledge : BOOL; (* HMI commands, once per write, cleared by the block *)
+    bCmdSilenceHorn : BOOL; (* HMI: silence the horn without acknowledging (acts once) *)
+    set : ST_AnnunciatorSet; (* settings (kept) *)
+    sts : ST_AnnunciatorSts; (* status *)
   END_STRUCT;
 END_TYPE

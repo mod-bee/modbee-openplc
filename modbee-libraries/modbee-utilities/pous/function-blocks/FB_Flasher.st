@@ -2,7 +2,7 @@
 
 While bEnable is on, bQ is on for tOnTime and off for tOffTime, over and over.
 bStartOn chooses the first phase: on (a flasher) or off (an "every X, pulse"
-timer). bPulse is on for one scan at the start of every on phase, and nCycles
+timer). bPulse is on for one scan at the start of every on phase, and nOnPhaseCount
 counts the on phases since bEnable came on.
 
 The phases are timed from where they should have started, not from the
@@ -13,31 +13,31 @@ tOnTime or tOffTime acts on the phase running now.
 tOnTime = 0: bQ stays off and bPulse fires every tOffTime. tOffTime = 0: bQ stays
 on and bPulse fires every tOnTime. Both 0: bPulse fires every scan. Negative
 times count as 0. If a cycle is shorter than the task interval, bQ and bPulse
-can only change once per scan, but nCycles still counts every cycle.
+can only change once per scan, but nOnPhaseCount still counts every cycle.
 
-bHold freezes the phase clock with bQ off (a stirrer blocked at minimum
+bPause freezes the phase clock with bQ off (a stirrer blocked at minimum
 level keeps the rest of its on phase); the phase carries on where it
-stopped when bHold drops. A rising edge on bStartNow starts an on phase now
-and restarts the cycle from it (while bHold is on, it starts when bHold
-drops). tET and tRemaining are the time spent in and left of the phase
-running now; tNextOnIn is the time to the next on phase (0 while on). *)
+stopped when bPause drops. A rising edge on bStartNow starts an on phase now
+and restarts the cycle from it (while bPause is on, it starts when bPause
+drops). tElapsedTime and tTimeLeft are the time spent in and left of the phase
+running now; tNextOnTimeLeft is the time to the next on phase (0 while on). *)
 
 FUNCTION_BLOCK FB_Flasher
   VAR_INPUT
     bEnable : BOOL; (* runs while TRUE *)
-    tOnTime : TIME := T#500ms;
-    tOffTime : TIME := T#500ms;
+    tOnTime : TIME := T#500ms; (* on time *)
+    tOffTime : TIME := T#500ms; (* off time *)
     bStartOn : BOOL := TRUE; (* first phase on (TRUE) or off (FALSE) *)
-    bHold : BOOL; (* freeze the phase clock, bQ off; carries on when released *)
+    bPause : BOOL; (* freeze the phase clock, bQ off; carries on when released *)
     bStartNow : BOOL; (* rising edge: start an on phase now, the cycle restarts from it *)
   END_VAR
   VAR_OUTPUT
-    bQ : BOOL;
+    bQ : BOOL; (* the flashing output *)
     bPulse : BOOL; (* one scan at the start of every on phase *)
-    nCycles : UDINT; (* on phases since bEnable came on *)
-    tET : TIME; (* time spent in the phase running now *)
-    tRemaining : TIME; (* time left in the phase running now *)
-    tNextOnIn : TIME; (* time to the next on phase (0 while on) *)
+    nOnPhaseCount : UDINT; (* on phases since bEnable came on *)
+    tElapsedTime : TIME; (* time spent in the phase running now *)
+    tTimeLeft : TIME; (* time left in the phase running now *)
+    tNextOnTimeLeft : TIME; (* time to the next on phase (0 while on) *)
   END_VAR
   VAR
     tCur : TIME;
@@ -55,7 +55,7 @@ FUNCTION_BLOCK FB_Flasher
     nN : LINT; (* whole cycles missed between two scans *)
     nK : LINT;
     nI : INT;
-    bHeld : BOOL; (* bHold is freezing the clock *)
+    bHeld : BOOL; (* bPause is freezing the clock *)
     tHoldAt : TIME; (* when the hold began *)
     tEval : TIME; (* the clock the phase is read at (frozen while held) *)
     bSnPrev : BOOL;
@@ -73,9 +73,9 @@ IF NOT bEnable THEN
   bSnPend := FALSE;
   bSnPrev := bStartNow;
   bQ := FALSE;
-  tET := T#0s;
-  tRemaining := T#0s;
-  tNextOnIn := T#0s;
+  tElapsedTime := T#0s;
+  tTimeLeft := T#0s;
+  tNextOnTimeLeft := T#0s;
   RETURN;
 END_IF;
 
@@ -91,15 +91,15 @@ END_IF;
 IF NOT bRunning THEN
   bRunning := TRUE;
   tStart := tCur;
-  nCycles := 0;
+  nOnPhaseCount := 0;
 END_IF;
 
-(* bHold: the clock stops; on release every reference moves on by the time
+(* bPause: the clock stops; on release every reference moves on by the time
    held, so the phase carries on where it stopped *)
-IF bHold AND NOT bHeld THEN
+IF bPause AND NOT bHeld THEN
   bHeld := TRUE;
   tHoldAt := tCur;
-ELSIF bHeld AND NOT bHold THEN
+ELSIF bHeld AND NOT bPause THEN
   bHeld := FALSE;
   tStart := tStart + (tCur - tHoldAt);
   tCycleStart := tCycleStart + (tCur - tHoldAt);
@@ -174,7 +174,7 @@ IF bDue THEN
   END_IF;
   tCycleStart := tCur - tLate;
   bBegun := TRUE;
-  nCycles := nCycles + 1 + LINT_TO_UDINT(nN);
+  nOnPhaseCount := nOnPhaseCount + 1 + LINT_TO_UDINT(nN);
   bPulse := TRUE;
 END_IF;
 
@@ -189,24 +189,24 @@ bQ := bBegun AND NOT bHeld AND (tEval - tCycleStart < tOnDur);
 IF bBegun THEN
   tEl := tEval - tCycleStart;
   IF tEl < tOnDur THEN
-    tET := tEl;
-    tRemaining := tOnDur - tEl;
-    tNextOnIn := T#0s;
+    tElapsedTime := tEl;
+    tTimeLeft := tOnDur - tEl;
+    tNextOnTimeLeft := T#0s;
   ELSE
-    tET := tEl - tOnDur;
-    tRemaining := tOffDur - tET;
-    tNextOnIn := tRemaining;
+    tElapsedTime := tEl - tOnDur;
+    tTimeLeft := tOffDur - tElapsedTime;
+    tNextOnTimeLeft := tTimeLeft;
   END_IF;
 ELSE
-  tET := tEval - tStart;
-  tRemaining := tOffDur - tET;
-  tNextOnIn := tRemaining;
+  tElapsedTime := tEval - tStart;
+  tTimeLeft := tOffDur - tElapsedTime;
+  tNextOnTimeLeft := tTimeLeft;
 END_IF;
-IF tRemaining < T#0s THEN
-  tRemaining := T#0s;
+IF tTimeLeft < T#0s THEN
+  tTimeLeft := T#0s;
 END_IF;
-IF tNextOnIn < T#0s THEN
-  tNextOnIn := T#0s;
+IF tNextOnTimeLeft < T#0s THEN
+  tNextOnTimeLeft := T#0s;
 END_IF;
 
 END_FUNCTION_BLOCK

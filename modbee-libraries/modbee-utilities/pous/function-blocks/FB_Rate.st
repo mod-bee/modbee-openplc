@@ -1,38 +1,38 @@
 (* FB_Rate — rate of change, with rising-fast and falling-fast warnings.
-Pins: fIn (the value), bInGood (its health), bReset (restart the measurement) -> fRate (change per set.eUnit),
+Pins: fIn (the value), bInputGood (its health), bRestartMeasurement (restart the measurement) -> fRate (change per set.eRateUnit),
 bGood (a full window of good readings, settings valid), bRisingFast, bFallingFast, plus FB_Object's bError /
 bWarning / eErrorId / eState. refData: its record.
 
-fRate is the slope of the best straight line through the readings of the last set.tWindow (a least-squares
+fRate is the slope of the best straight line through the readings of the last set.tRateWindow (a least-squares
 trend), so noise largely cancels. To keep the memory small at any task interval, the window is kept as ten
-slices of tWindow / 10: each slice holds the average reading and the average time of its readings, and the line
+slices of tRateWindow / 10: each slice holds the average reading and the average time of its readings, and the line
 is fitted through the last nine whole slices and the one being filled. A steady ramp gives exactly its rate at any
 task interval, even with only a few scans in the window. fRate is updated every scan and is 0 until a full window
-has been measured after a start, a reset or a change of window (sts.bReady). A step of S shows as a bump (peak
-about 1.7 x S / window) lasting about one window. set.tFilter smooths fRate further (a low-pass, 63 % in tFilter).
-tWindow 0 = off.
+has been measured after a start, a reset or a change of window (sts.bWindowFull). A step of S shows as a bump (peak
+about 1.7 x S / window) lasting about one window. set.tFilterTime smooths fRate further (a low-pass, 63 % in tFilterTime).
+tRateWindow 0 = off.
 
-bRisingFast: fRate above set.fRiseLimit for set.tAlarmDelay; bFallingFast: fRate below -set.fFallLimit for
+bRisingFast: fRate above set.fRisingFastAbove for set.tAlarmDelay; bFallingFast: fRate below -set.fFallingFastAbove for
 tAlarmDelay; a limit of 0 is off. Both clear as soon as the rate is back within the limit; both are warnings
 (RateHigh / RateLow).
 
 Time is measured from TIME() differences in whole milliseconds; the part of a millisecond left over is carried to
-the next scan. A NaN or infinite fIn, or bInGood FALSE, is ignored: fRate holds, a warning (SensorBad), and the
+the next scan. A NaN or infinite fIn, or bInputGood FALSE, is ignored: fRate holds, a warning (SensorBad), and the
 time it lasted does not count. Settings are kept by the block (a retained last-good copy): restored at power-up,
 a bad write put back. *)
 
 FUNCTION_BLOCK FB_Rate EXTENDS FB_Object
   VAR_INPUT
     fIn : REAL; (* the value *)
-    bInGood : BOOL := TRUE; (* its health; FALSE: fRate held *)
-    bReset : BOOL; (* restart the measurement *)
-    refData : REFERENCE TO ST_RateData;
+    bInputGood : BOOL := TRUE; (* its health; FALSE: fRate held *)
+    bRestartMeasurement : BOOL; (* restart the measurement *)
+    refData : REFERENCE TO ST_RateData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    fRate : REAL; (* change per set.eUnit *)
+    fRate : REAL; (* change per set.eRateUnit *)
     bGood : BOOL; (* a full window of good readings, settings valid *)
-    bRisingFast : BOOL; (* fRate > fRiseLimit (after tAlarmDelay) *)
-    bFallingFast : BOOL; (* fRate < -fFallLimit (after tAlarmDelay) *)
+    bRisingFast : BOOL; (* fRate > fRisingFastAbove (after tAlarmDelay) *)
+    bFallingFast : BOOL; (* fRate < -fFallingFastAbove (after tAlarmDelay) *)
   END_VAR
   VAR RETAIN
     stKept : ST_RateSet;
@@ -52,7 +52,7 @@ FUNCTION_BLOCK FB_Rate EXTENDS FB_Object
     fAccX : LREAL; (* the slice being filled: sum of reading x ms *)
     fAccT : LREAL; (* the slice being filled: sum of reading time x ms *)
     fFilled : LREAL; (* ms in the slice being filled *)
-    fSmooth : LREAL; (* after tFilter, per second *)
+    fSmooth : LREAL; (* after tFilterTime, per second *)
     tRiseSince : TIME; (* when fRate went above the rise limit *)
     tFallSince : TIME;
     bRiseOver : BOOL;
@@ -79,22 +79,22 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_RateSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (stS.tWindow >= T#0s) THEN
+  IF NOT (stS.tRateWindow >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tFilter >= T#0s) THEN
+  ELSIF NOT (stS.tFilterTime >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   ELSIF NOT (stS.tAlarmDelay >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.fRiseLimit >= 0.0) THEN
+  ELSIF NOT (stS.fRisingFastAbove >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fRiseLimit <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fRisingFastAbove <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fFallLimit >= 0.0) THEN
+  ELSIF NOT (stS.fFallingFastAbove >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fFallLimit <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fFallingFastAbove <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.eUnit = E_RateUnit.PerSec OR stS.eUnit = E_RateUnit.PerMin OR stS.eUnit = E_RateUnit.PerHour
-             OR stS.eUnit = E_RateUnit.PerDay) THEN
+  ELSIF NOT (stS.eRateUnit = E_RateUnit.PerSec OR stS.eRateUnit = E_RateUnit.PerMin OR stS.eRateUnit = E_RateUnit.PerHour
+             OR stS.eRateUnit = E_RateUnit.PerDay) THEN
     SetWhy := E_UtError.ChoiceBad;
   END_IF;
 END_METHOD
@@ -174,24 +174,24 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOk := TRUE;
 END_IF;
 
-bRestart := bReset OR SystemReset();
-IF refData.bCmdReset THEN
+bRestart := bRestartMeasurement OR SystemReset();
+IF refData.bCmdRestartMeasurement THEN
   bRestart := TRUE;
-  refData.bCmdReset := FALSE;
-  refData.sts.bRefused := FALSE;
-  refData.sts.eRefusedWhy := E_UtError.None;
+  refData.bCmdRestartMeasurement := FALSE;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
 
-bBad := NOT bInGood OR NOT (ABS(fIn) <= REAL#3.4E38);
+bBad := NOT bInputGood OR NOT (ABS(fIn) <= REAL#3.4E38);
 fX := REAL_TO_LREAL(fIn);
-fWidth := TIME_TO_LREAL(refData.set.tWindow) / 10.0;
-IF NOT bStarted OR bRestart OR refData.set.tWindow <> tWinPrev THEN
+fWidth := TIME_TO_LREAL(refData.set.tRateWindow) / 10.0;
+IF NOT bStarted OR bRestart OR refData.set.tRateWindow <> tWinPrev THEN
   bStarted := TRUE;
   tPrev := tNow;
   nSlices := 0;
@@ -201,7 +201,7 @@ IF NOT bStarted OR bRestart OR refData.set.tWindow <> tWinPrev THEN
   fFilled := 0.0;
   fSmooth := 0.0;
 END_IF;
-tWinPrev := refData.set.tWindow;
+tWinPrev := refData.set.tRateWindow;
 IF bBad OR fWidth <= 0.0 THEN
   tPrev := tNow;                  (* bad time does not count; window 0 = off *)
   IF fWidth <= 0.0 THEN
@@ -248,18 +248,18 @@ ELSE
       fFilled := 0.0;
     END_IF;
     IF nSlices >= 10 THEN
-      IF refData.set.tFilter <= T#0s OR NOT refData.sts.bReady THEN
+      IF refData.set.tFilterTime <= T#0s OR NOT refData.sts.bWindowFull THEN
         fSmooth := Slope(fWidth := fWidth);
       ELSE
         fSmooth := fSmooth + (Slope(fWidth := fWidth) - fSmooth)
-                   * (1.0 - EXP(-fDtMs / TIME_TO_LREAL(refData.set.tFilter)));
+                   * (1.0 - EXP(-fDtMs / TIME_TO_LREAL(refData.set.tFilterTime)));
       END_IF;
     END_IF;
   END_IF;
 END_IF;
-refData.sts.bReady := nSlices >= 10;
-refData.sts.bBadInput := bBad;
-CASE refData.set.eUnit OF
+refData.sts.bWindowFull := nSlices >= 10;
+refData.sts.bInputNotGood := bBad;
+CASE refData.set.eRateUnit OF
   E_RateUnit.PerMin:  fPerUnit := 60.0;
   E_RateUnit.PerHour: fPerUnit := 3600.0;
   E_RateUnit.PerDay:  fPerUnit := 86400.0;
@@ -269,7 +269,7 @@ END_CASE;
 fRate := LREAL_TO_REAL(fSmooth * fPerUnit);
 
 (* rising / falling fast: past the limit for tAlarmDelay; clear at once *)
-IF refData.sts.bReady AND refData.set.fRiseLimit > 0.0 AND fRate > refData.set.fRiseLimit THEN
+IF refData.sts.bWindowFull AND refData.set.fRisingFastAbove > 0.0 AND fRate > refData.set.fRisingFastAbove THEN
   IF NOT bRiseOver THEN
     bRiseOver := TRUE;
     tRiseSince := tNow;
@@ -277,7 +277,7 @@ IF refData.sts.bReady AND refData.set.fRiseLimit > 0.0 AND fRate > refData.set.f
 ELSE
   bRiseOver := FALSE;
 END_IF;
-IF refData.sts.bReady AND refData.set.fFallLimit > 0.0 AND fRate < -refData.set.fFallLimit THEN
+IF refData.sts.bWindowFull AND refData.set.fFallingFastAbove > 0.0 AND fRate < -refData.set.fFallingFastAbove THEN
   IF NOT bFallOver THEN
     bFallOver := TRUE;
     tFallSince := tNow;
@@ -287,11 +287,11 @@ ELSE
 END_IF;
 bRisingFast := bRiseOver AND tNow - tRiseSince >= refData.set.tAlarmDelay;
 bFallingFast := bFallOver AND tNow - tFallSince >= refData.set.tAlarmDelay;
-bGood := refData.sts.bReady AND bOk AND NOT bBad;
+bGood := refData.sts.bWindowFull AND bOk AND NOT bBad;
 
 (* errors: all warnings but a settings record that never was good *)
 bError := NOT bOk;
-bWarning := NOT bError AND (bBad OR bRisingFast OR bFallingFast OR refData.sts.bRefused);
+bWarning := NOT bError AND (bBad OR bRisingFast OR bFallingFast OR refData.sts.bSettingRefused);
 IF NOT bOk THEN
   eErrorId := E_UtError.BadSetting;
 ELSIF bBad THEN
@@ -300,7 +300,7 @@ ELSIF bRisingFast THEN
   eErrorId := E_UtError.RateHigh;
 ELSIF bFallingFast THEN
   eErrorId := E_UtError.RateLow;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;
@@ -311,7 +311,7 @@ ELSIF fWidth <= 0.0 THEN
   eState := E_State.Off;
 ELSIF bBad THEN
   eState := E_State.Held;
-ELSIF NOT refData.sts.bReady THEN
+ELSIF NOT refData.sts.bWindowFull THEN
   eState := E_State.Starting;
 ELSE
   eState := E_State.Running;

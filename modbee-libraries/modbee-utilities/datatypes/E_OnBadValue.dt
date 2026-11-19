@@ -1,5 +1,5 @@
 TYPE
   {attribute 'qualified_only'}
   {attribute 'strict'}
-  E_OnBadValue : USINT (Pass, Hold, Substitute) := Pass;
+  E_OnBadValue : USINT (Pass, Hold, Substitute, Stop) := Pass;
 END_TYPE

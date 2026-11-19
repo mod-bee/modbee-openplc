@@ -1,12 +1,12 @@
 TYPE
   ST_LevelControlData : STRUCT
     bCmdDemand : BOOL; (* as the bDemand pin, latched until the demand level is reached *)
-    bCmdStop : BOOL; (* ends a latched demand *)
-    bCmdReset : BOOL;
-    bCmdResetTot : BOOL; (* the cycle count back to 0 (cleared) *)
-    set : ST_LevelControlSet;
-    sts : ST_LevelControlSts;
-    det : ST_LevelControlDet;
-    tot : ST_LevelControlTot;
+    bCmdEndDemand : BOOL; (* ends a latched demand *)
+    bCmdResetFaults : BOOL; (* HMI: reset trips and alarms whose cause has gone (acts once, cleared by the block) *)
+    bCmdResetTotals : BOOL; (* the cycle count back to 0 (cleared) *)
+    set : ST_LevelControlSet; (* settings (kept) *)
+    sts : ST_LevelControlSts; (* status *)
+    det : ST_LevelControlDet; (* details, sent while viewed *)
+    tot : ST_LevelControlTot; (* totals (kept) *)
   END_STRUCT;
 END_TYPE

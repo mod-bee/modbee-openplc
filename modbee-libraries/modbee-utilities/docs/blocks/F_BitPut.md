@@ -6,21 +6,21 @@ Sets one bit of a DWORD.
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `nBits` | `DWORD` |  |  |
-| in | `nBit` | `SINT` |  | 0..31 |
-| in | `bValue` | `BOOL` |  |  |
-| out | *(result)* | `DWORD` | | `nBits` with the bit set to `bValue` |
+| in | `nBits` | `DWORD` |  | the word to change |
+| in | `nBitNumber` | `SINT` |  | which bit, 0..31 |
+| in | `bValue` | `BOOL` |  | the value to put in it |
+| out | *(result)* | `DWORD` |  | nBits with the bit set to bValue |
 
 ## How it works
 
-`nBits` with bit `nBit` (0..31) set to `bValue`; `nBit` outside 0..31 leaves it as is
+`nBits` with bit `nBitNumber` (0..31) set to `bValue`; `nBitNumber` outside 0..31 leaves it as is
 
 ## Example
 
 | Pin | Wire |
 | --- | --- |
 | `nBits` | `dwLamps` |
-| `nBit` | 3 |
+| `nBitNumber` | 3 |
 | `bValue` | `bPump4Run` |
 
 **Back to** [the index](../README.md).

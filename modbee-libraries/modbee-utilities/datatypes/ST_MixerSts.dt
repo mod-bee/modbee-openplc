@@ -1,10 +1,10 @@
 TYPE
   ST_MixerSts : STRUCT
-    eActivity : E_MixerActivity;
-    bWanted : BOOL;
-    bLevelOk : BOOL;
-    stLowLevel : ST_ProtectionSts;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    eActivity : E_MixerActivity; (* what it is doing: Off, Idle, Rest, Timed, PreRun, WithPump, StartNow, PostRun, LevelLow, NotReady *)
+    bStirrerRunCommand : BOOL; (* the stirrer is asked to run now *)
+    bLevelAboveMinimum : BOOL; (* the level is at or above the minimum *)
+    stLowLevelFault : ST_ProtectionSts; (* the level is below fMinLevelToMix (default a warning) *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

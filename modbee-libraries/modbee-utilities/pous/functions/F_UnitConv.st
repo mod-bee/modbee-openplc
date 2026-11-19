@@ -33,15 +33,15 @@ FUNCTION F_UnitConv : REAL
   VAR
     eKindFrom : E_UnitKind;
     eKindTo : E_UnitKind;
-    fKFrom : LREAL; (* base = value * k + o (base: kPa, L/s, L, fK, m, %, A, Hz, kW) *)
+    fKFrom : LREAL; (* base = value * k + o (base: kPa, L/s, L, fScaleToBase, m, %, A, Hz, kW) *)
     fOFrom : LREAL;
     fKTo : LREAL;
     fOTo : LREAL;
   END_VAR
 
 
-eKindFrom := F_UnitKind(eUnit := eFromUnit, fK => fKFrom, fO => fOFrom);
-eKindTo := F_UnitKind(eUnit := eToUnit, fK => fKTo, fO => fOTo);
+eKindFrom := F_UnitKind(eUnit := eFromUnit, fScaleToBase => fKFrom, fOffsetToBase => fOFrom);
+eKindTo := F_UnitKind(eUnit := eToUnit, fScaleToBase => fKTo, fOffsetToBase => fOTo);
 IF eKindFrom = E_UnitKind.None OR eKindFrom <> eKindTo OR eFromUnit = eToUnit THEN
   F_UnitConv := fIn;
 ELSE

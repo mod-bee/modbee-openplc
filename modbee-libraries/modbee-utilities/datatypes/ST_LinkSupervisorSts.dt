@@ -1,17 +1,17 @@
 TYPE
   ST_LinkSupervisorSts : STRUCT
-    bLinkOk : BOOL;
-    nNextStep : INT; (* 1 modem restart, 2 power cycle, 3 reboot, 0 none *)
+    bLinkGood : BOOL; (* the link works now *)
+    nNextRecoveryStep : INT; (* 1 modem restart, 2 power cycle, 3 reboot, 0 none *)
     bRebootPending : BOOL; (* the reboot is due but bRebootAllowed is FALSE *)
-    nRebootsToday : INT; (* kept over a reboot *)
-    nRestarts : UDINT;
-    nPowerCycles : UDINT;
-    nOutages : UDINT;
-    tLastDownFor : TIME;
-    tDownFor : TIME;
-    tTimeLeft : TIME;
-    tCountResetIn : TIME;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    nRebootCountToday : INT; (* kept over a reboot *)
+    nModemRestartCount : UDINT; (* modem restarts since power-up *)
+    nModemPowerCycleCount : UDINT; (* modem power cycles since power-up *)
+    nOutageCount : UDINT; (* link outages since power-up *)
+    tLastOutageTime : TIME; (* how long the last outage lasted *)
+    tCurrentOutageTime : TIME; (* how long the link has been down now *)
+    tTimeLeft : TIME; (* time left to the next recovery step *)
+    tRebootCountResetTimeLeft : TIME; (* time until the reboot count starts again *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

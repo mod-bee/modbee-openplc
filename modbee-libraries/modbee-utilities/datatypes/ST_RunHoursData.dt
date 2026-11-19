@@ -1,11 +1,11 @@
 TYPE
   ST_RunHoursData : STRUCT
-    bCmdResetService : BOOL; (* cleared by the block *)
-    bCmdPreset : BOOL; (* cleared by the block *)
-    fPresetHours : LREAL; (* 0 .. 1E7 *)
-    set : ST_RunHoursSet;
-    sts : ST_RunHoursSts;
-    tCurrentRun : TIME; (* detail *)
+    bCmdServiceDone : BOOL; (* cleared by the block *)
+    bCmdPresetHours : BOOL; (* cleared by the block *)
+    fPresetRunHours : LREAL; (* 0 .. 1E7 *)
+    set : ST_RunHoursSet; (* settings (kept) *)
+    sts : ST_RunHoursSts; (* status *)
+    tThisRunTime : TIME; (* detail *)
     tot : ST_RunHoursTot; (* kept hourly and at each stop *)
   END_STRUCT;
 END_TYPE

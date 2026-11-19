@@ -3,8 +3,8 @@ kind and neither is None *)
 
 FUNCTION F_UnitOk : BOOL
   VAR_INPUT
-    eFromUnit : E_Unit;
-    eToUnit : E_Unit;
+    eFromUnit : E_Unit; (* the unit it is in *)
+    eToUnit : E_Unit; (* the unit wanted *)
   END_VAR
   VAR
     eKindFrom : E_UnitKind;

@@ -1,16 +1,16 @@
 TYPE
   ST_SequencerSts : STRUCT
-    eMode : E_SeqMode;
-    nFaultStep : INT; (* the first faulted step (0 = none) *)
-    bFltTimeout : BOOL; (* did not prove / did not stop *)
-    bFltLoss : BOOL; (* lost its feedback *)
-    bFltConfig : BOOL;
-    nConfigStep : INT; (* the first step with a bad setting (0 = the chain's own) *)
-    nRestarts : INT; (* auto restarts in this window *)
-    bRestartLocked : BOOL;
-    tRestartIn : TIME;
-    tTimeLeft : TIME;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    eChainState : E_SeqMode; (* Idle, Starting, Running, Stopping, Aborted, Held or Partial *)
+    nFirstFaultStep : INT; (* the first faulted step (0 = none) *)
+    bStepTimedOut : BOOL; (* did not prove / did not stop *)
+    bStepLostFeedback : BOOL; (* lost its feedback *)
+    bSettingBad : BOOL; (* a step's setting is bad *)
+    nBadSettingStep : INT; (* the first step with a bad setting (0 = the chain's own) *)
+    nRetriesUsed : INT; (* auto restarts in this window *)
+    bAutoRestartLocked : BOOL; (* auto restarts used up: a reset is needed *)
+    tAutoRestartTimeLeft : TIME; (* time left before the auto restart *)
+    tTimeLeft : TIME; (* time left in the delay or phase running now *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

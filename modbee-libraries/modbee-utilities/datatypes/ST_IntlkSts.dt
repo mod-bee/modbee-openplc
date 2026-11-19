@@ -1,12 +1,12 @@
 TYPE
   ST_IntlkSts : STRUCT
-    bOk : BOOL;
-    nFirstOut : INT;
-    bBypassed : BOOL;
-    nNotOk : INT;
-    nTrips : UDINT; (* times bOk went FALSE (not kept) *)
+    bPermissive : BOOL; (* all conditions OK or bypassed *)
+    nFirstOutCondition : INT; (* the first condition out since the reset (1-based; 0 = none) *)
+    bBypassInEffect : BOOL; (* a bypass is in effect *)
+    nConditionsNotMet : INT; (* conditions not OK now *)
+    nTripCount : UDINT; (* times bPermissive went FALSE (not kept) *)
     tTimeLeft : TIME; (* the shortest delay left of a condition about to count (0 = none) *)
-    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

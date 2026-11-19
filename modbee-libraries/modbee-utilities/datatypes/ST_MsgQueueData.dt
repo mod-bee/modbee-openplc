@@ -1,8 +1,8 @@
 TYPE
   ST_MsgQueueData : STRUCT
-    bCmdClear : BOOL; (* Queue empties it; Active builds it again (cleared by the block) *)
-    bCmdNext : BOOL; (* the next message now (Queue drops the one on display) *)
-    set : ST_MsgQueueSet;
-    sts : ST_MsgQueueSts;
+    bCmdClearMessages : BOOL; (* Queue empties it; Active builds it again (cleared by the block) *)
+    bCmdNextMessage : BOOL; (* the next message now (Queue drops the one on display) *)
+    set : ST_MsgQueueSet; (* settings (kept) *)
+    sts : ST_MsgQueueSts; (* status *)
   END_STRUCT;
 END_TYPE

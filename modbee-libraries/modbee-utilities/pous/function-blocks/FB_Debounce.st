@@ -1,20 +1,20 @@
 (* FB_Debounce — on / off delay filter. bQ switches on once bIn has been TRUE for tOnDelay without a break, and off
 once it has been FALSE for tOffDelay. Anything shorter is ignored. bRising / bFalling: one scan when bQ switches.
-A delay of 0 (or less) passes bIn straight through. While bIn differs from bQ, tET is how long bIn has held its new
-state and tRemaining the delay still to run; else both 0. *)
+A delay of 0 (or less) passes bIn straight through. While bIn differs from bQ, tElapsedTime is how long bIn has held its new
+state and tTimeLeft the delay still to run; else both 0. *)
 
 FUNCTION_BLOCK FB_Debounce
   VAR_INPUT
-    bIn : BOOL;
-    tOnDelay : TIME := T#100ms;
-    tOffDelay : TIME := T#100ms;
+    bIn : BOOL; (* the raw signal *)
+    tOnDelay : TIME := T#100ms; (* bIn must be TRUE this long to switch bQ on *)
+    tOffDelay : TIME := T#100ms; (* bIn must be FALSE this long to switch bQ off *)
   END_VAR
   VAR_OUTPUT
-    bQ : BOOL;
-    bRising : BOOL;
-    bFalling : BOOL;
-    tET : TIME;
-    tRemaining : TIME;
+    bQ : BOOL; (* the debounced output *)
+    bRising : BOOL; (* one scan when bQ comes on *)
+    bFalling : BOOL; (* one scan when bQ goes off *)
+    tElapsedTime : TIME; (* how long bIn has held its new state *)
+    tTimeLeft : TIME; (* the delay still to run *)
   END_VAR
   VAR
     bInPrev : BOOL;
@@ -47,12 +47,12 @@ END_IF;
 IF bIn <> bQ THEN
   IF bIn THEN tDly := tOnDelay; ELSE tDly := tOffDelay; END_IF;
   IF tDly < T#0s THEN tDly := T#0s; END_IF;
-  tET := tCur - tSince;
-  IF tET > tDly THEN tET := tDly; END_IF;
-  tRemaining := tDly - tET;
+  tElapsedTime := tCur - tSince;
+  IF tElapsedTime > tDly THEN tElapsedTime := tDly; END_IF;
+  tTimeLeft := tDly - tElapsedTime;
 ELSE
-  tET := T#0s;
-  tRemaining := T#0s;
+  tElapsedTime := T#0s;
+  tTimeLeft := T#0s;
 END_IF;
 
 END_FUNCTION_BLOCK

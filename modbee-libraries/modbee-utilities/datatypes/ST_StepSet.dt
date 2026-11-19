@@ -1,12 +1,12 @@
 TYPE
   ST_StepSet : STRUCT
-    nOutputs : DWORD; (* bit n = the (n+1)-th output on during this step *)
-    tDuration : TIME; (* time in the step (0 = the condition alone) *)
-    bWaitCond : BOOL; (* also wait for the step's bCond *)
-    tTimeout : TIME; (* the longest time in the step (0 = none) *)
-    eOnTimeout : E_StepTimeout; (* Hold (a fault), Next (carry on), Stop (the stop step) *)
-    nNext : INT; (* position to go to next (0 = the following step) *)
-    nLoops : INT; (* with nNext pointing back: repeat this many times, then carry on *)
-    bSkip : BOOL; (* pass over this step *)
+    nOutputBits : DWORD; (* bit n = the (n+1)-th output on during this step *)
+    tStepTime : TIME; (* time in the step (0 = the condition alone) *)
+    bWaitForCondition : BOOL; (* also wait for the step's bStepCondition *)
+    tStepTimeout : TIME; (* the longest time in the step (0 = none) *)
+    eWhenTimedOut : E_StepTimeout; (* Hold (a fault), Next (carry on), Stop (the stop step) *)
+    nNextStep : INT; (* position to go to next (0 = the following step) *)
+    nLoops : INT; (* with nNextStep pointing back: repeat this many times, then carry on *)
+    bSkipStep : BOOL; (* pass over this step *)
   END_STRUCT;
 END_TYPE

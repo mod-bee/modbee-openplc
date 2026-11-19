@@ -1,22 +1,22 @@
 (* FB_ValveFloat EXTENDS FB_ValvePos — a floating (three-point) valve or damper: raise / lower contacts only.
 Everything of FB_ValvePos (where it goes, the feedback, the protections, Hand) plus the drive.
-Pins added: refFloat (its record) -> bRaiseOut (open), bLowerOut (close): never together, set.tReversal between
+Pins added: refFloatingData (its record) -> bOpenOutput (open), bCloseOutput (close): never together, set.tReversingDeadTime between
 them (FB_Changeover).
-The position is the feedback when good, else estimated from the drive time (set.tStroke for a full stroke),
-re-synced at the ends by the end switches or by over-travel (set.tOverTravel of extra drive at 0 / 100 %);
-homed by a full lower at power-up (set.bHomeOnStart; until then the position is -1, not known) or on bCmdHome.
-Moves shorter than set.tMinPulse or inside the deadband are not made; a move never drives longer than a full
+The position is the feedback when good, else estimated from the drive time (set.tFullStrokeTime for a full stroke),
+re-synced at the ends by the end switches or by over-travel (set.tExtraDriveAtEnd of extra drive at 0 / 100 %);
+homed by a full lower at power-up (set.bHomeAtPowerUp; until then the position is -1, not known) or on bCmdHomeNow.
+Moves shorter than set.tShortestMove or inside the deadband are not made; a move never drives longer than a full
 stroke and the over-travel (a stuck valve is not kept driving: it waits for a new aim). A hold (Off with
-fSafePos < 0, a trip with bHoldOnFault) stops where it is. Its settings are kept by the block (a retained
+fSafePositionPct < 0, a trip with bHoldWhenTripped) stops where it is. Its settings are kept by the block (a retained
 last-good copy): restored at power-up, a bad write put back. *)
 
 FUNCTION_BLOCK FB_ValveFloat EXTENDS FB_ValvePos
   VAR_INPUT
-    refFloat : REFERENCE TO ST_ValveFloatData;
+    refFloatingData : REFERENCE TO ST_ValveFloatData; (* the floating actuator record *)
   END_VAR
   VAR_OUTPUT
-    bRaiseOut : BOOL; (* drive open *)
-    bLowerOut : BOOL; (* drive closed (never with bRaiseOut) *)
+    bOpenOutput : BOOL; (* drive open *)
+    bCloseOutput : BOOL; (* drive closed (never with bOpenOutput) *)
   END_VAR
   VAR RETAIN
     stKeptFloat : ST_ValveFloatSet;
@@ -61,13 +61,13 @@ METHOD PRIVATE FloatWhy : E_UtError
     stS : REFERENCE TO ST_ValveFloatSet;
   END_VAR
   FloatWhy := E_UtError.None;
-  IF NOT (stS.tStroke > T#0s) THEN
+  IF NOT (stS.tFullStrokeTime > T#0s) THEN
     FloatWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tMinPulse >= T#0s) THEN
+  ELSIF NOT (stS.tShortestMove >= T#0s) THEN
     FloatWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tOverTravel >= T#0s) THEN
+  ELSIF NOT (stS.tExtraDriveAtEnd >= T#0s) THEN
     FloatWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tReversal >= T#0s) THEN
+  ELSIF NOT (stS.tReversingDeadTime >= T#0s) THEN
     FloatWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
@@ -80,41 +80,41 @@ METHOD PRIVATE FloatOk : BOOL
 END_METHOD
 
 (* before the valve's scan: the estimate from last scan's drive, the end switches *)
-IF __ISVALIDREF(refFloat) AND __ISVALIDREF(refData) THEN
+IF __ISVALIDREF(refFloatingData) AND __ISVALIDREF(refData) THEN
   IF bFloatFirst THEN
     IF nKeptFloatLayout = cLayout THEN
-      refFloat.set := stKeptFloat;
+      refFloatingData.set := stKeptFloat;
     ELSE
-      stKeptFloat := refFloat.set;
+      stKeptFloat := refFloatingData.set;
       nKeptFloatLayout := cLayout;
     END_IF;
     tPrev := TIME();
-    bHomed := NOT refFloat.set.bHomeOnStart;
-  ELSIF FloatOk(stS := refFloat.set) THEN
-    stKeptFloat := refFloat.set;
+    bHomed := NOT refFloatingData.set.bHomeAtPowerUp;
+  ELSIF FloatOk(stS := refFloatingData.set) THEN
+    stKeptFloat := refFloatingData.set;
   ELSIF FloatOk(stS := stKeptFloat) THEN
-    refFloat.sts.eRefusedWhy := FloatWhy(stS := refFloat.set);
-    refFloat.set := stKeptFloat;
-    refFloat.sts.bRefused := TRUE;
+    refFloatingData.sts.eSettingRefusedErrorId := FloatWhy(stS := refFloatingData.set);
+    refFloatingData.set := stKeptFloat;
+    refFloatingData.sts.bSettingRefused := TRUE;
   END_IF;
   IF bResetThisScan THEN                  // the equipment's reset clears a refused write
-    refFloat.sts.bRefused := FALSE;
-    refFloat.sts.eRefusedWhy := E_UtError.None;
+    refFloatingData.sts.bSettingRefused := FALSE;
+    refFloatingData.sts.eSettingRefusedErrorId := E_UtError.None;
   END_IF;
-  fStrokeMs := LINT_TO_REAL(TIME_TO_LINT(refFloat.set.tStroke));
+  fStrokeMs := LINT_TO_REAL(TIME_TO_LINT(refFloatingData.set.tFullStrokeTime));
   IF fStrokeMs < 1.0 THEN
     fStrokeMs := 1.0;
   END_IF;
   nDMs := TIME_TO_LINT(TIME() - tPrev);
   tPrev := tPrev + LINT_TO_TIME(nDMs);
-  IF bRaiseOut THEN
+  IF bOpenOutput THEN
     fEst := fEst + 100.0 * LINT_TO_REAL(nDMs) / fStrokeMs;
-  ELSIF bLowerOut THEN
+  ELSIF bCloseOutput THEN
     fEst := fEst - 100.0 * LINT_TO_REAL(nDMs) / fStrokeMs;
   END_IF;
   fEst := LIMIT(0.0, fEst, 100.0);
-  bEndO := refData.set.bUseOpenLs AND bOpenLs;
-  bEndC := refData.set.bUseClosedLs AND bClosedLs;
+  bEndO := refData.set.bOpenLimitSwitchFitted AND bOpenLimitSwitch;
+  bEndC := refData.set.bClosedLimitSwitchFitted AND bClosedLimitSwitch;
   IF bEndC AND NOT bEndO THEN
     fEst := 0.0;                  (* an end switch re-syncs *)
     bHomed := TRUE;
@@ -132,9 +132,9 @@ END_IF;
 
 SUPER^();                         // the valve: modes, the aim, the feedback, protections
 
-IF NOT __ISVALIDREF(refFloat) OR NOT __ISVALIDREF(refData) THEN
-  bRaiseOut := FALSE;
-  bLowerOut := FALSE;
+IF NOT __ISVALIDREF(refFloatingData) OR NOT __ISVALIDREF(refData) THEN
+  bOpenOutput := FALSE;
+  bCloseOutput := FALSE;
   bError := TRUE;
   eErrorId := E_UtError.NoRecord;
   RETURN;
@@ -142,9 +142,9 @@ END_IF;
 fSp := LIMIT(0.0, fAim, 100.0);
 bHold := bAimHold;
 
-(* homing: at power-up (bHomeOnStart) or bCmdHome, a full lower and the over-travel *)
-IF refFloat.bCmdHome THEN
-  refFloat.bCmdHome := FALSE;
+(* homing: at power-up (bHomeAtPowerUp) or bCmdHomeNow, a full lower and the over-travel *)
+IF refFloatingData.bCmdHomeNow THEN
+  refFloatingData.bCmdHomeNow := FALSE;
   bHomeAsk := TRUE;
 END_IF;
 IF bHomeAsk AND NOT bHold THEN
@@ -160,10 +160,10 @@ IF NOT bHomed AND NOT bFbOk AND NOT bHold AND NOT bHoming THEN
 END_IF;
 
 (* the move *)
-IF (fbCo.bQA OR fbCo.bQB) AND NOT bOutOnPrev THEN
+IF (fbCo.bSideAOutput OR fbCo.bSideBOutput) AND NOT bOutOnPrev THEN
   tPulseStart := tNow;            (* the drive actually came on *)
 END_IF;
-bOutOnPrev := fbCo.bQA OR fbCo.bQB;
+bOutOnPrev := fbCo.bSideAOutput OR fbCo.bSideBOutput;
 tElapsed := T#0s;
 IF bOutOnPrev THEN
   tElapsed := tNow - tPulseStart;
@@ -175,13 +175,13 @@ IF bHold THEN
 ELSIF nDir <> 0 THEN
   IF bToEnd THEN
     IF NOT bAtEndTime AND bOutOnPrev
-       AND ((nDir = 1 AND (fEst <= 0.0 OR (bFbOk AND fPosition <= refData.set.fClosedThreshold)))
-            OR (nDir = 2 AND (fEst >= 100.0 OR (bFbOk AND fPosition >= refData.set.fOpenThreshold)))) THEN
+       AND ((nDir = 1 AND (fEst <= 0.0 OR (bFbOk AND fPositionPct <= refData.set.fClosedAtOrBelowPct)))
+            OR (nDir = 2 AND (fEst >= 100.0 OR (bFbOk AND fPositionPct >= refData.set.fOpenAtOrAbovePct)))) THEN
       bAtEndTime := TRUE;
       tEndSince := tNow;
     END_IF;
     IF (nDir = 1 AND bEndC) OR (nDir = 2 AND bEndO)
-       OR (bAtEndTime AND tNow - tEndSince >= refFloat.set.tOverTravel) THEN
+       OR (bAtEndTime AND tNow - tEndSince >= refFloatingData.set.tExtraDriveAtEnd) THEN
       bStopNow := TRUE;
       IF nDir = 1 THEN
         fEst := 0.0;
@@ -193,14 +193,14 @@ ELSIF nDir <> 0 THEN
         bSynced100 := TRUE;
       END_IF;
     ELSIF NOT bHoming AND ((nDir = 1 AND fSp > 0.0) OR (nDir = 2 AND fSp < 100.0))
-          AND tElapsed >= refFloat.set.tMinPulse THEN
+          AND tElapsed >= refFloatingData.set.tShortestMove THEN
       bStopNow := TRUE;           (* the aim moved off the end *)
     END_IF;
-  ELSIF bOutOnPrev AND tElapsed >= refFloat.set.tMinPulse
-        AND ((nDir = 2 AND fPosition >= fSp) OR (nDir = 1 AND fPosition <= fSp)) THEN
+  ELSIF bOutOnPrev AND tElapsed >= refFloatingData.set.tShortestMove
+        AND ((nDir = 2 AND fPositionPct >= fSp) OR (nDir = 1 AND fPositionPct <= fSp)) THEN
     bStopNow := TRUE;             (* there *)
   END_IF;
-  IF tElapsed >= refFloat.set.tStroke + refFloat.set.tOverTravel THEN
+  IF tElapsed >= refFloatingData.set.tFullStrokeTime + refFloatingData.set.tExtraDriveAtEnd THEN
     bStopNow := TRUE;             (* never longer than a full stroke and the over-travel *)
     IF NOT bHoming AND (NOT bToEnd OR NOT bAtEndTime) THEN
       bCapped := TRUE;            (* stuck, or the end never came: do not keep driving it *)
@@ -219,7 +219,7 @@ IF bStopNow THEN
 END_IF;
 
 (* a new move: past the deadband, at least a minimum pulse *)
-IF bCapped AND ABS(fSp - fCappedSp) > refData.set.fDeadband THEN
+IF bCapped AND ABS(fSp - fCappedSp) > refData.set.fPositionDeadbandPct THEN
   bCapped := FALSE;
 END_IF;
 IF nDir = 0 AND NOT bHold AND NOT bStopNow THEN
@@ -232,10 +232,10 @@ IF nDir = 0 AND NOT bHold AND NOT bStopNow THEN
   ELSIF fSp >= 100.0 AND NOT bSynced100 AND NOT bCapped THEN
     nWant := 2;
     bToEnd := TRUE;
-  ELSIF fSp > 0.0 AND fSp < 100.0 AND NOT bCapped AND fPosition >= 0.0 THEN
-    fErr := fSp - fPosition;
-    fDb := MAX(refData.set.fDeadband, 100.0 * LINT_TO_REAL(nDMs) / fStrokeMs);
-    IF ABS(fErr) > fDb AND ABS(fErr) * fStrokeMs / 100.0 >= LINT_TO_REAL(TIME_TO_LINT(refFloat.set.tMinPulse)) THEN
+  ELSIF fSp > 0.0 AND fSp < 100.0 AND NOT bCapped AND fPositionPct >= 0.0 THEN
+    fErr := fSp - fPositionPct;
+    fDb := MAX(refData.set.fPositionDeadbandPct, 100.0 * LINT_TO_REAL(nDMs) / fStrokeMs);
+    IF ABS(fErr) > fDb AND ABS(fErr) * fStrokeMs / 100.0 >= LINT_TO_REAL(TIME_TO_LINT(refFloatingData.set.tShortestMove)) THEN
       bToEnd := FALSE;
       IF fErr > 0.0 THEN nWant := 2; ELSE nWant := 1; END_IF;
     END_IF;
@@ -246,15 +246,15 @@ IF nDir = 0 AND NOT bHold AND NOT bStopNow THEN
     IF nWant = 2 THEN bSynced0 := FALSE; ELSE bSynced100 := FALSE; END_IF;
   END_IF;
 END_IF;
-fbCo(bRun := nDir <> 0, bWantB := nDir = 2, bUseFb := FALSE, tGapAB := refFloat.set.tReversal,
-     tGapBA := refFloat.set.tReversal);
-bRaiseOut := fbCo.bQB;
-bLowerOut := fbCo.bQA;
+fbCo(bRun := nDir <> 0, bSelectSideB := nDir = 2, bContactorFeedbackFitted := FALSE, tAToBDeadTime := refFloatingData.set.tReversingDeadTime,
+     tBToADeadTime := refFloatingData.set.tReversingDeadTime);
+bOpenOutput := fbCo.bSideBOutput;
+bCloseOutput := fbCo.bSideAOutput;
 bFloatFirst := FALSE;
-refData.sts.fDemand := fSp;
-refData.sts.fEstimate := fEstimate;
-refData.sts.bMoving := nDir <> 0 OR fbCo.bInGap;
-refFloat.sts.bHomed := bHomed;
-refFloat.sts.bHoming := bHoming;
+refData.sts.fDemandPct := fSp;
+refData.sts.fEstimatedPct := fEstimate;
+refData.sts.bTravelling := nDir <> 0 OR fbCo.bPlannedGap;
+refFloatingData.sts.bHomed := bHomed;
+refFloatingData.sts.bHoming := bHoming;
 
 END_FUNCTION_BLOCK

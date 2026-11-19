@@ -2,29 +2,29 @@
 A FUNCTION: no instance; the VAR_IN_OUTs are references to the owner's settings, status and private state.
 
 - a condition acts after its delay; Off ignores it; Signal follows it with no alarm (no latch, count, retry,
-warning or trip) and lets go once the cause has been gone tRecover (a restart delay: a source refills before
+warning or trip) and lets go once the cause has been gone tAutoRecoverAfter (a restart delay: a source refills before
 its pump starts again; 0 = at once);
-- Auto clears once the cause has been gone tRecover; Retry does the same but locks out after nMaxRetries
+- Auto clears once the cause has been gone tAutoRecoverAfter; Retry does the same but locks out after nMaxRetriesBeforeLockout
 trips in the window; Manual needs a reset;
 - the recover wait counts from the raw cause gone; a cause back inside the wait starts it again; a reset is
 taken only while the cause is gone;
-- an operator reset clearing an Auto / Retry latch early sets bCleared, not bReset;
-- a garbage response acts as Trip, a garbage reset as Retry, both with bBadSetting; a negative delay /
-recover acts as 0 (recover 0 keeps the retry limit), a negative nMaxRetries locks out at the first trip,
+- an operator reset clearing an Auto / Retry latch early sets bClearedEarly, not bReset;
+- a garbage response acts as Trip, a garbage reset as Retry, both with bSettingBad; a negative delay /
+recover acts as 0 (recover 0 keeps the retry limit), a negative nMaxRetriesBeforeLockout locks out at the first trip,
 a negative window is one hour.
 Returns TRUE while it trips. *)
 
 FUNCTION F_Protect : BOOL
   VAR_INPUT
     tNow : TIME; (* TIME() of this scan *)
-    bCause : BOOL; (* the condition is present now *)
-    bResetReq : BOOL; (* reset request this scan *)
-    tRetryWindow : TIME; (* Retry counts trips within this window (T#0s: no window) *)
+    bConditionPresent : BOOL; (* the condition is present now *)
+    bResetRequest : BOOL; (* reset request this scan *)
+    tRetryCountWindow : TIME; (* Retry counts trips within this window (T#0s: no window) *)
   END_VAR
   VAR_IN_OUT
-    stSet : ST_ProtectionSet; (* settings (read only) *)
-    stSts : ST_ProtectionSts;
-    stWork : ST_ProtectionWork;
+    stSettings : ST_ProtectionSet; (* settings (read only) *)
+    stStatus : ST_ProtectionSts; (* status *)
+    stWorking : ST_ProtectionWork; (* working memory *)
   END_VAR
   VAR
     eResp : E_Response;
@@ -37,165 +37,165 @@ FUNCTION F_Protect : BOOL
   END_VAR
 
 
-stWork.bReset := FALSE;
-stWork.bCleared := FALSE;
+stWorking.bResetDone := FALSE;
+stWorking.bClearedEarly := FALSE;
 bBad := FALSE;
-CASE stSet.eResponse OF
+CASE stSettings.eActionOnFault OF
   E_Response.Off:
-    stSts.eState := E_ProtState.Clear;
-    stSts.nRetries := 0;
-    stSts.tTimeLeft := T#0s;
-    stWork.bActive := FALSE;
-    stWork.bLatched := FALSE;
-    stWork.bNeedsReset := FALSE;
-    stWork.bCausePrev := FALSE;
-    stWork.bActivePrev := FALSE;
-    stWork.bTrip := FALSE;
-    stWork.bWarn := FALSE;
-    stWork.bSignal := FALSE;
-    stWork.bBadSetting := FALSE;
+    stStatus.eFaultState := E_ProtState.Clear;
+    stStatus.nRetriesUsed := 0;
+    stStatus.tTimeLeft := T#0s;
+    stWorking.bActive := FALSE;
+    stWorking.bLatched := FALSE;
+    stWorking.bResetNeeded := FALSE;
+    stWorking.bConditionLastScan := FALSE;
+    stWorking.bActiveLastScan := FALSE;
+    stWorking.bTripping := FALSE;
+    stWorking.bWarning := FALSE;
+    stWorking.bSignalling := FALSE;
+    stWorking.bSettingBad := FALSE;
     F_Protect := FALSE;
     RETURN;
   E_Response.Warn, E_Response.Trip, E_Response.Signal:
-    eResp := stSet.eResponse;
+    eResp := stSettings.eActionOnFault;
 ELSE
   eResp := E_Response.Trip;       // a garbage response never removes a protection
   bBad := TRUE;
 END_CASE;
-CASE stSet.eReset OF
+CASE stSettings.eResetMode OF
   E_ResetMode.Manual, E_ResetMode.Retry, E_ResetMode.Auto:
-    eRst := stSet.eReset;
+    eRst := stSettings.eResetMode;
 ELSE
   eRst := E_ResetMode.Retry;      // rides through glitches, locks out after its retries
   bBad := TRUE;
 END_CASE;
-tDelay := stSet.tDelay;
+tDelay := stSettings.tTripDelay;
 IF tDelay < T#0s THEN tDelay := T#0s; bBad := TRUE; END_IF;
-tRecover := stSet.tRecover;
+tRecover := stSettings.tAutoRecoverAfter;
 IF tRecover < T#0s THEN
   tRecover := T#0s;
   bBad := TRUE;
   IF eRst = E_ResetMode.Auto THEN eRst := E_ResetMode.Retry; END_IF;   // never endless restarts
 END_IF;
-tWindow := tRetryWindow;
+tWindow := tRetryCountWindow;
 IF tWindow < T#0s THEN tWindow := T#1h; bBad := TRUE; END_IF;
-IF eRst = E_ResetMode.Retry AND stSet.nMaxRetries < 0 THEN bBad := TRUE; END_IF;
-stWork.bBadSetting := bBad;
+IF eRst = E_ResetMode.Retry AND stSettings.nMaxRetriesBeforeLockout < 0 THEN bBad := TRUE; END_IF;
+stWorking.bSettingBad := bBad;
 bWin := tWindow > T#0s;
 
-IF bCause AND NOT stWork.bCausePrev THEN
-  stWork.tCauseSince := tNow;
+IF bConditionPresent AND NOT stWorking.bConditionLastScan THEN
+  stWorking.tConditionCameAt := tNow;
 END_IF;
-stWork.bCausePrev := bCause;
-stWork.bActive := bCause AND (tNow - stWork.tCauseSince >= tDelay);
-IF bCause THEN
-  stWork.tGoneSince := tNow;      // the recover wait counts from the raw cause gone
+stWorking.bConditionLastScan := bConditionPresent;
+stWorking.bActive := bConditionPresent AND (tNow - stWorking.tConditionCameAt >= tDelay);
+IF bConditionPresent THEN
+  stWorking.tConditionWentAt := tNow;      // the recover wait counts from the raw cause gone
 END_IF;
 
 IF eResp = E_Response.Signal THEN
-  (* a control point: follows the condition, no alarm, nothing latched; lets go tRecover after the cause *)
-  IF stWork.bActive THEN
-    stWork.bSignal := TRUE;
-  ELSIF stWork.bSignal AND tNow - stWork.tGoneSince < tRecover THEN
-    stWork.bSignal := TRUE;       // the restart delay
+  (* a control point: follows the condition, no alarm, nothing latched; lets go tAutoRecoverAfter after the cause *)
+  IF stWorking.bActive THEN
+    stWorking.bSignalling := TRUE;
+  ELSIF stWorking.bSignalling AND tNow - stWorking.tConditionWentAt < tRecover THEN
+    stWorking.bSignalling := TRUE;       // the restart delay
   ELSE
-    stWork.bSignal := FALSE;
+    stWorking.bSignalling := FALSE;
   END_IF;
-  stWork.bLatched := FALSE;
-  stWork.bNeedsReset := FALSE;
-  stWork.bActivePrev := stWork.bActive;
-  stWork.bTrip := FALSE;
-  stWork.bWarn := FALSE;
-  stSts.nRetries := 0;
-  stSts.tTimeLeft := T#0s;
-  IF stWork.bActive THEN
-    stSts.eState := E_ProtState.Signal;
-  ELSIF stWork.bSignal THEN
-    stSts.eState := E_ProtState.Recovering;
-    stSts.tTimeLeft := tRecover - (tNow - stWork.tGoneSince);
-  ELSIF bCause THEN
-    stSts.eState := E_ProtState.Pending;
-    stSts.tTimeLeft := tDelay - (tNow - stWork.tCauseSince);
+  stWorking.bLatched := FALSE;
+  stWorking.bResetNeeded := FALSE;
+  stWorking.bActiveLastScan := stWorking.bActive;
+  stWorking.bTripping := FALSE;
+  stWorking.bWarning := FALSE;
+  stStatus.nRetriesUsed := 0;
+  stStatus.tTimeLeft := T#0s;
+  IF stWorking.bActive THEN
+    stStatus.eFaultState := E_ProtState.Signal;
+  ELSIF stWorking.bSignalling THEN
+    stStatus.eFaultState := E_ProtState.Recovering;
+    stStatus.tTimeLeft := tRecover - (tNow - stWorking.tConditionWentAt);
+  ELSIF bConditionPresent THEN
+    stStatus.eFaultState := E_ProtState.Pending;
+    stStatus.tTimeLeft := tDelay - (tNow - stWorking.tConditionCameAt);
   ELSE
-    stSts.eState := E_ProtState.Clear;
+    stStatus.eFaultState := E_ProtState.Clear;
   END_IF;
-  IF stSts.tTimeLeft < T#0s THEN stSts.tTimeLeft := T#0s; END_IF;
+  IF stStatus.tTimeLeft < T#0s THEN stStatus.tTimeLeft := T#0s; END_IF;
   F_Protect := FALSE;
   RETURN;
 END_IF;
-stWork.bSignal := FALSE;
+stWorking.bSignalling := FALSE;
 
-IF stWork.bActive AND NOT stWork.bActivePrev THEN
-  stSts.nCount := stSts.nCount + 1;
-  stWork.bLatched := TRUE;
+IF stWorking.bActive AND NOT stWorking.bActiveLastScan THEN
+  stStatus.nTripCount := stStatus.nTripCount + 1;
+  stWorking.bLatched := TRUE;
   IF eRst = E_ResetMode.Manual THEN
-    stWork.bNeedsReset := TRUE;
+    stWorking.bResetNeeded := TRUE;
   ELSIF eRst = E_ResetMode.Retry AND eResp = E_Response.Trip THEN
-    IF stSts.nRetries = 0 OR (bWin AND tNow - stWork.tWindowStart > tWindow) THEN
-      stWork.tWindowStart := tNow;
-      stSts.nRetries := 0;
+    IF stStatus.nRetriesUsed = 0 OR (bWin AND tNow - stWorking.tRetryWindowStartedAt > tWindow) THEN
+      stWorking.tRetryWindowStartedAt := tNow;
+      stStatus.nRetriesUsed := 0;
     END_IF;
-    stSts.nRetries := stSts.nRetries + 1;
-    IF stSts.nRetries > stSet.nMaxRetries THEN
-      stWork.bNeedsReset := TRUE;
+    stStatus.nRetriesUsed := stStatus.nRetriesUsed + 1;
+    IF stStatus.nRetriesUsed > stSettings.nMaxRetriesBeforeLockout THEN
+      stWorking.bResetNeeded := TRUE;
     END_IF;
   END_IF;
 END_IF;
-stWork.bActivePrev := stWork.bActive;
-IF bWin AND stSts.nRetries > 0 AND NOT stWork.bNeedsReset AND tNow - stWork.tWindowStart > tWindow THEN
-  stSts.nRetries := 0;
+stWorking.bActiveLastScan := stWorking.bActive;
+IF bWin AND stStatus.nRetriesUsed > 0 AND NOT stWorking.bResetNeeded AND tNow - stWorking.tRetryWindowStartedAt > tWindow THEN
+  stStatus.nRetriesUsed := 0;
 END_IF;
 
-IF stWork.bLatched THEN
-  IF stWork.bNeedsReset THEN
-    IF bResetReq AND NOT bCause THEN
-      stWork.bLatched := FALSE;
-      stWork.bNeedsReset := FALSE;
-      stSts.nRetries := 0;
-      stWork.bReset := TRUE;      // a reset that was needed: the owner may ask for a new command
+IF stWorking.bLatched THEN
+  IF stWorking.bResetNeeded THEN
+    IF bResetRequest AND NOT bConditionPresent THEN
+      stWorking.bLatched := FALSE;
+      stWorking.bResetNeeded := FALSE;
+      stStatus.nRetriesUsed := 0;
+      stWorking.bResetDone := TRUE;      // a reset that was needed: the owner may ask for a new command
     END_IF;
   ELSIF eResp = E_Response.Warn THEN
-    stWork.bLatched := stWork.bActive;
-  ELSIF NOT bCause AND tNow - stWork.tGoneSince >= tRecover THEN
-    stWork.bLatched := FALSE;
-  ELSIF NOT bCause AND bResetReq THEN
+    stWorking.bLatched := stWorking.bActive;
+  ELSIF NOT bConditionPresent AND tNow - stWorking.tConditionWentAt >= tRecover THEN
+    stWorking.bLatched := FALSE;
+  ELSIF NOT bConditionPresent AND bResetRequest THEN
     (* the operator's reset with the cause gone: no wait, a fresh retry count, no command cycle *)
-    stWork.bLatched := FALSE;
-    stSts.nRetries := 0;
-    stWork.bCleared := TRUE;
+    stWorking.bLatched := FALSE;
+    stStatus.nRetriesUsed := 0;
+    stWorking.bClearedEarly := TRUE;
   END_IF;
-ELSIF bResetReq AND stSts.nRetries > 0 THEN
-  stSts.nRetries := 0;
+ELSIF bResetRequest AND stStatus.nRetriesUsed > 0 THEN
+  stStatus.nRetriesUsed := 0;
 END_IF;
 
-stSts.tTimeLeft := T#0s;
-IF stWork.bLatched THEN
-  IF NOT stWork.bNeedsReset AND eResp = E_Response.Trip AND NOT bCause THEN
-    stSts.tTimeLeft := tRecover - (tNow - stWork.tGoneSince);
+stStatus.tTimeLeft := T#0s;
+IF stWorking.bLatched THEN
+  IF NOT stWorking.bResetNeeded AND eResp = E_Response.Trip AND NOT bConditionPresent THEN
+    stStatus.tTimeLeft := tRecover - (tNow - stWorking.tConditionWentAt);
   END_IF;
-ELSIF bCause AND NOT stWork.bActive THEN
-  stSts.tTimeLeft := tDelay - (tNow - stWork.tCauseSince);
+ELSIF bConditionPresent AND NOT stWorking.bActive THEN
+  stStatus.tTimeLeft := tDelay - (tNow - stWorking.tConditionCameAt);
 END_IF;
-IF stSts.tTimeLeft < T#0s THEN
-  stSts.tTimeLeft := T#0s;
+IF stStatus.tTimeLeft < T#0s THEN
+  stStatus.tTimeLeft := T#0s;
 END_IF;
-stWork.bTrip := stWork.bLatched AND eResp = E_Response.Trip;
-stWork.bWarn := stWork.bLatched AND eResp = E_Response.Warn;
-IF stWork.bLatched THEN
-  IF stWork.bNeedsReset THEN
-    stSts.eState := E_ProtState.Locked;
-  ELSIF stWork.bWarn THEN
-    stSts.eState := E_ProtState.Warning;
-  ELSIF NOT bCause THEN
-    stSts.eState := E_ProtState.Recovering;
+stWorking.bTripping := stWorking.bLatched AND eResp = E_Response.Trip;
+stWorking.bWarning := stWorking.bLatched AND eResp = E_Response.Warn;
+IF stWorking.bLatched THEN
+  IF stWorking.bResetNeeded THEN
+    stStatus.eFaultState := E_ProtState.Locked;
+  ELSIF stWorking.bWarning THEN
+    stStatus.eFaultState := E_ProtState.Warning;
+  ELSIF NOT bConditionPresent THEN
+    stStatus.eFaultState := E_ProtState.Recovering;
   ELSE
-    stSts.eState := E_ProtState.Tripped;
+    stStatus.eFaultState := E_ProtState.Tripped;
   END_IF;
-ELSIF bCause THEN
-  stSts.eState := E_ProtState.Pending;
+ELSIF bConditionPresent THEN
+  stStatus.eFaultState := E_ProtState.Pending;
 ELSE
-  stSts.eState := E_ProtState.Clear;
+  stStatus.eFaultState := E_ProtState.Clear;
 END_IF;
-F_Protect := stWork.bTrip;
+F_Protect := stWorking.bTripping;
 
 END_FUNCTION

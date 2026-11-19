@@ -1,19 +1,19 @@
 TYPE
   ST_IntlkCond : STRUCT
-    bOk : BOOL := TRUE; (* the live condition (the project's rung) *)
-    bBypass : BOOL; (* the bypass request (HMI; never kept) *)
-    bBad : BOOL; (* not OK now (before the delay) *)
-    bTripped : BOOL; (* counts against bOk *)
+    bConditionMet : BOOL := TRUE; (* the live condition (the project's rung) *)
+    bBypassRequest : BOOL; (* the bypass request (HMI; never kept) *)
+    bNotMetNow : BOOL; (* not OK now (before the delay) *)
+    bTripped : BOOL; (* counts against bConditionMet *)
     bLatched : BOOL; (* held until a reset *)
-    bBypassed : BOOL;
-    nRetries : INT;
-    tBadSince : TIME;
-    tBypassAt : TIME;
-    tWindowAt : TIME;
-    bBypassOn : BOOL;
-    bWentBad : BOOL; (* went out this scan *)
-    tDelayLeft : TIME; (* not OK, before tDelay: the time left until it counts (0 otherwise) *)
-    tBypassFor : TIME; (* bypassed so far (0 when not) *)
-    tBypassLeft : TIME; (* bypassed: the time left before it drops out (0: none, or no timeout) *)
+    bBypassInEffect : BOOL; (* the bypass is in effect *)
+    nRetriesUsed : INT; (* trips counted in the current retry window *)
+    tWentNotMetAt : TIME; (* engine memory: when it went not OK (TIME()) *)
+    tBypassStartedAt : TIME; (* engine memory: when the bypass started *)
+    tRetryWindowStartedAt : TIME; (* engine memory: when the retry window started *)
+    bBypassLastScan : BOOL; (* engine memory: the bypass request on the last scan *)
+    bWentNotMetThisScan : BOOL; (* went out this scan *)
+    tTripDelayTimeLeft : TIME; (* not OK, before tTripDelay: the time left until it counts (0 otherwise) *)
+    tBypassedFor : TIME; (* bypassed so far (0 when not) *)
+    tBypassTimeLeft : TIME; (* bypassed: the time left before it drops out (0: none, or no timeout) *)
   END_STRUCT;
 END_TYPE

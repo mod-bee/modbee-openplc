@@ -3,15 +3,15 @@
 INTERFACE I_Vessel EXTENDS I_Measurement
 
 
-PROPERTY fActVolume : REAL
+PROPERTY fActVolume : REAL    // working volume now
   GET
   END_GET
 END_PROPERTY
-PROPERTY fActPercent : REAL       // of the full volume
+PROPERTY fActVolumePct : REAL       // of the full volume
   GET
   END_GET
 END_PROPERTY
-PROPERTY fFullVolume : REAL
+PROPERTY fFullVolume : REAL    // working volume when full
   GET
   END_GET
 END_PROPERTY

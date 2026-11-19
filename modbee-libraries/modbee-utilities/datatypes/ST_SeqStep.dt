@@ -1,10 +1,10 @@
 TYPE
   ST_SeqStep : STRUCT
-    bFeedback : BOOL; (* running / proven *)
-    bReady : BOOL := TRUE; (* healthy, could start *)
-    bCmd : BOOL; (* run this machine *)
-    eState : E_SeqStepState;
-    tElapsed : TIME;
-    tLeft : TIME; (* its timeout while starting or stopping, its delay while the chain waits on it *)
+    bRunFeedback : BOOL; (* running / proven *)
+    bMachineReady : BOOL := TRUE; (* healthy, could start *)
+    bRunCommand : BOOL; (* run this machine *)
+    eStepState : E_SeqStepState; (* Off, Starting, Running, Stopping, Fault or Bypassed *)
+    tElapsedTime : TIME; (* time in the step so far *)
+    tTimeLeft : TIME; (* its timeout while starting or stopping, its delay while the chain waits on it *)
   END_STRUCT;
 END_TYPE

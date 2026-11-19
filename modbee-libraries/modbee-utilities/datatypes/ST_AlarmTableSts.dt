@@ -1,14 +1,14 @@
 TYPE
   ST_AlarmTableSts : STRUCT
-    nFirst : INT; (* the first trip (lowest row), else the first warning (0 none) *)
-    nLatest : INT; (* the row raised last *)
-    nFirstOut : INT; (* the first row raised since the last reset *)
-    eFirstCode : E_UtError;
-    eLatestCode : E_UtError;
-    nOn : INT;
-    nTrips : INT;
-    nUnacked : INT;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    nTopAlarmRow : INT; (* the first trip (lowest row), else the first warning (0 none) *)
+    nLatestAlarmRow : INT; (* the row raised last *)
+    nFirstOutRow : INT; (* the first row raised since the last reset *)
+    eTopAlarmCode : E_UtError; (* alarm code of nTopAlarmRow *)
+    eLatestAlarmCode : E_UtError; (* alarm code of nLatestAlarmRow *)
+    nAlarmsActive : INT; (* rows on now *)
+    nTripsActive : INT; (* rows on now that are trips *)
+    nAlarmsUnacknowledged : INT; (* rows waiting to be acknowledged *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

@@ -6,11 +6,11 @@ Unpacks the address F_IoAddrPack packed.
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `dwAddr` | `DWORD` |  | The packed address |
-| out | `eSrc` | `E_IoSrc` |  | Where the channel is: `None` (not on this site), `Board`, `I2c`, `Field`, `Remote` |
-| out | `nModule` | `USINT` |  | The module number (0..127) |
-| out | `nCh` | `USINT` |  | The channel number on the module |
-| out | *(result)* | `BOOL` | | Always TRUE |
+| in | `nPackedAddress` | `DWORD` |  | the packed address |
+| out | `eSource` | `E_IoSrc` |  | where the channel is: None (not on this site), Board, I2c, Field or Remote |
+| out | `nModuleNumber` | `USINT` |  | the module number within that source (0..127) |
+| out | `nChannel` | `USINT` |  | the channel number on the module |
+| out | *(result)* | `BOOL` |  | always TRUE (the parts are in the outputs) |
 
 ## How it works
 

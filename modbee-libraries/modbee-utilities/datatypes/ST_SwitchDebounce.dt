@@ -1,6 +1,6 @@
 TYPE
   ST_SwitchDebounce : STRUCT
-    bState : BOOL;
-    tSince : TIME; (* the input has differed from bState since then *)
+    bDebouncedState : BOOL; (* engine memory: the debounced state *)
+    tDifferentAt : TIME; (* the input has differed from bDebouncedState since then *)
   END_STRUCT;
 END_TYPE

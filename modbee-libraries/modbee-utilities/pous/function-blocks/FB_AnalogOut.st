@@ -1,30 +1,30 @@
 (* FB_AnalogOut — an engineering demand to an analog output card.
-Pins: fIn (the demand, Auto), bInterlock (FALSE: set.fFailValue at once, or hold with set.bHoldOnInterlock),
-bManual (held: Manual while TRUE, a panel switch, not kept) -> fOut (the engineering value output), nOutRaw (for
-%QW), bLimited (clamped or ramping), plus FB_Object's bError / bWarning / eErrorId / eState. refData: its record.
+Pins: fAutoDemand (the demand, Auto), bInterlock (FALSE: set.fValueWhenInterlocked at once, or hold with set.bHoldWhenInterlocked),
+bSelectorManual (held: Manual while TRUE, a panel switch, not kept) -> fOutput (the engineering value output), nRawOutput (for
+%QW), bClampedOrRamping (clamped or ramping), plus FB_Object's bError / bWarning / eErrorId / eState. refData: its record.
 stConfig: the raw span of the card, set once at the declaration.
 
-Auto: fOut follows fIn. Manual (the bManual pin held, or the kept choice set.bManual from bCmdManual /
-bCmdAuto): fOut is set.fManualValue; at the change to Manual, fManualValue takes the present fOut (bumpless). The
-demand is clamped to fOutMin..fOutMax and ramped by fRampUp / fRampDown (engineering units per eRateUnit; 0 = no
-ramp; FB_Ramp, exact at any rate). bInterlock FALSE gives fFailValue at once (or holds), in Manual too; when it
-returns the output ramps back from there. A NaN demand holds the output (warning ValueBad). nOutRaw =
-fRawMin..fRawMax over fEngMin..fEngMax, clamped to 0..65535. A span that is not usable: bError BadSetting, fOut
-at fEngMin. Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put
+Auto: fOutput follows fAutoDemand. Manual (the bSelectorManual pin held, or the kept choice set.bManualSelected from bCmdSelectManual /
+bCmdSelectAuto): fOutput is set.fManualOutput; at the change to Manual, fManualOutput takes the present fOutput (bumpless). The
+demand is clamped to fMinOutput..fMaxOutput and ramped by fRampUpRate / fRampDownRate (engineering units per eRateUnit; 0 = no
+ramp; FB_Ramp, exact at any rate). bInterlock FALSE gives fValueWhenInterlocked at once (or holds), in Manual too; when it
+returns the output ramps back from there. A NaN demand holds the output (warning ValueBad). nRawOutput =
+fRawAtSignalLow..fRawAtSignalHigh over fValueAtSignalLow..fValueAtSignalHigh, clamped to 0..65535. A span that is not usable: bError BadSetting, fOutput
+at fValueAtSignalLow. Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put
 back. *)
 
 FUNCTION_BLOCK FB_AnalogOut EXTENDS FB_Object
   VAR_INPUT
-    fIn : REAL; (* engineering demand (Auto) *)
-    bInterlock : BOOL := TRUE; (* FALSE: fFailValue at once (or hold) *)
-    bManual : BOOL; (* held: Manual while TRUE (a panel switch; not kept) *)
-    refData : REFERENCE TO ST_AnalogOutData;
+    fAutoDemand : REAL; (* engineering demand (Auto) *)
+    bInterlock : BOOL := TRUE; (* FALSE: fValueWhenInterlocked at once (or hold) *)
+    bSelectorManual : BOOL; (* held: Manual while TRUE (a panel switch; not kept) *)
+    refData : REFERENCE TO ST_AnalogOutData; (* the block's record *)
     stConfig : ST_AnalogOutConfig; (* the card's raw span (set at the declaration) *)
   END_VAR
   VAR_OUTPUT
-    fOut : REAL; (* engineering value actually output *)
-    nOutRaw : UINT; (* for %QW *)
-    bLimited : BOOL; (* clamped or ramping *)
+    fOutput : REAL; (* engineering value actually output *)
+    nRawOutput : UINT; (* for %QW *)
+    bClampedOrRamping : BOOL; (* clamped or ramping *)
   END_VAR
   VAR RETAIN
     stKept : ST_AnalogOutSet;
@@ -58,28 +58,28 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_AnalogOutSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (ABS(stS.fEngMax - stS.fEngMin) > 0.0) THEN   // no span
+  IF NOT (ABS(stS.fValueAtSignalHigh - stS.fValueAtSignalLow) > 0.0) THEN   // no span
     SetWhy := E_UtError.LimitsBad;
-  ELSIF NOT (ABS(stS.fEngMax - stS.fEngMin) <= REAL#3.4E38) THEN
+  ELSIF NOT (ABS(stS.fValueAtSignalHigh - stS.fValueAtSignalLow) <= REAL#3.4E38) THEN
     SetWhy := E_UtError.ValueBad;
-  ELSIF NOT (ABS(stS.fOutMin) <= REAL#3.4E38) THEN
+  ELSIF NOT (ABS(stS.fMinOutput) <= REAL#3.4E38) THEN
     SetWhy := E_UtError.ValueBad;
-  ELSIF NOT (ABS(stS.fOutMax) <= REAL#3.4E38) THEN
+  ELSIF NOT (ABS(stS.fMaxOutput) <= REAL#3.4E38) THEN
     SetWhy := E_UtError.ValueBad;
-  ELSIF NOT (stS.fRampUp >= 0.0) THEN
+  ELSIF NOT (stS.fRampUpRate >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fRampUp <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fRampUpRate <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fRampDown >= 0.0) THEN
+  ELSIF NOT (stS.fRampDownRate >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fRampDown <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fRampDownRate <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
   ELSIF NOT (stS.eRateUnit = E_RateUnit.PerSec OR stS.eRateUnit = E_RateUnit.PerMin
              OR stS.eRateUnit = E_RateUnit.PerHour OR stS.eRateUnit = E_RateUnit.PerDay) THEN
     SetWhy := E_UtError.ChoiceBad;
-  ELSIF NOT (ABS(stS.fFailValue) <= REAL#3.4E38) THEN
+  ELSIF NOT (ABS(stS.fValueWhenInterlocked) <= REAL#3.4E38) THEN
     SetWhy := E_UtError.ValueBad;
-  ELSIF NOT (ABS(stS.fManualValue) <= REAL#3.4E38) THEN
+  ELSIF NOT (ABS(stS.fManualOutput) <= REAL#3.4E38) THEN
     SetWhy := E_UtError.ValueBad;
   END_IF;
 END_METHOD
@@ -112,52 +112,52 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOkSet := TRUE;
 END_IF;
-IF refData.bCmdReset OR SystemReset() THEN
-  refData.bCmdReset := FALSE;
-  refData.sts.bRefused := FALSE;
-  refData.sts.eRefusedWhy := E_UtError.None;
+IF refData.bCmdClearRefused OR SystemReset() THEN
+  refData.bCmdClearRefused := FALSE;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
-bCfgBad := NOT (ABS(refData.set.fEngMax - refData.set.fEngMin) > 0.0
-                AND ABS(refData.set.fEngMax - refData.set.fEngMin) <= REAL#3.4E38)
-           OR NOT (ABS(stConfig.fRawMin) <= REAL#3.4E38 AND ABS(stConfig.fRawMax) <= REAL#3.4E38);
+bCfgBad := NOT (ABS(refData.set.fValueAtSignalHigh - refData.set.fValueAtSignalLow) > 0.0
+                AND ABS(refData.set.fValueAtSignalHigh - refData.set.fValueAtSignalLow) <= REAL#3.4E38)
+           OR NOT (ABS(stConfig.fRawAtSignalLow) <= REAL#3.4E38 AND ABS(stConfig.fRawAtSignalHigh) <= REAL#3.4E38);
 
 (* Manual / Auto: the HMI once, the pin while held *)
-IF refData.bCmdManual THEN refData.set.bManual := TRUE; refData.bCmdManual := FALSE; END_IF;
-IF refData.bCmdAuto THEN refData.set.bManual := FALSE; refData.bCmdAuto := FALSE; END_IF;
-bManualNow := bManual OR refData.set.bManual;
+IF refData.bCmdSelectManual THEN refData.set.bManualSelected := TRUE; refData.bCmdSelectManual := FALSE; END_IF;
+IF refData.bCmdSelectAuto THEN refData.set.bManualSelected := FALSE; refData.bCmdSelectAuto := FALSE; END_IF;
+bManualNow := bSelectorManual OR refData.set.bManualSelected;
 IF bManualNow AND NOT bManualPrev AND NOT bFirstScan THEN
-  refData.set.fManualValue := fOut;   (* bumpless into Manual *)
+  refData.set.fManualOutput := fOutput;   (* bumpless into Manual *)
 END_IF;
 bManualPrev := bManualNow;
 IF bManualNow THEN
-  fDemand := refData.set.fManualValue;
+  fDemand := refData.set.fManualOutput;
 ELSE
-  fDemand := fIn;
+  fDemand := fAutoDemand;
 END_IF;
 bBadIn := NOT (ABS(fDemand) <= REAL#3.4E38);
-IF refData.set.fOutMin <= refData.set.fOutMax THEN
-  fLo := refData.set.fOutMin;
-  fHi := refData.set.fOutMax;
+IF refData.set.fMinOutput <= refData.set.fMaxOutput THEN
+  fLo := refData.set.fMinOutput;
+  fHi := refData.set.fMaxOutput;
 ELSE
-  fLo := refData.set.fOutMax;
-  fHi := refData.set.fOutMin;
+  fLo := refData.set.fMaxOutput;
+  fHi := refData.set.fMinOutput;
 END_IF;
 bClamped := FALSE;
 IF bCfgBad THEN
-  fbRamp(fIn := refData.set.fEngMin, bTrack := TRUE);
+  fbRamp(fSetpoint := refData.set.fValueAtSignalLow, bFollowAtOnce := TRUE);
 ELSIF NOT bInterlock THEN
-  IF refData.set.bHoldOnInterlock THEN
-    fbRamp(fIn := fOut, bTrack := TRUE);
+  IF refData.set.bHoldWhenInterlocked THEN
+    fbRamp(fSetpoint := fOutput, bFollowAtOnce := TRUE);
   ELSE
-    fbRamp(fIn := refData.set.fFailValue, bTrack := TRUE);   (* at once, no ramp *)
+    fbRamp(fSetpoint := refData.set.fValueWhenInterlocked, bFollowAtOnce := TRUE);   (* at once, no ramp *)
   END_IF;
 ELSIF bBadIn THEN
-  fbRamp(fIn := fOut, bTrack := TRUE);                       (* hold *)
+  fbRamp(fSetpoint := fOutput, bFollowAtOnce := TRUE);                       (* hold *)
 ELSE
   fTarget := fDemand;
   IF fTarget > fHi THEN
@@ -167,14 +167,14 @@ ELSE
     fTarget := fLo;
     bClamped := TRUE;
   END_IF;
-  fbRamp(fIn := fTarget, fRateUp := refData.set.fRampUp, fRateDown := refData.set.fRampDown,
-         eRateUnit := refData.set.eRateUnit, bTrack := FALSE);
+  fbRamp(fSetpoint := fTarget, fRampUpRate := refData.set.fRampUpRate, fRampDownRate := refData.set.fRampDownRate,
+         eRateUnit := refData.set.eRateUnit, bFollowAtOnce := FALSE);
 END_IF;
-fOut := fbRamp.fOut;
+fOutput := fbRamp.fOut;
 
 (* the raw value for the card *)
-fRaw := F_Scale(fIn := fOut, fInMin := refData.set.fEngMin, fInMax := refData.set.fEngMax,
-                fOutMin := stConfig.fRawMin, fOutMax := stConfig.fRawMax, bClamp := FALSE, bSpanBad => bSpanBad);
+fRaw := F_Scale(fIn := fOutput, fInputLow := refData.set.fValueAtSignalLow, fInputHigh := refData.set.fValueAtSignalHigh,
+                fOutputLow := stConfig.fRawAtSignalLow, fOutputHigh := stConfig.fRawAtSignalHigh, bClampToOutput := FALSE, bInputSpanBad => bSpanBad);
 IF NOT (fRaw >= 0.0) THEN
   bClamped := TRUE;
   fRaw := 0.0;
@@ -182,19 +182,19 @@ ELSIF fRaw > 65535.0 THEN
   bClamped := TRUE;
   fRaw := 65535.0;
 END_IF;
-nOutRaw := REAL_TO_UINT(fRaw);
-bLimited := bClamped OR fbRamp.bRamping;
+nRawOutput := REAL_TO_UINT(fRaw);
+bClampedOrRamping := bClamped OR fbRamp.bRamping;
 
 (* errors *)
 bError := bCfgBad;
-bWarning := NOT bError AND (bBadIn OR NOT bOkSet OR refData.sts.bRefused);
+bWarning := NOT bError AND (bBadIn OR NOT bOkSet OR refData.sts.bSettingRefused);
 IF bCfgBad THEN
   eErrorId := E_UtError.BadSetting;
 ELSIF bBadIn THEN
   eErrorId := E_UtError.ValueBad;
 ELSIF NOT bOkSet THEN
   eErrorId := E_UtError.BadSetting;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;
@@ -206,10 +206,10 @@ ELSIF NOT bInterlock OR bBadIn THEN
 ELSE
   eState := E_State.Running;
 END_IF;
-refData.sts.fOut := fOut;
-refData.sts.bManual := bManualNow;
-refData.sts.bBadInput := bBadIn;
-refData.nRaw := nOutRaw;
+refData.sts.fOutput := fOutput;
+refData.sts.bInManual := bManualNow;
+refData.sts.bDemandNotANumber := bBadIn;
+refData.nRawOutput := nRawOutput;
 bFirstScan := FALSE;
 
 END_FUNCTION_BLOCK

@@ -1,15 +1,15 @@
 TYPE
   ST_VesselSts : STRUCT
     fVolume : REAL; (* in eVolumeUnit *)
-    fFullVolume : REAL;
-    fPercent : REAL; (* of fFullVolume *)
-    fFree : REAL; (* space left *)
-    fMass : REAL;
-    fLevelPercent : REAL; (* the level as a % of fPctLow .. fPctHigh *)
-    fArea : REAL; (* water surface, m2 *)
-    bGood : BOOL;
+    fFullVolume : REAL; (* working volume when full *)
+    fVolumePct : REAL; (* of fFullVolume *)
+    fSpaceLeft : REAL; (* space left *)
+    fMass : REAL; (* mass of the contents, in eMassUnit *)
+    fLevelPct : REAL; (* the level as a % of fLevelAtZeroPct .. fLevelAtFullPct *)
+    fSurfaceArea : REAL; (* water surface, m2 *)
+    bGood : BOOL; (* the volume can be trusted *)
     bOverfull : BOOL; (* the level is above the top *)
-    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

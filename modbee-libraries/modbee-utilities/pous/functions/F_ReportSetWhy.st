@@ -2,28 +2,28 @@
 
 FUNCTION F_ReportSetWhy : E_UtError
   VAR_IN_OUT
-    stS : ST_ReportSet;
+    stSettings : ST_ReportSet; (* the settings to check *)
   END_VAR
 
 F_ReportSetWhy := E_UtError.None;
-IF NOT (stS.fDeadband >= 0.0) THEN
+IF NOT (stSettings.fDeadband >= 0.0) THEN
   F_ReportSetWhy := E_UtError.BelowMin;
-ELSIF NOT (stS.fDeadband <= REAL#3.4E38) THEN
+ELSIF NOT (stSettings.fDeadband <= REAL#3.4E38) THEN
   F_ReportSetWhy := E_UtError.AboveMax;
-ELSIF NOT (stS.fSpan >= 0.0) THEN
+ELSIF NOT (stSettings.fSpan >= 0.0) THEN
   F_ReportSetWhy := E_UtError.BelowMin;
-ELSIF NOT (stS.fSpan <= REAL#3.4E38) THEN
+ELSIF NOT (stSettings.fSpan <= REAL#3.4E38) THEN
   F_ReportSetWhy := E_UtError.AboveMax;
-ELSIF NOT (stS.fResolution >= 0.0) THEN
+ELSIF NOT (stSettings.fRoundToStep >= 0.0) THEN
   F_ReportSetWhy := E_UtError.BelowMin;
-ELSIF NOT (stS.fResolution <= REAL#3.4E38) THEN
+ELSIF NOT (stSettings.fRoundToStep <= REAL#3.4E38) THEN
   F_ReportSetWhy := E_UtError.AboveMax;
-ELSIF NOT (stS.tMinInterval >= T#0s) THEN
+ELSIF NOT (stSettings.tMinInterval >= T#0s) THEN
   F_ReportSetWhy := E_UtError.TimeBad;
-ELSIF NOT (stS.tHeartbeat >= T#0s) THEN
+ELSIF NOT (stSettings.tHeartbeatInterval >= T#0s) THEN
   F_ReportSetWhy := E_UtError.TimeBad;
-ELSIF NOT (stS.eDeadbandMode = E_DeadbandMode.Abs OR stS.eDeadbandMode = E_DeadbandMode.PctValue
-           OR (stS.eDeadbandMode = E_DeadbandMode.PctSpan AND stS.fSpan > 0.0)) THEN
+ELSIF NOT (stSettings.eDeadbandMode = E_DeadbandMode.Abs OR stSettings.eDeadbandMode = E_DeadbandMode.PctValue
+           OR (stSettings.eDeadbandMode = E_DeadbandMode.PctSpan AND stSettings.fSpan > 0.0)) THEN
   F_ReportSetWhy := E_UtError.ChoiceBad;
 END_IF;
 

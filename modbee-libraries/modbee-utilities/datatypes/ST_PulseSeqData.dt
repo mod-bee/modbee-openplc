@@ -1,8 +1,8 @@
 TYPE
   ST_PulseSeqData : STRUCT
-    bCmdStart : BOOL; (* one full cleaning cycle now (cleared by the block) *)
+    bCmdCleanCycleNow : BOOL; (* one full cleaning cycle now (cleared by the block) *)
     bCmdStop : BOOL; (* stop now (cleared by the block) *)
-    set : ST_PulseSeqSet;
-    sts : ST_PulseSeqSts;
+    set : ST_PulseSeqSet; (* settings (kept) *)
+    sts : ST_PulseSeqSts; (* status *)
   END_STRUCT;
 END_TYPE

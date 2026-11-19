@@ -1,42 +1,42 @@
-(* FB_Interlock — the conditions that must all be healthy before a device may run, as one bOk signal (-> the
+(* FB_Interlock — the conditions that must all be healthy before a device may run, as one bPermissive signal (-> the
 device's bInterlock or bPermissive), with first-out and maintenance bypasses.
-Pins: bBypassEnable (key switch / HMI permission for bypasses), bReset (clear the first-out and the held
+Pins: bBypassKeyOn (key switch / HMI permission for bypasses), bResetFaults (clear the first-out and the held
 conditions), refData (set, sts), and the tables the project declares (VAR_IN_OUT, the same size, at most 16 rows):
-aCondSet (each condition's settings) and aCond (each condition's live row: the project writes aCond[i].bOk on the
-condition's own rung, the HMI aCond[i].bBypass) -> bOk (all healthy or bypassed), nFirstOut (the first condition
-to stop the device since the last reset, 1-based; 0 = none), nNotOk, bBypassed (a bypass in effect: show it),
+aConditionSettings (each condition's settings) and aConditions (each condition's live row: the project writes aConditions[i].bPermissive on the
+condition's own rung, the HMI aConditions[i].bBypassRequest) -> bPermissive (all healthy or bypassed), nFirstOutCondition (the first condition
+to stop the device since the last reset, 1-based; 0 = none), nConditionsNotMet, bBypassInEffect (a bypass in effect: show it),
 plus FB_Object's bError / bWarning / eErrorId / eState.
-Each condition: tDelay (must be not OK this long to count); eReset Auto (OK again as soon as healthy), Manual
+Each condition: tTripDelay (must be not OK this long to count); eResetMode Auto (OK again as soon as healthy), Manual
 (held until a reset while healthy: pull cords, e-stops) or Retry (by itself while healthy, at most
-set.nMaxRetries times in set.tRetryWindow, then held); a bypass (its bBypass, only when bBypassAllowed, while
-bBypassEnable, for at most set.tBypassTimeout, 0 = never drops out; once timed out it stays off until the request
-or bBypassEnable goes). nFirstOut: the condition that went out first (same scan: the lowest); after a reset with
+set.nMaxRetriesBeforeLockout times in set.tRetryCountWindow, then held); a bypass (its bBypassRequest, only when bBypassAllowed, while
+bBypassKeyOn, for at most set.tBypassEndsAfter, 0 = never drops out; once timed out it stays off until the request
+or bBypassKeyOn goes). nFirstOutCondition: the condition that went out first (same scan: the lowest); after a reset with
 conditions still out, the lowest of those. A reset acts in the same scan.
 Errors: bError for no rows, tables of different sizes or more than 16 rows, or settings that were never good
 (BadSetting); bWarning for a bypass (Bypassed) or a refused write (SettingRefused). Not OK is the block's job, not
 an error: eState Held, eErrorId ConditionOut.
-Kept settings (a retained last-good copy, restored at power-up, a bad write put back, sts.bRefused / eRefusedWhy):
+Kept settings (a retained last-good copy, restored at power-up, a bad write put back, sts.bSettingRefused / eSettingRefusedErrorId):
 set, and
-each condition row packed into one DWORD: bits 0..1 eReset, 2 bBypassAllowed, 3..31 tDelay in 10 ms steps
+each condition row packed into one DWORD: bits 0..1 eResetMode, 2 bBypassAllowed, 3..31 tTripDelay in 10 ms steps
 (0 .. about 62 days; kept rounded down to 10 ms).
-Times: each row shows tDelayLeft (not OK, until it counts), tBypassFor / tBypassLeft (a bypass so far / until it
+Times: each row shows tTripDelayTimeLeft (not OK, until it counts), tBypassedFor / tBypassTimeLeft (a bypass so far / until it
 drops out); sts.tTimeLeft is the shortest delay left. *)
 
 FUNCTION_BLOCK FB_Interlock EXTENDS FB_Object
   VAR_INPUT
-    bBypassEnable : BOOL := FALSE; (* key switch / HMI permission for bypasses *)
-    bReset : BOOL R_EDGE; (* clear the first-out and the held conditions *)
-    refData : REFERENCE TO ST_IntlkData;
+    bBypassKeyOn : BOOL := FALSE; (* key switch / HMI permission for bypasses *)
+    bResetFaults : BOOL R_EDGE; (* clear the first-out and the held conditions *)
+    refData : REFERENCE TO ST_IntlkData; (* the interlock's record *)
   END_VAR
   VAR_IN_OUT
-    aCondSet : ARRAY [*] OF ST_INTLKCONDSET;
-    aCond : ARRAY [*] OF ST_INTLKCOND;
+    aConditionSettings : ARRAY [*] OF ST_INTLKCONDSET; (* each condition's settings (same size as aCondition) *)
+    aConditions : ARRAY [*] OF ST_INTLKCOND; (* each condition's live row; the project writes aConditions[i].bConditionMet *)
   END_VAR
   VAR_OUTPUT
-    bOk : BOOL; (* all OK or bypassed -> the device's bInterlock / bPermissive *)
-    nFirstOut : INT; (* the first condition out since the reset (1-based; 0 = none) *)
-    nNotOk : INT;
-    bBypassed : BOOL; (* a bypass in effect (show it!) *)
+    bPermissive : BOOL; (* all OK or bypassed -> the device's bInterlock / bPermissive *)
+    nFirstOutCondition : INT; (* the first condition out since the reset (1-based; 0 = none) *)
+    nConditionsNotMet : INT; (* conditions not OK now *)
+    bBypassInEffect : BOOL; (* a bypass in effect (show it!) *)
   END_VAR
   VAR RETAIN
     stKept : ST_IntlkSet;
@@ -77,11 +77,11 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_IntlkSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (stS.tBypassTimeout >= T#0s) THEN
+  IF NOT (stS.tBypassEndsAfter >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.nMaxRetries >= 0) THEN
+  ELSIF NOT (stS.nMaxRetriesBeforeLockout >= 0) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.tRetryWindow >= T#0s) THEN
+  ELSIF NOT (stS.tRetryCountWindow >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
@@ -99,11 +99,11 @@ METHOD PRIVATE CondWhy : E_UtError
     stS : REFERENCE TO ST_IntlkCondSet;
   END_VAR
   CondWhy := E_UtError.None;
-  IF NOT (stS.tDelay >= T#0s) THEN
+  IF NOT (stS.tTripDelay >= T#0s) THEN
     CondWhy := E_UtError.TimeBad;
-  ELSIF NOT (TIME_TO_LINT(stS.tDelay) / 10 <= 16#1FFFFFFF) THEN
+  ELSIF NOT (TIME_TO_LINT(stS.tTripDelay) / 10 <= 16#1FFFFFFF) THEN
     CondWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.eReset = E_ResetMode.Auto OR stS.eReset = E_ResetMode.Retry OR stS.eReset = E_ResetMode.Manual) THEN
+  ELSIF NOT (stS.eResetMode = E_ResetMode.Auto OR stS.eResetMode = E_ResetMode.Retry OR stS.eResetMode = E_ResetMode.Manual) THEN
     CondWhy := E_UtError.ProtectionBad;
   END_IF;
 END_METHOD
@@ -120,7 +120,7 @@ METHOD PRIVATE Pack : DWORD
   VAR_INPUT
     stS : REFERENCE TO ST_IntlkCondSet;
   END_VAR
-  Pack := SHL(LINT_TO_DWORD(TIME_TO_LINT(stS.tDelay) / 10), 3) OR USINT_TO_DWORD(TO_USINT(stS.eReset));
+  Pack := SHL(LINT_TO_DWORD(TIME_TO_LINT(stS.tTripDelay) / 10), 3) OR USINT_TO_DWORD(TO_USINT(stS.eResetMode));
   IF stS.bBypassAllowed THEN
     Pack := Pack OR DWORD#16#4;
   END_IF;
@@ -131,29 +131,29 @@ METHOD PRIVATE Unpack : BOOL
     nW : DWORD;
     stS : REFERENCE TO ST_IntlkCondSet;
   END_VAR
-  stS.tDelay := LINT_TO_TIME(DWORD_TO_LINT(SHR(nW, 3)) * 10);
+  stS.tTripDelay := LINT_TO_TIME(DWORD_TO_LINT(SHR(nW, 3)) * 10);
   CASE DWORD_TO_USINT(nW AND DWORD#16#3) OF
-    0: stS.eReset := E_ResetMode.Manual;
-    1: stS.eReset := E_ResetMode.Retry;
+    0: stS.eResetMode := E_ResetMode.Manual;
+    1: stS.eResetMode := E_ResetMode.Retry;
   ELSE
-    stS.eReset := E_ResetMode.Auto;
+    stS.eResetMode := E_ResetMode.Auto;
   END_CASE;
   stS.bBypassAllowed := (nW AND DWORD#16#4) <> DWORD#0;
   Unpack := TRUE;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
-  bOk := FALSE;
+  bPermissive := FALSE;
   bError := TRUE;
   eErrorId := E_UtError.NoRecord;
   eState := E_State.Fault;
   RETURN;
 END_IF;
 tNow := TIME();
-nLb := LOWER_BOUND(aCond, 1);
-nRows := DINT_TO_INT(UPPER_BOUND(aCond, 1) - nLb + 1);
+nLb := LOWER_BOUND(aConditions, 1);
+nRows := DINT_TO_INT(UPPER_BOUND(aConditions, 1) - nLb + 1);
 bCfgBad := nRows < 1 OR nRows > cMaxRows
-           OR UPPER_BOUND(aCondSet, 1) - LOWER_BOUND(aCondSet, 1) + 1 <> INT_TO_DINT(nRows);
+           OR UPPER_BOUND(aConditionSettings, 1) - LOWER_BOUND(aConditionSettings, 1) + 1 <> INT_TO_DINT(nRows);
 IF bCfgBad THEN
   nRows := 0;
 END_IF;
@@ -163,8 +163,8 @@ IF bFirstScan THEN
   IF nKeptLayout = cLayout THEN
     refData.set := stKept;
     FOR nI := 1 TO MIN(nRows, nKeptRows) DO
-      nS := LOWER_BOUND(aCondSet, 1) + nI - 1;
-      Unpack(nW := aKeptCond[nI], stS := aCondSet[nS]);
+      nS := LOWER_BOUND(aConditionSettings, 1) + nI - 1;
+      Unpack(nW := aKeptCond[nI], stS := aConditionSettings[nS]);
     END_FOR;
   ELSE
     stKept := refData.set;
@@ -175,20 +175,20 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOkSet := TRUE;
 END_IF;
 bRowsOk := TRUE;
 FOR nI := 1 TO nRows DO
-  nS := LOWER_BOUND(aCondSet, 1) + nI - 1;
-  IF CondOk(stS := aCondSet[nS]) THEN
-    aKeptCond[nI] := Pack(stS := aCondSet[nS]);
+  nS := LOWER_BOUND(aConditionSettings, 1) + nI - 1;
+  IF CondOk(stS := aConditionSettings[nS]) THEN
+    aKeptCond[nI] := Pack(stS := aConditionSettings[nS]);
   ELSIF nI <= nKeptRows THEN
-    refData.sts.eRefusedWhy := CondWhy(stS := aCondSet[nS]);
-    Unpack(nW := aKeptCond[nI], stS := aCondSet[nS]);
-    refData.sts.bRefused := TRUE;
+    refData.sts.eSettingRefusedErrorId := CondWhy(stS := aConditionSettings[nS]);
+    Unpack(nW := aKeptCond[nI], stS := aConditionSettings[nS]);
+    refData.sts.bSettingRefused := TRUE;
   ELSE
     bRowsOk := FALSE;             (* never good: no copy to put back *)
   END_IF;
@@ -198,140 +198,140 @@ IF nRows > nKeptRows AND bRowsOk THEN
 END_IF;
 
 (* the reset: the pin, the system, the HMI once per write *)
-bResetReq := bReset OR SystemReset() OR (refData.bCmdReset AND NOT bResetSeen);
-bResetSeen := refData.bCmdReset;
-refData.bCmdReset := FALSE;
+bResetReq := bResetFaults OR SystemReset() OR (refData.bCmdResetFaults AND NOT bResetSeen);
+bResetSeen := refData.bCmdResetFaults;
+refData.bCmdResetFaults := FALSE;
 IF bResetReq THEN
-  nFirstOut := 0;
-  refData.sts.bRefused := FALSE;
-  refData.sts.eRefusedWhy := E_UtError.None;
+  nFirstOutCondition := 0;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
 
 (* each condition *)
-bOk := nRows > 0;
-bBypassed := FALSE;
-nNotOk := 0;
+bPermissive := nRows > 0;
+bBypassInEffect := FALSE;
+nConditionsNotMet := 0;
 nFirst := 0;
 nWentFirst := 0;
 FOR nI := 1 TO nRows DO
   nR := nLb + nI - 1;
-  nS := LOWER_BOUND(aCondSet, 1) + nI - 1;
-  bBadSet := NOT CondOk(stS := aCondSet[nS]);
+  nS := LOWER_BOUND(aConditionSettings, 1) + nI - 1;
+  bBadSet := NOT CondOk(stS := aConditionSettings[nS]);
   (* not OK this long *)
-  IF NOT aCond[nR].bOk AND NOT aCond[nR].bBad THEN
-    aCond[nR].tBadSince := tNow;
+  IF NOT aConditions[nR].bConditionMet AND NOT aConditions[nR].bNotMetNow THEN
+    aConditions[nR].tWentNotMetAt := tNow;
   END_IF;
-  aCond[nR].bBad := NOT aCond[nR].bOk;
-  bActive := aCond[nR].bBad AND (aCondSet[nS].tDelay <= T#0s
-                                 OR tNow - aCond[nR].tBadSince >= aCondSet[nS].tDelay);
-  IF aCondSet[nS].eReset = E_ResetMode.Auto AND NOT bBadSet THEN
-    aCond[nR].bLatched := FALSE;
+  aConditions[nR].bNotMetNow := NOT aConditions[nR].bConditionMet;
+  bActive := aConditions[nR].bNotMetNow AND (aConditionSettings[nS].tTripDelay <= T#0s
+                                 OR tNow - aConditions[nR].tWentNotMetAt >= aConditionSettings[nS].tTripDelay);
+  IF aConditionSettings[nS].eResetMode = E_ResetMode.Auto AND NOT bBadSet THEN
+    aConditions[nR].bLatched := FALSE;
   ELSIF bActive THEN
-    aCond[nR].bLatched := TRUE;
-  ELSIF aCond[nR].bLatched AND aCond[nR].bOk THEN
+    aConditions[nR].bLatched := TRUE;
+  ELSIF aConditions[nR].bLatched AND aConditions[nR].bConditionMet THEN
     IF bResetReq THEN
-      aCond[nR].bLatched := FALSE;
-    ELSIF aCondSet[nS].eReset = E_ResetMode.Retry AND NOT bBadSet THEN
-      IF aCond[nR].nRetries > 0 AND tNow - aCond[nR].tWindowAt >= refData.set.tRetryWindow THEN
-        aCond[nR].nRetries := 0;  (* a new window *)
+      aConditions[nR].bLatched := FALSE;
+    ELSIF aConditionSettings[nS].eResetMode = E_ResetMode.Retry AND NOT bBadSet THEN
+      IF aConditions[nR].nRetriesUsed > 0 AND tNow - aConditions[nR].tRetryWindowStartedAt >= refData.set.tRetryCountWindow THEN
+        aConditions[nR].nRetriesUsed := 0;  (* a new window *)
       END_IF;
-      IF aCond[nR].nRetries < refData.set.nMaxRetries THEN
-        IF aCond[nR].nRetries = 0 THEN
-          aCond[nR].tWindowAt := tNow;
+      IF aConditions[nR].nRetriesUsed < refData.set.nMaxRetriesBeforeLockout THEN
+        IF aConditions[nR].nRetriesUsed = 0 THEN
+          aConditions[nR].tRetryWindowStartedAt := tNow;
         END_IF;
-        aCond[nR].nRetries := aCond[nR].nRetries + 1;
-        aCond[nR].bLatched := FALSE;   (* by itself, a few times *)
+        aConditions[nR].nRetriesUsed := aConditions[nR].nRetriesUsed + 1;
+        aConditions[nR].bLatched := FALSE;   (* by itself, a few times *)
       END_IF;
     END_IF;
   END_IF;
-  IF bResetReq AND aCond[nR].bOk THEN
-    aCond[nR].nRetries := 0;
+  IF bResetReq AND aConditions[nR].bConditionMet THEN
+    aConditions[nR].nRetriesUsed := 0;
   END_IF;
-  IF aCond[nR].bBad AND NOT bActive AND aCondSet[nS].tDelay > T#0s THEN
-    aCond[nR].tDelayLeft := aCondSet[nS].tDelay - (tNow - aCond[nR].tBadSince);
-    IF tLeftMin = T#0s OR aCond[nR].tDelayLeft < tLeftMin THEN tLeftMin := aCond[nR].tDelayLeft; END_IF;
+  IF aConditions[nR].bNotMetNow AND NOT bActive AND aConditionSettings[nS].tTripDelay > T#0s THEN
+    aConditions[nR].tTripDelayTimeLeft := aConditionSettings[nS].tTripDelay - (tNow - aConditions[nR].tWentNotMetAt);
+    IF tLeftMin = T#0s OR aConditions[nR].tTripDelayTimeLeft < tLeftMin THEN tLeftMin := aConditions[nR].tTripDelayTimeLeft; END_IF;
   ELSE
-    aCond[nR].tDelayLeft := T#0s;
+    aConditions[nR].tTripDelayTimeLeft := T#0s;
   END_IF;
-  aCond[nR].bWentBad := (bActive OR aCond[nR].bLatched) AND NOT aCond[nR].bTripped;
-  aCond[nR].bTripped := bActive OR aCond[nR].bLatched;
+  aConditions[nR].bWentNotMetThisScan := (bActive OR aConditions[nR].bLatched) AND NOT aConditions[nR].bTripped;
+  aConditions[nR].bTripped := bActive OR aConditions[nR].bLatched;
   (* the bypass: allowed, asked, permitted, within the timeout *)
-  IF NOT (aCond[nR].bBypass AND aCondSet[nS].bBypassAllowed
-          AND bBypassEnable AND bOkSet) THEN
-    aCond[nR].bBypassOn := FALSE;
-    aCond[nR].bBypassed := FALSE;
+  IF NOT (aConditions[nR].bBypassRequest AND aConditionSettings[nS].bBypassAllowed
+          AND bBypassKeyOn AND bOkSet) THEN
+    aConditions[nR].bBypassLastScan := FALSE;
+    aConditions[nR].bBypassInEffect := FALSE;
   ELSE
-    IF NOT aCond[nR].bBypassOn THEN
-      aCond[nR].bBypassOn := TRUE;
-      aCond[nR].tBypassAt := tNow;
+    IF NOT aConditions[nR].bBypassLastScan THEN
+      aConditions[nR].bBypassLastScan := TRUE;
+      aConditions[nR].tBypassStartedAt := tNow;
     END_IF;
-    aCond[nR].bBypassed := refData.set.tBypassTimeout <= T#0s
-                           OR tNow - aCond[nR].tBypassAt < refData.set.tBypassTimeout;
+    aConditions[nR].bBypassInEffect := refData.set.tBypassEndsAfter <= T#0s
+                           OR tNow - aConditions[nR].tBypassStartedAt < refData.set.tBypassEndsAfter;
   END_IF;
-  IF aCond[nR].bBypassed THEN
-    aCond[nR].tBypassFor := tNow - aCond[nR].tBypassAt;
-    IF refData.set.tBypassTimeout > T#0s THEN
-      aCond[nR].tBypassLeft := refData.set.tBypassTimeout - aCond[nR].tBypassFor;
+  IF aConditions[nR].bBypassInEffect THEN
+    aConditions[nR].tBypassedFor := tNow - aConditions[nR].tBypassStartedAt;
+    IF refData.set.tBypassEndsAfter > T#0s THEN
+      aConditions[nR].tBypassTimeLeft := refData.set.tBypassEndsAfter - aConditions[nR].tBypassedFor;
     ELSE
-      aCond[nR].tBypassLeft := T#0s;
+      aConditions[nR].tBypassTimeLeft := T#0s;
     END_IF;
   ELSE
-    aCond[nR].tBypassFor := T#0s;
-    aCond[nR].tBypassLeft := T#0s;
+    aConditions[nR].tBypassedFor := T#0s;
+    aConditions[nR].tBypassTimeLeft := T#0s;
   END_IF;
   (* into the whole *)
-  IF aCond[nR].bBypassed THEN
-    bBypassed := TRUE;
-  ELSIF aCond[nR].bTripped THEN
-    bOk := FALSE;
-    nNotOk := nNotOk + 1;
+  IF aConditions[nR].bBypassInEffect THEN
+    bBypassInEffect := TRUE;
+  ELSIF aConditions[nR].bTripped THEN
+    bPermissive := FALSE;
+    nConditionsNotMet := nConditionsNotMet + 1;
     IF nFirst = 0 THEN
       nFirst := nI;
     END_IF;
-    IF aCond[nR].bWentBad AND nWentFirst = 0 THEN
+    IF aConditions[nR].bWentNotMetThisScan AND nWentFirst = 0 THEN
       nWentFirst := nI;
     END_IF;
   END_IF;
 END_FOR;
 
 (* first-out: kept until a reset; the one that went out first (same scan: the lowest) *)
-IF nFirstOut = 0 THEN
+IF nFirstOutCondition = 0 THEN
   IF nWentFirst > 0 THEN
-    nFirstOut := nWentFirst;
+    nFirstOutCondition := nWentFirst;
   ELSE
-    nFirstOut := nFirst;          (* after a reset (or power-up) with conditions still out *)
+    nFirstOutCondition := nFirst;          (* after a reset (or power-up) with conditions still out *)
   END_IF;
 END_IF;
-IF bOkPrev AND NOT bOk THEN
-  refData.sts.nTrips := refData.sts.nTrips + 1;
+IF bOkPrev AND NOT bPermissive THEN
+  refData.sts.nTripCount := refData.sts.nTripCount + 1;
 END_IF;
-bOkPrev := bOk;
+bOkPrev := bPermissive;
 
 (* errors *)
 bError := bCfgBad OR NOT bRowsOk OR NOT bOkSet;
-bWarning := NOT bError AND (bBypassed OR refData.sts.bRefused);
+bWarning := NOT bError AND (bBypassInEffect OR refData.sts.bSettingRefused);
 IF bError THEN
   eErrorId := E_UtError.BadSetting;
-ELSIF NOT bOk THEN
+ELSIF NOT bPermissive THEN
   eErrorId := E_UtError.ConditionOut;
-ELSIF bBypassed THEN
+ELSIF bBypassInEffect THEN
   eErrorId := E_UtError.Bypassed;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;
 END_IF;
 IF bError THEN
   eState := E_State.Fault;
-ELSIF NOT bOk THEN
+ELSIF NOT bPermissive THEN
   eState := E_State.Held;
 ELSE
   eState := E_State.Running;
 END_IF;
-refData.sts.bOk := bOk;
-refData.sts.nFirstOut := nFirstOut;
-refData.sts.bBypassed := bBypassed;
-refData.sts.nNotOk := nNotOk;
+refData.sts.bPermissive := bPermissive;
+refData.sts.nFirstOutCondition := nFirstOutCondition;
+refData.sts.bBypassInEffect := bBypassInEffect;
+refData.sts.nConditionsNotMet := nConditionsNotMet;
 refData.sts.tTimeLeft := tLeftMin;
 bFirstScan := FALSE;
 

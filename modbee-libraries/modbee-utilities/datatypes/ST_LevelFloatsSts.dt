@@ -1,13 +1,13 @@
 TYPE
   ST_LevelFloatsSts : STRUCT
-    bRun : BOOL; (* asks the level control to run *)
-    bStop : BOOL; (* the low float stops it (float control) *)
-    bFloatControl : BOOL;
-    bTransducerFault : BOOL;
-    bDisagree : BOOL; (* high and low made together *)
-    bLocked : BOOL; (* float control lockout *)
+    bAsksToRun : BOOL; (* asks the level control to run *)
+    bLowFloatStops : BOOL; (* the low float stops it (float control) *)
+    bOnFloatControl : BOOL; (* running on the floats and timers *)
+    bTransducerFault : BOOL; (* the transmitter disagrees with the high float (latched until a reset) *)
+    bFloatsDisagree : BOOL; (* high and low made together *)
+    bFloatResting : BOOL; (* float control lockout *)
     tTimeLeft : TIME; (* of the high hold, the run-on or the lockout now counting *)
-    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

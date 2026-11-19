@@ -1,11 +1,12 @@
 TYPE
   ST_PumpPrimeSet : STRUCT
-    bEveryStart : BOOL; (* prime at every start *)
-    eDoneBy : E_PrimeDone;
-    fDoneLevel : REAL; (* Pressure / Flow: primed above this *)
-    tHold : TIME := T#2s; (* the primed condition must last this long *)
-    tRunTime : TIME := T#30s; (* RunTime: primed after running this long *)
-    tTimeout : TIME := T#60s; (* priming always ends here *)
-    stTimeout : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Retry, tRecover := T#2m, nMaxRetries := 3);
+    bPrimeEveryStart : BOOL; (* prime at every start *)
+    ePrimeDoneBy : E_PrimeDone; (* what proves the prime: Pressure, Flow, Input or RunTime *)
+    fPrimedAbove : REAL; (* Pressure / Flow: primed above this *)
+    tPrimedHoldTime : TIME := T#2s; (* the primed condition must last this long *)
+    tPrimeRunTime : TIME := T#30s; (* RunTime: primed after running this long *)
+    tPrimeTimeout : TIME := T#60s; (* priming always ends here *)
+    stPrimeTimeoutFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#0s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#2m, nMaxRetriesBeforeLockout := 3);
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

@@ -6,10 +6,10 @@ Packs an IO channel address into one DWORD (the IO maps' kept copies).
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `eSrc` | `E_IoSrc` |  | Where the channel is: `None` (not on this site), `Board`, `I2c`, `Field`, `Remote` |
-| in | `nModule` | `USINT` |  | The module number (0..127) |
-| in | `nCh` | `USINT` |  | The channel number on the module |
-| out | *(result)* | `DWORD` | | The packed address |
+| in | `eSource` | `E_IoSrc` |  | where the channel is: None (not on this site), Board, I2c, Field or Remote |
+| in | `nModuleNumber` | `USINT` |  | the module number within that source (0..127) |
+| in | `nChannel` | `USINT` |  | the channel number on the module |
+| out | *(result)* | `DWORD` |  | the address packed into one DWORD |
 
 ## How it works
 

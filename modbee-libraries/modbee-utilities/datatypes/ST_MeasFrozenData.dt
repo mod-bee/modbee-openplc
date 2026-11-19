@@ -1,9 +1,7 @@
 TYPE
   ST_MeasFrozenData : STRUCT
-    bCmdReset : BOOL; (* reset a held Manual trip (cleared by the block) *)
-    set : ST_MeasFrozenSet;
-    stFrozen : ST_ProtectionSts;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bCmdResetFaults : BOOL; (* reset a held Manual trip (cleared by the block) *)
+    set : ST_MeasFrozenSet; (* settings (kept) *)
+    sts : ST_MeasFrozenSts; (* the status *)
   END_STRUCT;
 END_TYPE

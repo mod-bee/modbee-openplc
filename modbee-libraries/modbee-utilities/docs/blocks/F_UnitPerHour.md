@@ -6,8 +6,8 @@ The flow unit per hour of a volume unit (litre: L/h, m3: m3/h, megalitre: ML/h, 
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `eUnit` | `E_Unit` |  |  |
-| out | *(result)* | `E_Unit` | | The function’s value |
+| in | `eUnit` | `E_Unit` |  | a volume unit |
+| out | *(result)* | `E_Unit` |  | the volume unit's flow unit per hour (None: not a volume unit) |
 
 ## How it works
 

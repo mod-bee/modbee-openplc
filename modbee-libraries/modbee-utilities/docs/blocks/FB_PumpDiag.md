@@ -6,38 +6,40 @@ Names the likely cause of a pump's hydraulic trouble from its pressure, flow and
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `bRunning` | `BOOL` |  | the pump runs |
-| in | `ipPressure` | `I_Measurement` |  | optional. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
-| in | `ipFlow` | `I_Measurement` |  | optional. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
-| in | `ipSuction` | `I_Measurement` |  | optional. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
-| in | `refData` | `REFERENCE TO ST_PumpDiagData` |  | Its record (a variable of this type) |
-| in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
-| out | `eDiagnosis` | `E_PumpDiag` |  | `Normal`, `Blocked`, `Burst`, `NoLift` or `Suction` |
-| out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
+| in | `bPumpRunning` | `BOOL` |  | the pump runs |
+| in | `ipPressure` | `I_Measurement` |  | optional. An instance of a block that offers I_Measurement (FB_AnalogIn, FB_FlowTotal, FB_LevelMeter, FB_MeasFilter, FB_MeasFrozen, ...) |
+| in | `ipFlow` | `I_Measurement` |  | optional. An instance of a block that offers I_Measurement (FB_AnalogIn, FB_FlowTotal, FB_LevelMeter, FB_MeasFilter, FB_MeasFrozen, ...) |
+| in | `ipSuction` | `I_Measurement` |  | optional. An instance of a block that offers I_Measurement (FB_AnalogIn, FB_FlowTotal, FB_LevelMeter, FB_MeasFilter, FB_MeasFrozen, ...) |
+| in | `refData` | `REFERENCE TO ST_PumpDiagData` |  | the block's record |
+| in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
+| out | `eDiagnosis` | `E_PumpDiag` |  | Normal, Blocked, Burst, NoLift or Suction |
+| out | `bError` | `BOOL` |  | TRUE while a trip or setting fault is active *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
-| out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
-| out | `eState` | `E_State` |  | What it is doing now (Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault) *(from FB_Object)* |
+| out | `eErrorId` | `E_UtError` |  | which error: the first since the last reset, else the first warning; None when all is well *(from FB_Object)* |
+| out | `eState` | `E_State` |  | what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault *(from FB_Object)* |
 
 `bError`, `bWarning`, `eErrorId`, `eState` work as in every block: see [errors and state](../conventions.md#errors-and-state).
 
 ## Record `ST_PumpDiagData` (pin `refData`)
 
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `eDiagnosis` | `E_PumpDiag` |  | status |
-| `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
-| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
-
 **Settings `set`** (`ST_PumpDiagSet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `fPressureHigh` | `REAL` |  | in the pressure's unit (0 = off) |
-| `fPressureLow` | `REAL` |  |  |
-| `fFlowHigh` | `REAL` |  | in the flow's unit (0 = off) |
-| `fFlowLow` | `REAL` |  |  |
-| `fSuctionLow` | `REAL` |  | in the suction's unit (0 = off) |
-| `tDelay` | `TIME` | `T#10s` | the finding must stand this long |
+| `fHighPressureAbove` | `REAL` |  | in the pressure's unit (0 = off) |
+| `fLowPressureBelow` | `REAL` |  | pressure below this (0 = off) |
+| `fHighFlowAbove` | `REAL` |  | in the flow's unit (0 = off) |
+| `fLowFlowBelow` | `REAL` |  | flow below this (0 = off) |
+| `fLowSuctionBelow` | `REAL` |  | in the suction's unit (0 = off) |
+| `tDiagnosisDelay` | `TIME` | `T#10s` | the finding must stand this long |
+
+**Status `sts`** (`ST_PumpDiagSts`)
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `eDiagnosis` | `E_PumpDiag` |  | Normal, Blocked, Burst, NoLift or Suction |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and the last good value put back (until a reset) |
+| `eSettingRefusedErrorId` | `E_UtError` |  | why the last write was refused (cleared with bSettingRefused) |
 
 ## Lists
 
@@ -47,7 +49,7 @@ Names the likely cause of a pump's hydraulic trouble from its pressure, flow and
 
 The likely cause of a pump's hydraulic trouble from its pressure, flow and suction. An observer: it only tells, the pump's [`FB_LevelCheck`](FB_LevelCheck.md) parts act.
 
-While `bRunning` (the pump runs), after `set.tDelay` of the same finding:
+While `bPumpRunning` (the pump runs), after `set.tDiagnosisDelay` of the same finding:
 
 ```
   Blocked   pressure high and flow low (a closed valve, a blocked line)
@@ -64,7 +66,7 @@ A pump with pressure and flow transmitters.
 
 | Pin | Wire |
 | --- | --- |
-| `bRunning` | `fbMotor1.bQ` (or the motor's run feedback) |
+| `bPumpRunning` | `fbMotor1.bRunOutput` (or the motor's run feedback) |
 | `ipPressure` | `fbPressure` |
 | `ipFlow` | `fbFlow` |
 | `refData` | `stDiag1` |

@@ -1,18 +1,18 @@
 TYPE
   ST_GroupSts : STRUCT
-    eState : E_State;
-    eErrorId : E_UtError;
-    nLead : INT;
-    nRequired : INT;
-    nRunning : INT;
-    nCalled : INT;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    nExercising : INT; (* members on an exercise run *)
-    tExerciseIn : TIME; (* until the next exercise run (0: off, or one running) *)
-    nAvailable : INT; (* duty members available (not skipped) *)
-    bShortfall : BOOL; (* asked for more members than can run (none left, or nMaxRunning) *)
-    tRotateIn : TIME; (* Periodic: until the next rotation (0 otherwise) *)
+    eState : E_State; (* what it is doing now *)
+    eErrorId : E_UtError; (* the first error since the last reset (first-out) *)
+    nLeadMember : INT; (* the member that leads now (1..4) *)
+    nMembersRequired : INT; (* members wanted now *)
+    nMembersRunning : INT; (* members running now *)
+    nMembersCalled : INT; (* members called to run now *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    nMembersExercising : INT; (* members on an exercise run *)
+    tNextExerciseTimeLeft : TIME; (* until the next exercise run (0: off, or one running) *)
+    nMembersAvailable : INT; (* duty members available (not skipped) *)
+    bMembersShort : BOOL; (* asked for more members than can run (none left, or nMaxMembersRunning) *)
+    tRotateTimeLeft : TIME; (* Periodic: until the next rotation (0 otherwise) *)
     bStopping : BOOL; (* a staged stop is under way *)
   END_STRUCT;
 END_TYPE

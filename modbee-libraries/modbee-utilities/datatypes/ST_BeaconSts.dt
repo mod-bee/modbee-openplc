@@ -1,0 +1,8 @@
+TYPE
+  ST_BeaconSts : STRUCT
+    nAlarmsActive : INT; (* alarms present now *)
+    nAlarmShown : INT; (* the alarm number the lamp is flashing now (0 = none) *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+  END_STRUCT;
+END_TYPE

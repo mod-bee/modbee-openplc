@@ -1,11 +1,12 @@
 TYPE
   ST_MotorCurrentSet : STRUCT
-    fFullLoad : REAL; (* full-load current, in the CT's unit (0 = no monitoring) *)
-    fRunPercent : REAL := 20.0; (* bProvesRun at or above this % of full load *)
-    tStartMask : TIME := T#5s; (* high / low wait this long after the motor runs *)
-    stHigh : ST_CurrentLevelSet := (eResponse := E_Response.Off, tDelay := T#5s, eReset := E_ResetMode.Retry, tRecover := T#5m, nMaxRetries := 3, fPercent := 115.0, fDeadband := 5.0);
-    stLow : ST_CurrentLevelSet := (eResponse := E_Response.Off, tDelay := T#5s, eReset := E_ResetMode.Retry, tRecover := T#5m, nMaxRetries := 3, fPercent := 40.0, fDeadband := 5.0);
-    stStartTooLong : ST_CurrentLevelSet := (eResponse := E_Response.Off, tDelay := T#15s, eReset := E_ResetMode.Manual, fPercent := 150.0, fDeadband := 0.0);
-    stBad : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
+    fFullLoadCurrent : REAL; (* full-load current, in the CT's unit (0 = no monitoring) *)
+    fProvesRunAbovePct : REAL := 20.0; (* bCurrentProvesRun at or above this % of full load *)
+    tMaskAfterStart : TIME := T#5s; (* high / low wait this long after the motor runs *)
+    stHighCurrentFault : ST_CurrentLevelSet := (eActionOnFault := E_Response.Off, tTripDelay := T#5s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#5m, nMaxRetriesBeforeLockout := 3, fLevelPct := 115.0, fClearDeadbandPct := 5.0);
+    stLowCurrentFault : ST_CurrentLevelSet := (eActionOnFault := E_Response.Off, tTripDelay := T#5s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#5m, nMaxRetriesBeforeLockout := 3, fLevelPct := 40.0, fClearDeadbandPct := 5.0);
+    stLockedRotorFault : ST_CurrentLevelSet := (eActionOnFault := E_Response.Off, tTripDelay := T#15s, eResetMode := E_ResetMode.Manual, fLevelPct := 150.0, fClearDeadbandPct := 0.0);
+    stCurrentBadFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#5s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

@@ -6,10 +6,10 @@ Whole milliseconds of running to add this scan, exact over years (for your own r
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `bRunning` | `BOOL` |  | It runs (status) |
-| in | `tNow` | `TIME` |  | `TIME()` |
-| in-out | `stAcc` | `ST_HoursAcc` |  | Your accumulator (one per counter) |
-| out | *(result)* | `LINT` | | Milliseconds to add this scan |
+| in | `bRunning` | `BOOL` |  | it runs |
+| in | `tNow` | `TIME` |  | TIME() of this scan |
+| in-out | `stAccumulator` | `ST_HoursAcc` |  | your accumulator (one per counter) |
+| out | *(result)* | `LINT` |  | whole milliseconds of running since the last call |
 
 ## How it works
 
@@ -17,6 +17,6 @@ Whole milliseconds of running since the last call, exact: the scan time is added
 
 ## Example
 
-Used in ST for your own run-hour count: `nMs := F_HoursAdd(bRunning := bBlowerRun, tNow := TIME(), stAcc := stBlowerAcc);`
+Used in ST for your own run-hour count: `nMs := F_HoursAdd(bRunning := bBlowerRun, tNow := TIME(), stAccumulator := stBlowerAcc);`
 
 **Back to** [the index](../README.md).

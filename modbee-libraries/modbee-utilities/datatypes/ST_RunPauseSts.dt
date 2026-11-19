@@ -1,0 +1,5 @@
+TYPE
+  ST_RunPauseSts : STRUCT
+    bPaused : BOOL; (* the run is paused *)
+  END_STRUCT;
+END_TYPE

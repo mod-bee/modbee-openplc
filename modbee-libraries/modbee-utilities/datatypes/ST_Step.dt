@@ -1,7 +1,7 @@
 TYPE
   ST_Step : STRUCT
-    bCond : BOOL;
-    bActive : BOOL;
-    nLoopCount : INT;
+    bStepCondition : BOOL; (* the project writes it: the step's wait condition *)
+    bStepActive : BOOL; (* this step runs now *)
+    nLoopCount : INT; (* loops done on this step *)
   END_STRUCT;
 END_TYPE

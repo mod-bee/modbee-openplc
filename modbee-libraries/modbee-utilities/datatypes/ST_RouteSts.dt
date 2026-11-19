@@ -1,19 +1,19 @@
 TYPE
   ST_RouteSts : STRUCT
-    nOutlet : USINT;
-    nOpenMask : BYTE; (* bit n-1: requested open *)
-    nProvenMask : BYTE; (* bit n-1: open *)
-    nFaultOutlet : USINT;
-    eKind : E_OutletKind;
-    bRouteOk : BOOL;
-    bRouteLost : BOOL;
-    bOpening : BOOL;
-    bClosing : BOOL;
-    bDiverted : BOOL;
-    bNoStorage : BOOL;
-    bBlocked : BOOL;
-    tTimeLeft : TIME;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    nOutletInUse : USINT; (* the outlet in use (0 = none) *)
+    nOpenRequestedBits : BYTE; (* bit n-1: requested open *)
+    nProvenOpenBits : BYTE; (* bit n-1: open *)
+    nFaultedOutlet : USINT; (* the outlet whose valve has a fault (0 = none) *)
+    eOutletKindInUse : E_OutletKind; (* the kind of the outlet in use *)
+    bRouteProven : BOOL; (* the route is proven open: to the pumps' start hold *)
+    bRouteLost : BOOL; (* a pump runs and no outlet is open, or the outlet in use is blocked: to the pumps' interlock *)
+    bOpening : BOOL; (* a valve is opening *)
+    bClosing : BOOL; (* a valve is closing *)
+    bDivertedToStorage : BOOL; (* level pumping is sent to the storage (wet weather or the irrigator blocked) *)
+    bNoStorageAvailable : BOOL; (* wet weather asks for storage but none is fitted or it is full (warning NoStorage) *)
+    bRouteBlocked : BOOL; (* the irrigator is blocked and there is no storage: nothing opens (RouteBlocked) *)
+    tTimeLeft : TIME; (* time left in the close delay or travel now counting *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

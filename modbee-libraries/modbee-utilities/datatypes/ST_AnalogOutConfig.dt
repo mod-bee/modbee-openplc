@@ -1,6 +1,6 @@
 TYPE
   ST_AnalogOutConfig : STRUCT
-    fRawMin : REAL; (* raw value at fEngMin *)
-    fRawMax : REAL := 65535.0; (* raw value at fEngMax *)
+    fRawAtSignalLow : REAL; (* raw value at fValueAtSignalLow *)
+    fRawAtSignalHigh : REAL := 65535.0; (* raw value at fValueAtSignalHigh *)
   END_STRUCT;
 END_TYPE

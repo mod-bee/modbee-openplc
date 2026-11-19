@@ -2,9 +2,9 @@
 
 FUNCTION F_DstActive : BOOL
   VAR_INPUT
-    dtUtc : DT := DT#1970-01-01-00:00:00; (* the controller clock (UTC) *)
-    nOffsetMin : INT := 720; (* standard offset, minutes east of UTC (NZ 720) *)
-    eDst : E_DstRule := E_DstRule.Nz;
+    dtClockUtc : DT := DT#1970-01-01-00:00:00; (* the controller clock (UTC) *)
+    nUtcOffsetMinutes : INT := 720; (* standard offset, minutes east of UTC (NZ 720) *)
+    eDaylightSavingRule : E_DstRule := E_DstRule.Nz; (* None, Nz, AuSe, Eu or Us *)
   END_VAR
   VAR
     nT : LINT; (* the time the rule counts in, seconds since 1970 *)
@@ -21,12 +21,12 @@ FUNCTION F_DstActive : BOOL
 
 
 F_DstActive := FALSE;
-IF NOT (eDst = E_DstRule.Nz OR eDst = E_DstRule.AuSe OR eDst = E_DstRule.Eu OR eDst = E_DstRule.Us) THEN
+IF NOT (eDaylightSavingRule = E_DstRule.Nz OR eDaylightSavingRule = E_DstRule.AuSe OR eDaylightSavingRule = E_DstRule.Eu OR eDaylightSavingRule = E_DstRule.Us) THEN
   RETURN;                        (* NONE, or unknown *)
 END_IF;
-nT := DT_TO_LINT(dtUtc);
-IF eDst <> E_DstRule.Eu THEN
-  nT := nT + INT_TO_LINT(nOffsetMin) * 60;   (* local standard time *)
+nT := DT_TO_LINT(dtClockUtc);
+IF eDaylightSavingRule <> E_DstRule.Eu THEN
+  nT := nT + INT_TO_LINT(nUtcOffsetMinutes) * 60;   (* local standard time *)
 END_IF;
 IF nT >= 0 THEN
   nDay := LINT_TO_DINT(nT / 86400);
@@ -41,7 +41,7 @@ ELSIF F_DateDays(nYear := nY + 1, nMonth := 1, nDay := 1) <= nDay THEN
   nY := nY + 1;
 END_IF;
 FOR nK := 1 TO 2 DO               (* 1: the start, 2: the end *)
-  CASE eDst OF
+  CASE eDaylightSavingRule OF
   E_DstRule.Nz:
     IF nK = 1 THEN nMon := 9; nWk := -1; ELSE nMon := 4; nWk := 1; END_IF;
     nHr := 2;                     (* 02:00 standard (the end: 03:00 daylight) *)

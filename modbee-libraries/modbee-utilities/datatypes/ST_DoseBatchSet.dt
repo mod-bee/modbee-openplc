@@ -1,13 +1,13 @@
 TYPE
   ST_DoseBatchSet EXTENDS ST_DoseSet : STRUCT
-    fTarget : REAL; (* the quantity (fTarget pin 0) *)
-    fSlowAt : REAL; (* slow feed for this much left *)
-    fPreact : REAL; (* stop this much early (in flight) *)
-    bLearnPreact : BOOL;
-    fTolerance : REAL; (* 0 = off *)
-    tSettle : TIME := T#2s;
-    bActualIsTotal : BOOL; (* delivered = the rise of ipMeter's total *)
-    stNoFlow : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#30s, eReset := E_ResetMode.Retry, tRecover := T#1m, nMaxRetries := 3);
-    stOutOfTolerance : ST_ProtectionSet := (eResponse := E_Response.Warn, eReset := E_ResetMode.Auto);
+    fQuantitySetpoint : REAL; (* the quantity (fQuantitySetpoint pin 0) *)
+    fSlowFeedLast : REAL; (* slow feed for this much left *)
+    fStopEarlyBy : REAL; (* stop this much early (in flight) *)
+    bLearnStopEarly : BOOL; (* learn fStopEarlyBy from each dose's error *)
+    fToleranceQuantity : REAL; (* 0 = off *)
+    tSettleTime : TIME := T#2s; (* wait this long after the feed stops before the dose is weighed *)
+    bDeliveredFromMeterTotal : BOOL; (* delivered = the rise of ipProductMeter's total *)
+    stNoFlowFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#30s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#1m, nMaxRetriesBeforeLockout := 3);
+    stOutOfToleranceFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, eResetMode := E_ResetMode.Auto); (* a dose ended out of tolerance (default a warning) *)
   END_STRUCT;
 END_TYPE

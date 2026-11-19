@@ -1,14 +1,14 @@
 TYPE
   ST_Motor2SpeedSet : STRUCT
-    tSpeedChange : TIME := T#1s; (* dead time low -> high *)
-    tDownChange : TIME; (* high -> low (0 = tSpeedChange) *)
-    bStartInLow : BOOL := TRUE;
-    tLowStart : TIME := T#3s;
-    bDahlander : BOOL;
+    tLowToHighDeadTime : TIME := T#1s; (* dead time low -> high *)
+    tHighToLowDeadTime : TIME; (* high -> low (0 = tLowToHighDeadTime) *)
+    bStartInLowSpeed : BOOL := TRUE; (* a start to high runs low first for tLowSpeedStartTime *)
+    tLowSpeedStartTime : TIME := T#3s; (* how long a start to high runs in low first *)
+    bDahlanderWinding : BOOL; (* a Dahlander motor: bBridgeOutput closes the star point with high *)
     fLowSpeedPct : REAL := 50.0; (* low speed as % of high *)
-    bHandHigh : BOOL; (* Hand speed chosen last (kept) *)
-    tChangeover : TIME := T#2s;
-    stChangeover : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0);
-    bJogHigh : BOOL; (* a jog (FB_MotorJog) runs at high speed (FALSE: low) *)
+    bHandHighSelected : BOOL; (* Hand speed chosen last (kept) *)
+    tAuxFeedbackTimeout : TIME := T#2s; (* an aux contact must follow its coil within this time *)
+    stAuxFeedbackFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#0s, eResetMode := E_ResetMode.Manual, tAutoRecoverAfter := T#0s, nMaxRetriesBeforeLockout := 0);
+    bJogAtHighSpeed : BOOL; (* a jog (FB_MotorJog) runs at high speed (FALSE: low) *)
   END_STRUCT;
 END_TYPE

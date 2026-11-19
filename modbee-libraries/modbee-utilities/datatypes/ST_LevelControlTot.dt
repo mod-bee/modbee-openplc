@@ -1,5 +1,5 @@
 TYPE
   ST_LevelControlTot : STRUCT
-    nCycles : UDINT; (* pumping cycles: each new call (pump-down / fill) *)
+    nCycleCount : UDINT; (* pumping cycles: each new call (pump-down / fill) *)
   END_STRUCT;
 END_TYPE

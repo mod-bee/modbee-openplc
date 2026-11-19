@@ -6,10 +6,10 @@ TRUE while daylight saving is in force under a rule (NZ, AU south-east, EU, US).
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `dtUtc` | `DT` | `DT#1970-01-01-00:00:00` | the controller clock (UTC) |
-| in | `nOffsetMin` | `INT` | `720` | standard offset, minutes east of UTC (NZ 720) |
-| in | `eDst` | `E_DstRule` | `E_DstRule.Nz` | The daylight-saving rule: `None`, `Nz`, `AuSe`, `Eu`, `Us` |
-| out | *(result)* | `BOOL` | | TRUE while daylight saving is in force |
+| in | `dtClockUtc` | `DT` | `DT#1970-01-01-00:00:00` | the controller clock (UTC) |
+| in | `nUtcOffsetMinutes` | `INT` | `720` | standard offset, minutes east of UTC (NZ 720) |
+| in | `eDaylightSavingRule` | `E_DstRule` | `E_DstRule.Nz` | None, Nz, AuSe, Eu or Us |
+| out | *(result)* | `BOOL` |  | TRUE while daylight saving is in force |
 
 ## Lists
 
@@ -23,8 +23,8 @@ TRUE while daylight saving is in force under the rule
 
 | Pin | Wire |
 | --- | --- |
-| `dtUtc` | `dtUtcClock` |
-| `nOffsetMin` | 720 |
-| `eDst` | `E_DstRule.Nz` |
+| `dtClockUtc` | `dtUtcClock` |
+| `nUtcOffsetMinutes` | 720 |
+| `eDaylightSavingRule` | `E_DstRule.Nz` |
 
 **Back to** [the index](../README.md).

@@ -1,7 +1,7 @@
 TYPE
   ST_RunStyleSet : STRUCT
-    eStyle : E_RunStyle;
-    tKeepAlive : TIME := T#30s;
-    tPulse : TIME; (* Pulse: 0 = a start pulse for the run's own target *)
+    eRunStyle : E_RunStyle; (* Held, Toggle (push-on / push-off), KeepAlive or Pulse *)
+    tKeepAliveTimeout : TIME := T#30s; (* KeepAlive: the run ends this long after the last change *)
+    tPulseRunTime : TIME; (* Pulse: 0 = a start pulse for the run's own target *)
   END_STRUCT;
 END_TYPE

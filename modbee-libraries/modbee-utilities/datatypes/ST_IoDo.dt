@@ -1,10 +1,10 @@
 TYPE
   ST_IoDo : STRUCT
-    bQ : BOOL; (* your logic: the output wanted *)
-    bHoldOff : BOOL; (* your logic (a motor's bHoldOff): holds the output off, forced or not *)
-    bOut : BOOL; (* status: what went to the channel (after a force or the hold) *)
-    bOk : BOOL; (* status: the channel is fitted, answering and good *)
-    bFit : BOOL;
-    eWhy : E_IoQ;
+    bCommanded : BOOL; (* your logic: the output wanted *)
+    bHoldOutputOff : BOOL; (* your logic (a motor's bHoldOutputOff): holds the output off, forced or not *)
+    bOutput : BOOL; (* status: what went to the channel (after a force or the hold) *)
+    bGood : BOOL; (* status: the channel is fitted, answering and good *)
+    bFitted : BOOL; (* mapped on this site (source not None, module fitted) *)
+    eQuality : E_IoQ; (* the quality and why it is not good (E_IoQ) *)
   END_STRUCT;
 END_TYPE

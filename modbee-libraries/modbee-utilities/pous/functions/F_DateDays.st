@@ -3,7 +3,7 @@
 
 FUNCTION F_DateDays : DINT
   VAR_INPUT
-    nYear : INT := 1970;
+    nYear : INT := 1970; (* the year *)
     nMonth : INT := 1; (* 1..12 *)
     nDay : INT := 1; (* 1..31 *)
   END_VAR

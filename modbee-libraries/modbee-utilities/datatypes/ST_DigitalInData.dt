@@ -1,10 +1,10 @@
 TYPE
   ST_DigitalInData : STRUCT
-    bCmdReset : BOOL; (* reset a Manual alarm, clear bRefused (cleared by the block) *)
-    bCmdResetTot : BOOL; (* clear the totals (cleared by the block) *)
-    set : ST_DigitalInSet;
-    sts : ST_DigitalInSts;
-    det : ST_DigitalInDet;
-    tot : ST_DigitalInTot;
+    bCmdResetFaults : BOOL; (* reset a Manual alarm, clear bSettingRefused (cleared by the block) *)
+    bCmdResetTotals : BOOL; (* clear the totals (cleared by the block) *)
+    set : ST_DigitalInSet; (* settings (kept) *)
+    sts : ST_DigitalInSts; (* status *)
+    det : ST_DigitalInDet; (* details *)
+    tot : ST_DigitalInTot; (* totals (kept) *)
   END_STRUCT;
 END_TYPE

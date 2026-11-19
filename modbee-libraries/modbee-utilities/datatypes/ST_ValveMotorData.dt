@@ -1,6 +1,6 @@
 TYPE
   ST_ValveMotorData : STRUCT
-    set : ST_ValveMotorSet;
-    sts : ST_ValveMotorSts;
+    set : ST_ValveMotorSet; (* settings (kept) *)
+    sts : ST_ValveMotorSts; (* status *)
   END_STRUCT;
 END_TYPE

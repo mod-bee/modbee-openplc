@@ -1,12 +1,12 @@
 TYPE
   ST_FlowTotalData : STRUCT
-    bCmdResetTotal : BOOL; (* the totals back to 0 (cleared by the block) *)
+    bCmdResetTotals : BOOL; (* the totals back to 0 (cleared by the block) *)
     bCmdResetBatch : BOOL; (* the batch back to 0 (cleared by the block) *)
-    set : ST_FlowTotalSet;
-    sts : ST_FlowTotalSts;
-    tot : ST_FlowTotalTot;
-    bCmdConfirm : BOOL; (* confirms bCmdResetTotal (set.bConfirmReset); cleared by the block *)
-    bCmdPreset : BOOL; (* the total to fPresetTotal (cleared by the block) *)
-    fPresetTotal : LREAL;
+    set : ST_FlowTotalSet; (* settings (kept) *)
+    sts : ST_FlowTotalSts; (* status *)
+    tot : ST_FlowTotalTot; (* totals (kept) *)
+    bCmdConfirmReset : BOOL; (* confirms bCmdResetTotals (set.bResetNeedsConfirm); cleared by the block *)
+    bCmdPresetTotal : BOOL; (* the total to fPresetTotal (cleared by the block) *)
+    fPresetTotal : LREAL; (* the total bCmdPresetTotal writes, in the meter's unit *)
   END_STRUCT;
 END_TYPE

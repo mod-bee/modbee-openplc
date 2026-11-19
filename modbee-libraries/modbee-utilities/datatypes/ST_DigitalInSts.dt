@@ -1,10 +1,10 @@
 TYPE
   ST_DigitalInSts : STRUCT
-    bQ : BOOL;
-    bAlarm : BOOL;
-    bChatter : BOOL;
-    bGood : BOOL;
-    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bSignal : BOOL; (* the clean (debounced) signal *)
+    bStateAlarm : BOOL; (* the state alarm is on (a warning) *)
+    bChattering : BOOL; (* too many changes: the signal holds its last stable value *)
+    bGood : BOOL; (* the signal can be trusted *)
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

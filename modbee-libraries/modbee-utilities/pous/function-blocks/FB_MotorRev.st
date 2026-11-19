@@ -1,29 +1,29 @@
 (* FB_MotorRev EXTENDS FB_Motor — a reversing starter.
-Everything of FB_Motor (modes, protections, totals, refData) plus the direction. bQ = TRUE while either direction
-is asked to run; the direction auxes confirm running (bFeedback is not used).
-Pins added: bReverse (the Auto direction), bFeedbackFwd / bFeedbackRev (the auxes), bLimitFwd / bLimitRev (end
-of travel: that direction stops and will not start), refRev (its record) -> bQFwd, bQRev (never on together),
-bReversed (running in reverse).
-Direction: Hand -> set.bHandReverse (kept; bCmdFwd / bCmdRev, or FB_LocalControl's bRev, choose it and start in Hand); Auto -> bReverse.
-A change waits set.tReversalDelay (FB_Changeover); with set.bStopBeforeReverse a direction change stops and needs
-a new start (the run request going away). An aux that does not follow its coil within set.tChangeover trips
-set.stChangeover (default Manual): bError Changeover. A planned gap never counts as feedback lost.
-Jog: FB_MotorJog, in reverse with its bJogRev. Its settings are kept by the block (a retained last-good copy): restored at
+Everything of FB_Motor (modes, protections, totals, refData) plus the direction. bRunOutput = TRUE while either direction
+is asked to run; the direction auxes confirm running (bRunFeedback is not used).
+Pins added: bAutoReverse (the Auto direction), bForwardFeedback / bReverseFeedback (the auxes), bForwardLimitSwitch / bReverseLimitSwitch (end
+of travel: that direction stops and will not start), refReversingData (its record) -> bForwardOutput, bReverseOutput (never on together),
+bRunningReverse (running in reverse).
+Direction: Hand -> set.bHandReverseSelected (kept; bCmdHandForward / bCmdHandReverse, or FB_LocalControl's bReverseButton, choose it and start in Hand); Auto -> bAutoReverse.
+A change waits set.tReversingDeadTime (FB_Changeover); with set.bStopBeforeReverse a direction change stops and needs
+a new start (the run request going away). An aux that does not follow its coil within set.tAuxFeedbackTimeout trips
+set.stAuxFeedbackFault (default Manual): bError Changeover. A planned gap never counts as feedback lost.
+Jog: FB_MotorJog, in reverse with its bJogReverse. Its settings are kept by the block (a retained last-good copy): restored at
 power-up, a bad write put back. *)
 
 FUNCTION_BLOCK FB_MotorRev EXTENDS FB_Motor IMPLEMENTS I_LocalChoice
   VAR_INPUT
-    bReverse : BOOL := FALSE; (* Auto direction *)
-    bFeedbackFwd : BOOL;
-    bFeedbackRev : BOOL;
-    bLimitFwd : BOOL; (* end of travel forward *)
-    bLimitRev : BOOL;
-    refRev : REFERENCE TO ST_MotorRevData;
+    bAutoReverse : BOOL := FALSE; (* Auto direction *)
+    bForwardFeedback : BOOL; (* the forward contactor's aux *)
+    bReverseFeedback : BOOL; (* the reverse contactor's aux *)
+    bForwardLimitSwitch : BOOL; (* end of travel forward *)
+    bReverseLimitSwitch : BOOL; (* end of travel reverse: that direction stops and will not start *)
+    refReversingData : REFERENCE TO ST_MotorRevData; (* the reversing record *)
   END_VAR
   VAR_OUTPUT
-    bQFwd : BOOL;
-    bQRev : BOOL; (* never with bQFwd *)
-    bReversed : BOOL;
+    bForwardOutput : BOOL; (* the forward contactor *)
+    bReverseOutput : BOOL; (* never with bForwardOutput *)
+    bRunningReverse : BOOL; (* running in reverse *)
   END_VAR
   VAR CONSTANT
     cRevLayout : UINT := 2; (* the layout of its own kept settings *)
@@ -43,16 +43,16 @@ FUNCTION_BLOCK FB_MotorRev EXTENDS FB_Motor IMPLEMENTS I_LocalChoice
   END_VAR
 
 
-(* a panel choice (FB_LocalControl bRev): in Hand, as bCmdFwd / bCmdRev *)
+(* a panel choice (FB_LocalControl bReverseButton): in Hand, as bCmdHandForward / bCmdHandReverse *)
 METHOD PUBLIC Choose : BOOL
   VAR_INPUT
-    eChoice : E_LocalChoice;
+    eLocalChoice : E_LocalChoice;    // the local selection: Low, High, Forward, Reverse, Pos1..Pos3 or Halt
   END_VAR
-  Choose := eChoice = E_LocalChoice.Forward OR eChoice = E_LocalChoice.Reverse;
-  IF Choose AND __ISVALIDREF(refRev) AND __ISVALIDREF(refData) THEN
+  Choose := eLocalChoice = E_LocalChoice.Forward OR eLocalChoice = E_LocalChoice.Reverse;
+  IF Choose AND __ISVALIDREF(refReversingData) AND __ISVALIDREF(refData) THEN
     IF refData.set.eMode = E_Mode.Hand THEN
-      refRev.bCmdFwd := eChoice = E_LocalChoice.Forward;
-      refRev.bCmdRev := eChoice = E_LocalChoice.Reverse;
+      refReversingData.bCmdHandForward := eLocalChoice = E_LocalChoice.Forward;
+      refReversingData.bCmdHandReverse := eLocalChoice = E_LocalChoice.Reverse;
     END_IF;
   END_IF;
 END_METHOD
@@ -62,15 +62,15 @@ METHOD PRIVATE RevWhy : E_UtError
     stS : REFERENCE TO ST_MotorRevSet;
   END_VAR
   RevWhy := E_UtError.None;
-  IF NOT (stS.tReversalDelay >= T#0s) THEN
+  IF NOT (stS.tReversingDeadTime >= T#0s) THEN
     RevWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tChangeover > T#0s) THEN
+  ELSIF NOT (stS.tAuxFeedbackTimeout > T#0s) THEN
     RevWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.stChangeover.tDelay >= T#0s) THEN
+  ELSIF NOT (stS.stAuxFeedbackFault.tTripDelay >= T#0s) THEN
     RevWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stChangeover.tRecover >= T#0s) THEN
+  ELSIF NOT (stS.stAuxFeedbackFault.tAutoRecoverAfter >= T#0s) THEN
     RevWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stChangeover.nMaxRetries >= 0) THEN
+  ELSIF NOT (stS.stAuxFeedbackFault.nMaxRetriesBeforeLockout >= 0) THEN
     RevWhy := E_UtError.ProtectionBad;
   END_IF;
 END_METHOD
@@ -86,11 +86,11 @@ END_METHOD
 METHOD PROTECTED OVERRIDE FeedbackOk : BOOL
   IF NOT __ISVALIDREF(refData) THEN
     FeedbackOk := FALSE;
-  ELSIF NOT refData.set.bUseFeedback THEN
-    FeedbackOk := bQFwd OR bQRev;
+  ELSIF NOT refData.set.bRunFeedbackFitted THEN
+    FeedbackOk := bForwardOutput OR bReverseOutput;
   ELSE
-    FeedbackOk := (bQFwd AND bFeedbackFwd) OR (bQRev AND bFeedbackRev) OR (bQ AND fbCo.bInGap AND bConfirmed)
-                  OR (NOT bQ AND (bFeedbackFwd OR bFeedbackRev));
+    FeedbackOk := (bForwardOutput AND bForwardFeedback) OR (bReverseOutput AND bReverseFeedback) OR (bRunOutput AND fbCo.bPlannedGap AND bConfirmed)
+                  OR (NOT bRunOutput AND (bForwardFeedback OR bReverseFeedback));
   END_IF;
 END_METHOD
 
@@ -103,7 +103,7 @@ METHOD PROTECTED OVERRIDE ShapeRun : BOOL
     bDirStop := FALSE;
   END_IF;
   ShapeRun := SUPER^.ShapeRun(bWant := bWant) AND NOT bDirStop
-              AND NOT (bWantRev AND bLimitRev) AND NOT (NOT bWantRev AND bLimitFwd);
+              AND NOT (bWantRev AND bReverseLimitSwitch) AND NOT (NOT bWantRev AND bForwardLimitSwitch);
 END_METHOD
 
 METHOD PROTECTED OVERRIDE DriveChecks
@@ -117,15 +117,15 @@ METHOD PROTECTED OVERRIDE DriveChecks
     eError : E_UtError;
   END_VAR
   eError := E_UtError.None;
-  IF NOT __ISVALIDREF(refRev) THEN
+  IF NOT __ISVALIDREF(refReversingData) THEN
     bTrip := TRUE;
     eError := E_UtError.NoRecord;
     RETURN;
   END_IF;
-  F_Protect(tNow := tNow, bCause := fbCo.bCause, bResetReq := bReset, tRetryWindow := T#1h,
-            stSet := refRev.set.stChangeover, stSts := refRev.sts.stChangeover, stWork := stWChangeover);
-  bTrip := stWChangeover.bTrip;
-  bWarn := stWChangeover.bWarn;
+  F_Protect(tNow := tNow, bConditionPresent := fbCo.bAuxWrong, bResetRequest := bReset, tRetryCountWindow := refData.set.tRetryCountWindow,
+            stSettings := refReversingData.set.stAuxFeedbackFault, stStatus := refReversingData.sts.stAuxFeedbackFault, stWorking := stWChangeover);
+  bTrip := stWChangeover.bTripping;
+  bWarn := stWChangeover.bWarning;
   bHold := FALSE;
   IF bTrip OR bWarn THEN
     eError := E_UtError.Changeover;
@@ -133,69 +133,69 @@ METHOD PROTECTED OVERRIDE DriveChecks
 END_METHOD
 
 (* the direction wanted, before the motor runs its scan *)
-IF __ISVALIDREF(refRev) THEN
+IF __ISVALIDREF(refReversingData) THEN
   IF bRevFirst THEN
     IF nKeptRevLayout = cRevLayout THEN
-      refRev.set := stKeptRev;
+      refReversingData.set := stKeptRev;
     ELSE
-      stKeptRev := refRev.set;
+      stKeptRev := refReversingData.set;
       nKeptRevLayout := cRevLayout;
     END_IF;
     bRevFirst := FALSE;
-  ELSIF RevOk(stS := refRev.set) THEN
-    stKeptRev := refRev.set;
+  ELSIF RevOk(stS := refReversingData.set) THEN
+    stKeptRev := refReversingData.set;
   ELSIF RevOk(stS := stKeptRev) THEN
-    refRev.sts.eRefusedWhy := RevWhy(stS := refRev.set);
-    refRev.set := stKeptRev;
-    refRev.sts.bRefused := TRUE;
+    refReversingData.sts.eSettingRefusedErrorId := RevWhy(stS := refReversingData.set);
+    refReversingData.set := stKeptRev;
+    refReversingData.sts.bSettingRefused := TRUE;
   END_IF;
   IF bResetThisScan THEN                  // the equipment's reset clears a refused write
-    refRev.sts.bRefused := FALSE;
-    refRev.sts.eRefusedWhy := E_UtError.None;
+    refReversingData.sts.bSettingRefused := FALSE;
+    refReversingData.sts.eSettingRefusedErrorId := E_UtError.None;
   END_IF;
-  IF refRev.bCmdFwd OR refRev.bCmdRev THEN
-    refRev.set.bHandReverse := refRev.bCmdRev;
-    refRev.bCmdFwd := FALSE;
-    refRev.bCmdRev := FALSE;
+  IF refReversingData.bCmdHandForward OR refReversingData.bCmdHandReverse THEN
+    refReversingData.set.bHandReverseSelected := refReversingData.bCmdHandReverse;
+    refReversingData.bCmdHandForward := FALSE;
+    refReversingData.bCmdHandReverse := FALSE;
     IF __ISVALIDREF(refData) THEN
       IF refData.set.eMode = E_Mode.Hand THEN
-        Command(eCmd := E_EquipCmd.Start);
+        Command(eCommand := E_EquipCmd.Start);
       END_IF;
     END_IF;
   END_IF;
-  bWantRev := bReverse;
+  bWantRev := bAutoReverse;
   IF __ISVALIDREF(refData) THEN
     IF refData.set.eMode = E_Mode.Hand THEN
-      bWantRev := refRev.set.bHandReverse;
-      IF bJogIn THEN bWantRev := bJogRevIn; END_IF;   // a jog (FB_MotorJog): its bJogRev
+      bWantRev := refReversingData.set.bHandReverseSelected;
+      IF bJogIn THEN bWantRev := bJogRevIn; END_IF;   // a jog (FB_MotorJog): its bJogReverse
     END_IF;
   END_IF;
-  IF bQ AND bWantRev <> bRunRev AND refRev.set.bStopBeforeReverse THEN
+  IF bRunOutput AND bWantRev <> bRunRev AND refReversingData.set.bStopBeforeReverse THEN
     bDirStop := TRUE;             (* stop; a new start is needed *)
   END_IF;
 END_IF;
 
-SUPER^();                         // the motor: modes, protections, ShapeRun, bQ
+SUPER^();                         // the motor: modes, protections, ShapeRun, bRunOutput
 
-IF NOT __ISVALIDREF(refRev) THEN
-  bQFwd := FALSE;
-  bQRev := FALSE;
+IF NOT __ISVALIDREF(refReversingData) THEN
+  bForwardOutput := FALSE;
+  bReverseOutput := FALSE;
   RETURN;
 END_IF;
-IF NOT bQ OR NOT bDirStop THEN
+IF NOT bRunOutput OR NOT bDirStop THEN
   bRunRev := bWantRev;
 END_IF;
-fbCo(bRun := bQ AND NOT (bRunRev AND bLimitRev) AND NOT (NOT bRunRev AND bLimitFwd), bWantB := bRunRev,
-     bFbA := bFeedbackFwd, bFbB := bFeedbackRev, bUseFb := refData.set.bUseFeedback,
-     tGapAB := refRev.set.tReversalDelay, tGapBA := refRev.set.tReversalDelay,
-     tOpenTime := refRev.set.tChangeover);
-bQFwd := fbCo.bQA;
-bQRev := fbCo.bQB;
-bConfirmed := bQ AND (bConfirmed OR (bQFwd AND bFeedbackFwd) OR (bQRev AND bFeedbackRev)
-                      OR NOT refData.set.bUseFeedback);
-bReversed := bQRev;
-refRev.sts.bReverse := bQRev;
-refRev.sts.bAtLimitFwd := bLimitFwd;
-refRev.sts.bAtLimitRev := bLimitRev;
+fbCo(bRun := bRunOutput AND NOT (bRunRev AND bReverseLimitSwitch) AND NOT (NOT bRunRev AND bForwardLimitSwitch), bSelectSideB := bRunRev,
+     bSideAFeedback := bForwardFeedback, bSideBFeedback := bReverseFeedback, bContactorFeedbackFitted := refData.set.bRunFeedbackFitted,
+     tAToBDeadTime := refReversingData.set.tReversingDeadTime, tBToADeadTime := refReversingData.set.tReversingDeadTime,
+     tAuxFeedbackTimeout := refReversingData.set.tAuxFeedbackTimeout);
+bForwardOutput := fbCo.bSideAOutput;
+bReverseOutput := fbCo.bSideBOutput;
+bConfirmed := bRunOutput AND (bConfirmed OR (bForwardOutput AND bForwardFeedback) OR (bReverseOutput AND bReverseFeedback)
+                      OR NOT refData.set.bRunFeedbackFitted);
+bRunningReverse := bReverseOutput;
+refReversingData.sts.bRunningReverse := bReverseOutput;
+refReversingData.sts.bAtForwardLimit := bForwardLimitSwitch;
+refReversingData.sts.bAtReverseLimit := bReverseLimitSwitch;
 
 END_FUNCTION_BLOCK

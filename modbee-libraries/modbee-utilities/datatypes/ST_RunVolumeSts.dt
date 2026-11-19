@@ -1,11 +1,11 @@
 TYPE
   ST_RunVolumeSts : STRUCT
-    fDelivered : LREAL;
-    fLeft : LREAL;
-    tCap : TIME; (* the safety time cap in use (0 = no volume target) *)
-    bDefaultCap : BOOL; (* the cap is tDefaultCap, not worked out from fMinFlow *)
-    stMeterFailed : ST_ProtectionSts;
-    bRefused : BOOL; (* a bad settings write was put back (cleared by the run's reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    fDeliveredThisRun : LREAL; (* volume delivered in this run *)
+    fVolumeLeft : LREAL; (* volume left to the target *)
+    tTimeCapInUse : TIME; (* the safety time cap in use (0 = no volume target) *)
+    bDefaultTimeCapInUse : BOOL; (* the cap is tDefaultTimeCap, not worked out from fMinExpectedFlow *)
+    stMeterFailedFault : ST_ProtectionSts; (* the meter does not count while the run runs *)
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by the run's reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

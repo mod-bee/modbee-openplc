@@ -1,8 +1,9 @@
 TYPE
   ST_RunVolumeSet : STRUCT
-    fTarget : LREAL; (* 0 = no volume target *)
-    fMinFlow : REAL; (* the least flow expected, per hour in the meter's unit (0 = use tDefaultCap) *)
-    tDefaultCap : TIME := T#2h; (* the safety time cap when fMinFlow is 0 *)
-    stMeterFailed : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#2m, eReset := E_ResetMode.Auto, tRecover := T#0s, nMaxRetries := 0);
+    fVolumeSetpoint : LREAL; (* 0 = no volume target *)
+    fMinExpectedFlow : REAL; (* the least flow expected, per hour in the meter's unit (0 = use tDefaultTimeCap) *)
+    tDefaultTimeCap : TIME := T#2h; (* the safety time cap when fMinExpectedFlow is 0 *)
+    stMeterFailedFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#2m, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#0s, nMaxRetriesBeforeLockout := 0);
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

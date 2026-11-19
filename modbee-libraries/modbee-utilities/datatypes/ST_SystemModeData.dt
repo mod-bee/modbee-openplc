@@ -1,11 +1,11 @@
 TYPE
   ST_SystemModeData : STRUCT
-    nCmdMode : INT := -1; (* 0 Off, 1 Manual, 2 Auto: writes set.eMode once, then -1 (cleared; SMS, SCADA) *)
-    bCmdStart : BOOL; (* latch the manual run (rising edge, cleared) *)
-    bCmdStop : BOOL;
-    bCmdReset : BOOL; (* the plant reset, as the bReset pin *)
-    set : ST_SystemModeSet;
-    sts : ST_SystemModeSts;
-    det : ST_SystemModeDet;
+    nCmdSystemMode : INT := -1; (* 0 Off, 1 Manual, 2 Auto: writes set.eSystemMode once, then -1 (cleared; SMS, SCADA) *)
+    bCmdStartManualRun : BOOL; (* latch the manual run (rising edge, cleared) *)
+    bCmdStopManualRun : BOOL; (* HMI: end the manual run (acts once, cleared) *)
+    bCmdResetFaults : BOOL; (* the plant reset, as the bPlantReset pin *)
+    set : ST_SystemModeSet; (* settings (kept) *)
+    sts : ST_SystemModeSts; (* status *)
+    det : ST_SystemModeDet; (* details *)
   END_STRUCT;
 END_TYPE

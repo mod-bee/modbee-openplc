@@ -1,9 +1,9 @@
 TYPE
   ST_AnnunciatorSts : STRUCT
-    nFirstOut : INT;
-    nActive : INT;
-    nUnacked : INT;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    nFirstOutAlarm : INT; (* the alarm that started this event (1 = first element; 0 = none) *)
+    nAlarmsActive : INT; (* alarms present now *)
+    nAlarmsUnacknowledged : INT; (* alarms waiting to be acknowledged *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

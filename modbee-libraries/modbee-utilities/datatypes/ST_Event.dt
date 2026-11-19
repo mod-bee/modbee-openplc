@@ -1,10 +1,10 @@
 TYPE
   ST_Event : STRUCT
-    nSeq : UDINT; (* running number of the event (0 = empty slot) *)
-    dtStamp : DT; (* when it happened (dtClock) *)
-    nSrc : INT; (* the source (0 = the log itself, power-up) *)
-    nCode : INT; (* your own code (0 = none) *)
-    eStop : E_StopReason;
-    eFault : E_UtError;
+    nEventNumber : UDINT; (* running number of the event (0 = empty slot) *)
+    dtTimeStamp : DT; (* when it happened (dtLocalTime) *)
+    nSource : INT; (* the source (0 = the log itself, power-up) *)
+    nUserCode : INT; (* your own code (0 = none) *)
+    eStopReason : E_StopReason; (* the stop reason logged *)
+    eLoggedErrorId : E_UtError; (* the error logged *)
   END_STRUCT;
 END_TYPE

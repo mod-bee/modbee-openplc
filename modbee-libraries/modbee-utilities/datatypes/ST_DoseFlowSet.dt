@@ -1,11 +1,11 @@
 TYPE
   ST_DoseFlowSet EXTENDS ST_DoseSet : STRUCT
-    fRatio : REAL; (* dose units per carrier unit *)
-    fMinFlow : REAL; (* carrier flow needed (per hour) *)
-    tCarrierProven : TIME := T#10s;
-    fMaxRate : REAL := 100.0; (* % *)
-    fPulseVolume : REAL; (* dose per stroke pulse (0 = no pulses) *)
-    tPulseWidth : TIME := T#200ms;
-    stOverCapacity : ST_ProtectionSet := (eResponse := E_Response.Warn, eReset := E_ResetMode.Auto);
+    fDosePerCarrierUnit : REAL; (* dose units per carrier unit *)
+    fMinCarrierFlow : REAL; (* carrier flow needed (per hour) *)
+    tCarrierProveDelay : TIME := T#10s; (* the carrier must run this long before dosing (waiting, not a fault) *)
+    fMaxPumpSpeedPct : REAL := 100.0; (* % *)
+    fDosePerStroke : REAL; (* dose per stroke pulse (0 = no pulses) *)
+    tStrokePulseWidth : TIME := T#200ms; (* length of each stroke pulse *)
+    stOverCapacityFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, eResetMode := E_ResetMode.Auto); (* the dose needs more than the pump gives (a trip holds the dose) *)
   END_STRUCT;
 END_TYPE

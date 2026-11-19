@@ -6,9 +6,9 @@ TRUE when F_UnitConv can convert between two units.
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `eFromUnit` | `E_Unit` |  | From this unit |
-| in | `eToUnit` | `E_Unit` |  | To this unit |
-| out | *(result)* | `BOOL` | | TRUE when the pair can be converted |
+| in | `eFromUnit` | `E_Unit` |  | the unit it is in |
+| in | `eToUnit` | `E_Unit` |  | the unit wanted |
+| out | *(result)* | `BOOL` |  | TRUE when F_UnitConv can convert |
 
 ## How it works
 

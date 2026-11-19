@@ -1,46 +1,46 @@
 (* FB_Sequencer — a start / stop chain: conveyors, crushing, process trains.
-Tables the project declares (VAR_IN_OUT, the same size, at most 32): aStepSet (each machine's settings, in START
-order) and aStep (each machine's live row: the block writes bCmd, the project writes bFeedback and bReady from
-the machine, e.g. m1.Request(bRun := aStep[1].bCmd, bHold := FALSE); aStep[1].bFeedback := m1.bIsRunning;
-aStep[1].bReady := m1.bIsReady).
-bRun (held) starts it and its drop stops it; bStart / bStop are edges; bInterlock FALSE = bAbort; bPermissive FALSE
-refuses a start. A start runs the steps one at a time: a step's bCmd goes on, its bFeedback must prove within
-tTimeout, then tStartDelay passes before the next step (bNoFeedback: proved by the delay alone; bBypass: not
-started). A stop runs them per set.eStopMode (Reverse: last started first stopped; AllAtOnce; Forward), each
-waiting for its feedback to go and then its tStopDelay. A step losing its feedback while running, or failing to
-prove at start, is a fault (FeedbackLost / NoFeedback) and set.eOnLoss decides what stops: Cascade (the failed step
+Tables the project declares (VAR_IN_OUT, the same size, at most 32): aStepSettings (each machine's settings, in START
+order) and aSteps (each machine's live row: the block writes bRunCommand, the project writes bRunFeedback and bMachineReady from
+the machine, e.g. m1.Request(bRun := aSteps[1].bRunCommand, bPause := FALSE); aSteps[1].bRunFeedback := m1.bIsRunning;
+aSteps[1].bMachineReady := m1.bIsReady).
+bRun (held) starts it and its drop stops it; bStart / bStop are edges; bInterlock FALSE = bAbortWhileHeld; bPermissive FALSE
+refuses a start. A start runs the steps one at a time: a step's bRunCommand goes on, its bRunFeedback must prove within
+tFeedbackTimeout, then tNextStartDelay passes before the next step (bNoFeedbackFitted: proved by the delay alone; bSkipStep: not
+started). A stop runs them per set.eStopOrder (Reverse: last started first stopped; AllAtOnce; Forward), each
+waiting for its feedback to go and then its tNextStopDelay. A step losing its feedback while running, or failing to
+prove at start, is a fault (FeedbackLost / NoFeedback) and set.eWhenStepLost decides what stops: Cascade (the failed step
 and every step after it at once, then the rest in reverse), StopAll, DownstreamOnly (the steps before it keep
-running: sts.eMode Partial). A step whose feedback will not go when stopped holds the stop there and raises Stuck
-once its timeout has passed; bAbort is the way out. bHold pauses a START (never a stop). bAbort (a level) drops
-every bCmd at once.
+running: sts.eChainState Partial). A step whose feedback will not go when stopped holds the stop there and raises Stuck
+once its timeout has passed; bAbortWhileHeld is the way out. bPause pauses a START (never a stop). bAbortWhileHeld (a level) drops
+every bRunCommand at once.
 Auto restart (set.bAutoRestart): after a fault stop it starts again by itself once every step is ready and bRun is
-still TRUE, after set.tRestartDelay (bRestarting on: wire it to a pre-start siren), at most set.nMaxRetries times in
-set.tRetryWindow. A stop or abort cancels the run request, so it never restarts by itself after those.
-Nothing is kept over a power cut but the settings: the chain comes back idle with every bCmd off and must be
+still TRUE, after set.tAutoRestartAfter (bAutoRestartPending on: wire it to a pre-start siren), at most set.nMaxRetriesBeforeLockout times in
+set.tRetryCountWindow. A stop or abort cancels the run request, so it never restarts by itself after those.
+Nothing is kept over a power cut but the settings: the chain comes back idle with every bRunCommand off and must be
 started again. Faults clear on a start, a stop or a reset. Kept (a retained last-good copy, a bad write put back):
 set, and the step rows packed into two DWORDs each (the times in 100 ms steps up to 109 min). *)
 
 FUNCTION_BLOCK FB_Sequencer EXTENDS FB_Object
   VAR_INPUT
     bRun : BOOL; (* held run request: its rise starts it, it must stay on for an auto restart *)
-    bStart : BOOL R_EDGE;
-    bStop : BOOL R_EDGE;
-    bAbort : BOOL; (* level: everything off at once (e.g. NOT e-stop healthy) *)
-    bHold : BOOL; (* pause a start where it is *)
-    bReset : BOOL R_EDGE; (* clear the fault *)
+    bStart : BOOL R_EDGE; (* rising edge: start the chain *)
+    bStop : BOOL R_EDGE; (* rising edge: stop the chain *)
+    bAbortWhileHeld : BOOL; (* level: everything off at once (e.g. NOT e-stop healthy) *)
+    bPause : BOOL; (* pause a start where it is *)
+    bResetFaults : BOOL R_EDGE; (* clear the fault *)
     bInterlock : BOOL := TRUE; (* FALSE = abort *)
     bPermissive : BOOL := TRUE; (* FALSE refuses a start *)
-    refData : REFERENCE TO ST_SequencerData;
+    refData : REFERENCE TO ST_SequencerData; (* the block's record *)
   END_VAR
   VAR_IN_OUT
-    aStepSet : ARRAY [*] OF ST_SEQSTEPSET;
-    aStep : ARRAY [*] OF ST_SEQSTEP;
+    aStepSettings : ARRAY [*] OF ST_SEQSTEPSET; (* each machine's settings, in start order *)
+    aSteps : ARRAY [*] OF ST_SEQSTEP; (* each machine's live row: the block writes bRunCommand, the project bRunFeedback and bMachineReady *)
   END_VAR
   VAR_OUTPUT
-    bRunning : BOOL; (* every step up *)
-    bBusy : BOOL; (* starting, held or stopping *)
+    bAllRunning : BOOL; (* every step up *)
+    bInTransition : BOOL; (* starting, held or stopping *)
     nCurrentStep : INT; (* the step being started or stopped (0 = none) *)
-    bRestarting : BOOL; (* auto restart countdown: wire to a pre-start siren *)
+    bAutoRestartPending : BOOL; (* auto restart countdown: wire to a pre-start siren *)
   END_VAR
   VAR RETAIN
     stKept : ST_SequencerSet;
@@ -107,17 +107,17 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_SequencerSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (stS.eStopMode = E_SeqStopMode.Reverse OR stS.eStopMode = E_SeqStopMode.AllAtOnce
-          OR stS.eStopMode = E_SeqStopMode.Forward) THEN
+  IF NOT (stS.eStopOrder = E_SeqStopMode.Reverse OR stS.eStopOrder = E_SeqStopMode.AllAtOnce
+          OR stS.eStopOrder = E_SeqStopMode.Forward) THEN
     SetWhy := E_UtError.ChoiceBad;
-  ELSIF NOT (stS.eOnLoss = E_SeqLoss.Cascade OR stS.eOnLoss = E_SeqLoss.StopAll
-             OR stS.eOnLoss = E_SeqLoss.DownstreamOnly) THEN
+  ELSIF NOT (stS.eWhenStepLost = E_SeqLoss.Cascade OR stS.eWhenStepLost = E_SeqLoss.StopAll
+             OR stS.eWhenStepLost = E_SeqLoss.DownstreamOnly) THEN
     SetWhy := E_UtError.ChoiceBad;
-  ELSIF NOT (stS.tRestartDelay >= T#0s) THEN
+  ELSIF NOT (stS.tAutoRestartAfter >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.nMaxRetries >= 0) THEN
+  ELSIF NOT (stS.nMaxRetriesBeforeLockout >= 0) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.tRetryWindow >= T#0s) THEN
+  ELSIF NOT (stS.tRetryCountWindow >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
@@ -135,17 +135,17 @@ METHOD PRIVATE RowWhy : E_UtError
     stS : REFERENCE TO ST_SeqStepSet;
   END_VAR
   RowWhy := E_UtError.None;
-  IF NOT (stS.tStartDelay >= T#0s) THEN
+  IF NOT (stS.tNextStartDelay >= T#0s) THEN
     RowWhy := E_UtError.TimeBad;
-  ELSIF NOT (TIME_TO_LINT(stS.tStartDelay) / 100 <= 16#FFFF) THEN
+  ELSIF NOT (TIME_TO_LINT(stS.tNextStartDelay) / 100 <= 16#FFFF) THEN
     RowWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tStopDelay >= T#0s) THEN
+  ELSIF NOT (stS.tNextStopDelay >= T#0s) THEN
     RowWhy := E_UtError.TimeBad;
-  ELSIF NOT (TIME_TO_LINT(stS.tStopDelay) / 100 <= 16#FFFF) THEN
+  ELSIF NOT (TIME_TO_LINT(stS.tNextStopDelay) / 100 <= 16#FFFF) THEN
     RowWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tTimeout >= T#0s) THEN
+  ELSIF NOT (stS.tFeedbackTimeout >= T#0s) THEN
     RowWhy := E_UtError.TimeBad;
-  ELSIF NOT (TIME_TO_LINT(stS.tTimeout) / 100 <= 16#FFFF) THEN
+  ELSIF NOT (TIME_TO_LINT(stS.tFeedbackTimeout) / 100 <= 16#FFFF) THEN
     RowWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
@@ -162,10 +162,10 @@ METHOD PRIVATE Pack : BOOL
     nRow : DINT;
     stS : REFERENCE TO ST_SeqStepSet;
   END_VAR
-  aKeptStep[2 * nRow - 1] := LINT_TO_DWORD(TIME_TO_LINT(stS.tStartDelay) / 100)
-                             OR SHL(LINT_TO_DWORD(TIME_TO_LINT(stS.tStopDelay) / 100), 16);
-  aKeptStep[2 * nRow] := LINT_TO_DWORD(TIME_TO_LINT(stS.tTimeout) / 100) OR SHL(BOOL_TO_DWORD(stS.bBypass), 16)
-                         OR SHL(BOOL_TO_DWORD(stS.bNoFeedback), 17);
+  aKeptStep[2 * nRow - 1] := LINT_TO_DWORD(TIME_TO_LINT(stS.tNextStartDelay) / 100)
+                             OR SHL(LINT_TO_DWORD(TIME_TO_LINT(stS.tNextStopDelay) / 100), 16);
+  aKeptStep[2 * nRow] := LINT_TO_DWORD(TIME_TO_LINT(stS.tFeedbackTimeout) / 100) OR SHL(BOOL_TO_DWORD(stS.bSkipStep), 16)
+                         OR SHL(BOOL_TO_DWORD(stS.bNoFeedbackFitted), 17);
   Pack := TRUE;
 END_METHOD
 
@@ -174,11 +174,11 @@ METHOD PRIVATE Unpack : BOOL
     nRow : DINT;
     stS : REFERENCE TO ST_SeqStepSet;
   END_VAR
-  stS.tStartDelay := LINT_TO_TIME(DWORD_TO_LINT(aKeptStep[2 * nRow - 1] AND DWORD#16#FFFF) * 100);
-  stS.tStopDelay := LINT_TO_TIME(DWORD_TO_LINT(SHR(aKeptStep[2 * nRow - 1], 16)) * 100);
-  stS.tTimeout := LINT_TO_TIME(DWORD_TO_LINT(aKeptStep[2 * nRow] AND DWORD#16#FFFF) * 100);
-  stS.bBypass := (aKeptStep[2 * nRow] AND DWORD#16#10000) <> DWORD#0;
-  stS.bNoFeedback := (aKeptStep[2 * nRow] AND DWORD#16#20000) <> DWORD#0;
+  stS.tNextStartDelay := LINT_TO_TIME(DWORD_TO_LINT(aKeptStep[2 * nRow - 1] AND DWORD#16#FFFF) * 100);
+  stS.tNextStopDelay := LINT_TO_TIME(DWORD_TO_LINT(SHR(aKeptStep[2 * nRow - 1], 16)) * 100);
+  stS.tFeedbackTimeout := LINT_TO_TIME(DWORD_TO_LINT(aKeptStep[2 * nRow] AND DWORD#16#FFFF) * 100);
+  stS.bSkipStep := (aKeptStep[2 * nRow] AND DWORD#16#10000) <> DWORD#0;
+  stS.bNoFeedbackFitted := (aKeptStep[2 * nRow] AND DWORD#16#20000) <> DWORD#0;
   Unpack := TRUE;
 END_METHOD
 
@@ -189,9 +189,9 @@ IF NOT __ISVALIDREF(refData) THEN
   RETURN;
 END_IF;
 tNow := TIME();
-nLo := LOWER_BOUND(aStep, 1);
-nSLo := LOWER_BOUND(aStepSet, 1);
-nN := MIN(UPPER_BOUND(aStep, 1) - nLo + 1, UPPER_BOUND(aStepSet, 1) - nSLo + 1);
+nLo := LOWER_BOUND(aSteps, 1);
+nSLo := LOWER_BOUND(aStepSettings, 1);
+nN := MIN(UPPER_BOUND(aSteps, 1) - nLo + 1, UPPER_BOUND(aStepSettings, 1) - nSLo + 1);
 bTooMany := nN > cMaxRows;
 IF bTooMany THEN
   nN := cMaxRows;                 (* up to 32 steps; more: a config fault *)
@@ -202,7 +202,7 @@ IF bFirstScan THEN
   IF nKeptLayout = cLayout THEN
     refData.set := stKept;
     FOR nI := 1 TO MIN(nN, INT_TO_DINT(nKeptRows)) DO
-      Unpack(nRow := nI, stS := aStepSet[nSLo + nI - 1]);
+      Unpack(nRow := nI, stS := aStepSettings[nSLo + nI - 1]);
     END_FOR;
   ELSE
     stKept := refData.set;
@@ -212,9 +212,9 @@ IF bFirstScan THEN
   tPrev := tNow;
   bRunPrev := bRun;               (* a bRun held over a power cut is not a new start *)
   FOR nI := 1 TO nN DO
-    aStep[nLo + nI - 1].bCmd := FALSE;
-    aStep[nLo + nI - 1].eState := E_SeqStepState.Off;
-    aStep[nLo + nI - 1].tElapsed := T#0s;
+    aSteps[nLo + nI - 1].bRunCommand := FALSE;
+    aSteps[nLo + nI - 1].eStepState := E_SeqStepState.Off;
+    aSteps[nLo + nI - 1].tElapsedTime := T#0s;
   END_FOR;
   eMd := E_SeqMode.Idle;
 END_IF;
@@ -222,21 +222,21 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOkSet := TRUE;
 END_IF;
 bRowsOk := TRUE;
 nCfgAt := 0;
 FOR nI := 1 TO nN DO
   nS := nSLo + nI - 1;
-  IF RowOk(stS := aStepSet[nS]) THEN
-    Pack(nRow := nI, stS := aStepSet[nS]);
+  IF RowOk(stS := aStepSettings[nS]) THEN
+    Pack(nRow := nI, stS := aStepSettings[nS]);
   ELSIF nI <= INT_TO_DINT(nKeptRows) THEN
-    refData.sts.eRefusedWhy := RowWhy(stS := aStepSet[nS]);
-    Unpack(nRow := nI, stS := aStepSet[nS]);
-    refData.sts.bRefused := TRUE;
+    refData.sts.eSettingRefusedErrorId := RowWhy(stS := aStepSettings[nS]);
+    Unpack(nRow := nI, stS := aStepSettings[nS]);
+    refData.sts.bSettingRefused := TRUE;
   ELSE
     bRowsOk := FALSE;
     IF nCfgAt = 0 THEN nCfgAt := nI; END_IF;
@@ -262,19 +262,19 @@ IF NOT bPermissive THEN
 END_IF;
 bStopSeen := refData.bCmdStop;
 refData.bCmdStop := FALSE;
-bResetReq := bReset OR SystemReset() OR (refData.bCmdReset AND NOT bResetSeen);
-bResetSeen := refData.bCmdReset;
-refData.bCmdReset := FALSE;
+bResetReq := bResetFaults OR SystemReset() OR (refData.bCmdResetFaults AND NOT bResetSeen);
+bResetSeen := refData.bCmdResetFaults;
+refData.bCmdResetFaults := FALSE;
 nFailAt := 0;
 bFailTimeout := FALSE;
 bCfgSet := NOT bOkSet OR bTooMany OR NOT bRowsOk;
 
-bAbortNow := bAbort OR NOT bInterlock;
+bAbortNow := bAbortWhileHeld OR NOT bInterlock;
 IF bAbortNow THEN
   (* everything off at once; no restart by itself *)
   FOR nI := 1 TO nN DO
-    aStep[nLo + nI - 1].bCmd := FALSE;
-    aStep[nLo + nI - 1].eState := E_SeqStepState.Off;
+    aSteps[nLo + nI - 1].bRunCommand := FALSE;
+    aSteps[nLo + nI - 1].eStepState := E_SeqStepState.Off;
   END_FOR;
   eMd := E_SeqMode.Aborted;
   bRunReq := FALSE;
@@ -284,15 +284,15 @@ IF bAbortNow THEN
 ELSE
   (* any start, stop or reset clears the faults *)
   IF bStartReq OR bStopReq OR bResetReq THEN
-    refData.sts.bFltTimeout := FALSE;
-    refData.sts.bFltLoss := FALSE;
-    refData.sts.bFltConfig := FALSE;
-    refData.sts.nFaultStep := 0;
-    refData.sts.bRefused := FALSE;
-    refData.sts.eRefusedWhy := E_UtError.None;
+    refData.sts.bStepTimedOut := FALSE;
+    refData.sts.bStepLostFeedback := FALSE;
+    refData.sts.bSettingBad := FALSE;
+    refData.sts.nFirstFaultStep := 0;
+    refData.sts.bSettingRefused := FALSE;
+    refData.sts.eSettingRefusedErrorId := E_UtError.None;
     FOR nI := 1 TO nN DO
-      IF aStep[nLo + nI - 1].eState = E_SeqStepState.Fault THEN
-        aStep[nLo + nI - 1].eState := E_SeqStepState.Off;
+      IF aSteps[nLo + nI - 1].eStepState = E_SeqStepState.Fault THEN
+        aSteps[nLo + nI - 1].eStepState := E_SeqStepState.Off;
       END_IF;
     END_FOR;
   END_IF;
@@ -302,19 +302,19 @@ ELSE
       eMd := E_SeqMode.Idle;
     END_IF;
     IF eMd <> E_SeqMode.Idle AND (eMd <> E_SeqMode.Stopping OR NOT bSeqStop) THEN
-      IF refData.set.eStopMode = E_SeqStopMode.AllAtOnce THEN
+      IF refData.set.eStopOrder = E_SeqStopMode.AllAtOnce THEN
         FOR nI := 1 TO nN DO
           nR := nLo + nI - 1;
-          IF aStep[nR].bCmd THEN
-            aStep[nR].bCmd := FALSE;
-            aStep[nR].eState := E_SeqStepState.Stopping;
-            aStep[nR].tElapsed := T#0s;
+          IF aSteps[nR].bRunCommand THEN
+            aSteps[nR].bRunCommand := FALSE;
+            aSteps[nR].eStepState := E_SeqStepState.Stopping;
+            aSteps[nR].tElapsedTime := T#0s;
           END_IF;
         END_FOR;
         bSeqStop := FALSE;
       ELSE
         bSeqStop := TRUE;
-        bFwdStop := refData.set.eStopMode = E_SeqStopMode.Forward;
+        bFwdStop := refData.set.eStopOrder = E_SeqStopMode.Forward;
       END_IF;
       nCur := 0;
       nSub := 0;
@@ -323,12 +323,12 @@ ELSE
   ELSIF bStartReq AND eMd <> E_SeqMode.Starting AND eMd <> E_SeqMode.Held AND eMd <> E_SeqMode.Running THEN
     nRun := 0;
     FOR nI := 1 TO nN DO
-      IF NOT aStepSet[nSLo + nI - 1].bBypass OR aStep[nLo + nI - 1].bCmd THEN
+      IF NOT aStepSettings[nSLo + nI - 1].bSkipStep OR aSteps[nLo + nI - 1].bRunCommand THEN
         nRun := nRun + 1;
       END_IF;
     END_FOR;
     IF bCfgSet OR nRun = 0 THEN
-      refData.sts.bFltConfig := TRUE;   (* refused *)
+      refData.sts.bSettingBad := TRUE;   (* refused *)
       IF eMd = E_SeqMode.Aborted THEN
         eMd := E_SeqMode.Idle;
       END_IF;
@@ -347,26 +347,26 @@ ELSE
   FOR nI := 1 TO nN DO
     nR := nLo + nI - 1;
     nS := nSLo + nI - 1;
-    IF aStep[nR].eState = E_SeqStepState.Stopping THEN
-      aStep[nR].tElapsed := aStep[nR].tElapsed + tScan;
-      IF NOT aStep[nR].bFeedback OR aStepSet[nS].bNoFeedback THEN
-        aStep[nR].eState := E_SeqStepState.Off;
-      ELSIF aStepSet[nS].tTimeout > T#0s AND aStep[nR].tElapsed >= aStepSet[nS].tTimeout THEN
-        refData.sts.bFltTimeout := TRUE;
-        IF refData.sts.nFaultStep = 0 THEN
-          refData.sts.nFaultStep := DINT_TO_INT(nI);
+    IF aSteps[nR].eStepState = E_SeqStepState.Stopping THEN
+      aSteps[nR].tElapsedTime := aSteps[nR].tElapsedTime + tScan;
+      IF NOT aSteps[nR].bRunFeedback OR aStepSettings[nS].bNoFeedbackFitted THEN
+        aSteps[nR].eStepState := E_SeqStepState.Off;
+      ELSIF aStepSettings[nS].tFeedbackTimeout > T#0s AND aSteps[nR].tElapsedTime >= aStepSettings[nS].tFeedbackTimeout THEN
+        refData.sts.bStepTimedOut := TRUE;
+        IF refData.sts.nFirstFaultStep = 0 THEN
+          refData.sts.nFirstFaultStep := DINT_TO_INT(nI);
           eFlt := E_UtError.Stuck;
         END_IF;
       END_IF;
-    ELSIF aStep[nR].bCmd AND aStep[nR].eState = E_SeqStepState.Running AND NOT aStepSet[nS].bNoFeedback
-          AND NOT aStep[nR].bFeedback AND nFailAt = 0 THEN
+    ELSIF aSteps[nR].bRunCommand AND aSteps[nR].eStepState = E_SeqStepState.Running AND NOT aStepSettings[nS].bNoFeedbackFitted
+          AND NOT aSteps[nR].bRunFeedback AND nFailAt = 0 THEN
       nFailAt := nI;
     END_IF;
   END_FOR;
 
   (* the start, one step at a time *)
   IF nFailAt = 0 AND (eMd = E_SeqMode.Starting OR eMd = E_SeqMode.Held) THEN
-    IF bHold THEN
+    IF bPause THEN
       eMd := E_SeqMode.Held;
     ELSE
       eMd := E_SeqMode.Starting;
@@ -383,28 +383,28 @@ ELSE
         nK := nLo + nCur - 1;
         nKS := nSLo + nCur - 1;
         IF nSub = 0 THEN
-          IF aStep[nK].bCmd AND aStep[nK].eState = E_SeqStepState.Running THEN
+          IF aSteps[nK].bRunCommand AND aSteps[nK].eStepState = E_SeqStepState.Running THEN
             nCur := nCur + 1;     (* already running and proven *)
-          ELSIF aStepSet[nKS].bBypass AND NOT aStep[nK].bCmd THEN
-            aStep[nK].eState := E_SeqStepState.Bypassed;
+          ELSIF aStepSettings[nKS].bSkipStep AND NOT aSteps[nK].bRunCommand THEN
+            aSteps[nK].eStepState := E_SeqStepState.Bypassed;
             nCur := nCur + 1;
           ELSE
-            IF aStep[nK].eState <> E_SeqStepState.Starting THEN
-              aStep[nK].bCmd := TRUE;
-              aStep[nK].eState := E_SeqStepState.Starting;
-              aStep[nK].tElapsed := T#0s;
+            IF aSteps[nK].eStepState <> E_SeqStepState.Starting THEN
+              aSteps[nK].bRunCommand := TRUE;
+              aSteps[nK].eStepState := E_SeqStepState.Starting;
+              aSteps[nK].tElapsedTime := T#0s;
             ELSE
-              aStep[nK].tElapsed := aStep[nK].tElapsed + tScan;
+              aSteps[nK].tElapsedTime := aSteps[nK].tElapsedTime + tScan;
             END_IF;
-            IF aStepSet[nKS].bNoFeedback OR aStep[nK].bFeedback THEN
-              aStep[nK].eState := E_SeqStepState.Running;
+            IF aStepSettings[nKS].bNoFeedbackFitted OR aSteps[nK].bRunFeedback THEN
+              aSteps[nK].eStepState := E_SeqStepState.Running;
               tAcc := T#0s;
-              IF aStepSet[nKS].tStartDelay > T#0s THEN
+              IF aStepSettings[nKS].tNextStartDelay > T#0s THEN
                 nSub := 1;
                 EXIT;
               END_IF;
               nCur := nCur + 1;
-            ELSIF aStepSet[nKS].tTimeout > T#0s AND aStep[nK].tElapsed >= aStepSet[nKS].tTimeout THEN
+            ELSIF aStepSettings[nKS].tFeedbackTimeout > T#0s AND aSteps[nK].tElapsedTime >= aStepSettings[nKS].tFeedbackTimeout THEN
               nFailAt := nCur;
               bFailTimeout := TRUE;
               EXIT;
@@ -414,7 +414,7 @@ ELSE
           END_IF;
         ELSE
           tAcc := tAcc + tScan;
-          IF tAcc >= aStepSet[nKS].tStartDelay THEN
+          IF tAcc >= aStepSettings[nKS].tNextStartDelay THEN
             nCur := nCur + 1;
             nSub := 0;
           ELSE
@@ -435,11 +435,11 @@ ELSE
         nCur := 0;                (* the next step to stop *)
         IF bFwdStop THEN
           FOR nI := nN TO 1 BY -1 DO
-            IF aStep[nLo + nI - 1].bCmd THEN nCur := nI; END_IF;
+            IF aSteps[nLo + nI - 1].bRunCommand THEN nCur := nI; END_IF;
           END_FOR;
         ELSE
           FOR nI := 1 TO nN DO
-            IF aStep[nLo + nI - 1].bCmd THEN nCur := nI; END_IF;
+            IF aSteps[nLo + nI - 1].bRunCommand THEN nCur := nI; END_IF;
           END_FOR;
         END_IF;
         IF nCur = 0 THEN
@@ -447,31 +447,31 @@ ELSE
           EXIT;
         END_IF;
         nK := nLo + nCur - 1;
-        aStep[nK].bCmd := FALSE;
-        aStep[nK].eState := E_SeqStepState.Stopping;
-        aStep[nK].tElapsed := T#0s;
+        aSteps[nK].bRunCommand := FALSE;
+        aSteps[nK].eStepState := E_SeqStepState.Stopping;
+        aSteps[nK].tElapsedTime := T#0s;
         nSub := 0;
         EXIT;                     (* its feedback is checked from the next scan *)
       END_IF;
       nK := nLo + nCur - 1;
       nKS := nSLo + nCur - 1;
       IF nSub = 0 THEN
-        IF aStep[nK].eState = E_SeqStepState.Stopping THEN
+        IF aSteps[nK].eStepState = E_SeqStepState.Stopping THEN
           EXIT;                   (* still running down *)
         END_IF;
         nSub := 1;
         tAcc := T#0s;
         bAnyOn := FALSE;
         FOR nI := 1 TO nN DO
-          bAnyOn := bAnyOn OR aStep[nLo + nI - 1].bCmd;
+          bAnyOn := bAnyOn OR aSteps[nLo + nI - 1].bRunCommand;
         END_FOR;
-        IF bAnyOn AND aStepSet[nKS].tStopDelay > T#0s THEN
+        IF bAnyOn AND aStepSettings[nKS].tNextStopDelay > T#0s THEN
           EXIT;
         END_IF;
         nCur := 0;
       ELSE
         tAcc := tAcc + tScan;
-        IF tAcc >= aStepSet[nKS].tStopDelay THEN
+        IF tAcc >= aStepSettings[nKS].tNextStopDelay THEN
           nCur := 0;
         ELSE
           EXIT;
@@ -484,25 +484,25 @@ ELSE
   IF nFailAt > 0 THEN
     nK := nLo + nFailAt - 1;
     IF bFailTimeout THEN
-      refData.sts.bFltTimeout := TRUE;
+      refData.sts.bStepTimedOut := TRUE;
     ELSE
-      refData.sts.bFltLoss := TRUE;
+      refData.sts.bStepLostFeedback := TRUE;
     END_IF;
-    IF refData.sts.nFaultStep = 0 THEN
-      refData.sts.nFaultStep := DINT_TO_INT(nFailAt);
+    IF refData.sts.nFirstFaultStep = 0 THEN
+      refData.sts.nFirstFaultStep := DINT_TO_INT(nFailAt);
       IF bFailTimeout THEN eFlt := E_UtError.NoFeedback; ELSE eFlt := E_UtError.FeedbackLost; END_IF;
     END_IF;
-    aStep[nK].bCmd := FALSE;
-    aStep[nK].eState := E_SeqStepState.Fault;
+    aSteps[nK].bRunCommand := FALSE;
+    aSteps[nK].eStepState := E_SeqStepState.Fault;
     FOR nI := 1 TO nN DO
       nR := nLo + nI - 1;
-      IF aStep[nR].bCmd AND (nI > nFailAt OR refData.set.eOnLoss = E_SeqLoss.StopAll) THEN
-        aStep[nR].bCmd := FALSE;
-        aStep[nR].eState := E_SeqStepState.Stopping;
-        aStep[nR].tElapsed := T#0s;
+      IF aSteps[nR].bRunCommand AND (nI > nFailAt OR refData.set.eWhenStepLost = E_SeqLoss.StopAll) THEN
+        aSteps[nR].bRunCommand := FALSE;
+        aSteps[nR].eStepState := E_SeqStepState.Stopping;
+        aSteps[nR].tElapsedTime := T#0s;
       END_IF;
     END_FOR;
-    CASE refData.set.eOnLoss OF
+    CASE refData.set.eWhenStepLost OF
     E_SeqLoss.StopAll:
       bSeqStop := FALSE;
     E_SeqLoss.DownstreamOnly:
@@ -529,8 +529,8 @@ ELSE
     bAnyStopping := FALSE;
     FOR nI := 1 TO nN DO
       nR := nLo + nI - 1;
-      bAnyOn := bAnyOn OR aStep[nR].bCmd;
-      bAnyStopping := bAnyStopping OR aStep[nR].eState = E_SeqStepState.Stopping;
+      bAnyOn := bAnyOn OR aSteps[nR].bRunCommand;
+      bAnyStopping := bAnyStopping OR aSteps[nR].eStepState = E_SeqStepState.Stopping;
     END_FOR;
     IF NOT bAnyStopping THEN
       nCur := 0;
@@ -539,25 +539,25 @@ ELSE
   END_IF;
 END_IF;
 IF bCfgSet THEN
-  refData.sts.bFltConfig := TRUE; (* a bad setting is shown as a config fault while it lasts *)
+  refData.sts.bSettingBad := TRUE; (* a bad setting is shown as a config fault while it lasts *)
 END_IF;
-refData.sts.nConfigStep := DINT_TO_INT(nCfgAt);
+refData.sts.nBadSettingStep := DINT_TO_INT(nCfgAt);
 
 (* auto restart: wanted running, bRun held, every step ready *)
 bArmed := FALSE;
-IF bResetReq OR bStartReq OR (nRsCount > 0 AND tNow - tRsWinAt >= refData.set.tRetryWindow) THEN
+IF bResetReq OR bStartReq OR (nRsCount > 0 AND tNow - tRsWinAt >= refData.set.tRetryCountWindow) THEN
   nRsCount := 0;
   bRsLocked := FALSE;
 END_IF;
-IF refData.set.bAutoRestart AND bRunReq AND bRun AND NOT bAbortNow AND bPermissive AND NOT bHold AND NOT bCfgSet
+IF refData.set.bAutoRestart AND bRunReq AND bRun AND NOT bAbortNow AND bPermissive AND NOT bPause AND NOT bCfgSet
    AND NOT bRsLocked AND (eMd = E_SeqMode.Idle OR eMd = E_SeqMode.Partial) THEN
   bAllReady := TRUE;
   FOR nI := 1 TO nN DO
     nR := nLo + nI - 1;
-    IF NOT (aStepSet[nSLo + nI - 1].bBypass AND NOT aStep[nR].bCmd) THEN
-      bAllReady := bAllReady AND (aStep[nR].bReady OR aStep[nR].bFeedback);
+    IF NOT (aStepSettings[nSLo + nI - 1].bSkipStep AND NOT aSteps[nR].bRunCommand) THEN
+      bAllReady := bAllReady AND (aSteps[nR].bMachineReady OR aSteps[nR].bRunFeedback);
     END_IF;
-    IF aStep[nR].eState = E_SeqStepState.Stopping THEN
+    IF aSteps[nR].eStepState = E_SeqStepState.Stopping THEN
       bAllReady := FALSE;
     END_IF;
   END_FOR;
@@ -569,17 +569,17 @@ ELSE
   tRsAcc := T#0s;
 END_IF;
 bArmedPrev := bArmed;
-bRestarting := FALSE;
-refData.sts.tRestartIn := T#0s;
+bAutoRestartPending := FALSE;
+refData.sts.tAutoRestartTimeLeft := T#0s;
 IF bArmed THEN
-  IF tRsAcc >= refData.set.tRestartDelay THEN
-    refData.sts.bFltTimeout := FALSE;
-    refData.sts.bFltLoss := FALSE;
-    refData.sts.bFltConfig := FALSE;
-    refData.sts.nFaultStep := 0;
+  IF tRsAcc >= refData.set.tAutoRestartAfter THEN
+    refData.sts.bStepTimedOut := FALSE;
+    refData.sts.bStepLostFeedback := FALSE;
+    refData.sts.bSettingBad := FALSE;
+    refData.sts.nFirstFaultStep := 0;
     FOR nI := 1 TO nN DO
-      IF aStep[nLo + nI - 1].eState = E_SeqStepState.Fault THEN
-        aStep[nLo + nI - 1].eState := E_SeqStepState.Off;
+      IF aSteps[nLo + nI - 1].eStepState = E_SeqStepState.Fault THEN
+        aSteps[nLo + nI - 1].eStepState := E_SeqStepState.Off;
       END_IF;
     END_FOR;
     eMd := E_SeqMode.Starting;
@@ -591,12 +591,12 @@ IF bArmed THEN
       tRsWinAt := tNow;
     END_IF;
     nRsCount := nRsCount + 1;
-    IF nRsCount >= refData.set.nMaxRetries THEN
+    IF nRsCount >= refData.set.nMaxRetriesBeforeLockout THEN
       bRsLocked := TRUE;          (* no more by itself until a reset or a start *)
     END_IF;
   ELSE
-    bRestarting := TRUE;
-    refData.sts.tRestartIn := refData.set.tRestartDelay - tRsAcc;
+    bAutoRestartPending := TRUE;
+    refData.sts.tAutoRestartTimeLeft := refData.set.tAutoRestartAfter - tRsAcc;
   END_IF;
 END_IF;
 
@@ -604,49 +604,49 @@ END_IF;
 FOR nI := 1 TO nN DO
   nR := nLo + nI - 1;
   nS := nSLo + nI - 1;
-  IF NOT aStep[nR].bCmd AND aStep[nR].eState <> E_SeqStepState.Stopping AND aStep[nR].eState <> E_SeqStepState.Fault THEN
-    IF aStepSet[nS].bBypass THEN
-      aStep[nR].eState := E_SeqStepState.Bypassed;
+  IF NOT aSteps[nR].bRunCommand AND aSteps[nR].eStepState <> E_SeqStepState.Stopping AND aSteps[nR].eStepState <> E_SeqStepState.Fault THEN
+    IF aStepSettings[nS].bSkipStep THEN
+      aSteps[nR].eStepState := E_SeqStepState.Bypassed;
     ELSE
-      aStep[nR].eState := E_SeqStepState.Off;
+      aSteps[nR].eStepState := E_SeqStepState.Off;
     END_IF;
   END_IF;
-  aStep[nR].tLeft := T#0s;
-  IF (aStep[nR].eState = E_SeqStepState.Starting OR aStep[nR].eState = E_SeqStepState.Stopping)
-     AND aStepSet[nS].tTimeout > aStep[nR].tElapsed THEN
-    aStep[nR].tLeft := aStepSet[nS].tTimeout - aStep[nR].tElapsed;
+  aSteps[nR].tTimeLeft := T#0s;
+  IF (aSteps[nR].eStepState = E_SeqStepState.Starting OR aSteps[nR].eStepState = E_SeqStepState.Stopping)
+     AND aStepSettings[nS].tFeedbackTimeout > aSteps[nR].tElapsedTime THEN
+    aSteps[nR].tTimeLeft := aStepSettings[nS].tFeedbackTimeout - aSteps[nR].tElapsedTime;
   END_IF;
 END_FOR;
 refData.sts.tTimeLeft := T#0s;
 IF nSub = 1 AND nCur >= 1 AND nCur <= nN THEN
   nK := nLo + nCur - 1;
   nKS := nSLo + nCur - 1;
-  IF (eMd = E_SeqMode.Starting OR eMd = E_SeqMode.Held) AND aStepSet[nKS].tStartDelay > tAcc THEN
-    aStep[nK].tLeft := aStepSet[nKS].tStartDelay - tAcc;
-    refData.sts.tTimeLeft := aStep[nK].tLeft;
-  ELSIF eMd = E_SeqMode.Stopping AND bSeqStop AND aStepSet[nKS].tStopDelay > tAcc THEN
-    aStep[nK].tLeft := aStepSet[nKS].tStopDelay - tAcc;
-    refData.sts.tTimeLeft := aStep[nK].tLeft;
+  IF (eMd = E_SeqMode.Starting OR eMd = E_SeqMode.Held) AND aStepSettings[nKS].tNextStartDelay > tAcc THEN
+    aSteps[nK].tTimeLeft := aStepSettings[nKS].tNextStartDelay - tAcc;
+    refData.sts.tTimeLeft := aSteps[nK].tTimeLeft;
+  ELSIF eMd = E_SeqMode.Stopping AND bSeqStop AND aStepSettings[nKS].tNextStopDelay > tAcc THEN
+    aSteps[nK].tTimeLeft := aStepSettings[nKS].tNextStopDelay - tAcc;
+    refData.sts.tTimeLeft := aSteps[nK].tTimeLeft;
   END_IF;
 END_IF;
 
 (* outputs and status *)
-bRunning := eMd = E_SeqMode.Running;
-bBusy := eMd = E_SeqMode.Starting OR eMd = E_SeqMode.Held OR eMd = E_SeqMode.Stopping;
+bAllRunning := eMd = E_SeqMode.Running;
+bInTransition := eMd = E_SeqMode.Starting OR eMd = E_SeqMode.Held OR eMd = E_SeqMode.Stopping;
 IF eMd = E_SeqMode.Starting OR eMd = E_SeqMode.Held OR (eMd = E_SeqMode.Stopping AND bSeqStop) THEN
   nCurrentStep := DINT_TO_INT(nCur);
 ELSE
   nCurrentStep := 0;
 END_IF;
-IF NOT (refData.sts.bFltTimeout OR refData.sts.bFltLoss OR refData.sts.bFltConfig) THEN
-  refData.sts.nFaultStep := 0;
+IF NOT (refData.sts.bStepTimedOut OR refData.sts.bStepLostFeedback OR refData.sts.bSettingBad) THEN
+  refData.sts.nFirstFaultStep := 0;
 END_IF;
-refData.sts.eMode := eMd;
-refData.sts.nRestarts := nRsCount;
-refData.sts.bRestartLocked := bRsLocked;
-bError := refData.sts.bFltTimeout OR refData.sts.bFltLoss OR refData.sts.bFltConfig;
-bWarning := NOT bError AND (bRestarting OR refData.sts.bRefused);
-IF refData.sts.bFltConfig THEN
+refData.sts.eChainState := eMd;
+refData.sts.nRetriesUsed := nRsCount;
+refData.sts.bAutoRestartLocked := bRsLocked;
+bError := refData.sts.bStepTimedOut OR refData.sts.bStepLostFeedback OR refData.sts.bSettingBad;
+bWarning := NOT bError AND (bAutoRestartPending OR refData.sts.bSettingRefused);
+IF refData.sts.bSettingBad THEN
   IF bTooMany OR NOT bRowsOk THEN
     eErrorId := E_UtError.RecipeBad;
   ELSIF NOT bOkSet THEN
@@ -654,9 +654,9 @@ IF refData.sts.bFltConfig THEN
   ELSE
     eErrorId := E_UtError.NoChannels;  (* nothing to run: every step bypassed, or none *)
   END_IF;
-ELSIF refData.sts.bFltTimeout OR refData.sts.bFltLoss THEN
+ELSIF refData.sts.bStepTimedOut OR refData.sts.bStepLostFeedback THEN
   eErrorId := eFlt;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;
@@ -671,7 +671,7 @@ ELSE
 END_CASE;
 IF bError THEN
   eState := E_State.Fault;
-ELSIF bRestarting THEN
+ELSIF bAutoRestartPending THEN
   eState := E_State.Waiting;
 END_IF;
 bFirstScan := FALSE;

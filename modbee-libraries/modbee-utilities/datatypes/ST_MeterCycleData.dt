@@ -1,6 +1,6 @@
 TYPE
   ST_MeterCycleData : STRUCT
-    bCmdRollover : BOOL; (* close the cycle (cleared by the block) *)
-    tot : ST_MeterCycleTot;
+    bCmdCloseCycle : BOOL; (* close the cycle (cleared by the block) *)
+    tot : ST_MeterCycleTot; (* the totals (kept) *)
   END_STRUCT;
 END_TYPE

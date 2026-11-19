@@ -1,26 +1,26 @@
 (* FB_SettingArray — FB_SettingCheck for a list of project values.
-aItem (the project's table, VAR_IN_OUT, at most 32 kept): each row holds the value in use (fValue: the project
-reads it), its limits fMin / fMax and the items it must be above / below (nAbove / nBelow: their POSITION in the
-table, 1 = the first element, 0 = none), the value wanted (fRequest: the HMI / SCADA writes it) and bCmdCheck.
-Each time an item's fRequest changes (or on bCmdCheck) it is checked against its limits and the related items:
-passed, fValue := fRequest; failed, fValue is kept, the row shows bRefused / eRefusedId (until its next accepted
-write), and the block's nRefusedItem / eRefusedId say which. Items are checked in table order, so two related
+aItems (the project's table, VAR_IN_OUT, at most 32 kept): each row holds the value in use (fValueInUse: the project
+reads it), its limits fLowestAllowed / fHighestAllowed and the items it must be above / below (nMustBeAboveItem / nMustBeBelowItem: their POSITION in the
+table, 1 = the first element, 0 = none), the value wanted (fRequestedValue: the HMI / SCADA writes it) and bCmdCheckNow.
+Each time an item's fRequestedValue changes (or on bCmdCheckNow) it is checked against its limits and the related items:
+passed, fValueInUse := fRequestedValue; failed, fValueInUse is kept, the row shows bRequestRefused / eRefusedReason (until its next accepted
+write), and the block's nRefusedItem / eRefusedReason say which. Items are checked in table order, so two related
 items changed in one scan check the later one against the earlier one's new value. Nothing is checked on the
-first scan (requests are only read). bBad: an item's value itself fails the checks now (written past the check,
+first scan (requests are only read). bValueBad: an item's value itself fails the checks now (written past the check,
 or a related item moved); bError BadSetting then.
-Kept over a power cut by the block: each item's fValue (the first 32). The limits and relations are the
+Kept over a power cut by the block: each item's fValueInUse (the first 32). The limits and relations are the
 project's configuration (set at the declaration), not kept. *)
 
 FUNCTION_BLOCK FB_SettingArray EXTENDS FB_Object
   VAR_IN_OUT
-    aItem : ARRAY [*] OF ST_SETTINGITEM;
+    aItems : ARRAY [*] OF ST_SETTINGITEM; (* the project's table of settings (at most 32 kept) *)
   END_VAR
   VAR_OUTPUT
-    bAccepted : BOOL; (* one scan: a request was taken *)
-    bRefused : BOOL; (* one scan: a request was refused *)
-    bAnyBad : BOOL;
+    bRequestAccepted : BOOL; (* one scan: a request was taken *)
+    bRequestRefused : BOOL; (* one scan: a request was refused *)
+    bAnyValueBad : BOOL; (* a value in use fails its checks now *)
     nRefusedItem : INT; (* the last refused item (0 = none since power-up) *)
-    eRefusedId : E_UtError;
+    eRefusedReason : E_UtError; (* why the last request was refused (None after an accepted one) *)
   END_VAR
   VAR RETAIN
     aKeptValue : ARRAY [1..32] OF REAL;
@@ -47,22 +47,22 @@ FUNCTION_BLOCK FB_SettingArray EXTENDS FB_Object
   END_VAR
 
 
-bAccepted := FALSE;
-bRefused := FALSE;
-bAnyBad := FALSE;
-nLo := LOWER_BOUND(aItem, 1);
-nN := UPPER_BOUND(aItem, 1) - nLo + 1;
+bRequestAccepted := FALSE;
+bRequestRefused := FALSE;
+bAnyValueBad := FALSE;
+nLo := LOWER_BOUND(aItems, 1);
+nN := UPPER_BOUND(aItems, 1) - nLo + 1;
 IF bFirstScan THEN
   IF nKeptLayout = cLayout THEN
     FOR nI := 1 TO MIN(nN, INT_TO_DINT(nKeptRows)) DO
-      aItem[nLo + nI - 1].fValue := aKeptValue[nI];
+      aItems[nLo + nI - 1].fValueInUse := aKeptValue[nI];
     END_FOR;
   ELSE
     nKeptLayout := cLayout;
   END_IF;
   FOR nI := 1 TO nN DO            (* requests are only read on the first scan *)
-    aItem[nLo + nI - 1].fSeen := aItem[nLo + nI - 1].fRequest;
-    aItem[nLo + nI - 1].bCmdCheck := FALSE;
+    aItems[nLo + nI - 1].fRequestLastRead := aItems[nLo + nI - 1].fRequestedValue;
+    aItems[nLo + nI - 1].bCmdCheckNow := FALSE;
   END_FOR;
 END_IF;
 
@@ -74,71 +74,71 @@ FOR nPass := 1 TO 2 DO
     nBx := 0;
     fAboveV := REAL#-3.4E38;
     fBelowV := REAL#3.4E38;
-    IF aItem[nR].nAbove >= 1 AND INT_TO_DINT(aItem[nR].nAbove) <= nN AND INT_TO_DINT(aItem[nR].nAbove) <> nI THEN
-      nAx := nLo + INT_TO_DINT(aItem[nR].nAbove) - 1;
-      fAboveV := aItem[nAx].fValue;
+    IF aItems[nR].nMustBeAboveItem >= 1 AND INT_TO_DINT(aItems[nR].nMustBeAboveItem) <= nN AND INT_TO_DINT(aItems[nR].nMustBeAboveItem) <> nI THEN
+      nAx := nLo + INT_TO_DINT(aItems[nR].nMustBeAboveItem) - 1;
+      fAboveV := aItems[nAx].fValueInUse;
     END_IF;
-    IF aItem[nR].nBelow >= 1 AND INT_TO_DINT(aItem[nR].nBelow) <= nN AND INT_TO_DINT(aItem[nR].nBelow) <> nI THEN
-      nBx := nLo + INT_TO_DINT(aItem[nR].nBelow) - 1;
-      fBelowV := aItem[nBx].fValue;
+    IF aItems[nR].nMustBeBelowItem >= 1 AND INT_TO_DINT(aItems[nR].nMustBeBelowItem) <= nN AND INT_TO_DINT(aItems[nR].nMustBeBelowItem) <> nI THEN
+      nBx := nLo + INT_TO_DINT(aItems[nR].nMustBeBelowItem) - 1;
+      fBelowV := aItems[nBx].fValueInUse;
     END_IF;
-    bLimitsOk := aItem[nR].fMin = aItem[nR].fMin AND aItem[nR].fMax = aItem[nR].fMax AND fAboveV = fAboveV
-                 AND fBelowV = fBelowV AND aItem[nR].fMin >= REAL#-3.4E38 AND aItem[nR].fMax <= REAL#3.4E38
+    bLimitsOk := aItems[nR].fLowestAllowed = aItems[nR].fLowestAllowed AND aItems[nR].fHighestAllowed = aItems[nR].fHighestAllowed AND fAboveV = fAboveV
+                 AND fBelowV = fBelowV AND aItems[nR].fLowestAllowed >= REAL#-3.4E38 AND aItems[nR].fHighestAllowed <= REAL#3.4E38
                  AND fAboveV >= REAL#-3.4E38 AND fBelowV <= REAL#3.4E38;
     IF nPass = 1 THEN
       (* NaN never equals itself: NaN to NaN is no change *)
       bPending := NOT bFirstScan
-                  AND (NOT (aItem[nR].fRequest = aItem[nR].fSeen
-                            OR (NOT (aItem[nR].fRequest = aItem[nR].fRequest) AND NOT (aItem[nR].fSeen = aItem[nR].fSeen)))
-                       OR aItem[nR].bCmdCheck);
-      aItem[nR].fSeen := aItem[nR].fRequest;
-      aItem[nR].bCmdCheck := FALSE;
+                  AND (NOT (aItems[nR].fRequestedValue = aItems[nR].fRequestLastRead
+                            OR (NOT (aItems[nR].fRequestedValue = aItems[nR].fRequestedValue) AND NOT (aItems[nR].fRequestLastRead = aItems[nR].fRequestLastRead)))
+                       OR aItems[nR].bCmdCheckNow);
+      aItems[nR].fRequestLastRead := aItems[nR].fRequestedValue;
+      aItems[nR].bCmdCheckNow := FALSE;
       IF bPending THEN
         IF NOT bLimitsOk THEN
           eWhy := E_UtError.LimitsBad;
         ELSE
-          eWhy := F_CheckReal(fValue := aItem[nR].fRequest, fMin := aItem[nR].fMin, fMax := aItem[nR].fMax,
-                              bUseAbove := nAx <> 0, fAbove := fAboveV, bUseBelow := nBx <> 0, fBelow := fBelowV);
+          eWhy := F_CheckReal(fValue := aItems[nR].fRequestedValue, fLowestAllowed := aItems[nR].fLowestAllowed, fHighestAllowed := aItems[nR].fHighestAllowed,
+                              bCheckAbove := nAx <> 0, fMustBeAbove := fAboveV, bCheckBelow := nBx <> 0, fMustBeBelow := fBelowV);
         END_IF;
         IF eWhy = E_UtError.None THEN
-          aItem[nR].fValue := aItem[nR].fRequest;
-          aItem[nR].bRefused := FALSE;
-          aItem[nR].eRefusedId := E_UtError.None;
-          bAccepted := TRUE;
+          aItems[nR].fValueInUse := aItems[nR].fRequestedValue;
+          aItems[nR].bRequestRefused := FALSE;
+          aItems[nR].eRefusedReason := E_UtError.None;
+          bRequestAccepted := TRUE;
         ELSE
-          aItem[nR].bRefused := TRUE;
-          aItem[nR].eRefusedId := eWhy;
-          bRefused := TRUE;
+          aItems[nR].bRequestRefused := TRUE;
+          aItems[nR].eRefusedReason := eWhy;
+          bRequestRefused := TRUE;
           nRefusedItem := DINT_TO_INT(nI);
-          eRefusedId := eWhy;
+          eRefusedReason := eWhy;
         END_IF;
       END_IF;
     ELSE
       IF NOT bLimitsOk THEN
         eWhy := E_UtError.LimitsBad;
       ELSE
-        eWhy := F_CheckReal(fValue := aItem[nR].fValue, fMin := aItem[nR].fMin, fMax := aItem[nR].fMax,
-                            bUseAbove := nAx <> 0, fAbove := fAboveV, bUseBelow := nBx <> 0, fBelow := fBelowV);
+        eWhy := F_CheckReal(fValue := aItems[nR].fValueInUse, fLowestAllowed := aItems[nR].fLowestAllowed, fHighestAllowed := aItems[nR].fHighestAllowed,
+                            bCheckAbove := nAx <> 0, fMustBeAbove := fAboveV, bCheckBelow := nBx <> 0, fMustBeBelow := fBelowV);
       END_IF;
-      aItem[nR].bBad := eWhy <> E_UtError.None;
-      bAnyBad := bAnyBad OR aItem[nR].bBad;
+      aItems[nR].bValueBad := eWhy <> E_UtError.None;
+      bAnyValueBad := bAnyValueBad OR aItems[nR].bValueBad;
     END_IF;
   END_FOR;
 END_FOR;
 
-(* keep the values (a value written past the check is kept too: bBad shows it) *)
+(* keep the values (a value written past the check is kept too: bValueBad shows it) *)
 FOR nI := 1 TO MIN(nN, cMaxKept) DO
-  IF aKeptValue[nI] <> aItem[nLo + nI - 1].fValue THEN
-    aKeptValue[nI] := aItem[nLo + nI - 1].fValue;
+  IF aKeptValue[nI] <> aItems[nLo + nI - 1].fValueInUse THEN
+    aKeptValue[nI] := aItems[nLo + nI - 1].fValueInUse;
   END_IF;
 END_FOR;
 IF MIN(nN, cMaxKept) > INT_TO_DINT(nKeptRows) THEN
   nKeptRows := DINT_TO_INT(MIN(nN, cMaxKept));
 END_IF;
-bError := bAnyBad;
+bError := bAnyValueBad;
 bWarning := FALSE;
-IF bAnyBad THEN eErrorId := E_UtError.BadSetting; ELSE eErrorId := E_UtError.None; END_IF;
-IF bAnyBad THEN eState := E_State.Fault; ELSE eState := E_State.Running; END_IF;
+IF bAnyValueBad THEN eErrorId := E_UtError.BadSetting; ELSE eErrorId := E_UtError.None; END_IF;
+IF bAnyValueBad THEN eState := E_State.Fault; ELSE eState := E_State.Running; END_IF;
 bFirstScan := FALSE;
 
 END_FUNCTION_BLOCK

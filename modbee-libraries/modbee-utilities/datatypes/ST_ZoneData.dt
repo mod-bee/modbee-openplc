@@ -1,6 +1,6 @@
 TYPE
   ST_ZoneData : STRUCT
-    set : ST_ZoneSet;
-    sts : ST_ZoneSts;
+    set : ST_ZoneSet; (* settings (kept) *)
+    sts : ST_ZoneSts; (* status *)
   END_STRUCT;
 END_TYPE

@@ -1,17 +1,20 @@
+(* F_CheckLreal — as F_CheckReal for an LREAL setting (a total, a preset): a number, within
+fLowestAllowed..fHighestAllowed. Returns the first problem as an E_UtError, None when it is good. *)
+
 FUNCTION F_CheckLreal : E_UtError
   VAR_INPUT
-    fValue : LREAL;
-    fMin : LREAL;
-    fMax : LREAL;
+    fValue : LREAL; (* the value to check *)
+    fLowestAllowed : LREAL; (* lowest value allowed *)
+    fHighestAllowed : LREAL; (* highest value allowed *)
   END_VAR
 
 IF NOT (fValue = fValue) OR fValue > LREAL#1.7E308 OR fValue < LREAL#-1.7E308 THEN
   F_CheckLreal := E_UtError.ValueBad;
-ELSIF fMin > fMax THEN
+ELSIF fLowestAllowed > fHighestAllowed THEN
   F_CheckLreal := E_UtError.LimitsBad;
-ELSIF fValue < fMin THEN
+ELSIF fValue < fLowestAllowed THEN
   F_CheckLreal := E_UtError.BelowMin;
-ELSIF fValue > fMax THEN
+ELSIF fValue > fHighestAllowed THEN
   F_CheckLreal := E_UtError.AboveMax;
 ELSE
   F_CheckLreal := E_UtError.None;

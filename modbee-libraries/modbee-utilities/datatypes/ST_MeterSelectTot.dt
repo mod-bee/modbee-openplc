@@ -1,5 +1,5 @@
 TYPE
   ST_MeterSelectTot : STRUCT
-    fTotal : LREAL;
+    fTotal : LREAL; (* the total, in the meters' unit (kept) *)
   END_STRUCT;
 END_TYPE

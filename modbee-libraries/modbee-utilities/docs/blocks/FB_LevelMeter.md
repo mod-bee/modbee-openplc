@@ -8,15 +8,15 @@ Offers `I_Meter`: wire this instance to another block's `ip…` pin of that type
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `ipLevel` | `I_Measurement` |  | required. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
-| in | `bActive` | `BOOL` |  | the pump runs: only then is anything counted |
-| in | `ipAdd` | `I_Meter` |  | optional: a meter on the tank's other inflow or outflow during the run, whose rise is added. A meter block's instance (FB_PulseMeter, FB_FlowTotal, FB_RegisterMeter, FB_LevelMeter) |
-| in | `refData` | `REFERENCE TO ST_LevelMeterData` |  | Its record (a variable of this type) |
-| in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
-| out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
+| in | `ipLevel` | `I_Measurement` |  | required. An instance of a block that offers I_Measurement (FB_AnalogIn, FB_FlowTotal, FB_LevelMeter, FB_MeasFilter, FB_MeasFrozen, ...) |
+| in | `bPumpRunning` | `BOOL` |  | the pump runs: only then is anything counted |
+| in | `ipOtherMeter` | `I_Meter` |  | a meter on the tank's other inflow or outflow during the run, whose rise is added (optional). An instance of a block that offers I_Meter (FB_FlowTotal, FB_LevelMeter, FB_MeterSelect, FB_PulseMeter, FB_RegisterMeter) |
+| in | `refData` | `REFERENCE TO ST_LevelMeterData` |  | the block's record |
+| in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
+| out | `bError` | `BOOL` |  | TRUE while a trip or setting fault is active *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
-| out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
-| out | `eState` | `E_State` |  | What it is doing now (Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault) *(from FB_Object)* |
+| out | `eErrorId` | `E_UtError` |  | which error: the first since the last reset, else the first warning; None when all is well *(from FB_Object)* |
+| out | `eState` | `E_State` |  | what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault *(from FB_Object)* |
 
 `bError`, `bWarning`, `eErrorId`, `eState` work as in every block: see [errors and state](../conventions.md#errors-and-state).
 
@@ -24,31 +24,31 @@ Offers `I_Meter`: wire this instance to another block's `ip…` pin of that type
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `bCmdResetTotal` | `BOOL` |  |  |
+| `bCmdResetTotals` | `BOOL` |  | HMI: the total back to 0 (acts once, cleared by the block) |
 
 **Settings `set`** (`ST_LevelMeterSet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `bCountFalls` | `BOOL` | `TRUE` | a pump emptying the tank |
-| `fDeadband` | `REAL` |  | a high-water mark |
-| `tRateWindow` | `TIME` | `T#1m` | The rate is worked out over this window |
+| `bCountLevelFall` | `BOOL` | `TRUE` | count the level's fall (a pump emptying the tank); FALSE: its rise |
+| `fMinRiseToCount` | `REAL` |  | the moved volume must pass its highest value so far by this before it counts (waves never count twice) |
+| `tRateWindow` | `TIME` | `T#1m` | the rate is worked out over this window |
 
 **Status `sts`** (`ST_LevelMeterSts`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `bGood` | `BOOL` |  | The value can be trusted |
-| `fRate` | `REAL` |  | per hour |
-| `fRunMoved` | `LREAL` |  | this run so far |
-| `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
-| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
+| `bGood` | `BOOL` |  | counting: the meter can be trusted |
+| `fFlowPerHour` | `REAL` |  | per hour |
+| `fDeliveredThisRun` | `LREAL` |  | this run so far |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and the last good value put back (until a reset) |
+| `eSettingRefusedErrorId` | `E_UtError` |  | why the last write was refused (cleared with bSettingRefused) |
 
 **Totals `tot`** (`ST_LevelMeterTot`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `fTotal` | `LREAL` |  | The total (kept) |
+| `fTotal` | `LREAL` |  | the total (kept) |
 
 ## How it works
 
@@ -61,22 +61,21 @@ The volume an irrigation pump moves, from the tank level.
 | Pin | Wire |
 | --- | --- |
 | `ipLevel` | `fbTank` |
-| `bActive` | `DI_P1_Running` |
+| `bPumpRunning` | `DI_P1_Running` |
 | `refData` | `stLevelMeter` |
 
-Set `stLevelMeter.set.bCountFalls := TRUE` (the pump empties the tank).
+Set `stLevelMeter.set.bCountLevelFall := TRUE` (the pump empties the tank).
 
 ## Read from ST (methods and properties)
 
 Ladder uses the pins above. These are for ST code and for other blocks (through the interface pins):
-
-- property `fActTotal : LREAL`
-- property `fActRate : REAL`
-- property `bIsGood : BOOL`
-- property `fActValue : REAL`: I_Measurement: the rate (per hour), unit None (the vessel's volume unit is not known here), no bands
-- property `bHasValue : BOOL`
-- property `bIsFitted : BOOL`
-- property `eUnit : E_Unit`
-- method `Band(eBand) : BOOL`
-
 **Back to** [the index](../README.md).
+
+- property `fActTotal : LREAL`: the lifetime total in its unit
+- property `fActFlowPerHour : REAL`: the rate, per hour
+- property `bIsGood : BOOL`: the value can be trusted now
+- property `fActValue : REAL`: I_Measurement: the rate (per hour), unit None (the vessel's volume unit is not known here), no bands
+- property `bHasValue : BOOL`: a value is available (fitted and read at least once)
+- property `bIsFitted : BOOL`: fitted on this site
+- property `eUnit : E_Unit`: the unit of the value
+- method `Band(eBand) : BOOL`

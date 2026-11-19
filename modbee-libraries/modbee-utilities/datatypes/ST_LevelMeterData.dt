@@ -1,8 +1,8 @@
 TYPE
   ST_LevelMeterData : STRUCT
-    bCmdResetTotal : BOOL;
-    set : ST_LevelMeterSet;
-    sts : ST_LevelMeterSts;
-    tot : ST_LevelMeterTot;
+    bCmdResetTotals : BOOL; (* HMI: the total back to 0 (acts once, cleared by the block) *)
+    set : ST_LevelMeterSet; (* settings (kept) *)
+    sts : ST_LevelMeterSts; (* status *)
+    tot : ST_LevelMeterTot; (* totals (kept) *)
   END_STRUCT;
 END_TYPE

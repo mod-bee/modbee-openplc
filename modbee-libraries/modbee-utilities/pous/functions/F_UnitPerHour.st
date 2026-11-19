@@ -3,7 +3,7 @@ MegaLitrePerHour, Gallon: GalPerHour): a meter's rate unit. Any other unit: None
 
 FUNCTION F_UnitPerHour : E_Unit
   VAR_INPUT
-    eUnit : E_Unit;
+    eUnit : E_Unit; (* a volume unit *)
   END_VAR
 
 CASE eUnit OF

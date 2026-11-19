@@ -1,5 +1,6 @@
 TYPE
   ST_StarterSoftSet : STRUCT
-    stStartTooLong : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#15s, eReset := E_ResetMode.Manual);
+    stStartTooLongFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#15s, eResetMode := E_ResetMode.Manual); (* top of ramp not reached in time *)
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

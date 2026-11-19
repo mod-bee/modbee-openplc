@@ -3,19 +3,19 @@
 INTERFACE I_SystemMode
 
 
-PROPERTY bSystemAuto : BOOL
+PROPERTY bSystemAuto : BOOL    // the plant is in Auto
   GET
   END_GET
 END_PROPERTY
-PROPERTY bSystemOff : BOOL
+PROPERTY bSystemOff : BOOL    // the plant is Off
   GET
   END_GET
 END_PROPERTY
-PROPERTY bSystemHold : BOOL
+PROPERTY bSystemHold : BOOL    // the power-up hold is on: automatic starts wait
   GET
   END_GET
 END_PROPERTY
-PROPERTY bSystemReset : BOOL
+PROPERTY bSystemReset : BOOL    // the plant reset this scan
   GET
   END_GET
 END_PROPERTY

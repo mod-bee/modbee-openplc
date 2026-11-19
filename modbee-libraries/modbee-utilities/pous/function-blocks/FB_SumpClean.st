@@ -1,19 +1,19 @@
-(* FB_SumpClean — sump cleaning: every set.nEvery pump cycles (or bClean / bCmdClean) the sump is pumped down past
-its normal stop to set.fCleanLevel and the pump runs on set.tCleanTime there, to clear the settled solids. A part
+(* FB_SumpClean — sump cleaning: every set.nPumpCyclesBetweenCleans pump cycles (or bCleanNow / bCmdCleanNow) the sump is pumped down past
+its normal stop to set.fCleanLevel and the pump runs on set.tRunOnAtCleanLevel there, to clear the settled solids. A part
 of an EMPTY FB_LevelControl: it asks for a normal run (E_PartAction.Request; the low-low cut-out and start limits
-still apply). Not reaching fCleanLevel within set.tMaxClean gives up: a warning (CleanFailed) until the next good
+still apply). Not reaching fCleanLevel within set.tCleanTimeout gives up: a warning (CleanFailed) until the next good
 clean or a reset. A cycle is one start of the owner's run. A bad level stops a clean. The record shows the
-clean under way's time (tElapsed). *)
+clean under way's time (tElapsedTime). *)
 
 FUNCTION_BLOCK FB_SumpClean EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT
     ipOwner : I_PartOwner; (* required: the EMPTY level control *)
     ipLevel : I_Measurement; (* required: the sump level *)
-    bClean : BOOL R_EDGE; (* clean now *)
-    refData : REFERENCE TO ST_SumpCleanData;
+    bCleanNow : BOOL R_EDGE; (* clean now *)
+    refData : REFERENCE TO ST_SumpCleanData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    bCleaning : BOOL;
+    bCleaning : BOOL; (* a clean is running *)
   END_VAR
   VAR RETAIN
     stKept : ST_SumpCleanSet;
@@ -37,25 +37,25 @@ FUNCTION_BLOCK FB_SumpClean EXTENDS FB_Object IMPLEMENTS I_Part
 (* the first bad setting (None: all good) *)
 METHOD PRIVATE SetWhy : E_UtError
   SetWhy := E_UtError.None;
-  IF NOT (refData.set.nEvery >= 0) THEN
+  IF NOT (refData.set.nPumpCyclesBetweenCleans >= 0) THEN
     SetWhy := E_UtError.BelowMin;
   ELSIF NOT (ABS(refData.set.fCleanLevel) <= REAL#3.4E38) THEN
     SetWhy := E_UtError.ValueBad;
-  ELSIF NOT (refData.set.tCleanTime >= T#0s) THEN
+  ELSIF NOT (refData.set.tRunOnAtCleanLevel >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (refData.set.tMaxClean >= T#0s) THEN
+  ELSIF NOT (refData.set.tCleanTimeout >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
 
 METHOD PUBLIC Evaluate : E_PartAction
   VAR_INPUT
-    bRunning : BOOL;              // the owner is running
-    bResetWanted : BOOL;
-    bMasked : BOOL;
+    bOwnerRunCommand : BOOL;              // the owner is running
+    bResetRequest : BOOL;    // the owner's reset request this scan
+    bStartMaskOn : BOOL;    // the owner's start mask is on (checks set to mask at start ignore their cause)
   END_VAR
   VAR_OUTPUT
-    eErrorId : E_UtError;
+    eErrorId : E_UtError;    // the error this part stands for (when it warns or trips)
   END_VAR
   VAR
     tN : TIME;
@@ -71,13 +71,13 @@ METHOD PUBLIC Evaluate : E_PartAction
   tN := TIME();
   bGood := ipLevel.bIsGood;
   (* cycles: each start of the owner's run (not a clean's own) *)
-  IF bRunning AND NOT bRunPrev AND NOT bCleaning THEN
-    refData.nCycles := refData.nCycles + 1;
-    IF refData.set.nEvery > 0 AND refData.nCycles >= refData.set.nEvery THEN
+  IF bOwnerRunCommand AND NOT bRunPrev AND NOT bCleaning THEN
+    refData.sts.nPumpCycleCount := refData.sts.nPumpCycleCount + 1;
+    IF refData.set.nPumpCyclesBetweenCleans > 0 AND refData.sts.nPumpCycleCount >= refData.set.nPumpCyclesBetweenCleans THEN
       bAsk := TRUE;
     END_IF;
   END_IF;
-  bRunPrev := bRunning;
+  bRunPrev := bOwnerRunCommand;
   IF bAsk AND NOT bCleaning AND bGood THEN
     bCleaning := TRUE;
     bReached := FALSE;
@@ -87,25 +87,25 @@ METHOD PUBLIC Evaluate : E_PartAction
   IF bCleaning THEN
     IF NOT bGood THEN
       bCleaning := FALSE;
-    ELSIF refData.set.tMaxClean > T#0s AND NOT bReached AND tN - tStart >= refData.set.tMaxClean THEN
+    ELSIF refData.set.tCleanTimeout > T#0s AND NOT bReached AND tN - tStart >= refData.set.tCleanTimeout THEN
       bCleaning := FALSE;
-      refData.bFailed := TRUE;
+      refData.sts.bCleanFailed := TRUE;
     ELSIF ipLevel.fActValue <= refData.set.fCleanLevel OR bReached THEN
       IF NOT bReached THEN
         bReached := TRUE;
         tAt := tN;
       END_IF;
-      IF tN - tAt >= refData.set.tCleanTime THEN
+      IF tN - tAt >= refData.set.tRunOnAtCleanLevel THEN
         bCleaning := FALSE;
-        refData.bFailed := FALSE;
-        refData.nCycles := 0;
+        refData.sts.bCleanFailed := FALSE;
+        refData.sts.nPumpCycleCount := 0;
       END_IF;
     END_IF;
   END_IF;
-  IF bCleaning THEN refData.tElapsed := tN - tStart; ELSE refData.tElapsed := T#0s; END_IF;
+  IF bCleaning THEN refData.sts.tElapsedTime := tN - tStart; ELSE refData.sts.tElapsedTime := T#0s; END_IF;
   IF bCleaning THEN
     Evaluate := E_PartAction.Request;
-  ELSIF refData.bFailed THEN
+  ELSIF refData.sts.bCleanFailed THEN
     eErrorId := E_UtError.CleanFailed;
     Evaluate := E_PartAction.Warn;
   END_IF;
@@ -113,9 +113,9 @@ END_METHOD
 
 METHOD PUBLIC SetNext
   VAR_INPUT
-    ipNext : I_Part;
+    ipNextPart : I_Part;    // the next part in the owner's chain
   END_VAR
-  THIS^.ipNext := ipNext;
+  THIS^.ipNext := ipNextPart;
 END_METHOD
 
 METHOD PUBLIC GetNext : I_Part
@@ -138,33 +138,33 @@ IF bFirstScan THEN
 ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
-  refData.eRefusedWhy := SetWhy();
+  refData.sts.eSettingRefusedErrorId := SetWhy();
   refData.set := stKept;
-  refData.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
 END_IF;
 IF NOT bAdded THEN
   ipOwner.AddPart(ipPart := THIS^);
   bAdded := TRUE;
 END_IF;
 bCalled := TRUE;
-IF bClean THEN bAsk := TRUE; END_IF;
-IF refData.bCmdClean THEN
+IF bCleanNow THEN bAsk := TRUE; END_IF;
+IF refData.bCmdCleanNow THEN
   bAsk := TRUE;
-  refData.bCmdClean := FALSE;
+  refData.bCmdCleanNow := FALSE;
 END_IF;
-IF refData.bCmdReset OR SystemReset() THEN
-  refData.bCmdReset := FALSE;
-  refData.bFailed := FALSE;
-  refData.bRefused := FALSE;
-  refData.eRefusedWhy := E_UtError.None;
+IF refData.bCmdClearCleanFailed OR SystemReset() THEN
+  refData.bCmdClearCleanFailed := FALSE;
+  refData.sts.bCleanFailed := FALSE;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
-refData.bCleaning := bCleaning;
-IF bCleaning THEN refData.tElapsed := TIME() - tStart; ELSE refData.tElapsed := T#0s; END_IF;
+refData.sts.bCleaning := bCleaning;
+IF bCleaning THEN refData.sts.tElapsedTime := TIME() - tStart; ELSE refData.sts.tElapsedTime := T#0s; END_IF;
 bError := FALSE;
-bWarning := refData.bFailed OR refData.bRefused;
-IF refData.bFailed THEN
+bWarning := refData.sts.bCleanFailed OR refData.sts.bSettingRefused;
+IF refData.sts.bCleanFailed THEN
   eErrorId := E_UtError.CleanFailed;
-ELSIF refData.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;

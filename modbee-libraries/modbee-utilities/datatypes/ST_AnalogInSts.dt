@@ -1,11 +1,11 @@
 TYPE
   ST_AnalogInSts : STRUCT
-    fValue : REAL;
-    fValueAlt : REAL; (* the value in the second unit *)
-    bGood : BOOL;
-    eSignal : E_AiStatus;
-    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    stFault : ST_ProtectionSts;
+    fValue : REAL; (* the value in engineering units *)
+    fValueSecondUnit : REAL; (* the value in the second unit *)
+    bGood : BOOL; (* the value can be trusted *)
+    eSignalStatus : E_AiStatus; (* the signal: Ok, UnderRange, OverRange, FailLow, FailHigh, InputBad, NotFitted *)
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    stSignalFault : ST_ProtectionSts; (* signal fault protection status *)
   END_STRUCT;
 END_TYPE

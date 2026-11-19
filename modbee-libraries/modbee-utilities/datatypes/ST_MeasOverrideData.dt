@@ -1,9 +1,8 @@
 TYPE
   ST_MeasOverrideData : STRUCT
     bSimulate : BOOL; (* never kept: off after a power cut *)
-    fSimValue : REAL;
-    set : ST_MeasOverrideSet;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    fSimulatedValue : REAL; (* the value passed on while bSimulate *)
+    set : ST_MeasOverrideSet; (* settings (kept) *)
+    sts : ST_MeasOverrideSts; (* the status *)
   END_STRUCT;
 END_TYPE

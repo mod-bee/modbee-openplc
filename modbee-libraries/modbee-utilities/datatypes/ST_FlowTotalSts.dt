@@ -1,10 +1,10 @@
 TYPE
   ST_FlowTotalSts : STRUCT
-    bGood : BOOL;
-    bEstimating : BOOL;
-    fRate : REAL; (* per hour *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    stInputBad : ST_ProtectionSts;
+    bGood : BOOL; (* counting: the meter can be trusted *)
+    bEstimating : BOOL; (* the meter is bad and fNominalRate is being counted *)
+    fFlowPerHour : REAL; (* per hour *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    stMeterBadFault : ST_ProtectionSts; (* the meter's input is bad (default a warning) *)
   END_STRUCT;
 END_TYPE

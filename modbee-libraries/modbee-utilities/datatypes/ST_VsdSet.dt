@@ -1,23 +1,23 @@
 TYPE
   ST_VsdSet : STRUCT
-    fMinSpeed : REAL;
-    fMaxSpeed : REAL := 100.0;
-    fAccelRate : REAL; (* % per second (0 = the drive ramps) *)
-    fDecelRate : REAL;
-    fSkipLow : REAL; (* resonance band (equal = off) *)
-    fSkipHigh : REAL;
-    fHandSpeed : REAL := 50.0;
-    fAutoSpeed : REAL := 100.0;
-    fRawMin : REAL;
-    fRawMax : REAL := 65535.0;
-    tResetPulse : TIME := T#500ms;
-    fDevBand : REAL := 10.0; (* speed deviation, % *)
-    stDriveNotReady : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#1s, eReset := E_ResetMode.Retry, tRecover := T#10s, nMaxRetries := 3);
-    stSpeedDev : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#10s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0);
-    tDriveRamp : TIME; (* the drive's own 0 -> 100 % time: bAtSpeed / speedDev wait for it *)
-    fRatedHz : REAL; (* the motor's frequency at 100 % (display; 0 = none) *)
+    fMinSpeedPct : REAL; (* lowest speed while running, % *)
+    fMaxSpeedPct : REAL := 100.0; (* highest speed, % *)
+    fAccelPctPerSec : REAL; (* % per second (0 = the drive ramps) *)
+    fDecelPctPerSec : REAL; (* speed fall, % per second (0 = the drive ramps) *)
+    fSkipBandLow : REAL; (* resonance band (equal = off) *)
+    fSkipBandHigh : REAL; (* top of the speed band to skip *)
+    fHandSpeedPct : REAL := 50.0; (* speed in Hand, % *)
+    fAutoSpeedPct : REAL := 100.0; (* speed in Auto when the owner gives none, % *)
+    fRawAtZeroPct : REAL; (* raw speed reference at 0 % (a register or card value) *)
+    fRawAtFullPct : REAL := 65535.0; (* raw speed reference at 100 % *)
+    tDriveResetPulse : TIME := T#500ms; (* length of the bDriveReset pulse on an operator reset *)
+    fSpeedDeviationPct : REAL := 10.0; (* speed deviation, % *)
+    stDriveNotReadyFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#1s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
+    stSpeedDeviationFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#10s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#5s, nMaxRetriesBeforeLockout := 0);
+    tDriveOwnRampTime : TIME; (* the drive's own 0 -> 100 % time: bAtSpeed / speedDev wait for it *)
+    fRatedFrequency : REAL; (* the motor's frequency at 100 % (display; 0 = none) *)
     fRatedRpm : REAL; (* its speed at 100 % (display; 0 = none) *)
-    fJogSpeed : REAL; (* the speed while jogging (FB_MotorJog), % (0 = fHandSpeed) *)
-    eRateUnit : E_RateUnit; (* fAccelRate / fDecelRate: % per second (default), minute, hour or day *)
+    fJogSpeedPct : REAL; (* the speed while jogging (FB_MotorJog), % (0 = fHandSpeedPct) *)
+    eRateUnit : E_RateUnit; (* fAccelPctPerSec / fDecelPctPerSec: % per second (default), minute, hour or day *)
   END_STRUCT;
 END_TYPE

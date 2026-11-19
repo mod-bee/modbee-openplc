@@ -1,14 +1,14 @@
 TYPE
   ST_DoseSet : STRUCT
-    bEnabled : BOOL := TRUE; (* FALSE: no dosing (a dose ends, stop reason Off) *)
-    fPumpCapacity : REAL; (* the dosing pump at 100 %, dose units per hour *)
-    fMaxQuantity : LREAL; (* per dose (0 = off) *)
-    stMaxTime : ST_ProtectionSet := (eResponse := E_Response.Off, tDelay := T#1h, eReset := E_ResetMode.Manual);
-    stStockLow : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#30s);
-    tRetryWindow : TIME := T#1h;
+    bDosingEnabled : BOOL := TRUE; (* FALSE: no dosing (a dose ends, stop reason Off) *)
+    fFlowAtFullSpeed : REAL; (* the dosing pump at 100 %, dose units per hour *)
+    fMaxQuantityPerDose : LREAL; (* per dose (0 = off) *)
+    stMaxDoseTimeFault : ST_ProtectionSet := (eActionOnFault := E_Response.Off, tTripDelay := T#1h, eResetMode := E_ResetMode.Manual); (* a dose lasted longer than the delay (default Off) *)
+    stStockLowFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#5s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#30s);
+    tRetryCountWindow : TIME := T#1h; (* Retry counts trips within this window (0 = until a reset) *)
     eMode : E_Mode := E_Mode.Auto; (* Off, Hand or Auto (kept) *)
-    fHandRate : REAL := 50.0; (* Hand: the pump's speed, % *)
+    fHandSpeedPct : REAL := 50.0; (* Hand: the pump's speed, % *)
     bHandNeedsCarrier : BOOL := TRUE; (* Hand: the carrier must be proven (Flow / Timed) *)
-    tHandMax : TIME := T#5m; (* Hand: the longest run (0 = no limit) *)
+    tMaxHandRunTime : TIME := T#5m; (* Hand: the longest run (0 = no limit) *)
   END_STRUCT;
 END_TYPE

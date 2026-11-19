@@ -1,25 +1,25 @@
 (* FB_RegisterMeter — totals from a device's own total register (a Modbus energy / flow meter, a BeeBus counter).
 Offers I_Meter (the total, the rate per hour; an I_Measurement too: its rate).
-Pins: fRegister (the device's running total, in its unit; LREAL so a 32-bit register stays exact), bInGood (the
+Pins: fRegisterTotal (the device's running total, in its unit; LREAL so a 32-bit register stays exact), bInputGood (the
 read can be trusted), refData.
-Each increase adds (fRegister - the last) x set.fScale. A drop is a device reset or a glitch: nothing is counted,
-and only the part above the highest reading seen counts again, unless it is a wrap (set.fRolloverAt > 0: the
+Each increase adds (fRegisterTotal - the last) x set.fTotalPerRegisterUnit. A drop is a device reset or a glitch: nothing is counted,
+and only the part above the highest reading seen counts again, unless it is a wrap (set.fRegisterWrapsAt > 0: the
 register restarts from 0 past it; a fall from the top half to the bottom half counts the wrap). An increase
-above set.fMaxStep (0 = no limit) is a glitch: taken as the new reading, nothing counted. While bad nothing is
-counted; the register catches up when good again. Bad past set.stInputBad's delay: bIsGood FALSE, a warning
-(SensorBad). Units: set.eInUnit (the register's volume unit, with fScale applied after) and set.eOutUnit (the
+above set.fMaxStepPerRead (0 = no limit) is a glitch: taken as the new reading, nothing counted. While bad nothing is
+counted; the register catches up when good again. Bad past set.stMeterBadFault's delay: bIsGood FALSE, a warning
+(SensorBad). Units: set.eMeterUnit (the register's volume unit, with fTotalPerRegisterUnit applied after) and set.eTotalUnit (the
 total's), E_Unit volume units, both set convert each addition; both None = no conversion; one set, or a unit that
-is not a volume, is a bad setting (put back). The total is LREAL, kept hourly, when bRunning falls (the pump stops; optional)
-and on a reset (bCmdResetTotal).
-Total commands: bCmdResetTotal (with set.bConfirmReset, only together with bCmdConfirm in the same write) and
-bCmdPreset (the total to fPresetTotal, 0 .. 1E12). *)
+is not a volume, is a bad setting (put back). The total is LREAL, kept hourly, when bPumpRunning falls (the pump stops; optional)
+and on a reset (bCmdResetTotals).
+Total commands: bCmdResetTotals (with set.bResetNeedsConfirm, only together with bCmdConfirmReset in the same write) and
+bCmdPresetTotal (the total to fPresetTotal, 0 .. 1E12). *)
 
 FUNCTION_BLOCK FB_RegisterMeter EXTENDS FB_Object IMPLEMENTS I_Meter
   VAR_INPUT
-    fRegister : LREAL;
-    bInGood : BOOL := TRUE;
-    bRunning : BOOL := FALSE; (* optional: the pump runs; its fall keeps the totals *)
-    refData : REFERENCE TO ST_RegisterMeterData;
+    fRegisterTotal : LREAL; (* the device's running total register, in its unit (LREAL keeps 32 bits exact) *)
+    bInputGood : BOOL := TRUE; (* the input can be trusted *)
+    bPumpRunning : BOOL := FALSE; (* optional: the pump runs; its fall keeps the totals *)
+    refData : REFERENCE TO ST_RegisterMeterData; (* the block's record *)
   END_VAR
   VAR RETAIN
     stKept : ST_RegisterMeterSet;
@@ -48,41 +48,41 @@ FUNCTION_BLOCK FB_RegisterMeter EXTENDS FB_Object IMPLEMENTS I_Meter
   END_VAR
 
 
-PROPERTY PUBLIC fActTotal : LREAL
+PROPERTY PUBLIC fActTotal : LREAL    // the lifetime total in its unit
   GET
     IF __ISVALIDREF(refData) THEN fActTotal := refData.tot.fTotal; ELSE fActTotal := 0.0; END_IF;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC fActRate : REAL
+PROPERTY PUBLIC fActFlowPerHour : REAL    // the rate, per hour
   GET
-    IF __ISVALIDREF(refData) THEN fActRate := refData.sts.fRate; ELSE fActRate := 0.0; END_IF;
+    IF __ISVALIDREF(refData) THEN fActFlowPerHour := refData.sts.fFlowPerHour; ELSE fActFlowPerHour := 0.0; END_IF;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bIsGood : BOOL
+PROPERTY PUBLIC bIsGood : BOOL    // the value can be trusted now
   GET
     IF __ISVALIDREF(refData) THEN bIsGood := refData.sts.bGood; ELSE bIsGood := FALSE; END_IF;
   END_GET
 END_PROPERTY
-(* I_Measurement: the rate (per hour), in set.eOutUnit per hour, no bands *)
-PROPERTY PUBLIC fActValue : REAL
+(* I_Measurement: the rate (per hour), in set.eTotalUnit per hour, no bands *)
+PROPERTY PUBLIC fActValue : REAL    // the value now (the total, in its unit)
   GET
-    IF __ISVALIDREF(refData) THEN fActValue := refData.sts.fRate; ELSE fActValue := 0.0; END_IF;
+    IF __ISVALIDREF(refData) THEN fActValue := refData.sts.fFlowPerHour; ELSE fActValue := 0.0; END_IF;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bHasValue : BOOL
+PROPERTY PUBLIC bHasValue : BOOL    // a value is available (fitted and read at least once)
   GET
     bHasValue := TRUE;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bIsFitted : BOOL
+PROPERTY PUBLIC bIsFitted : BOOL    // fitted on this site
   GET
     bIsFitted := TRUE;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC eUnit : E_Unit
+PROPERTY PUBLIC eUnit : E_Unit    // the unit of the value
   GET
     eUnit := E_Unit.None;
-    IF __ISVALIDREF(refData) THEN eUnit := F_UnitPerHour(eUnit := refData.set.eOutUnit); END_IF;
+    IF __ISVALIDREF(refData) THEN eUnit := F_UnitPerHour(eUnit := refData.set.eTotalUnit); END_IF;
   END_GET
 END_PROPERTY
 METHOD PUBLIC Band : BOOL
@@ -100,24 +100,26 @@ METHOD PRIVATE SetWhy : E_UtError
     bU : BOOL;
     fU : LREAL;
   END_VAR
-  fU := F_UnitFactor(eFromUnit := stS.eInUnit, eToUnit := stS.eOutUnit, bOk => bU);
+  fU := F_UnitFactor(eFromUnit := stS.eMeterUnit, eToUnit := stS.eTotalUnit, bUnitsMatch => bU);
   SetWhy := E_UtError.None;
   IF NOT (bU) THEN
     SetWhy := E_UtError.ChoiceBad;
-  ELSIF NOT (stS.fScale >= 0.0) THEN
+  ELSIF NOT (stS.fTotalPerRegisterUnit >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fScale <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fTotalPerRegisterUnit <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fRolloverAt >= 0.0) THEN
+  ELSIF NOT (stS.fRegisterWrapsAt >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fMaxStep >= 0.0) THEN
+  ELSIF NOT (stS.fMaxStepPerRead >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
   ELSIF NOT (stS.tRateWindow > T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.stInputBad.tDelay >= T#0s) THEN
+  ELSIF NOT (stS.stMeterBadFault.tTripDelay >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (stS.stInputBad.tRecover >= T#0s) THEN
+  ELSIF NOT (stS.stMeterBadFault.tAutoRecoverAfter >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.tRetryCountWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
 
@@ -151,87 +153,87 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF SystemReset() THEN                // the plant reset clears a refused write
-  refData.sts.bRefused := FALSE;
-  refData.sts.eRefusedWhy := E_UtError.None;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
 
 (* count the increases *)
-fMult := F_UnitFactor(eFromUnit := refData.set.eInUnit, eToUnit := refData.set.eOutUnit, bOk => bUnitOk);
-bGoodNow := bInGood AND fRegister = fRegister AND ABS(fRegister) <= LREAL#1.0E300;
+fMult := F_UnitFactor(eFromUnit := refData.set.eMeterUnit, eToUnit := refData.set.eTotalUnit, bUnitsMatch => bUnitOk);
+bGoodNow := bInputGood AND fRegisterTotal = fRegisterTotal AND ABS(fRegisterTotal) <= LREAL#1.0E300;
 IF bGoodNow THEN
   IF NOT bHaveLast THEN
     bHaveLast := TRUE;
-    fLast := fRegister;           (* the first reading: the start, nothing counted *)
-  ELSIF fRegister > fLast THEN
-    fD := fRegister - fLast;
-    IF refData.set.fMaxStep > 0.0 AND fD > refData.set.fMaxStep THEN
-      refData.sts.nGlitches := refData.sts.nGlitches + 1;   (* a jump: nothing counted *)
+    fLast := fRegisterTotal;           (* the first reading: the start, nothing counted *)
+  ELSIF fRegisterTotal > fLast THEN
+    fD := fRegisterTotal - fLast;
+    IF refData.set.fMaxStepPerRead > 0.0 AND fD > refData.set.fMaxStepPerRead THEN
+      refData.sts.nGlitchCount := refData.sts.nGlitchCount + 1;   (* a jump: nothing counted *)
     ELSE
-      refData.tot.fTotal := refData.tot.fTotal + fD * REAL_TO_LREAL(refData.set.fScale) * fMult;
+      refData.tot.fTotal := refData.tot.fTotal + fD * REAL_TO_LREAL(refData.set.fTotalPerRegisterUnit) * fMult;
     END_IF;
-    fLast := fRegister;
-  ELSIF fRegister < fLast THEN
-    IF refData.set.fRolloverAt > 0.0 AND fLast >= refData.set.fRolloverAt / 2.0
-       AND fRegister < refData.set.fRolloverAt / 2.0 THEN
-      fD := refData.set.fRolloverAt - fLast + fRegister;    (* a wrap *)
-      refData.tot.fTotal := refData.tot.fTotal + fD * REAL_TO_LREAL(refData.set.fScale) * fMult;
-      fLast := fRegister;
+    fLast := fRegisterTotal;
+  ELSIF fRegisterTotal < fLast THEN
+    IF refData.set.fRegisterWrapsAt > 0.0 AND fLast >= refData.set.fRegisterWrapsAt / 2.0
+       AND fRegisterTotal < refData.set.fRegisterWrapsAt / 2.0 THEN
+      fD := refData.set.fRegisterWrapsAt - fLast + fRegisterTotal;    (* a wrap *)
+      refData.tot.fTotal := refData.tot.fTotal + fD * REAL_TO_LREAL(refData.set.fTotalPerRegisterUnit) * fMult;
+      fLast := fRegisterTotal;
     ELSE
-      refData.sts.nGlitches := refData.sts.nGlitches + 1;   (* a drop: counts again only above fLast *)
+      refData.sts.nGlitchCount := refData.sts.nGlitchCount + 1;   (* a drop: counts again only above fLast *)
     END_IF;
   END_IF;
-  refData.sts.fRegister := fRegister;
+  refData.sts.fLastGoodReading := fRegisterTotal;
 END_IF;
 
 (* the input bad *)
-F_Protect(tNow := tNow, bCause := NOT bGoodNow, bResetReq := SystemReset(), tRetryWindow := T#1h,
-          stSet := refData.set.stInputBad, stSts := refData.sts.stInputBad, stWork := stWInputBad);
+F_Protect(tNow := tNow, bConditionPresent := NOT bGoodNow, bResetRequest := SystemReset(), tRetryCountWindow := refData.set.tRetryCountWindow,
+          stSettings := refData.set.stMeterBadFault, stStatus := refData.sts.stMeterBadFault, stWorking := stWInputBad);
 refData.sts.bGood := NOT stWInputBad.bActive;
 
 (* rate over the window, per hour *)
 tWin := tNow - tWindowAt;
 IF tWin >= refData.set.tRateWindow THEN
-  refData.sts.fRate := LREAL_TO_REAL((refData.tot.fTotal - fWindowTotal) * 3600000.0 / TIME_TO_LREAL(tWin));
+  refData.sts.fFlowPerHour := LREAL_TO_REAL((refData.tot.fTotal - fWindowTotal) * 3600000.0 / TIME_TO_LREAL(tWin));
   fWindowTotal := refData.tot.fTotal;
   tWindowAt := tNow;
 END_IF;
 
 (* reset, keep *)
-IF refData.bCmdResetTotal AND (refData.bCmdConfirm OR NOT refData.set.bConfirmReset) THEN
-  refData.bCmdResetTotal := FALSE;
+IF refData.bCmdResetTotals AND (refData.bCmdConfirmReset OR NOT refData.set.bResetNeedsConfirm) THEN
+  refData.bCmdResetTotals := FALSE;
   refData.tot.fTotal := 0.0;
   fWindowTotal := 0.0;
   stKeptTot := refData.tot;
 END_IF;
-refData.bCmdResetTotal := FALSE;
-refData.bCmdConfirm := FALSE;
-IF refData.bCmdPreset THEN
+refData.bCmdResetTotals := FALSE;
+refData.bCmdConfirmReset := FALSE;
+IF refData.bCmdPresetTotal THEN
   IF refData.fPresetTotal >= 0.0 AND refData.fPresetTotal <= 1.0E12 THEN
     refData.tot.fTotal := refData.fPresetTotal;
     fWindowTotal := refData.fPresetTotal;
     stKeptTot := refData.tot;
   END_IF;
-  refData.bCmdPreset := FALSE;
+  refData.bCmdPresetTotal := FALSE;
 END_IF;
-IF (bRunningWas AND NOT bRunning) OR tNow - tKeptAt >= T#1h THEN
+IF (bRunningWas AND NOT bPumpRunning) OR tNow - tKeptAt >= T#1h THEN
   stKeptTot := refData.tot;
   tKeptAt := tNow;
 END_IF;
-bRunningWas := bRunning;
+bRunningWas := bPumpRunning;
 
-bError := NOT bOk OR stWInputBad.bTrip;
-bWarning := NOT bError AND (stWInputBad.bWarn OR refData.sts.bRefused);
+bError := NOT bOk OR stWInputBad.bTripping;
+bWarning := NOT bError AND (stWInputBad.bWarning OR refData.sts.bSettingRefused);
 IF NOT bOk THEN
   eErrorId := E_UtError.BadSetting;
-ELSIF stWInputBad.bTrip OR stWInputBad.bWarn THEN
+ELSIF stWInputBad.bTripping OR stWInputBad.bWarning THEN
   eErrorId := E_UtError.SensorBad;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;

@@ -1,10 +1,10 @@
 TYPE
   ST_StartsSts : STRUCT
-    nStartsInHour : INT;
-    tWait : TIME; (* until a start is allowed *)
-    bHolding : BOOL; (* a start is waiting *)
-    bFailWaiting : BOOL; (* the wait after a failed start is running *)
-    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    nStartCountInWindow : INT; (* starts counted in the window, rounded up *)
+    tStartHeldTimeLeft : TIME; (* until a start is allowed *)
+    bStartHeld : BOOL; (* a start is waiting *)
+    bWaitingAfterFailedStart : BOOL; (* the wait after a failed start is running *)
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

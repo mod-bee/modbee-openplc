@@ -1,12 +1,12 @@
 TYPE
   ST_RunSts : STRUCT
-    eState : E_State;
-    eErrorId : E_UtError;
+    eState : E_State; (* what it is doing now *)
+    eErrorId : E_UtError; (* the first error since the last reset (first-out) *)
     eStopReason : E_StopReason; (* why the last run ended *)
-    bActive : BOOL;
-    bPaused : BOOL;
-    bWaiting : BOOL; (* a new run waits for the permissive *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bBusy : BOOL; (* a run is active now *)
+    bPaused : BOOL; (* the run is paused *)
+    bWaitingForPermissive : BOOL; (* a new run waits for the permissive *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

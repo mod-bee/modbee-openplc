@@ -1,18 +1,18 @@
 TYPE
   ST_GroupSet : STRUCT
-    eRotate : E_Rotate;
-    tRotateInterval : TIME := T#24h;
-    nFixedLead : INT := 1;
-    tStageDelay : TIME := T#5s;
-    tDestageDelay : TIME := T#5s;
-    tFailover : TIME := T#10s;
-    nMaxRunning : INT; (* most members running at once, Hand included (0 = no limit) *)
-    bHandCounts : BOOL := TRUE; (* a member running in Hand counts toward the members wanted *)
+    eRotateBy : E_Rotate; (* how the lead moves on: EachStart, Periodic, Fixed or Hours *)
+    tRotateInterval : TIME := T#24h; (* Periodic: the lead moves on this often *)
+    nFixedLeadMember : INT := 1; (* Fixed: the member that always leads (1..4) *)
+    tAddMemberDelay : TIME := T#5s; (* between member starts when more are wanted *)
+    tDropMemberDelay : TIME := T#5s; (* between member stops when fewer are wanted *)
+    tFailoverAfter : TIME := T#10s; (* a called member not running after this is skipped and the next one called *)
+    nMaxMembersRunning : INT; (* most members running at once, Hand included (0 = no limit) *)
+    bHandRunCounts : BOOL := TRUE; (* a member running in Hand counts toward the members wanted *)
     bSwapWhileRunning : BOOL; (* a rotation while running: start the next member, then stop the old one *)
-    eStop : E_GroupStop; (* nothing asked any more: stop all at once, or one per tStopStep *)
-    tStopStep : TIME := T#3s; (* Staged: between member stops *)
-    fHoursBand : REAL := 1.0; (* Hours: members this close in run hours (h) count as equal (rotation order) *)
-    tExerciseEvery : TIME; (* run a member idle this long while nothing is asked (0 = off) *)
-    tExerciseTime : TIME := T#30s; (* for this long *)
+    eStopOrder : E_GroupStop; (* nothing asked any more: stop all at once, or one per tBetweenMemberStops *)
+    tBetweenMemberStops : TIME := T#3s; (* Staged: between member stops *)
+    fEqualHoursBand : REAL := 1.0; (* Hours: members this close in run hours (h) count as equal (rotation order) *)
+    tExerciseAfterIdle : TIME; (* run a member idle this long while nothing is asked (0 = off) *)
+    tExerciseRunTime : TIME := T#30s; (* for this long *)
   END_STRUCT;
 END_TYPE

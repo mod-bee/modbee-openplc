@@ -1,14 +1,14 @@
 TYPE
   ST_VsdSts : STRUCT
-    fSpeedRef : REAL;
-    fSpeedFb : REAL;
-    bAtSpeed : BOOL;
-    bDriveReady : BOOL;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    stDriveNotReady : ST_ProtectionSts;
-    stSpeedDev : ST_ProtectionSts;
-    fSpeedHz : REAL; (* the speed in Hz (set.fRatedHz) *)
+    fSpeedReferencePct : REAL; (* the speed reference sent, % after clamp, skip band and ramp *)
+    fSpeedFeedbackPct : REAL; (* the actual speed %; below 0 = not wired *)
+    bAtSpeed : BOOL; (* the speed reference has reached its target *)
+    bDriveReady : BOOL; (* the drive's ready relay *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    stDriveNotReadyFault : ST_ProtectionSts; (* the drive's ready relay lost while running *)
+    stSpeedDeviationFault : ST_ProtectionSts; (* the speed feedback is off the reference by more than fSpeedDeviationPct *)
+    fSpeedHz : REAL; (* the speed in Hz (set.fRatedFrequency) *)
     fSpeedRpm : REAL; (* the speed in rpm (set.fRatedRpm) *)
   END_STRUCT;
 END_TYPE

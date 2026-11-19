@@ -1,6 +1,6 @@
 TYPE
   ST_IoAiKept : STRUCT
-    dwAddr : DWORD; (* F_IoAddrPack *)
-    fFailSafe : REAL;
+    nPackedAddress : DWORD; (* F_IoAddrPack *)
+    fFailSafeValue : REAL; (* engine memory: the kept fail-safe value *)
   END_STRUCT;
 END_TYPE

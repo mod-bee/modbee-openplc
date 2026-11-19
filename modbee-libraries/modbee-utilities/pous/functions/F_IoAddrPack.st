@@ -4,16 +4,16 @@ bits 10..17 the channel (0..255). The caller checks the module is at most 127 (F
 
 FUNCTION F_IoAddrPack : DWORD
   VAR_INPUT
-    eSrc : E_IoSrc;
-    nModule : USINT;
-    nCh : USINT;
+    eSource : E_IoSrc; (* where the channel is: None (not on this site), Board, I2c, Field or Remote *)
+    nModuleNumber : USINT; (* the module number within that source (0..127) *)
+    nChannel : USINT; (* the channel number on the module *)
   END_VAR
   VAR
     nSrc : DWORD;
   END_VAR
 
 
-CASE eSrc OF
+CASE eSource OF
   E_IoSrc.Board: nSrc := 1;
   E_IoSrc.I2c: nSrc := 2;
   E_IoSrc.Field: nSrc := 3;
@@ -21,6 +21,6 @@ CASE eSrc OF
 ELSE
   nSrc := 0;
 END_CASE;
-F_IoAddrPack := nSrc OR SHL(USINT_TO_DWORD(nModule) AND DWORD#16#7F, 3) OR SHL(USINT_TO_DWORD(nCh), 10);
+F_IoAddrPack := nSrc OR SHL(USINT_TO_DWORD(nModuleNumber) AND DWORD#16#7F, 3) OR SHL(USINT_TO_DWORD(nChannel), 10);
 
 END_FUNCTION

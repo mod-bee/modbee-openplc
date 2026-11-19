@@ -1,21 +1,21 @@
 (* F_ReportRun — the report-by-exception decision of one value (private to FB_Report and FB_ReportArray): the rules of
-FB_Report. tHeartbeat and bOnStart are the ones in force (FB_ReportArray: the array's when the item's are off).
-Returns stM.bReport. *)
+FB_Report. tHeartbeatInterval and bReportOnStart are the ones in force (FB_ReportArray: the array's when the item's are off).
+Returns stMemory.bSendNow. *)
 
 FUNCTION F_ReportRun : BOOL
   VAR_INPUT
-    tNow : TIME;
-    fIn : REAL;
-    bInGood : BOOL;
-    bForceReq : BOOL;
-    bEnable : BOOL;
-    tHeartbeat : TIME;
-    bOnStart : BOOL;
+    tNow : TIME; (* TIME() of this scan *)
+    fIn : REAL; (* the value *)
+    bInputGood : BOOL; (* its quality *)
+    bReportNow : BOOL; (* report now asked this scan *)
+    bEnable : BOOL; (* link up / node born *)
+    tHeartbeatInterval : TIME; (* the heartbeat in use *)
+    bReportOnStart : BOOL; (* report when it starts *)
   END_VAR
   VAR_IN_OUT
-    stS : ST_ReportSet;
-    stM : ST_ReportMem;
-    stSts : ST_ReportSts;
+    stSettings : ST_ReportSet; (* the item's settings (read only) *)
+    stMemory : ST_ReportMem; (* the item's results and memory *)
+    stStatus : ST_ReportSts; (* the item's status *)
   END_VAR
   VAR
     fV : REAL;
@@ -29,85 +29,85 @@ FUNCTION F_ReportRun : BOOL
 (* the value: NaN fails every comparison; infinity is beyond any real *)
 bSend := FALSE;
 IF NOT (ABS(fIn) <= REAL#3.4E38) THEN
-  fV := stM.fGoodV;
+  fV := stMemory.fLastNumber;
   bQ := FALSE;
 ELSE
   fV := fIn;
-  IF stS.fResolution > 0.0 THEN
-    fR := REAL_TO_LREAL(fV) / REAL_TO_LREAL(stS.fResolution);
+  IF stSettings.fRoundToStep > 0.0 THEN
+    fR := REAL_TO_LREAL(fV) / REAL_TO_LREAL(stSettings.fRoundToStep);
     IF fR < 1.0E15 AND fR > -1.0E15 THEN
-      fV := LREAL_TO_REAL(LINT_TO_LREAL(LREAL_TO_LINT(fR)) * REAL_TO_LREAL(stS.fResolution));
+      fV := LREAL_TO_REAL(LINT_TO_LREAL(LREAL_TO_LINT(fR)) * REAL_TO_LREAL(stSettings.fRoundToStep));
     END_IF;
   END_IF;
-  stM.fGoodV := fV;
-  bQ := bInGood;
+  stMemory.fLastNumber := fV;
+  bQ := bInputGood;
 END_IF;
-IF bForceReq THEN
-  stM.bForcePend := bEnable;
+IF bReportNow THEN
+  stMemory.bForcePending := bEnable;
 END_IF;
 IF NOT bEnable THEN
-  stM.bStarted := FALSE;
-  stM.bForcePend := FALSE;
-  stM.bChange := FALSE;
-  stM.bHeld := FALSE;
-ELSIF NOT stM.bStarted THEN
-  stM.bStarted := TRUE;
-  stM.bForcePend := FALSE;
-  stM.bChange := FALSE;
-  stM.bHeld := FALSE;
-  IF bOnStart THEN
+  stMemory.bStarted := FALSE;
+  stMemory.bForcePending := FALSE;
+  stMemory.bChangePending := FALSE;
+  stMemory.bHeldByMinInterval := FALSE;
+ELSIF NOT stMemory.bStarted THEN
+  stMemory.bStarted := TRUE;
+  stMemory.bForcePending := FALSE;
+  stMemory.bChangePending := FALSE;
+  stMemory.bHeldByMinInterval := FALSE;
+  IF bReportOnStart THEN
     bSend := TRUE;
-    stM.eReason := E_ReportReason.First;
+    stMemory.eReportReason := E_ReportReason.First;
   ELSE
-    stSts.fLastValue := fV;   (* the starting point for changes *)
-    stSts.bLastGood := bQ;
-    stM.tLastAt := tNow;
+    stStatus.fReportedValue := fV;   (* the starting point for changes *)
+    stStatus.bReportedGood := bQ;
+    stMemory.tLastReportAt := tNow;
   END_IF;
 ELSE
-  fDb := MAX(stS.fDeadband, 0.0);
-  IF stS.eDeadbandMode = E_DeadbandMode.PctValue THEN
-    fDb := ABS(stSts.fLastValue) * fDb / 100.0;
-  ELSIF stS.eDeadbandMode = E_DeadbandMode.PctSpan THEN
-    IF stS.fSpan > 0.0 THEN
-      fDb := stS.fSpan * fDb / 100.0;
+  fDb := MAX(stSettings.fDeadband, 0.0);
+  IF stSettings.eDeadbandMode = E_DeadbandMode.PctValue THEN
+    fDb := ABS(stStatus.fReportedValue) * fDb / 100.0;
+  ELSIF stSettings.eDeadbandMode = E_DeadbandMode.PctSpan THEN
+    IF stSettings.fSpan > 0.0 THEN
+      fDb := stSettings.fSpan * fDb / 100.0;
     ELSE
       fDb := 0.0;
     END_IF;
   END_IF;
-  IF ABS(fV - stSts.fLastValue) > fDb OR bQ <> stSts.bLastGood THEN
-    stM.bChange := TRUE;
+  IF ABS(fV - stStatus.fReportedValue) > fDb OR bQ <> stStatus.bReportedGood THEN
+    stMemory.bChangePending := TRUE;
   END_IF;
-  IF tNow - stM.tLastAt >= stS.tMinInterval THEN
-    IF stM.bForcePend THEN
+  IF tNow - stMemory.tLastReportAt >= stSettings.tMinInterval THEN
+    IF stMemory.bForcePending THEN
       bSend := TRUE;
-      stM.eReason := E_ReportReason.Forced;
-    ELSIF stM.bChange THEN
+      stMemory.eReportReason := E_ReportReason.Forced;
+    ELSIF stMemory.bChangePending THEN
       bSend := TRUE;
-      stM.eReason := E_ReportReason.Change;
-    ELSIF tHeartbeat > T#0s AND tNow - stM.tLastAt >= tHeartbeat THEN
+      stMemory.eReportReason := E_ReportReason.Change;
+    ELSIF tHeartbeatInterval > T#0s AND tNow - stMemory.tLastReportAt >= tHeartbeatInterval THEN
       bSend := TRUE;
-      stM.eReason := E_ReportReason.Heartbeat;
+      stMemory.eReportReason := E_ReportReason.Heartbeat;
     END_IF;
-  ELSIF (stM.bForcePend OR stM.bChange) AND NOT stM.bHeld THEN
-    stM.bHeld := TRUE;
-    stSts.nSuppressed := stSts.nSuppressed + 1;
+  ELSIF (stMemory.bForcePending OR stMemory.bChangePending) AND NOT stMemory.bHeldByMinInterval THEN
+    stMemory.bHeldByMinInterval := TRUE;
+    stStatus.nSuppressedCount := stStatus.nSuppressedCount + 1;
   END_IF;
 END_IF;
-stM.bReport := bSend;
+stMemory.bSendNow := bSend;
 IF bSend THEN
-  stM.fValue := fV;
-  stM.bGood := bQ;
-  stSts.eReason := stM.eReason;
-  stSts.fLastValue := fV;
-  stSts.bLastGood := bQ;
-  stSts.nReports := stSts.nReports + 1;
-  stM.tLastAt := tNow;
-  stM.bForcePend := FALSE;
-  stM.bChange := FALSE;
-  stM.bHeld := FALSE;
+  stMemory.fReportedValue := fV;
+  stMemory.bReportedGood := bQ;
+  stStatus.eReportReason := stMemory.eReportReason;
+  stStatus.fReportedValue := fV;
+  stStatus.bReportedGood := bQ;
+  stStatus.nSentCount := stStatus.nSentCount + 1;
+  stMemory.tLastReportAt := tNow;
+  stMemory.bForcePending := FALSE;
+  stMemory.bChangePending := FALSE;
+  stMemory.bHeldByMinInterval := FALSE;
 END_IF;
-IF stM.bStarted THEN
-  stSts.tSinceLast := tNow - stM.tLastAt;
+IF stMemory.bStarted THEN
+  stStatus.tSinceLastReport := tNow - stMemory.tLastReportAt;
 END_IF;
 F_ReportRun := bSend;
 

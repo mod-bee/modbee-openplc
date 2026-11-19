@@ -6,22 +6,22 @@ The wet-weather inhibit: says when not to irrigate (rain, wet soil, a lost senso
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `bRain` | `BOOL` |  | a rain switch |
-| in | `bSoilWet` | `BOOL` |  | a moisture switch |
-| in | `bRainOk` | `BOOL` | `TRUE` | The rain sensor is healthy (FALSE = lost: defers, a warning) |
-| in | `bSoilOk` | `BOOL` | `TRUE` | the sensors' health; FALSE = lost |
-| in | `bManual` | `BOOL` |  | panel |
-| in | `bRemote` | `BOOL` |  | platform |
-| in | `ipSoil` | `I_Measurement` |  | NULL = bSoilWet / bSoilOk. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
-| in | `refData` | `REFERENCE TO ST_IrrDeferData` |  | Its record (a variable of this type) |
-| in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
-| out | `bDefer` | `BOOL` |  | do not irrigate |
-| out | `eReason` | `E_Defer` |  | Why (status) |
-| out | `bToStorage` | `BOOL` |  | -> the route |
-| out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
+| in | `bRainSwitch` | `BOOL` |  | a rain switch |
+| in | `bSoilWetSwitch` | `BOOL` |  | a soil moisture switch |
+| in | `bRainSwitchGood` | `BOOL` | `TRUE` | the rain sensor is healthy (FALSE = lost: defers, a warning) |
+| in | `bSoilWetSwitchGood` | `BOOL` | `TRUE` | the soil sensor is healthy (FALSE = lost) |
+| in | `bManualDefer` | `BOOL` |  | defer from the panel |
+| in | `bRemoteDefer` | `BOOL` |  | defer from the platform (SCADA) |
+| in | `ipSoilMoisture` | `I_Measurement` |  | NULL = bSoilWetSwitch / bSoilWetSwitchGood. An instance of a block that offers I_Measurement (FB_AnalogIn, FB_FlowTotal, FB_LevelMeter, FB_MeasFilter, FB_MeasFrozen, ...) |
+| in | `refData` | `REFERENCE TO ST_IrrDeferData` |  | the block's record |
+| in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
+| out | `bDeferIrrigation` | `BOOL` |  | do not irrigate |
+| out | `eDeferReason` | `E_Defer` |  | why it defers |
+| out | `bSendToStorage` | `BOOL` |  | to the route: send the water to storage |
+| out | `bError` | `BOOL` |  | TRUE while a trip or setting fault is active *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
-| out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
-| out | `eState` | `E_State` |  | What it is doing now (Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault) *(from FB_Object)* |
+| out | `eErrorId` | `E_UtError` |  | which error: the first since the last reset, else the first warning; None when all is well *(from FB_Object)* |
+| out | `eState` | `E_State` |  | what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault *(from FB_Object)* |
 
 `bError`, `bWarning`, `eErrorId`, `eState` work as in every block: see [errors and state](../conventions.md#errors-and-state).
 
@@ -31,26 +31,26 @@ The wet-weather inhibit: says when not to irrigate (rain, wet soil, a lost senso
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `bUseRain` | `BOOL` | `TRUE` |  |
-| `bUseSoil` | `BOOL` | `TRUE` |  |
-| `tOnDelay` | `TIME` | `T#1m` |  |
-| `tClearDelay` | `TIME` | `T#1h` | the soil drains |
-| `bStorage` | `BOOL` | `TRUE` | a storage is fitted: bToStorage follows bDefer |
-| `fSoilWet` | `REAL` | `35.0` | soil transmitter: wet at or above, % |
-| `fSoilDry` | `REAL` | `30.0` | dry again below |
+| `bRainSensorFitted` | `BOOL` | `TRUE` | the rain sensor is fitted and used |
+| `bSoilSensorFitted` | `BOOL` | `TRUE` | the soil sensor is fitted and used |
+| `tDeferDelay` | `TIME` | `T#1m` | rain, wet soil or a lost sensor must last this long to defer |
+| `tClearDelay` | `TIME` | `T#1h` | every weather cause must be gone this long before irrigation is allowed again (the soil drains) |
+| `bStorageFitted` | `BOOL` | `TRUE` | a storage is fitted: bSendToStorage follows bDeferIrrigation |
+| `fSoilWetAtPct` | `REAL` | `35.0` | soil transmitter: wet at or above, % |
+| `fSoilDryBelowPct` | `REAL` | `30.0` | dry again below |
 | `bManualDefer` | `BOOL` |  | HMI defer |
 
 **Status `sts`** (`ST_IrrDeferSts`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `bDeferred` | `BOOL` |  |  |
-| `eReason` | `E_Defer` |  | Why (status) |
-| `fSoil` | `REAL` |  | NaN = none |
-| `bSoilIsWet` | `BOOL` |  |  |
-| `tTimeLeft` | `TIME` |  | Time left in the delay or phase running now |
-| `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
-| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
+| `bDeferred` | `BOOL` |  | irrigation is deferred now |
+| `eDeferReason` | `E_Defer` |  | why: Manual, Remote, Rain, Soil, RainLost, SoilLost or Setting |
+| `fSoilMoisturePct` | `REAL` |  | NaN = none |
+| `bSoilIsWet` | `BOOL` |  | the soil reads wet |
+| `tTimeLeft` | `TIME` |  | time left in the defer or clear delay |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and the last good value put back (until a reset) |
+| `eSettingRefusedErrorId` | `E_UtError` |  | why the last write was refused (cleared with bSettingRefused) |
 
 ## Lists
 
@@ -66,11 +66,11 @@ A rain switch and a soil moisture transmitter.
 
 | Pin | Wire |
 | --- | --- |
-| `bRain` | `DI_RainSwitch` |
-| `ipSoil` | `fbSoil` |
-| `bManual` | `DI_DeferSwitch` |
+| `bRainSwitch` | `DI_RainSwitch` |
+| `ipSoilMoisture` | `fbSoil` |
+| `bManualDefer` | `DI_DeferSwitch` |
 | `refData` | `stDefer` |
-| `bDefer` | the zone program's hold |
-| `bToStorage` | the route's `bToStorage` |
+| `bDeferIrrigation` | the zone program's hold |
+| `bSendToStorage` | the route's `bSendToStorage` |
 
 **Back to** [the index](../README.md).

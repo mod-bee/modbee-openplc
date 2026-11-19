@@ -1,0 +1,10 @@
+TYPE
+  ST_SumpCleanSts : STRUCT
+    bCleaning : BOOL; (* a clean is running *)
+    bCleanFailed : BOOL; (* the last clean did not reach the clean level in time (warning CleanFailed) *)
+    nPumpCycleCount : INT; (* since the last clean *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    tElapsedTime : TIME; (* the clean under way (0 when none) *)
+  END_STRUCT;
+END_TYPE

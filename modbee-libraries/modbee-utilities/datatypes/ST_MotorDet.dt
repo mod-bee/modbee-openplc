@@ -1,8 +1,8 @@
 TYPE
   ST_MotorDet : STRUCT
-    tRestartIn : TIME;
-    tRunTime : TIME; (* this run *)
+    tMinOffTimeLeft : TIME; (* time left before a start is allowed (restart delay) *)
+    tThisRunTime : TIME; (* this run *)
     tIdleTime : TIME; (* since the last stop (0 while running) *)
-    tHandLeft : TIME; (* a Hand run's time left under set.tHandMax (0 = none counting) *)
+    tHandTimeLeft : TIME; (* a Hand run's time left under set.tMaxHandRunTime (0 = none counting) *)
   END_STRUCT;
 END_TYPE

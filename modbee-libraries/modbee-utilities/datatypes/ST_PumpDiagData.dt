@@ -1,8 +1,6 @@
 TYPE
   ST_PumpDiagData : STRUCT
-    set : ST_PumpDiagSet;
-    eDiagnosis : E_PumpDiag; (* status *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    set : ST_PumpDiagSet; (* settings (kept) *)
+    sts : ST_PumpDiagSts; (* the status *)
   END_STRUCT;
 END_TYPE

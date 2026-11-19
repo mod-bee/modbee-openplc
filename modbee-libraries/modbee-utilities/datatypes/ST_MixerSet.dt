@@ -1,15 +1,16 @@
 TYPE
   ST_MixerSet : STRUCT
-    bCycle : BOOL := TRUE;
-    tOnTime : TIME := T#5m;
-    tOffTime : TIME := T#1h;
-    bPreRun : BOOL := TRUE;
-    tPreRun : TIME := T#2m;
-    bPostRun : BOOL := TRUE;
-    tPostRun : TIME := T#30s;
-    bWithPump : BOOL := TRUE;
-    fMinLevel : REAL := 0.3; (* in the level's unit *)
-    fMinDeadband : REAL := 0.05;
-    stLowLevel : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#5m, eReset := E_ResetMode.Auto);
+    bCycleOn : BOOL := TRUE; (* run the periodic on / off cycle *)
+    tOnTime : TIME := T#5m; (* cycle on time *)
+    tOffTime : TIME := T#1h; (* cycle off time *)
+    bPreRunOn : BOOL := TRUE; (* mix before the pump starts *)
+    tPreRunTime : TIME := T#2m; (* pre-run time (time already run counts) *)
+    bPostRunOn : BOOL := TRUE; (* mix on after the pump stops *)
+    tPostRunTime : TIME := T#30s; (* post-run time *)
+    bRunWithPump : BOOL := TRUE; (* mix while the pump runs *)
+    fMinLevelToMix : REAL := 0.3; (* in the level's unit *)
+    fMinLevelDeadband : REAL := 0.05; (* the level must rise this far above fMinLevelToMix before mixing again *)
+    stLowLevelFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#5m, eResetMode := E_ResetMode.Auto); (* the level is below fMinLevelToMix (default a warning) *)
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

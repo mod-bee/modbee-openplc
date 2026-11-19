@@ -1,7 +1,7 @@
 TYPE
   ST_PumpData EXTENDS ST_EquipmentData : STRUCT
-    set : ST_PumpSet;
-    sts : ST_PumpSts;
-    det : ST_PumpDet;
+    set : ST_PumpSet; (* settings (kept) *)
+    sts : ST_PumpSts; (* status *)
+    det : ST_PumpDet; (* details *)
   END_STRUCT;
 END_TYPE

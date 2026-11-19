@@ -1,9 +1,9 @@
 TYPE
   ST_RouteSet : STRUCT
-    aOutlet : ARRAY [1..4] OF ST_Outlet;
-    nLevelOutlet : USINT; (* 0 = no valve *)
-    nRunOutlet : USINT;
+    aOutlets : ARRAY [1..4] OF ST_Outlet; (* outlets 1..4: kind and speed preset *)
+    nLevelPumpingOutlet : USINT; (* 0 = no valve *)
+    nRunOutlet : USINT; (* the outlet of a run or the zone watering, 1..4; above 0 also asks for it *)
     nStorageOutlet : USINT; (* 0 = no storage *)
-    tCloseDelay : TIME := T#5s; (* 0 .. 10 min *)
+    tValveCloseDelay : TIME := T#5s; (* 0 .. 10 min *)
   END_STRUCT;
 END_TYPE

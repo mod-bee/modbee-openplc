@@ -1,42 +1,42 @@
 (* FB_SwitchSet — up to four level switches (LL, L, H, HH) on one vessel or line as switch bands, and one plain
 contact (a float, a pressure or flow switch, a door), each debounced, with a quality per switch. Wire the instance
 to any I_Measurement pin: owners read the bands through Band(E_Band.HighHigh) ...; rungs read bLowLow .. bHighHigh
-and bQ.
+and bContactDebounced.
 
-Pins: bLL, bL, bH, bHH (TRUE = the level is in that band: wire NOT at the pin for a contact that opens),
-bContact, and their qualities bLLGood .. bContactGood (default TRUE: the IO module / comms are healthy)
--> bLowLow, bLow (L or LL), bHigh (H or HH), bHighHigh, bQ (the contact), bGood, plus FB_Object's bError /
+Pins: bLowLowSwitch, bLowSwitch, bHighSwitch, bHighHighSwitch (TRUE = the level is in that band: wire NOT at the pin for a contact that opens),
+bContact, and their qualities bLowLowSwitchGood .. bContactGood (default TRUE: the IO module / comms are healthy)
+-> bLowLow, bLowOrBelow (L or LL), bHighOrAbove (H or HH), bHighHigh, bContactDebounced (the contact), bGood, plus FB_Object's bError /
 bWarning / eErrorId / eState. refData: its record. stConfig: which switches are fitted and the debounce times
 (engineering constants, set at the declaration).
 A switch follows its input once the input has held its new state for the debounce time (power-up: at once).
-A switch whose quality is bad holds its last state; after set.stInputBad it trips (SensorBad, not good).
-Disagree (high and low together, HH without H, LL without L) acts per set.stDisagree (default a warning);
-the switches are still reported as read. set.bFitted FALSE: not on this site (not good, no fault).
+A switch whose quality is bad holds its last state; after set.stInputBadFault it trips (SensorBad, not good).
+Disagree (high and low together, HH without H, LL without L) acts per set.stSwitchOrderFault (default a warning);
+the switches are still reported as read. set.bSensorFitted FALSE: not on this site (not good, no fault).
 Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back.
 A chattering contact: FB_DigitalIn's chatter check, on each switch before it reaches this block. *)
 
 FUNCTION_BLOCK FB_SwitchSet EXTENDS FB_Object IMPLEMENTS I_Measurement
   VAR_INPUT
-    bLL : BOOL := FALSE;
-    bL : BOOL;
-    bH : BOOL;
-    bHH : BOOL;
-    bContact : BOOL;
-    bLLGood : BOOL := TRUE;
-    bLGood : BOOL := TRUE;
-    bHGood : BOOL := TRUE;
-    bHHGood : BOOL := TRUE;
-    bContactGood : BOOL := TRUE;
-    refData : REFERENCE TO ST_SwitchSetData;
+    bLowLowSwitch : BOOL := FALSE; (* the low-low switch (TRUE = the level is in that band; NOT at the pin for a contact that opens) *)
+    bLowSwitch : BOOL; (* the low switch (TRUE = in that band) *)
+    bHighSwitch : BOOL; (* the high switch (TRUE = in that band) *)
+    bHighHighSwitch : BOOL; (* the high-high switch (TRUE = in that band) *)
+    bContact : BOOL; (* a plain contact (a float, a pressure or flow switch, a door) *)
+    bLowLowSwitchGood : BOOL := TRUE; (* the low-low switch's input is healthy *)
+    bLowSwitchGood : BOOL := TRUE; (* the low switch's input is healthy *)
+    bHighSwitchGood : BOOL := TRUE; (* the high switch's input is healthy *)
+    bHighHighSwitchGood : BOOL := TRUE; (* the high-high switch's input is healthy *)
+    bContactGood : BOOL := TRUE; (* the contact's input is healthy (IO module, comms) *)
+    refData : REFERENCE TO ST_SwitchSetData; (* the block's record *)
     stConfig : ST_SwitchSetConfig; (* engineering constants (set at the declaration) *)
   END_VAR
   VAR_OUTPUT
-    bLowLow : BOOL;
-    bLow : BOOL; (* L or LL *)
-    bHigh : BOOL; (* H or HH *)
-    bHighHigh : BOOL;
-    bQ : BOOL; (* the plain contact, debounced *)
-    bGood : BOOL;
+    bLowLow : BOOL; (* the low-low switch / level *)
+    bLowOrBelow : BOOL; (* L or LL *)
+    bHighOrAbove : BOOL; (* H or HH *)
+    bHighHigh : BOOL; (* the high-high switch / level *)
+    bGood : BOOL; (* the switches can be trusted *)
+    bContactDebounced : BOOL; (* the plain contact, debounced *)
   END_VAR
   VAR RETAIN
     stKept : ST_SwitchSetSet;
@@ -72,27 +72,27 @@ FUNCTION_BLOCK FB_SwitchSet EXTENDS FB_Object IMPLEMENTS I_Measurement
   END_VAR
 
 
-PROPERTY PUBLIC fActValue : REAL
+PROPERTY PUBLIC fActValue : REAL    // the value in its unit (held at the last good one while bad, when so set)
   GET
     fActValue := 0.0;             // switches only: no continuous value
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bIsGood : BOOL
+PROPERTY PUBLIC bIsGood : BOOL    // the value can be trusted now
   GET
     bIsGood := bGood;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bHasValue : BOOL
+PROPERTY PUBLIC bHasValue : BOOL    // a continuous value (FALSE: switches only)
   GET
     bHasValue := FALSE;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bIsFitted : BOOL
+PROPERTY PUBLIC bIsFitted : BOOL    // the sensor is on this site (FALSE: no value, no bands, no fault)
   GET
     bIsFitted := bFittedNow;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC eUnit : E_Unit
+PROPERTY PUBLIC eUnit : E_Unit    // the unit of the value
   GET
     eUnit := E_Unit.None;         // switches only: no unit
   END_GET
@@ -100,12 +100,12 @@ END_PROPERTY
 METHOD PUBLIC Band : BOOL
 
   VAR_INPUT
-    eBand : E_Band;
+    eBand : E_Band;    // the band asked about (LowLow, Low, High, HighHigh); returns TRUE while the value is in it
   END_VAR
   CASE eBand OF
     E_Band.LowLow: Band := bLowLow;
-    E_Band.Low: Band := bLow;
-    E_Band.High: Band := bHigh;
+    E_Band.Low: Band := bLowOrBelow;
+    E_Band.High: Band := bHighOrAbove;
     E_Band.HighHigh: Band := bHighHigh;
   ELSE
     Band := FALSE;
@@ -123,22 +123,22 @@ METHOD PRIVATE Debounce : BOOL
     stD : ST_SwitchDebounce;
   END_VAR
   IF bFirstScan AND bInGood THEN
-    stD.bState := bIn;
+    stD.bDebouncedState := bIn;
   END_IF;
-  IF NOT bInGood OR bIn = stD.bState THEN
-    stD.tSince := tNow;
-  ELSIF tNow - stD.tSince >= tDelay THEN
-    stD.bState := bIn;
-    stD.tSince := tNow;
+  IF NOT bInGood OR bIn = stD.bDebouncedState THEN
+    stD.tDifferentAt := tNow;
+  ELSIF tNow - stD.tDifferentAt >= tDelay THEN
+    stD.bDebouncedState := bIn;
+    stD.tDifferentAt := tNow;
   END_IF;
-  Debounce := stD.bState;
+  Debounce := stD.bDebouncedState;
 END_METHOD
 
 METHOD PRIVATE ProtOk : BOOL
   VAR_INPUT
     stP : REFERENCE TO ST_ProtectionSet;
   END_VAR
-  ProtOk := stP.tDelay >= T#0s AND stP.tRecover >= T#0s AND stP.nMaxRetries >= 0;
+  ProtOk := stP.tTripDelay >= T#0s AND stP.tAutoRecoverAfter >= T#0s AND stP.nMaxRetriesBeforeLockout >= 0;
 END_METHOD
 
 METHOD PRIVATE SetWhy : E_UtError
@@ -146,10 +146,12 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_SwitchSetSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (ProtOk(stP := stS.stDisagree)) THEN
+  IF NOT (ProtOk(stP := stS.stSwitchOrderFault)) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (ProtOk(stP := stS.stInputBad)) THEN
+  ELSIF NOT (ProtOk(stP := stS.stInputBadFault)) THEN
     SetWhy := E_UtError.ProtectionBad;
+  ELSIF NOT (stS.tRetryCountWindow >= T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
 
@@ -162,10 +164,10 @@ END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
   bLowLow := FALSE;
-  bLow := FALSE;
-  bHigh := FALSE;
+  bLowOrBelow := FALSE;
+  bHighOrAbove := FALSE;
   bHighHigh := FALSE;
-  bQ := FALSE;
+  bContactDebounced := FALSE;
   bGood := FALSE;
   bFittedNow := FALSE;
   bError := TRUE;
@@ -188,55 +190,54 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOk := TRUE;
 END_IF;
-bOk := bOk AND stConfig.tDebounce >= T#0s AND stConfig.tContactDebounce >= T#0s
-       AND stConfig.tRetryWindow >= T#0s;
+bOk := bOk AND stConfig.tLevelSwitchDebounceTime >= T#0s AND stConfig.tContactDebounceTime >= T#0s;
 
 bReset := SystemReset();
-IF refData.bCmdReset THEN
+IF refData.bCmdResetFaults THEN
   bReset := TRUE;
-  refData.bCmdReset := FALSE;
-  refData.sts.bRefused := FALSE;
-  refData.sts.eRefusedWhy := E_UtError.None;
+  refData.bCmdResetFaults := FALSE;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
-bFittedNow := refData.set.bFitted AND (stConfig.bUseLL OR stConfig.bUseL OR stConfig.bUseH OR stConfig.bUseHH
-                                       OR stConfig.bUseContact);
+bFittedNow := refData.set.bSensorFitted AND (stConfig.bLowLowSwitchFitted OR stConfig.bLowSwitchFitted OR stConfig.bHighSwitchFitted OR stConfig.bHighHighSwitchFitted
+                                       OR stConfig.bContactFitted);
 
 (* the switches; one that is not fitted reads FALSE *)
-sLL := Debounce(bIn := bLL, bInGood := bLLGood, tDelay := stConfig.tDebounce, stD := stDLL) AND stConfig.bUseLL;
-sL := Debounce(bIn := bL, bInGood := bLGood, tDelay := stConfig.tDebounce, stD := stDL) AND stConfig.bUseL;
-sH := Debounce(bIn := bH, bInGood := bHGood, tDelay := stConfig.tDebounce, stD := stDH) AND stConfig.bUseH;
-sHH := Debounce(bIn := bHH, bInGood := bHHGood, tDelay := stConfig.tDebounce, stD := stDHH) AND stConfig.bUseHH;
-bQ := Debounce(bIn := bContact, bInGood := bContactGood, tDelay := stConfig.tContactDebounce, stD := stDContact)
-      AND stConfig.bUseContact;
+sLL := Debounce(bIn := bLowLowSwitch, bInGood := bLowLowSwitchGood, tDelay := stConfig.tLevelSwitchDebounceTime, stD := stDLL) AND stConfig.bLowLowSwitchFitted;
+sL := Debounce(bIn := bLowSwitch, bInGood := bLowSwitchGood, tDelay := stConfig.tLevelSwitchDebounceTime, stD := stDL) AND stConfig.bLowSwitchFitted;
+sH := Debounce(bIn := bHighSwitch, bInGood := bHighSwitchGood, tDelay := stConfig.tLevelSwitchDebounceTime, stD := stDH) AND stConfig.bHighSwitchFitted;
+sHH := Debounce(bIn := bHighHighSwitch, bInGood := bHighHighSwitchGood, tDelay := stConfig.tLevelSwitchDebounceTime, stD := stDHH) AND stConfig.bHighHighSwitchFitted;
+bContactDebounced := Debounce(bIn := bContact, bInGood := bContactGood, tDelay := stConfig.tContactDebounceTime, stD := stDContact)
+      AND stConfig.bContactFitted;
 IF NOT bFittedNow THEN
   sLL := FALSE;
   sL := FALSE;
   sH := FALSE;
   sHH := FALSE;
-  bQ := FALSE;
+  bContactDebounced := FALSE;
 END_IF;
 bLowLow := sLL;
-bLow := sL OR sLL;
-bHigh := sH OR sHH;
+bLowOrBelow := sL OR sLL;
+bHighOrAbove := sH OR sHH;
 bHighHigh := sHH;
 
 (* disagree and a bad input *)
-bClash := ((sH OR sHH) AND (sL OR sLL)) OR (sHH AND stConfig.bUseH AND NOT sH)
-          OR (sLL AND stConfig.bUseL AND NOT sL);
-bBad := (stConfig.bUseLL AND NOT bLLGood) OR (stConfig.bUseL AND NOT bLGood) OR (stConfig.bUseH AND NOT bHGood)
-        OR (stConfig.bUseHH AND NOT bHHGood) OR (stConfig.bUseContact AND NOT bContactGood);
-bTripD := F_Protect(tNow := tNow, bCause := bClash AND bOk AND bFittedNow, bResetReq := bReset,
-                    tRetryWindow := stConfig.tRetryWindow, stSet := refData.set.stDisagree,
-                    stSts := refData.sts.stDisagree, stWork := stWDisagree);
-bTripB := F_Protect(tNow := tNow, bCause := bBad AND bOk AND bFittedNow, bResetReq := bReset,
-                    tRetryWindow := stConfig.tRetryWindow, stSet := refData.set.stInputBad,
-                    stSts := refData.sts.stInputBad, stWork := stWInputBad);
-bSignal := stWDisagree.bSignal OR stWInputBad.bSignal;
+bClash := ((sH OR sHH) AND (sL OR sLL)) OR (sHH AND stConfig.bHighSwitchFitted AND NOT sH)
+          OR (sLL AND stConfig.bLowSwitchFitted AND NOT sL);
+bBad := (stConfig.bLowLowSwitchFitted AND NOT bLowLowSwitchGood) OR (stConfig.bLowSwitchFitted AND NOT bLowSwitchGood) OR (stConfig.bHighSwitchFitted AND NOT bHighSwitchGood)
+        OR (stConfig.bHighHighSwitchFitted AND NOT bHighHighSwitchGood) OR (stConfig.bContactFitted AND NOT bContactGood);
+bTripD := F_Protect(tNow := tNow, bConditionPresent := bClash AND bOk AND bFittedNow, bResetRequest := bReset,
+                    tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stSwitchOrderFault,
+                    stStatus := refData.sts.stSwitchOrderFault, stWorking := stWDisagree);
+bTripB := F_Protect(tNow := tNow, bConditionPresent := bBad AND bOk AND bFittedNow, bResetRequest := bReset,
+                    tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stInputBadFault,
+                    stStatus := refData.sts.stInputBadFault, stWorking := stWInputBad);
+bSignal := stWDisagree.bSignalling OR stWInputBad.bSignalling;
 bGood := bOk AND bFittedNow AND NOT bTripD AND NOT bTripB AND NOT bSignal;
 
 (* errors *)
@@ -249,10 +250,10 @@ IF (bTripD OR bTripB) AND NOT bTripWas THEN
 END_IF;
 bTripWas := bTripD OR bTripB;
 bError := NOT bOk OR bTripD OR bTripB;
-bWarning := NOT bError AND ((bFittedNow AND ((bBad AND NOT stWInputBad.bSignal)
-                                             OR (bClash AND NOT stWDisagree.bSignal)
-                                             OR stWDisagree.bBadSetting OR stWInputBad.bBadSetting))
-                            OR refData.sts.bRefused);
+bWarning := NOT bError AND ((bFittedNow AND ((bBad AND NOT stWInputBad.bSignalling)
+                                             OR (bClash AND NOT stWDisagree.bSignalling)
+                                             OR stWDisagree.bSettingBad OR stWInputBad.bSettingBad))
+                            OR refData.sts.bSettingRefused);
 
 IF NOT bOk THEN
   eErrorId := E_UtError.BadSetting;
@@ -262,9 +263,9 @@ ELSIF bWarning AND bBad THEN
   eErrorId := E_UtError.SensorBad;
 ELSIF bWarning AND bClash THEN
   eErrorId := E_UtError.SwitchDisagree;
-ELSIF bWarning AND (stWDisagree.bBadSetting OR stWInputBad.bBadSetting) THEN
+ELSIF bWarning AND (stWDisagree.bSettingBad OR stWInputBad.bSettingBad) THEN
   eErrorId := E_UtError.BadSetting;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;
@@ -280,10 +281,10 @@ ELSE
 END_IF;
 
 refData.sts.bLowLow := bLowLow;
-refData.sts.bLow := bLow;
-refData.sts.bHigh := bHigh;
+refData.sts.bLowOrBelow := bLowOrBelow;
+refData.sts.bHighOrAbove := bHighOrAbove;
 refData.sts.bHighHigh := bHighHigh;
-refData.sts.bContact := bQ;
+refData.sts.bContact := bContactDebounced;
 refData.sts.bGood := bGood;
 bFirstScan := FALSE;
 

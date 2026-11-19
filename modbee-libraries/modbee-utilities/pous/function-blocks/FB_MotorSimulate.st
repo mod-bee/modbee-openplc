@@ -1,15 +1,15 @@
 (* FB_MotorSimulate — test equipment without the plant. Put it between the field feedback and the block's feedback
-pin: bFeedback := bRealFeedback normally; while the record's
-bSimulate is on, bFeedback follows bQ (the block's own output, one scan later), as if the contactor / valve
-answered. bSimulate is not kept: it is off after a power cut, and a reset of the system clears it. While it is
+pin: bFeedback := bFieldFeedback normally; while the record's
+bSimulateFeedback is on, bFeedback follows bOutput (the block's own output, one scan later), as if the contactor / valve
+answered. bSimulateFeedback is not kept: it is off after a power cut, and a reset of the system clears it. While it is
 on: a warning (Simulated), so a simulated machine is never mistaken for a real one.
-Pins: bQ (the block's output), bRealFeedback (the field contact), refData -> bFeedback, plus FB_Object's outputs. *)
+Pins: bOutput (the block's output), bFieldFeedback (the field contact), refData -> bFeedback, plus FB_Object's outputs. *)
 
 FUNCTION_BLOCK FB_MotorSimulate EXTENDS FB_Object
   VAR_INPUT
-    bQ : BOOL := FALSE; (* the block's output (motor bQ, valve bOut ...) *)
-    bRealFeedback : BOOL; (* the field feedback contact *)
-    refData : REFERENCE TO ST_MotorSimulateData;
+    bOutput : BOOL := FALSE; (* the block's output (motor bOutput, valve bOutput ...) *)
+    bFieldFeedback : BOOL; (* the field feedback contact *)
+    refData : REFERENCE TO ST_MotorSimulateData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
     bFeedback : BOOL; (* -> the block's feedback pin *)
@@ -20,24 +20,24 @@ FUNCTION_BLOCK FB_MotorSimulate EXTENDS FB_Object
 
 
 IF NOT __ISVALIDREF(refData) THEN
-  bFeedback := bRealFeedback;     (* no record: the real feedback, never a simulated one *)
+  bFeedback := bFieldFeedback;     (* no record: the real feedback, never a simulated one *)
   bError := TRUE;
   eErrorId := E_UtError.NoRecord;
   eState := E_State.Fault;
   RETURN;
 END_IF;
 IF SystemReset() THEN
-  refData.bSimulate := FALSE;
+  refData.bSimulateFeedback := FALSE;
 END_IF;
-IF refData.bSimulate THEN
+IF refData.bSimulateFeedback THEN
   bFeedback := bQWas;
 ELSE
-  bFeedback := bRealFeedback;
+  bFeedback := bFieldFeedback;
 END_IF;
-bQWas := bQ;
+bQWas := bOutput;
 bError := FALSE;
-bWarning := refData.bSimulate;
-IF refData.bSimulate THEN
+bWarning := refData.bSimulateFeedback;
+IF refData.bSimulateFeedback THEN
   eErrorId := E_UtError.Simulated;
   eState := E_State.Running;
 ELSE

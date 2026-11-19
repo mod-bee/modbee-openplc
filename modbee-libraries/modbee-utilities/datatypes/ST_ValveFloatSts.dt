@@ -1,8 +1,8 @@
 TYPE
   ST_ValveFloatSts : STRUCT
-    bHomed : BOOL;
-    bHoming : BOOL;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bHomed : BOOL; (* the position estimate is synced *)
+    bHoming : BOOL; (* driving to the end to sync *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

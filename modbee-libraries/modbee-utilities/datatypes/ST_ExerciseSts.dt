@@ -1,0 +1,8 @@
+TYPE
+  ST_ExerciseSts : STRUCT
+    bExercising : BOOL; (* an exercise run is asked now *)
+    tNextExerciseTimeLeft : TIME; (* time until the next exercise run *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+  END_STRUCT;
+END_TYPE

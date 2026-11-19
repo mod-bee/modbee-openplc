@@ -1,0 +1,13 @@
+TYPE
+  ST_CascadeSts : STRUCT
+    nExtraPumps : INT; (* pumps wanted beyond the first (-1 = the jockey alone) *)
+    tAddOrDropTimeLeft : TIME; (* to the next change *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    eStageRuleInUse : E_StageBy; (* the rule in use (Pressure on a fallback) *)
+    bJockeyAlone : BOOL; (* the jockey alone *)
+    bPressureRuleFallback : BOOL; (* the flow rule left the pressure short: the Pressure rule until the next start *)
+    bFlowNotGood : BOOL; (* Flow / PerPump without a good flow *)
+    fFlowPerPump : REAL; (* the flow per running duty pump (0 with no good flow) *)
+  END_STRUCT;
+END_TYPE

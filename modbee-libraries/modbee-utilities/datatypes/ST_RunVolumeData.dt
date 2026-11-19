@@ -1,6 +1,6 @@
 TYPE
   ST_RunVolumeData : STRUCT
-    set : ST_RunVolumeSet;
-    sts : ST_RunVolumeSts;
+    set : ST_RunVolumeSet; (* settings (kept) *)
+    sts : ST_RunVolumeSts; (* status *)
   END_STRUCT;
 END_TYPE

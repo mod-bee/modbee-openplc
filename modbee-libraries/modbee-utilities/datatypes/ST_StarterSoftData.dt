@@ -1,10 +1,7 @@
 TYPE
   ST_StarterSoftData : STRUCT
-    bCmdReset : BOOL; (* reset its trip once the cause has gone (cleared by the block) *)
-    set : ST_StarterSoftSet;
-    stStartTooLong : ST_ProtectionSts;
-    bAtSpeed : BOOL; (* status: top of ramp *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bCmdResetFaults : BOOL; (* reset its trip once the cause has gone (cleared by the block) *)
+    set : ST_StarterSoftSet; (* settings (kept) *)
+    sts : ST_StarterSoftSts; (* the status *)
   END_STRUCT;
 END_TYPE

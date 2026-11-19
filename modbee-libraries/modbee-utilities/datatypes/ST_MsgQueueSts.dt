@@ -1,11 +1,11 @@
 TYPE
   ST_MsgQueueSts : STRUCT
-    nCount : INT;
-    bFull : BOOL;
-    nLost : UDINT;
-    bWrnConfig : BOOL; (* no slot or no source *)
-    bWrnSrc : BOOL; (* a call this scan had an nSrc outside aSources (ignored) *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    nMessages : INT; (* messages waiting (Queue) or active (Active) *)
+    bBufferFull : BOOL; (* the buffer is full *)
+    nMessageLostCount : UDINT; (* messages lost to a full buffer *)
+    bBufferSizeBad : BOOL; (* no slot or no source *)
+    bSourceOutOfRange : BOOL; (* a call this scan had an nSource outside aSources (ignored) *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

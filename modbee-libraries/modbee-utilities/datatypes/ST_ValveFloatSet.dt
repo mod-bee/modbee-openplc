@@ -1,9 +1,9 @@
 TYPE
   ST_ValveFloatSet : STRUCT
-    tStroke : TIME := T#60s; (* full stroke *)
-    tMinPulse : TIME := T#500ms; (* shortest move *)
-    tOverTravel : TIME := T#5s; (* extra drive at 0 / 100 % to re-sync *)
-    tReversal : TIME := T#500ms; (* pause between raise and lower *)
-    bHomeOnStart : BOOL := TRUE; (* home at power-up *)
+    tFullStrokeTime : TIME := T#60s; (* full stroke *)
+    tShortestMove : TIME := T#500ms; (* shortest move *)
+    tExtraDriveAtEnd : TIME := T#5s; (* extra drive at 0 / 100 % to re-sync *)
+    tReversingDeadTime : TIME := T#500ms; (* pause between raise and lower *)
+    bHomeAtPowerUp : BOOL := TRUE; (* home at power-up *)
   END_STRUCT;
 END_TYPE

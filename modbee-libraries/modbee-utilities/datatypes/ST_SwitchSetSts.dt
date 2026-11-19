@@ -1,14 +1,14 @@
 TYPE
   ST_SwitchSetSts : STRUCT
-    bLowLow : BOOL;
-    bLow : BOOL;
-    bHigh : BOOL;
-    bHighHigh : BOOL;
-    bContact : BOOL;
-    bGood : BOOL;
-    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    stDisagree : ST_ProtectionSts;
-    stInputBad : ST_ProtectionSts;
+    bLowLow : BOOL; (* the low-low switch / level *)
+    bLowOrBelow : BOOL; (* L or LL *)
+    bHighOrAbove : BOOL; (* H or HH *)
+    bHighHigh : BOOL; (* the high-high switch / level *)
+    bContact : BOOL; (* the plain contact, debounced *)
+    bGood : BOOL; (* the switches can be trusted *)
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    stSwitchOrderFault : ST_ProtectionSts; (* switches out of order (high and low together, HH without H, LL without L); default a warning *)
+    stInputBadFault : ST_ProtectionSts; (* input-bad protection status *)
   END_STRUCT;
 END_TYPE

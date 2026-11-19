@@ -1,12 +1,12 @@
 TYPE
   ST_SystemModeSet : STRUCT
-    eMode : E_SysMode;
-    ePowerUp : E_PowerUp;
-    nAutoType : INT := 1;
-    nAutoTypes : INT := 1; (* 1..8 offered *)
-    tManualMaxRun : TIME; (* 0 = no limit *)
-    tPowerOnDelay : TIME;
+    eSystemMode : E_SysMode; (* Off, Manual or Auto (kept over a power cut) *)
+    eModeAtPowerUp : E_PowerUp; (* Last: back in the mode it had; Off: Off after every power-up *)
+    nAutoModeChosen : INT := 1; (* the auto type chosen (1..nAutoModesOffered; kept) *)
+    nAutoModesOffered : INT := 1; (* 1..8 offered *)
+    tMaxManualRunTime : TIME; (* 0 = no limit *)
+    tPowerOnDelay : TIME; (* after power-up, automatic starts wait this long *)
     eModeSource : E_ModeSource; (* where the mode comes from *)
-    bOfferManual : BOOL := TRUE; (* FALSE: the plant is Off / Auto only (Manual refused, a Manual contact is Off) *)
+    bManualOffered : BOOL := TRUE; (* FALSE: the plant is Off / Auto only (Manual refused, a Manual contact is Off) *)
   END_STRUCT;
 END_TYPE

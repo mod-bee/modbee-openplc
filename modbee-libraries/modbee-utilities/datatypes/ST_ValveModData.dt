@@ -1,6 +1,6 @@
 TYPE
   ST_ValveModData : STRUCT
-    set : ST_ValveModSet;
-    sts : ST_ValveModSts;
+    set : ST_ValveModSet; (* settings (kept) *)
+    sts : ST_ValveModSts; (* status *)
   END_STRUCT;
 END_TYPE

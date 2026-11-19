@@ -1,7 +1,7 @@
 TYPE
   ST_IntlkData : STRUCT
-    bCmdReset : BOOL; (* as bReset (cleared by the block; a held write acts once) *)
-    set : ST_IntlkSet;
-    sts : ST_IntlkSts;
+    bCmdResetFaults : BOOL; (* as bResetFaults (cleared by the block; a held write acts once) *)
+    set : ST_IntlkSet; (* settings (kept) *)
+    sts : ST_IntlkSts; (* status *)
   END_STRUCT;
 END_TYPE

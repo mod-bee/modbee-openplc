@@ -1,25 +1,25 @@
 (* FB_RunStyle — how a run takes its signal: a front end for FB_Run (or any block with a held run pin), in the style
-the installer picks (set.eStyle):
-  Held       bRun follows bIn
-  Toggle     each rising edge of bIn flips bRun (a push-on / push-off button)
-  KeepAlive  bRun while bIn keeps changing (pulses from a remote unit); off set.tKeepAlive after the last change
-             (bLost for one scan)
-  Pulse      a rising edge of bIn: with set.tPulse = 0 a one-scan bStart (the run's own target ends it: wire bStart
-             to FB_Run.bStart); with set.tPulse > 0, bRun for tPulse
+the installer picks (set.eRunStyle):
+  Held       bRunHeld follows bRunSignal
+  Toggle     each rising edge of bRunSignal flips bRunHeld (a push-on / push-off button)
+  KeepAlive  bRunHeld while bRunSignal keeps changing (pulses from a remote unit); off set.tKeepAliveTimeout after the last change
+             (bKeepAliveLost for one scan)
+  Pulse      a rising edge of bRunSignal: with set.tPulseRunTime = 0 a one-scan bStart (the run's own target ends it: wire bStart
+             to FB_Run.bStart); with set.tPulseRunTime > 0, bRunHeld for tPulseRunTime
 bStop (rising edge) ends a Toggle / Pulse run and forgets it. Edges in the first scan are ignored: nothing starts
 at power-up. Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write
 put back. *)
 
 FUNCTION_BLOCK FB_RunStyle EXTENDS FB_Object
   VAR_INPUT
-    bIn : BOOL; (* the run signal (held, toggled, pulsed, kept alive) *)
+    bRunSignal : BOOL; (* the run signal (held, toggled, pulsed, kept alive) *)
     bStop : BOOL; (* rising edge: ends a latched run *)
-    refData : REFERENCE TO ST_RunStyleData;
+    refData : REFERENCE TO ST_RunStyleData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    bRun : BOOL; (* -> FB_Run.bRun (held) *)
+    bRunHeld : BOOL; (* -> FB_Run.bRun (held) *)
     bStart : BOOL; (* one scan -> FB_Run.bStart (Pulse with the run's own target) *)
-    bLost : BOOL; (* one scan: KeepAlive pulses stopped *)
+    bKeepAliveLost : BOOL; (* one scan: KeepAlive pulses stopped *)
   END_VAR
   VAR RETAIN
     stKept : ST_RunStyleSet;
@@ -47,12 +47,12 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_RunStyleSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (stS.eStyle = E_RunStyle.Held OR stS.eStyle = E_RunStyle.Toggle OR stS.eStyle = E_RunStyle.Pulse
-          OR (stS.eStyle = E_RunStyle.KeepAlive AND stS.tKeepAlive > T#0s)) THEN
+  IF NOT (stS.eRunStyle = E_RunStyle.Held OR stS.eRunStyle = E_RunStyle.Toggle OR stS.eRunStyle = E_RunStyle.Pulse
+          OR (stS.eRunStyle = E_RunStyle.KeepAlive AND stS.tKeepAliveTimeout > T#0s)) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tKeepAlive >= T#0s) THEN
+  ELSIF NOT (stS.tKeepAliveTimeout >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tPulse >= T#0s) THEN
+  ELSIF NOT (stS.tPulseRunTime >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
@@ -65,7 +65,7 @@ METHOD PRIVATE SetOk : BOOL
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
-  bRun := FALSE;
+  bRunHeld := FALSE;
   bError := TRUE;
   eErrorId := E_UtError.NoRecord;
   eState := E_State.Fault;
@@ -73,7 +73,7 @@ IF NOT __ISVALIDREF(refData) THEN
 END_IF;
 tNow := TIME();
 bStart := FALSE;
-bLost := FALSE;
+bKeepAliveLost := FALSE;
 IF bFirstScan THEN
   IF nKeptLayout = cLayout THEN
     refData.set := stKept;
@@ -81,7 +81,7 @@ IF bFirstScan THEN
     stKept := refData.set;
     nKeptLayout := cLayout;
   END_IF;
-  bInPrev := bIn;                 (* no edge at power-up *)
+  bInPrev := bRunSignal;                 (* no edge at power-up *)
   bStopPrev := bStop;
   tAt := tNow;
 END_IF;
@@ -89,67 +89,67 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF SystemReset() THEN                // the plant reset clears a refused write
-  refData.bRefused := FALSE;
-  refData.eRefusedWhy := E_UtError.None;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
-bEdge := bIn AND NOT bInPrev;
+bEdge := bRunSignal AND NOT bInPrev;
 bStopEdge := bStop AND NOT bStopPrev;
 IF bStopEdge THEN
   bLatched := FALSE;
 END_IF;
 
-CASE refData.set.eStyle OF
+CASE refData.set.eRunStyle OF
   E_RunStyle.Toggle:
     IF bEdge AND NOT bStopEdge THEN
       bLatched := NOT bLatched;
     END_IF;
-    bRun := bLatched;
+    bRunHeld := bLatched;
   E_RunStyle.KeepAlive:
-    IF bIn <> bInPrev THEN
+    IF bRunSignal <> bInPrev THEN
       tAt := tNow;
       bAlive := TRUE;
-    ELSIF bAlive AND tNow - tAt >= refData.set.tKeepAlive THEN
+    ELSIF bAlive AND tNow - tAt >= refData.set.tKeepAliveTimeout THEN
       bAlive := FALSE;
-      bLost := TRUE;
+      bKeepAliveLost := TRUE;
     END_IF;
-    bRun := bAlive AND bOk;
+    bRunHeld := bAlive AND bOk;
   E_RunStyle.Pulse:
     IF bEdge AND NOT bStopEdge THEN
-      IF refData.set.tPulse > T#0s THEN
+      IF refData.set.tPulseRunTime > T#0s THEN
         bLatched := TRUE;
         tAt := tNow;
       ELSE
         bStart := TRUE;
       END_IF;
     END_IF;
-    IF bLatched AND tNow - tAt >= refData.set.tPulse THEN
+    IF bLatched AND tNow - tAt >= refData.set.tPulseRunTime THEN
       bLatched := FALSE;
     END_IF;
-    bRun := bLatched;
+    bRunHeld := bLatched;
 ELSE
-  bRun := bIn;
+  bRunHeld := bRunSignal;
 END_CASE;
-bInPrev := bIn;
+bInPrev := bRunSignal;
 bStopPrev := bStop;
-refData.bRun := bRun;
+refData.sts.bRunHeld := bRunHeld;
 bError := NOT bOk;
-bWarning := NOT bError AND (bLost OR refData.bRefused);
+bWarning := NOT bError AND (bKeepAliveLost OR refData.sts.bSettingRefused);
 IF NOT bOk THEN
   eErrorId := E_UtError.BadSetting;
-ELSIF bLost THEN
+ELSIF bKeepAliveLost THEN
   eErrorId := E_UtError.LinkLost;
-ELSIF refData.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;
 END_IF;
-IF bRun THEN eState := E_State.Running; ELSE eState := E_State.Idle; END_IF;
+IF bRunHeld THEN eState := E_State.Running; ELSE eState := E_State.Idle; END_IF;
 bFirstScan := FALSE;
 
 END_FUNCTION_BLOCK

@@ -8,16 +8,16 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `ipOwner` | `I_PartOwner` |  | required: the EMPTY level control. The owner's instance |
-| in | `ipLevel` | `I_Measurement` |  | required: the sump level. A measurement block's instance (FB_AnalogIn, FB_SwitchSet, FB_Vessel, ...) |
-| in | `bClean` | `BOOL R_EDGE` |  | clean now Acts on its rising edge. |
-| in | `refData` | `REFERENCE TO ST_SumpCleanData` |  | Its record (a variable of this type) |
-| in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
-| out | `bCleaning` | `BOOL` |  | A clean is running |
-| out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
+| in | `ipOwner` | `I_PartOwner` |  | required: the EMPTY level control. An instance of a block that offers I_PartOwner (FB_Alarm, FB_AlarmBeacon, FB_AlarmTable, FB_AnalogIn, FB_AnalogOut, ...) |
+| in | `ipLevel` | `I_Measurement` |  | required: the sump level. An instance of a block that offers I_Measurement (FB_AnalogIn, FB_FlowTotal, FB_LevelMeter, FB_MeasFilter, FB_MeasFrozen, ...) |
+| in | `bCleanNow` | `BOOL R_EDGE` |  | clean now |
+| in | `refData` | `REFERENCE TO ST_SumpCleanData` |  | the block's record |
+| in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
+| out | `bCleaning` | `BOOL` |  | a clean is running |
+| out | `bError` | `BOOL` |  | TRUE while a trip or setting fault is active *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
-| out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
-| out | `eState` | `E_State` |  | What it is doing now (Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault) *(from FB_Object)* |
+| out | `eErrorId` | `E_UtError` |  | which error: the first since the last reset, else the first warning; None when all is well *(from FB_Object)* |
+| out | `eState` | `E_State` |  | what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault *(from FB_Object)* |
 
 `bError`, `bWarning`, `eErrorId`, `eState` work as in every block: see [errors and state](../conventions.md#errors-and-state).
 
@@ -25,27 +25,32 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `bCmdClean` | `BOOL` |  | clean now (cleared by the block) |
-| `bCmdReset` | `BOOL` |  | clear bFailed (cleared by the block) |
-| `bCleaning` | `BOOL` |  | status |
-| `bFailed` | `BOOL` |  |  |
-| `nCycles` | `INT` |  | since the last clean |
-| `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
-| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
-| `tElapsed` | `TIME` |  | the clean under way (0 when none) |
+| `bCmdCleanNow` | `BOOL` |  | clean now (cleared by the block) |
+| `bCmdClearCleanFailed` | `BOOL` |  | clear bCleanFailed (cleared by the block) |
 
 **Settings `set`** (`ST_SumpCleanSet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `nEvery` | `INT` |  | pump cycles between cleans (0 = only on command) |
-| `fCleanLevel` | `REAL` | `5.0` |  |
-| `tCleanTime` | `TIME` | `T#20s` | run on at the clean level |
-| `tMaxClean` | `TIME` | `T#5m` | give up after this (0 = no limit) |
+| `nPumpCyclesBetweenCleans` | `INT` |  | pump cycles between cleans (0 = only on command) |
+| `fCleanLevel` | `REAL` | `5.0` | a clean pumps past the normal stop to this level |
+| `tRunOnAtCleanLevel` | `TIME` | `T#20s` | run on at the clean level |
+| `tCleanTimeout` | `TIME` | `T#5m` | give up after this (0 = no limit) |
+
+**Status `sts`** (`ST_SumpCleanSts`)
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `bCleaning` | `BOOL` |  | a clean is running |
+| `bCleanFailed` | `BOOL` |  | the last clean did not reach the clean level in time (warning CleanFailed) |
+| `nPumpCycleCount` | `INT` |  | since the last clean |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and the last good value put back (until a reset) |
+| `eSettingRefusedErrorId` | `E_UtError` |  | why the last write was refused (cleared with bSettingRefused) |
+| `tElapsedTime` | `TIME` |  | the clean under way (0 when none) |
 
 ## How it works
 
-Sump cleaning: every `set.nEvery` pump cycles (or `bClean` / `bCmdClean`) the sump is pumped down past its normal stop to `set.fCleanLevel` and the pump runs on `set.tCleanTime` there, to clear the settled solids. A part of an EMPTY [`FB_LevelControl`](FB_LevelControl.md): it asks for a normal run (`E_PartAction.Request`; the low-low cut-out and start limits still apply). Not reaching `fCleanLevel` within `set.tMaxClean` gives up: a warning (CleanFailed) until the next good clean or a reset. A cycle is one start of the owner's run. A bad level stops a clean. The record shows the clean under way's time (`tElapsed`).
+Sump cleaning: every `set.nPumpCyclesBetweenCleans` pump cycles (or `bCleanNow` / `bCmdCleanNow`) the sump is pumped down past its normal stop to `set.fCleanLevel` and the pump runs on `set.tRunOnAtCleanLevel` there, to clear the settled solids. A part of an EMPTY [`FB_LevelControl`](FB_LevelControl.md): it asks for a normal run (`E_PartAction.Request`; the low-low cut-out and start limits still apply). Not reaching `fCleanLevel` within `set.tCleanTimeout` gives up: a warning (CleanFailed) until the next good clean or a reset. A cycle is one start of the owner's run. A bad level stops a clean. The record shows the clean under way's time (`sts.tElapsedTime`).
 
 ## Example
 
@@ -57,6 +62,6 @@ Clean the sump every 20 pump cycles.
 | `ipLevel` | `fbSumpLevel` |
 | `refData` | `stClean` |
 
-Set `stClean.set.nEvery := 20`, `fCleanLevel` and `tCleanTime`.
+Set `stClean.set.nPumpCyclesBetweenCleans := 20`, `fCleanLevel` and `tRunOnAtCleanLevel`.
 
 **Back to** [the index](../README.md).

@@ -6,10 +6,10 @@ Days from 1970-01-01 to a date.
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `nYear` | `INT` | `1970` | The year |
+| in | `nYear` | `INT` | `1970` | the year |
 | in | `nMonth` | `INT` | `1` | 1..12 |
 | in | `nDay` | `INT` | `1` | 1..31 |
-| out | *(result)* | `DINT` | | Days since 1970-01-01 |
+| out | *(result)* | `DINT` |  | days from 1970-01-01 to the date |
 
 ## How it works
 

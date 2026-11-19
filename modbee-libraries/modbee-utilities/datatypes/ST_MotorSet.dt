@@ -1,10 +1,10 @@
 TYPE
   ST_MotorSet EXTENDS ST_EquipmentSet : STRUCT
-    tRestartDelay : TIME := T#5s; (* after a stop, before the next start *)
-    bUseFeedback : BOOL := TRUE;
-    stOverload : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#100ms, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
-    stNoFeedback : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#3s, eReset := E_ResetMode.Retry, tRecover := T#30s, nMaxRetries := 3);
-    stFeedbackLost : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#500ms, eReset := E_ResetMode.Retry, tRecover := T#30s, nMaxRetries := 3);
-    stStuck : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#3s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0);
+    tMinOffTime : TIME := T#5s; (* after a stop, before the next start *)
+    bRunFeedbackFitted : BOOL := TRUE; (* use the run feedback (bFeedback); FALSE: no feedback checks *)
+    stOverloadFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#100ms, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
+    stNoRunFeedbackFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#3s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#30s, nMaxRetriesBeforeLockout := 3);
+    stRunFeedbackLostFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#500ms, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#30s, nMaxRetriesBeforeLockout := 3);
+    stStuckOnFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#3s, eResetMode := E_ResetMode.Manual, tAutoRecoverAfter := T#0s, nMaxRetriesBeforeLockout := 0);
   END_STRUCT;
 END_TYPE

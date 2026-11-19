@@ -1,6 +1,6 @@
 TYPE
   ST_ReportArraySet : STRUCT
-    tHeartbeat : TIME; (* for items whose own is 0 (0 = off) *)
-    bReportOnStart : BOOL := TRUE;
+    tDefaultHeartbeatInterval : TIME; (* for items whose own is 0 (0 = off) *)
+    bReportOnStart : BOOL := TRUE; (* report when the block starts or bEnable comes back *)
   END_STRUCT;
 END_TYPE

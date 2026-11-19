@@ -1,5 +1,5 @@
 TYPE
   ST_StartsConfig : STRUCT
-    tWindow : TIME := T#1h; (* the sliding window (0 < tWindow <= 8 h) *)
+    tStartsWindow : TIME := T#1h; (* the sliding window (0 < tStartsWindow <= 8 h) *)
   END_STRUCT;
 END_TYPE

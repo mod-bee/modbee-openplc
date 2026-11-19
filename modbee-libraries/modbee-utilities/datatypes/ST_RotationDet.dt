@@ -1,6 +1,6 @@
 TYPE
   ST_RotationDet : STRUCT
-    tPeriod : TIME; (* between the last two pulses *)
+    tTimeBetweenPulses : TIME; (* between the last two pulses *)
     tTimeLeft : TIME; (* the start delay left, or the acting protection's time left *)
   END_STRUCT;
 END_TYPE

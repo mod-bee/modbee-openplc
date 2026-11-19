@@ -1,8 +1,8 @@
 TYPE
   ST_WatchdogSet : STRUCT
-    tTimeout : TIME := T#90s; (* no change for this long = link dead *)
-    tRecover : TIME; (* alive this long before bOk returns (and Auto clears bCommsFail) *)
-    tBeatPeriod : TIME := T#30s; (* bHeartbeatOut toggles every tBeatPeriod (T#0s = off) *)
-    eFailReset : E_ResetMode := E_ResetMode.Auto;
+    tHeartbeatTimeout : TIME := T#90s; (* no change for this long = link dead *)
+    tHeartbeatInterval : TIME := T#30s; (* bHeartbeatOut toggles every tHeartbeatInterval (T#0s = off) *)
+    stCommsFailFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#0s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#0s, nMaxRetriesBeforeLockout := 3);
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

@@ -1,35 +1,35 @@
 (* FB_MotorVsd EXTENDS FB_Motor — a variable speed drive over hard-wired IO.
-Everything of FB_Motor (modes, protections, the plug, totals, refData) plus the speed. bQ = the drive's run
-command; bFeedback = the drive's running relay.
+Everything of FB_Motor (modes, protections, the plug, totals, refData) plus the speed. bRunOutput = the drive's run
+command; bRunFeedback = the drive's running relay.
 
 Pins added: bDriveReady (the drive's ready relay: lost while running is a protection; not ready holds a new
-start), fSpeedFb (actual speed %, < 0 = not wired), refVsd (its record) -> fSpeedRef (% after clamp, skip band,
-ramp), nSpeedRefRaw (scaled to set.fRawMin..fRawMax, a Modbus register), bDriveReset (a pulse on an operator
+start), fSpeedFeedbackPct (actual speed %, < 0 = not wired), refDriveData (its record) -> fSpeedReferencePct (% after clamp, skip band,
+ramp), nSpeedReferenceRaw (scaled to set.fRawAtZeroPct..fRawAtFullPct, a Modbus register), bDriveResetPulse (a pulse on an operator
 reset), bAtSpeed.
-Speed asked for: Auto -> the owner's speed (Request fSpeed, < 0 = set.fAutoSpeed); Hand -> set.fHandSpeed.
-Clamped to fMinSpeed..fMaxSpeed; a target inside the skip band holds at its near edge; ramped by fAccelRate /
-fDecelRate (% per set.eRateUnit: second by default, minute, hour or day; 0 = the drive ramps); a start begins from
-fMinSpeed. A jog (FB_MotorJog) runs at set.fJogSpeed (0 = fHandSpeed).
-Drive protections: driveNotReady (the ready relay lost while running), speedDev (|reference - fSpeedFb| past
-set.fDevBand while running with the ramp done and set.tDriveRamp passed since the reference stopped changing,
-fSpeedFb wired).
-bAtSpeed: the ramp done, and by fSpeedFb within fDevBand, or without fSpeedFb once set.tDriveRamp (the drive's own
+Speed asked for: Auto -> the owner's speed (Request fSpeed, < 0 = set.fAutoSpeedPct); Hand -> set.fHandSpeedPct.
+Clamped to fMinSpeedPct..fMaxSpeedPct; a target inside the skip band holds at its near edge; ramped by fAccelPctPerSec /
+fDecelPctPerSec (% per set.eRateUnit: second by default, minute, hour or day; 0 = the drive ramps); a start begins from
+fMinSpeedPct. A jog (FB_MotorJog) runs at set.fJogSpeedPct (0 = fHandSpeedPct).
+Drive protections: driveNotReady (the ready relay lost while running), speedDev (|reference - fSpeedFeedbackPct| past
+set.fSpeedDeviationPct while running with the ramp done and set.tDriveOwnRampTime passed since the reference stopped changing,
+fSpeedFeedbackPct wired).
+bAtSpeed: the ramp done, and by fSpeedFeedbackPct within fSpeedDeviationPct, or without fSpeedFeedbackPct once set.tDriveOwnRampTime (the drive's own
 0 -> 100 % ramp time, 0 = none) has passed since the reference stopped changing.
 The speed in Hz and rpm (sts.fSpeedHz, sts.fSpeedRpm, for display): the feedback while running when wired, else
-the reference, x set.fRatedHz / fRatedRpm at 100 % (0 = not shown).
+the reference, x set.fRatedFrequency / fRatedRpm at 100 % (0 = not shown).
 Its settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back. *)
 
 FUNCTION_BLOCK FB_MotorVsd EXTENDS FB_Motor
   VAR_INPUT
-    bDriveReady : BOOL := TRUE;
-    fSpeedFb : REAL := -1.0;
-    refVsd : REFERENCE TO ST_VsdData;
+    bDriveReady : BOOL := TRUE; (* the drive's ready relay: lost while running is a fault; not ready holds a new start *)
+    fSpeedFeedbackPct : REAL := -1.0; (* the actual speed %; below 0 = not wired *)
+    refDriveData : REFERENCE TO ST_VsdData; (* the drive record *)
   END_VAR
   VAR_OUTPUT
-    fSpeedRef : REAL;
-    nSpeedRefRaw : UINT;
-    bDriveReset : BOOL;
-    bAtSpeed : BOOL;
+    fSpeedReferencePct : REAL; (* the speed reference, % after clamp, skip band and ramp *)
+    nSpeedReferenceRaw : UINT; (* the speed reference scaled to fRawAtZeroPct..fRawAtFullPct (a Modbus register, %QW) *)
+    bDriveResetPulse : BOOL; (* a pulse to the drive's reset input on an operator reset *)
+    bAtSpeed : BOOL; (* the speed reference has reached its target *)
   END_VAR
   VAR CONSTANT
     cVsdLayout : UINT := 2; (* the layout of its own kept settings *)
@@ -64,35 +64,35 @@ FUNCTION_BLOCK FB_MotorVsd EXTENDS FB_Motor
 (* the first bad setting (None: all good) *)
 METHOD PRIVATE VsdWhy : E_UtError
   VsdWhy := E_UtError.None;
-  IF NOT (refVsd.set.fMinSpeed >= 0.0) THEN
+  IF NOT (refDriveData.set.fMinSpeedPct >= 0.0) THEN
     VsdWhy := E_UtError.BelowMin;
-  ELSIF NOT (refVsd.set.fMaxSpeed <= 100.0) THEN
+  ELSIF NOT (refDriveData.set.fMaxSpeedPct <= 100.0) THEN
     VsdWhy := E_UtError.AboveMax;
-  ELSIF NOT (refVsd.set.fMinSpeed <= refVsd.set.fMaxSpeed) THEN
+  ELSIF NOT (refDriveData.set.fMinSpeedPct <= refDriveData.set.fMaxSpeedPct) THEN
     VsdWhy := E_UtError.LimitsBad;
-  ELSIF NOT (refVsd.set.fAccelRate >= 0.0) THEN
+  ELSIF NOT (refDriveData.set.fAccelPctPerSec >= 0.0) THEN
     VsdWhy := E_UtError.BelowMin;
-  ELSIF NOT (refVsd.set.fDecelRate >= 0.0) THEN
+  ELSIF NOT (refDriveData.set.fDecelPctPerSec >= 0.0) THEN
     VsdWhy := E_UtError.BelowMin;
-  ELSIF NOT (refVsd.set.fSkipLow <= refVsd.set.fSkipHigh) THEN
+  ELSIF NOT (refDriveData.set.fSkipBandLow <= refDriveData.set.fSkipBandHigh) THEN
     VsdWhy := E_UtError.LimitsBad;
-  ELSIF NOT (refVsd.set.tResetPulse >= T#0s) THEN
+  ELSIF NOT (refDriveData.set.tDriveResetPulse >= T#0s) THEN
     VsdWhy := E_UtError.TimeBad;
-  ELSIF NOT (refVsd.set.fDevBand >= 0.0) THEN
+  ELSIF NOT (refDriveData.set.fSpeedDeviationPct >= 0.0) THEN
     VsdWhy := E_UtError.BelowMin;
-  ELSIF NOT (refVsd.set.tDriveRamp >= T#0s) THEN
+  ELSIF NOT (refDriveData.set.tDriveOwnRampTime >= T#0s) THEN
     VsdWhy := E_UtError.TimeBad;
-  ELSIF NOT (refVsd.set.fRatedHz >= 0.0) THEN
+  ELSIF NOT (refDriveData.set.fRatedFrequency >= 0.0) THEN
     VsdWhy := E_UtError.BelowMin;
-  ELSIF NOT (refVsd.set.fRatedHz <= REAL#3.4E38) THEN
+  ELSIF NOT (refDriveData.set.fRatedFrequency <= REAL#3.4E38) THEN
     VsdWhy := E_UtError.AboveMax;
-  ELSIF NOT (refVsd.set.fRatedRpm >= 0.0) THEN
+  ELSIF NOT (refDriveData.set.fRatedRpm >= 0.0) THEN
     VsdWhy := E_UtError.BelowMin;
-  ELSIF NOT (refVsd.set.fRatedRpm <= REAL#3.4E38) THEN
+  ELSIF NOT (refDriveData.set.fRatedRpm <= REAL#3.4E38) THEN
     VsdWhy := E_UtError.AboveMax;
-  ELSIF NOT (refVsd.set.fJogSpeed >= 0.0) THEN
+  ELSIF NOT (refDriveData.set.fJogSpeedPct >= 0.0) THEN
     VsdWhy := E_UtError.BelowMin;
-  ELSIF NOT (refVsd.set.fJogSpeed <= 100.0) THEN
+  ELSIF NOT (refDriveData.set.fJogSpeedPct <= 100.0) THEN
     VsdWhy := E_UtError.AboveMax;
   END_IF;
 END_METHOD
@@ -111,87 +111,87 @@ METHOD PROTECTED OVERRIDE DriveChecks
     bX : BOOL;
   END_VAR
   eError := E_UtError.None;
-  IF NOT __ISVALIDREF(refVsd) THEN
+  IF NOT __ISVALIDREF(refDriveData) THEN
     bTrip := TRUE;
     eError := E_UtError.NoRecord;
     RETURN;
   END_IF;
   IF bReset THEN
     tResetAt := tNow;             // a reset pulse to the drive
-    bDriveReset := TRUE;
+    bDriveResetPulse := TRUE;
   END_IF;
-  bX := F_Protect(tNow := tNow, bCause := bQ AND NOT bDriveReady, bResetReq := bReset,
-                  tRetryWindow := T#1h, stSet := refVsd.set.stDriveNotReady,
-                  stSts := refVsd.sts.stDriveNotReady, stWork := stWNotReady);
-  bX := F_Protect(tNow := tNow, bCause := bQ AND fSpeedFb >= 0.0 AND bSettled
-                                          AND ABS(fSpeedRef - fSpeedFb) > refVsd.set.fDevBand,
-                  bResetReq := bReset, tRetryWindow := T#1h, stSet := refVsd.set.stSpeedDev,
-                  stSts := refVsd.sts.stSpeedDev, stWork := stWSpeedDev);
-  bTrip := stWNotReady.bTrip OR stWSpeedDev.bTrip;
-  bWarn := stWNotReady.bWarn OR stWSpeedDev.bWarn;
+  bX := F_Protect(tNow := tNow, bConditionPresent := bRunOutput AND NOT bDriveReady, bResetRequest := bReset,
+                  tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refDriveData.set.stDriveNotReadyFault,
+                  stStatus := refDriveData.sts.stDriveNotReadyFault, stWorking := stWNotReady);
+  bX := F_Protect(tNow := tNow, bConditionPresent := bRunOutput AND fSpeedFeedbackPct >= 0.0 AND bSettled
+                                          AND ABS(fSpeedReferencePct - fSpeedFeedbackPct) > refDriveData.set.fSpeedDeviationPct,
+                  bResetRequest := bReset, tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refDriveData.set.stSpeedDeviationFault,
+                  stStatus := refDriveData.sts.stSpeedDeviationFault, stWorking := stWSpeedDev);
+  bTrip := stWNotReady.bTripping OR stWSpeedDev.bTripping;
+  bWarn := stWNotReady.bWarning OR stWSpeedDev.bWarning;
   bHold := NOT bDriveReady;
-  IF stWNotReady.bTrip OR stWNotReady.bWarn THEN
+  IF stWNotReady.bTripping OR stWNotReady.bWarning THEN
     eError := E_UtError.DriveFault;
-  ELSIF stWSpeedDev.bTrip OR stWSpeedDev.bWarn THEN
+  ELSIF stWSpeedDev.bTripping OR stWSpeedDev.bWarning THEN
     eError := E_UtError.SpeedDeviation;
   END_IF;
 END_METHOD
 
-SUPER^();                         // the motor: modes, protections (with DriveChecks), bQ
+SUPER^();                         // the motor: modes, protections (with DriveChecks), bRunOutput
 
-IF NOT __ISVALIDREF(refVsd) THEN
-  fSpeedRef := 0.0;
-  nSpeedRefRaw := 0;
+IF NOT __ISVALIDREF(refDriveData) THEN
+  fSpeedReferencePct := 0.0;
+  nSpeedReferenceRaw := 0;
   RETURN;
 END_IF;
 IF bVsdFirst THEN
   IF nKeptVsdLayout = cVsdLayout THEN
-    refVsd.set := stKeptVsd;
+    refDriveData.set := stKeptVsd;
   ELSE
-    stKeptVsd := refVsd.set;
+    stKeptVsd := refDriveData.set;
     nKeptVsdLayout := cVsdLayout;
   END_IF;
   tLastRamp := tNow;
   bVsdFirst := FALSE;
 ELSIF VsdWhy() = E_UtError.None THEN
-  stKeptVsd := refVsd.set;
+  stKeptVsd := refDriveData.set;
 ELSE
-  refVsd.sts.eRefusedWhy := VsdWhy();
-  refVsd.set := stKeptVsd;
-  refVsd.sts.bRefused := TRUE;
+  refDriveData.sts.eSettingRefusedErrorId := VsdWhy();
+  refDriveData.set := stKeptVsd;
+  refDriveData.sts.bSettingRefused := TRUE;
 END_IF;
 IF bResetThisScan THEN                  // the equipment's reset clears a refused write
-  refVsd.sts.bRefused := FALSE;
-  refVsd.sts.eRefusedWhy := E_UtError.None;
+  refDriveData.sts.bSettingRefused := FALSE;
+  refDriveData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
 
 (* the speed asked for *)
 IF __ISVALIDREF(refData) AND refData.set.eMode = E_Mode.Hand THEN
-  fTarget := refVsd.set.fHandSpeed;
-  IF bJogging AND refVsd.set.fJogSpeed > 0.0 THEN
-    fTarget := refVsd.set.fJogSpeed;   // a jog (FB_MotorJog) at its own speed
+  fTarget := refDriveData.set.fHandSpeedPct;
+  IF bJogging AND refDriveData.set.fJogSpeedPct > 0.0 THEN
+    fTarget := refDriveData.set.fJogSpeedPct;   // a jog (FB_MotorJog) at its own speed
   END_IF;
 ELSIF fSpeedReq >= 0.0 AND fSpeedReq = fSpeedReq THEN
   fTarget := fSpeedReq;
 ELSE
-  fTarget := refVsd.set.fAutoSpeed;
+  fTarget := refDriveData.set.fAutoSpeedPct;
 END_IF;
-fTarget := LIMIT(refVsd.set.fMinSpeed, fTarget, refVsd.set.fMaxSpeed);
-IF refVsd.set.fSkipHigh > refVsd.set.fSkipLow AND fTarget > refVsd.set.fSkipLow AND fTarget < refVsd.set.fSkipHigh THEN
-  IF fTarget - refVsd.set.fSkipLow < refVsd.set.fSkipHigh - fTarget THEN
-    fTarget := refVsd.set.fSkipLow;
+fTarget := LIMIT(refDriveData.set.fMinSpeedPct, fTarget, refDriveData.set.fMaxSpeedPct);
+IF refDriveData.set.fSkipBandHigh > refDriveData.set.fSkipBandLow AND fTarget > refDriveData.set.fSkipBandLow AND fTarget < refDriveData.set.fSkipBandHigh THEN
+  IF fTarget - refDriveData.set.fSkipBandLow < refDriveData.set.fSkipBandHigh - fTarget THEN
+    fTarget := refDriveData.set.fSkipBandLow;
   ELSE
-    fTarget := refVsd.set.fSkipHigh;
+    fTarget := refDriveData.set.fSkipBandHigh;
   END_IF;
 END_IF;
 
 (* the ramp: a start begins from the minimum; across the skip band in one step *)
-IF bQ AND NOT bQWas THEN
-  fSpeedRef := refVsd.set.fMinSpeed;
+IF bRunOutput AND NOT bQWas THEN
+  fSpeedReferencePct := refDriveData.set.fMinSpeedPct;
 END_IF;
-bQWas := bQ;
+bQWas := bRunOutput;
 fDt := TIME_TO_REAL(tNow - tLastRamp) / 1000.0;
-CASE refVsd.set.eRateUnit OF          // a rate per minute / hour / day: a smaller step per second
+CASE refDriveData.set.eRateUnit OF          // a rate per minute / hour / day: a smaller step per second
   E_RateUnit.PerMin: fDt := fDt / 60.0;
   E_RateUnit.PerHour: fDt := fDt / 3600.0;
   E_RateUnit.PerDay: fDt := fDt / 86400.0;
@@ -199,66 +199,66 @@ ELSE
   ;
 END_CASE;
 tLastRamp := tNow;
-IF NOT bQ THEN
-  fSpeedRef := 0.0;
-ELSIF fTarget > fSpeedRef THEN
-  IF refVsd.set.fAccelRate > 0.0 THEN
-    fStep := refVsd.set.fAccelRate * fDt;
-    fSpeedRef := MIN(fTarget, fSpeedRef + fStep);
+IF NOT bRunOutput THEN
+  fSpeedReferencePct := 0.0;
+ELSIF fTarget > fSpeedReferencePct THEN
+  IF refDriveData.set.fAccelPctPerSec > 0.0 THEN
+    fStep := refDriveData.set.fAccelPctPerSec * fDt;
+    fSpeedReferencePct := MIN(fTarget, fSpeedReferencePct + fStep);
   ELSE
-    fSpeedRef := fTarget;
+    fSpeedReferencePct := fTarget;
   END_IF;
-ELSIF fTarget < fSpeedRef THEN
-  IF refVsd.set.fDecelRate > 0.0 THEN
-    fStep := refVsd.set.fDecelRate * fDt;
-    fSpeedRef := MAX(fTarget, fSpeedRef - fStep);
+ELSIF fTarget < fSpeedReferencePct THEN
+  IF refDriveData.set.fDecelPctPerSec > 0.0 THEN
+    fStep := refDriveData.set.fDecelPctPerSec * fDt;
+    fSpeedReferencePct := MAX(fTarget, fSpeedReferencePct - fStep);
   ELSE
-    fSpeedRef := fTarget;
-  END_IF;
-END_IF;
-IF refVsd.set.fSkipHigh > refVsd.set.fSkipLow AND fSpeedRef > refVsd.set.fSkipLow AND fSpeedRef < refVsd.set.fSkipHigh THEN
-  IF fTarget >= refVsd.set.fSkipHigh THEN
-    fSpeedRef := refVsd.set.fSkipHigh;      // the ramp jumps over the band
-  ELSE
-    fSpeedRef := refVsd.set.fSkipLow;
+    fSpeedReferencePct := fTarget;
   END_IF;
 END_IF;
-fSpan := refVsd.set.fRawMax - refVsd.set.fRawMin;
-nSpeedRefRaw := REAL_TO_UINT(LIMIT(0.0, refVsd.set.fRawMin + fSpeedRef / 100.0 * fSpan, 65535.0));
-IF fSpeedRef <> fTargetWas OR (bQ AND NOT bQWasRamp) THEN
+IF refDriveData.set.fSkipBandHigh > refDriveData.set.fSkipBandLow AND fSpeedReferencePct > refDriveData.set.fSkipBandLow AND fSpeedReferencePct < refDriveData.set.fSkipBandHigh THEN
+  IF fTarget >= refDriveData.set.fSkipBandHigh THEN
+    fSpeedReferencePct := refDriveData.set.fSkipBandHigh;      // the ramp jumps over the band
+  ELSE
+    fSpeedReferencePct := refDriveData.set.fSkipBandLow;
+  END_IF;
+END_IF;
+fSpan := refDriveData.set.fRawAtFullPct - refDriveData.set.fRawAtZeroPct;
+nSpeedReferenceRaw := REAL_TO_UINT(LIMIT(0.0, refDriveData.set.fRawAtZeroPct + fSpeedReferencePct / 100.0 * fSpan, 65535.0));
+IF fSpeedReferencePct <> fTargetWas OR (bRunOutput AND NOT bQWasRamp) THEN
   tTargetAt := tNow;              (* the reference changed (or a start): the drive's own ramp counts again *)
 END_IF;
-fTargetWas := fSpeedRef;
-bQWasRamp := bQ;
-bRampDone := bQ AND fSpeedRef = fTarget;
-bDriveDone := bRampDone AND tNow - tTargetAt >= refVsd.set.tDriveRamp;
+fTargetWas := fSpeedReferencePct;
+bQWasRamp := bRunOutput;
+bRampDone := bRunOutput AND fSpeedReferencePct = fTarget;
+bDriveDone := bRampDone AND tNow - tTargetAt >= refDriveData.set.tDriveOwnRampTime;
 bSettled := bDriveDone;
-IF fSpeedFb >= 0.0 THEN
-  bAtSpeed := bRampDone AND ABS(fSpeedRef - fSpeedFb) <= refVsd.set.fDevBand;
+IF fSpeedFeedbackPct >= 0.0 THEN
+  bAtSpeed := bRampDone AND ABS(fSpeedReferencePct - fSpeedFeedbackPct) <= refDriveData.set.fSpeedDeviationPct;
 ELSE
   bAtSpeed := bDriveDone;
 END_IF;
-IF fSpeedFb >= 0.0 AND fSpeedFb <= REAL#3.4E38 AND bQ THEN
-  fShown := fSpeedFb;
+IF fSpeedFeedbackPct >= 0.0 AND fSpeedFeedbackPct <= REAL#3.4E38 AND bRunOutput THEN
+  fShown := fSpeedFeedbackPct;
 ELSE
-  fShown := fSpeedRef;
+  fShown := fSpeedReferencePct;
 END_IF;
-IF refVsd.set.fRatedHz > 0.0 THEN
-  refVsd.sts.fSpeedHz := fShown / 100.0 * refVsd.set.fRatedHz;
+IF refDriveData.set.fRatedFrequency > 0.0 THEN
+  refDriveData.sts.fSpeedHz := fShown / 100.0 * refDriveData.set.fRatedFrequency;
 ELSE
-  refVsd.sts.fSpeedHz := 0.0;
+  refDriveData.sts.fSpeedHz := 0.0;
 END_IF;
-IF refVsd.set.fRatedRpm > 0.0 THEN
-  refVsd.sts.fSpeedRpm := fShown / 100.0 * refVsd.set.fRatedRpm;
+IF refDriveData.set.fRatedRpm > 0.0 THEN
+  refDriveData.sts.fSpeedRpm := fShown / 100.0 * refDriveData.set.fRatedRpm;
 ELSE
-  refVsd.sts.fSpeedRpm := 0.0;
+  refDriveData.sts.fSpeedRpm := 0.0;
 END_IF;
-IF bDriveReset AND tNow - tResetAt >= refVsd.set.tResetPulse THEN
-  bDriveReset := FALSE;
+IF bDriveResetPulse AND tNow - tResetAt >= refDriveData.set.tDriveResetPulse THEN
+  bDriveResetPulse := FALSE;
 END_IF;
-refVsd.sts.fSpeedRef := fSpeedRef;
-refVsd.sts.fSpeedFb := fSpeedFb;
-refVsd.sts.bAtSpeed := bAtSpeed;
-refVsd.sts.bDriveReady := bDriveReady;
+refDriveData.sts.fSpeedReferencePct := fSpeedReferencePct;
+refDriveData.sts.fSpeedFeedbackPct := fSpeedFeedbackPct;
+refDriveData.sts.bAtSpeed := bAtSpeed;
+refDriveData.sts.bDriveReady := bDriveReady;
 
 END_FUNCTION_BLOCK

@@ -1,6 +1,6 @@
 TYPE
   ST_ZoneSeqDet : STRUCT
-    tLeft : TIME; (* this pass's time left (the time zones not done) *)
-    tPhaseTime : TIME; (* time in the present phase *)
+    tPassTimeLeft : TIME; (* this pass's time left (the time zones not done) *)
+    tInPhaseFor : TIME; (* time in the present phase *)
   END_STRUCT;
 END_TYPE

@@ -1,16 +1,16 @@
 TYPE
   ST_ValvePosSet EXTENDS ST_EquipmentSet : STRUCT
-    fSafePos : REAL; (* % on Off / interlock / a trip (< 0 = stays) *)
-    bHoldOnFault : BOOL; (* a trip holds where it is *)
-    fRestPos : REAL; (* % while the owner's open is off *)
-    fHandPos : REAL; (* Hand position (kept) *)
-    fOpenThreshold : REAL := 98.0; (* bIsOpen at or above, % *)
-    fClosedThreshold : REAL := 2.0; (* bIsClosed at or below, % *)
-    fDeadband : REAL := 1.0; (* % error ignored *)
-    fDevLimit : REAL := 5.0; (* deviation above this, % *)
-    bUseOpenLs : BOOL;
-    bUseClosedLs : BOOL;
-    stDeviation : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#10s, eReset := E_ResetMode.Auto, tRecover := T#0s, nMaxRetries := 3);
-    stPosFb : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#500ms, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 3);
+    fSafePositionPct : REAL; (* % on Off / interlock / a trip (< 0 = stays) *)
+    bHoldWhenTripped : BOOL; (* a trip holds where it is *)
+    fRestPositionPct : REAL; (* % while the owner's open is off *)
+    fHandPositionPct : REAL; (* Hand position (kept) *)
+    fOpenAtOrAbovePct : REAL := 98.0; (* bIsOpen at or above, % *)
+    fClosedAtOrBelowPct : REAL := 2.0; (* bIsClosed at or below, % *)
+    fPositionDeadbandPct : REAL := 1.0; (* % error ignored *)
+    fDeviationAbovePct : REAL := 5.0; (* deviation above this, % *)
+    bOpenLimitSwitchFitted : BOOL; (* the open end switch (bOpenLimitSwitch) is fitted and used *)
+    bClosedLimitSwitchFitted : BOOL; (* the closed end switch (bClosedLimitSwitch) is fitted and used *)
+    stDeviationFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#10s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#0s, nMaxRetriesBeforeLockout := 3);
+    stPositionFeedbackFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#500ms, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#2s, nMaxRetriesBeforeLockout := 3);
   END_STRUCT;
 END_TYPE

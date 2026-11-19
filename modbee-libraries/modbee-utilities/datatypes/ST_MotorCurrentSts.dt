@@ -1,14 +1,14 @@
 TYPE
   ST_MotorCurrentSts : STRUCT
     fCurrent : REAL; (* in the CT's unit *)
-    fPercent : REAL; (* of full load *)
-    bProvesRun : BOOL;
-    stHigh : ST_ProtectionSts;
-    stLow : ST_ProtectionSts;
-    stStartTooLong : ST_ProtectionSts;
-    stBad : ST_ProtectionSts;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    tMaskLeft : TIME; (* running: the start mask's time left (0 when past it or stopped) *)
+    fCurrentPct : REAL; (* of full load *)
+    bCurrentProvesRun : BOOL; (* the current is at or above fProvesRunAbovePct *)
+    stHighCurrentFault : ST_ProtectionSts; (* overload by current (default Off) *)
+    stLowCurrentFault : ST_ProtectionSts; (* dry run or broken belt (default Off) *)
+    stLockedRotorFault : ST_ProtectionSts; (* start current lasts too long: a locked rotor (default Off) *)
+    stCurrentBadFault : ST_ProtectionSts; (* the current signal is bad (default a warning) *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    tStartMaskTimeLeft : TIME; (* running: the start mask's time left (0 when past it or stopped) *)
   END_STRUCT;
 END_TYPE

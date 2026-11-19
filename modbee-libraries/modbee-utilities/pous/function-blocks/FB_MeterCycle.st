@@ -1,21 +1,21 @@
 (* FB_MeterCycle — this cycle's and the last cycle's quantity on any meter (a pump run, a fill, an irrigation): an
 observer that reads its meter and changes nothing.
 
-Pins: bRollover (rising edge: closes the cycle, e.g. the pump's start command), ipMeter (required), bRunning
-(optional: the pump runs; its fall keeps the totals), dtClock (optional), refData -> FB_Object's outputs.
-tot.fThis counts every rise of the meter's total since the last rollover (a fall, e.g. the meter's total reset,
-is not counted). A rollover (bRollover or the record's bCmdRollover) moves tot.fThis to tot.fLast and starts the
-next cycle from zero, counts it (tot.nCycles) and stamps it (tot.dtLastEnd from dtClock: blank when unwired, the
+Pins: bCloseCycle (rising edge: closes the cycle, e.g. the pump's start command), ipMeter (required), bPumpRunning
+(optional: the pump runs; its fall keeps the totals), dtLocalTime (optional), refData -> FB_Object's outputs.
+tot.fThisCycle counts every rise of the meter's total since the last rollover (a fall, e.g. the meter's total reset,
+is not counted). A rollover (bCloseCycle or the record's bCmdCloseCycle) moves tot.fThisCycle to tot.fLastCycle and starts the
+next cycle from zero, counts it (tot.nCycleCount) and stamps it (tot.dtLastCycleEnd from dtLocalTime: blank when unwired, the
 boards have no real-time clock). A rollover from a timer (every 15 min ...) gives interval quantities. tot is kept
-over a power cut: at each rollover, when bRunning falls and hourly. *)
+over a power cut: at each rollover, when bPumpRunning falls and hourly. *)
 
 FUNCTION_BLOCK FB_MeterCycle EXTENDS FB_Object
   VAR_INPUT
-    bRollover : BOOL := FALSE; (* rising edge: close the cycle *)
+    bCloseCycle : BOOL := FALSE; (* rising edge: close the cycle *)
     ipMeter : I_Meter; (* required *)
-    bRunning : BOOL := FALSE; (* optional: the pump runs; its fall keeps the totals *)
-    dtClock : DT; (* optional: the local time, for tot.dtLastEnd *)
-    refData : REFERENCE TO ST_MeterCycleData;
+    bPumpRunning : BOOL := FALSE; (* optional: the pump runs; its fall keeps the totals *)
+    dtLocalTime : DT; (* optional: the local time, for tot.dtLastCycleEnd *)
+    refData : REFERENCE TO ST_MeterCycleData; (* the block's record *)
   END_VAR
   VAR RETAIN
     stKeptTot : ST_MeterCycleTot;
@@ -51,36 +51,36 @@ IF bFirstScan THEN
     nKeptLayout := cLayout;
   END_IF;
   fLastTotal := fTotal;
-  bRolloverPrev := bRollover;     // a rollover held at power-up is not a new cycle
-  bRunningWas := bRunning;
+  bRolloverPrev := bCloseCycle;     // a rollover held at power-up is not a new cycle
+  bRunningWas := bPumpRunning;
   tKeptAt := tNow;
   bFirstScan := FALSE;
 END_IF;
 
 (* count the meter's rises *)
 IF fTotal > fLastTotal THEN
-  refData.tot.fThis := refData.tot.fThis + (fTotal - fLastTotal);
+  refData.tot.fThisCycle := refData.tot.fThisCycle + (fTotal - fLastTotal);
 END_IF;
 fLastTotal := fTotal;
 
 (* the rollover *)
-IF (bRollover AND NOT bRolloverPrev) OR refData.bCmdRollover THEN
-  refData.tot.fLast := refData.tot.fThis;
-  refData.tot.fThis := 0.0;
-  refData.tot.nCycles := refData.tot.nCycles + 1;
-  refData.tot.dtLastEnd := dtClock;
+IF (bCloseCycle AND NOT bRolloverPrev) OR refData.bCmdCloseCycle THEN
+  refData.tot.fLastCycle := refData.tot.fThisCycle;
+  refData.tot.fThisCycle := 0.0;
+  refData.tot.nCycleCount := refData.tot.nCycleCount + 1;
+  refData.tot.dtLastCycleEnd := dtLocalTime;
   stKeptTot := refData.tot;
   tKeptAt := tNow;
 END_IF;
-bRolloverPrev := bRollover;
-refData.bCmdRollover := FALSE;
+bRolloverPrev := bCloseCycle;
+refData.bCmdCloseCycle := FALSE;
 
 (* keep *)
-IF (bRunningWas AND NOT bRunning) OR tNow - tKeptAt >= T#1h THEN
+IF (bRunningWas AND NOT bPumpRunning) OR tNow - tKeptAt >= T#1h THEN
   stKeptTot := refData.tot;
   tKeptAt := tNow;
 END_IF;
-bRunningWas := bRunning;
+bRunningWas := bPumpRunning;
 
 bError := FALSE;
 bWarning := FALSE;

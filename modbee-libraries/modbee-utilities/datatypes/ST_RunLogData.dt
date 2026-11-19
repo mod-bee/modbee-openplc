@@ -1,6 +1,6 @@
 TYPE
   ST_RunLogData : STRUCT
-    bCmdResetCounts : BOOL; (* clears the counts (cleared by the block) *)
-    tot : ST_RunLogTot;
+    bCmdResetCounters : BOOL; (* clears the counts (cleared by the block) *)
+    tot : ST_RunLogTot; (* totals (kept) *)
   END_STRUCT;
 END_TYPE

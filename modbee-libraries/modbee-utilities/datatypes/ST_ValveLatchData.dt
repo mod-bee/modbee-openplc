@@ -1,6 +1,6 @@
 TYPE
   ST_ValveLatchData : STRUCT
-    set : ST_ValveLatchSet;
-    sts : ST_ValveLatchSts;
+    set : ST_ValveLatchSet; (* settings (kept) *)
+    sts : ST_ValveLatchSts; (* status *)
   END_STRUCT;
 END_TYPE

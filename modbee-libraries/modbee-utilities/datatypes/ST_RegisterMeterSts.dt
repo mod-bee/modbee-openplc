@@ -1,11 +1,11 @@
 TYPE
   ST_RegisterMeterSts : STRUCT
-    bGood : BOOL;
-    fRate : REAL; (* per hour *)
-    fRegister : LREAL; (* the last good reading *)
-    nGlitches : UDINT; (* drops and too-large steps (not kept) *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    stInputBad : ST_ProtectionSts;
+    bGood : BOOL; (* counting: the meter can be trusted *)
+    fFlowPerHour : REAL; (* per hour *)
+    fLastGoodReading : LREAL; (* the last good reading *)
+    nGlitchCount : UDINT; (* drops and too-large steps (not kept) *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    stMeterBadFault : ST_ProtectionSts; (* the meter's input is bad (default a warning) *)
   END_STRUCT;
 END_TYPE

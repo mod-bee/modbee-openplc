@@ -1,26 +1,26 @@
 TYPE
   ST_SpeedLoopSts : STRUCT
-    eState : E_State;
-    eErrorId : E_UtError;
-    fSpeed : REAL;
-    fPv : REAL; (* the value under control (the flow with Flow control) *)
-    fSpNow : REAL; (* the setpoint in use (ramped, fill ramp, boost) *)
-    bManual : BOOL;
-    bPvBad : BOOL;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    stPvBad : ST_ProtectionSts;
-    ePhase : E_LoopPhase;
-    ePresetUsed : E_LoopPreset;
-    bAtSetpoint : BOOL;
-    bFilled : BOOL;
-    bSleeping : BOOL;
-    bFlowLimiting : BOOL;
-    nHuntCount : INT;
-    stHighPv : ST_ProtectionSts;
-    stLowAtMax : ST_ProtectionSts;
-    stFill : ST_ProtectionSts;
-    stNotReaching : ST_ProtectionSts;
-    stHunting : ST_ProtectionSts;
+    eState : E_State; (* what it is doing now *)
+    eErrorId : E_UtError; (* the first error since the last reset (first-out) *)
+    fSpeedSetpointPct : REAL; (* the speed asked, % *)
+    fProcessValue : REAL; (* the value under control (the flow with Flow control) *)
+    fSetpointInUse : REAL; (* the setpoint in use (ramped, fill ramp, boost) *)
+    bInManual : BOOL; (* manual speed now *)
+    bProcessValueBad : BOOL; (* the controlled value is bad *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    stProcessValueBadFault : ST_ProtectionSts; (* the controlled value is bad *)
+    eLoopPhase : E_LoopPhase; (* Idle, Filling, Control, Boost, Sleep, Fallback or Manual *)
+    eSetpointPresetInUse : E_LoopPreset; (* the preset in use: Normal, Low or High *)
+    bAtSetpoint : BOOL; (* within fAtSetpointBand of the setpoint *)
+    bPipeFilled : BOOL; (* the pipe fill is done in this run *)
+    bSleeping : BOOL; (* asleep on low demand *)
+    bFlowLimiting : BOOL; (* the speed is held back by fMaxFlow *)
+    nCrossingCount : INT; (* setpoint crossings counted in the window *)
+    stHighProcessValueFault : ST_ProtectionSts; (* the controlled value is too high *)
+    stLowAtMaxSpeedFault : ST_ProtectionSts; (* low value at the top speed: a burst or lost suction *)
+    stFillTimeoutFault : ST_ProtectionSts; (* fill timeout status *)
+    stSetpointNotReachedFault : ST_ProtectionSts; (* the setpoint is not reached *)
+    stHuntingFault : ST_ProtectionSts; (* the loop hunts (too many crossings) *)
   END_STRUCT;
 END_TYPE

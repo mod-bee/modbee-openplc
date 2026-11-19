@@ -6,9 +6,9 @@ TRUE when an IO address can be kept by the IO maps (a known source, a module of 
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `eSrc` | `E_IoSrc` |  | Where the channel is: `None` (not on this site), `Board`, `I2c`, `Field`, `Remote` |
-| in | `nModule` | `USINT` |  | The module number (0..127) |
-| out | *(result)* | `BOOL` | | TRUE when the address can be kept |
+| in | `eSource` | `E_IoSrc` |  | where the channel is: None (not on this site), Board, I2c, Field or Remote |
+| in | `nModuleNumber` | `USINT` |  | the module number within that source (0..127) |
+| out | *(result)* | `BOOL` |  | TRUE when the IO maps can keep this address |
 
 ## How it works
 

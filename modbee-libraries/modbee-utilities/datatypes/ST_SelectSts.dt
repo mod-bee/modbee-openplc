@@ -1,14 +1,14 @@
 TYPE
   ST_SelectSts : STRUCT
-    fOut : REAL;
-    fSpread : REAL;
-    nSelected : INT; (* the sensor used (1..3), 0 = a combination or none *)
-    nGoodCount : INT;
-    nDeviating : INT; (* the sensor dropped (1..3), 0 none *)
-    bGood : BOOL;
-    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    stDeviation : ST_ProtectionSts;
-    stNoAgree : ST_ProtectionSts;
+    fValue : REAL; (* the voted value; while not good per eWhenNoneGood *)
+    fSpread : REAL; (* the largest difference between usable sensors *)
+    nSensorUsed : INT; (* the sensor used (1..3), 0 = a combination or none *)
+    nSensorsGood : INT; (* usable sensors *)
+    nSensorDropped : INT; (* the sensor dropped (1..3), 0 none *)
+    bGood : BOOL; (* the voted value can be trusted *)
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    stDeviationFault : ST_ProtectionSts; (* deviation protection status *)
+    stNoAgreementFault : ST_ProtectionSts; (* no-agreement protection status *)
   END_STRUCT;
 END_TYPE

@@ -1,15 +1,15 @@
 TYPE
   ST_AlarmData : STRUCT
-    bCmdAck : BOOL; (* HMI commands, once per write, cleared by the block *)
-    bCmdReset : BOOL;
-    bCmdShelve : BOOL;
-    bCmdUnshelve : BOOL;
-    bCmdOutOfService : BOOL;
-    bCmdInService : BOOL;
-    bCmdResetCount : BOOL;
-    bGrpAck : BOOL; (* written only by FB_Annunciator *)
-    set : ST_AlarmSettings;
-    sts : ST_AlarmSts;
-    det : ST_AlarmDet;
+    bCmdAcknowledge : BOOL; (* HMI commands, once per write, cleared by the block *)
+    bCmdResetFaults : BOOL; (* HMI: reset trips and alarms whose cause has gone (acts once, cleared by the block) *)
+    bCmdShelve : BOOL; (* HMI: shelve the alarm for set.tShelveTime (acts once) *)
+    bCmdUnshelve : BOOL; (* HMI: end the shelving (acts once) *)
+    bCmdOutOfService : BOOL; (* HMI: take the alarm out of service (acts once) *)
+    bCmdInService : BOOL; (* HMI: put the alarm back in service (acts once) *)
+    bCmdResetCounters : BOOL; (* HMI: clear sts.nRaiseCount (acts once) *)
+    bGroupAcknowledge : BOOL; (* written only by FB_Annunciator *)
+    set : ST_AlarmSettings; (* settings (kept) *)
+    sts : ST_AlarmSts; (* status *)
+    det : ST_AlarmDet; (* details *)
   END_STRUCT;
 END_TYPE

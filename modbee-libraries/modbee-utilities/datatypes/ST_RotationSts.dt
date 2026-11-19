@@ -2,13 +2,13 @@ TYPE
   ST_RotationSts : STRUCT
     fSpeed : REAL; (* in set.eSpeedUnit *)
     bRotating : BOOL; (* pulses being seen *)
-    bTooFast : BOOL; (* pulses at the scan limit (5 s) *)
-    bUnitBad : BOOL; (* eSpeedUnit / fDistPerPulse not usable: speed 0, speed checks off *)
-    stStall : ST_ProtectionSts;
-    stUnderspeed : ST_ProtectionSts;
-    stOverspeed : ST_ProtectionSts;
-    stSensor : ST_ProtectionSts;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bPulsesTooFast : BOOL; (* pulses at the scan limit (5 s) *)
+    bSpeedUnitBad : BOOL; (* eSpeedUnit / fDistancePerPulse not usable: speed 0, speed checks off *)
+    stStallFault : ST_ProtectionSts; (* no pulses while running *)
+    stUnderspeedFault : ST_ProtectionSts; (* speed below fUnderspeedBelow *)
+    stOverspeedFault : ST_ProtectionSts; (* speed above fOverspeedAbove *)
+    stPulsesWhileStoppedFault : ST_ProtectionSts; (* pulses while stopped (after the coast down): the sensor is suspect *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

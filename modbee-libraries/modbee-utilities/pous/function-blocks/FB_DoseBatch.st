@@ -1,24 +1,24 @@
 (* FB_DoseBatch EXTENDS FB_Dose — batching a quantity.
-A rising bRun, bStart or bCmdStart delivers the target (fTarget pin, 0 = set.fTarget): bFast until set.fSlowAt is
-left, then bSlow, stopping early by the in-flight quantity (set.fPreact), then set.tSettle and the result.
-set.bLearnPreact corrects the preact by half of each dose's error (doses more than 25 % off are not learned from),
-between 0 and half the target; the learned preact is written to set.fPreact at a dose's end. Delivered =
-ipActual's value (a scale), or the rise of ipMeter's total (set.bActualIsTotal). A feed that does not raise the
-delivered quantity: set.stNoFlow; a result off by more than set.fTolerance: set.stOutOfTolerance. A pause (bHold,
-bCmdHold, bInterlock FALSE, a trip) holds the feeds; bStart resumes after bCmdHold.
-Pins: FB_Dose's, ipActual, ipMeter, fTarget, refData -> FB_Dose's outputs, bFast, bSlow, fRemaining. *)
+A rising bRun, bStart or bCmdStart delivers the target (fQuantitySetpoint pin, 0 = set.fQuantitySetpoint): bFastFeed until set.fSlowFeedLast is
+left, then bSlowFeed, stopping early by the in-flight quantity (set.fStopEarlyBy), then set.tSettleTime and the result.
+set.bLearnStopEarly corrects the preact by half of each dose's error (doses more than 25 % off are not learned from),
+between 0 and half the target; the learned preact is written to set.fStopEarlyBy at a dose's end. Delivered =
+ipDelivered's value (a scale), or the rise of ipProductMeter's total (set.bDeliveredFromMeterTotal). A feed that does not raise the
+delivered quantity: set.stNoFlowFault; a result off by more than set.fToleranceQuantity: set.stOutOfToleranceFault. A pause (bPause,
+bCmdPause, bInterlock FALSE, a trip) holds the feeds; bStart resumes after bCmdPause.
+Pins: FB_Dose's, ipDelivered, ipProductMeter, fQuantitySetpoint, refData -> FB_Dose's outputs, bFastFeed, bSlowFeed, fQuantityLeft. *)
 
 FUNCTION_BLOCK FB_DoseBatch EXTENDS FB_Dose
   VAR_INPUT
-    ipActual : I_Measurement; (* delivered so far (a scale) *)
-    ipMeter : I_Meter; (* set.bActualIsTotal: the product meter *)
-    fTarget : REAL; (* 0 = set.fTarget *)
-    refData : REFERENCE TO ST_DoseBatchData;
+    ipDelivered : I_Measurement; (* delivered so far (a scale) *)
+    ipProductMeter : I_Meter; (* set.bDeliveredFromMeterTotal: the product meter *)
+    fQuantitySetpoint : REAL; (* 0 = set.fQuantitySetpoint *)
+    refData : REFERENCE TO ST_DoseBatchData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    bFast : BOOL;
-    bSlow : BOOL;
-    fRemaining : REAL;
+    bFastFeed : BOOL; (* the fast feed *)
+    bSlowFeed : BOOL; (* the slow feed *)
+    fQuantityLeft : REAL; (* quantity still to go *)
   END_VAR
   VAR RETAIN
     stKept : ST_DoseBatchSet;
@@ -62,23 +62,23 @@ METHOD PRIVATE SetWhy : E_UtError
   SetWhy := E_UtError.None;
   IF BaseSetWhy(refSet := stS) <> E_UtError.None THEN
     SetWhy := BaseSetWhy(refSet := stS);
-  ELSIF NOT (stS.fTarget >= 0.0) THEN
+  ELSIF NOT (stS.fQuantitySetpoint >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fTarget <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fQuantitySetpoint <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fSlowAt >= 0.0) THEN
+  ELSIF NOT (stS.fSlowFeedLast >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fSlowAt <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fSlowFeedLast <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fPreact >= 0.0) THEN
+  ELSIF NOT (stS.fStopEarlyBy >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fPreact <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fStopEarlyBy <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fTolerance >= 0.0) THEN
+  ELSIF NOT (stS.fToleranceQuantity >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fTolerance <= REAL#3.4E38) THEN
+  ELSIF NOT (stS.fToleranceQuantity <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.tSettle >= T#0s) THEN
+  ELSIF NOT (stS.tSettleTime >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
@@ -91,11 +91,11 @@ METHOD PRIVATE SetOk : BOOL
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
-  bPumpRun := FALSE;
-  fRate := 0.0;
+  bPumpRunCommand := FALSE;
+  fPumpSpeedPct := 0.0;
   bBusy := FALSE;
-  bFast := FALSE;
-  bSlow := FALSE;
+  bFastFeed := FALSE;
+  bSlowFeed := FALSE;
   bError := TRUE;
   eErrorId := E_UtError.NoRecord;
   eState := E_State.Fault;
@@ -108,39 +108,39 @@ IF bFirstScan THEN
     stKept := refData.set;
     nKeptLayout := cLayout;
   END_IF;
-  fPAct := refData.set.fPreact;
+  fPAct := refData.set.fStopEarlyBy;
 END_IF;
 bResetNow := Begin(refCmd := refData, refSet := refData.set, refSts := refData.sts);
 bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF bOk AND NOT bBusy THEN
-  fPAct := refData.set.fPreact;   (* a write while idle is taken *)
+  fPAct := refData.set.fStopEarlyBy;   (* a write while idle is taken *)
 END_IF;
 
 (* the delivered quantity *)
 bActGood := FALSE;
 fActV := 0.0;
-IF refData.set.bActualIsTotal THEN
-  IF ipMeter <> NULL THEN
-    fActV := LREAL_TO_REAL(ipMeter.fActTotal);
-    bActGood := ipMeter.bIsGood AND ABS(fActV) <= REAL#3.4E38;
+IF refData.set.bDeliveredFromMeterTotal THEN
+  IF ipProductMeter <> NULL THEN
+    fActV := LREAL_TO_REAL(ipProductMeter.fActTotal);
+    bActGood := ipProductMeter.bIsGood AND ABS(fActV) <= REAL#3.4E38;
   END_IF;
-ELSIF ipActual <> NULL THEN
-  fActV := ipActual.fActValue;
-  bActGood := ipActual.bIsGood AND ABS(fActV) <= REAL#3.4E38;
+ELSIF ipDelivered <> NULL THEN
+  fActV := ipDelivered.fActValue;
+  bActGood := ipDelivered.bIsGood AND ABS(fActV) <= REAL#3.4E38;
 END_IF;
 bTripHold := bTripHold OR bNoFlowTrip OR bTolTrip;
 
 bStartNow := bStartReq OR bRunEdge;
 IF bBusy AND bActGood THEN
-  IF refData.set.bActualIsTotal THEN
+  IF refData.set.bDeliveredFromMeterTotal THEN
     fDlv := REAL_TO_LREAL(fActV) - fStartRef;
   ELSE
     fDlv := REAL_TO_LREAL(fActV);
@@ -158,15 +158,15 @@ IF fTgt > 0.0 AND fPUse > 0.5 * fTgt THEN
 END_IF;
 IF NOT bBusy THEN
   IF bOk AND bStartNow AND NOT bEndReq AND bPermissive AND NOT bTripHold THEN
-    IF fTarget > 0.0 THEN
-      fTgt := fTarget;
+    IF fQuantitySetpoint > 0.0 THEN
+      fTgt := fQuantitySetpoint;
     ELSE
-      fTgt := refData.set.fTarget;
+      fTgt := refData.set.fQuantitySetpoint;
     END_IF;
     IF fTgt > 0.0 AND fTgt <= REAL#3.4E38 THEN
       bBusy := TRUE;
       bHoldLatch := FALSE;
-      IF refData.set.bActualIsTotal AND bActGood THEN
+      IF refData.set.bDeliveredFromMeterTotal AND bActGood THEN
         fStartRef := REAL_TO_LREAL(fActV);
         fDlv := 0.0;
       ELSIF bActGood THEN
@@ -175,7 +175,7 @@ IF NOT bBusy THEN
         fDlv := 0.0;
       END_IF;
       fRiseRef := fDlv;
-      IF refData.set.fSlowAt >= fTgt THEN
+      IF refData.set.fSlowFeedLast >= fTgt THEN
         nStage := 2;
       ELSE
         nStage := 1;
@@ -184,69 +184,69 @@ IF NOT bBusy THEN
   END_IF;
 ELSIF bEndReq OR NOT bOk THEN
   bBusy := FALSE;
-  refData.sts.fLastDelivered := fDlv;
-  refData.sts.fLastError := LREAL_TO_REAL(fDlv) - fTgt;
+  refData.sts.fDeliveredLastDose := fDlv;
+  refData.sts.fLastDoseError := LREAL_TO_REAL(fDlv) - fTgt;
   eEnd := EndWhy(refSet := refData.set);
 ELSE
   IF nStage < 3 AND fDlv >= REAL_TO_LREAL(fTgt - fPUse) THEN
     nStage := 3;
     tSettleAt := tNow;
-  ELSIF nStage = 1 AND refData.set.fSlowAt > 0.0 AND fDlv >= REAL_TO_LREAL(fTgt - refData.set.fSlowAt) THEN
+  ELSIF nStage = 1 AND refData.set.fSlowFeedLast > 0.0 AND fDlv >= REAL_TO_LREAL(fTgt - refData.set.fSlowFeedLast) THEN
     nStage := 2;
   END_IF;
-  IF nStage = 3 AND tNow - tSettleAt >= refData.set.tSettle THEN
+  IF nStage = 3 AND tNow - tSettleAt >= refData.set.tSettleTime THEN
     bBusy := FALSE;               (* complete *)
     bDoneNow := TRUE;
     eEnd := E_StopReason.Done;
     fErr := LREAL_TO_REAL(fDlv) - fTgt;
-    refData.sts.fLastDelivered := fDlv;
-    refData.sts.fLastError := fErr;
-    IF refData.set.bLearnPreact AND ABS(fErr) <= 0.25 * fTgt THEN
+    refData.sts.fDeliveredLastDose := fDlv;
+    refData.sts.fLastDoseError := fErr;
+    IF refData.set.bLearnStopEarly AND ABS(fErr) <= 0.25 * fTgt THEN
       fPAct := LIMIT(0.0, fPAct + 0.5 * fErr, 0.5 * fTgt);
-      refData.set.fPreact := fPAct;   (* written at a dose's end only *)
-      stKept.fPreact := fPAct;
+      refData.set.fStopEarlyBy := fPAct;   (* written at a dose's end only *)
+      stKept.fStopEarlyBy := fPAct;
     END_IF;
-    bTolCause := refData.set.fTolerance > 0.0 AND ABS(fErr) > refData.set.fTolerance;
+    bTolCause := refData.set.fToleranceQuantity > 0.0 AND ABS(fErr) > refData.set.fToleranceQuantity;
   END_IF;
 END_IF;
-bFast := FALSE;
-bSlow := FALSE;
+bFastFeed := FALSE;
+bSlowFeed := FALSE;
 tLeft := T#0s;
 IF bBusy THEN
-  bPaused := bHold OR bHoldLatch OR NOT bInterlock OR bTripHold;
-  bFast := nStage = 1 AND NOT bPaused;
-  bSlow := nStage = 2 AND NOT bPaused;
-  fRemaining := MAX(0.0, fTgt - LREAL_TO_REAL(fDlv));
+  bPaused := bPause OR bHoldLatch OR NOT bInterlock OR bTripHold;
+  bFastFeed := nStage = 1 AND NOT bPaused;
+  bSlowFeed := nStage = 2 AND NOT bPaused;
+  fQuantityLeft := MAX(0.0, fTgt - LREAL_TO_REAL(fDlv));
   IF nStage = 3 THEN
-    tLeft := refData.set.tSettle - (tNow - tSettleAt);
+    tLeft := refData.set.tSettleTime - (tNow - tSettleAt);
   END_IF;
 ELSE
   bPaused := FALSE;
-  fRemaining := 0.0;
+  fQuantityLeft := 0.0;
 END_IF;
 bRose := fDlv > fRiseRef;
 IF bRose THEN
   fDosed := fDlv - fRiseRef;
   fRiseRef := fDlv;
 END_IF;
-bFeeding := bFast OR bSlow;
+bFeeding := bFastFeed OR bSlowFeed;
 
-bNoFlowTrip := F_Protect(tNow := tNow, bCause := bBusy AND bFeeding AND NOT bRose, bResetReq := bResetNow,
-                         tRetryWindow := refData.set.tRetryWindow, stSet := refData.set.stNoFlow,
-                         stSts := refData.sts.stNoFlow, stWork := stWNoFlow);
-bTolTrip := F_Protect(tNow := tNow, bCause := bTolCause, bResetReq := bResetNow,
-                      tRetryWindow := refData.set.tRetryWindow, stSet := refData.set.stOutOfTolerance,
-                      stSts := refData.sts.stOutOfTolerance, stWork := stWTol);
+bNoFlowTrip := F_Protect(tNow := tNow, bConditionPresent := bBusy AND bFeeding AND NOT bRose, bResetRequest := bResetNow,
+                         tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stNoFlowFault,
+                         stStatus := refData.sts.stNoFlowFault, stWorking := stWNoFlow);
+bTolTrip := F_Protect(tNow := tNow, bConditionPresent := bTolCause, bResetRequest := bResetNow,
+                      tRetryCountWindow := refData.set.tRetryCountWindow, stSettings := refData.set.stOutOfToleranceFault,
+                      stStatus := refData.sts.stOutOfToleranceFault, stWorking := stWTol);
 IF bBusy AND (bMaxTrip OR bQtyEnd) THEN
-  bBusy := FALSE;                 (* the whole dose took too long, or reached fMaxQuantity *)
-  refData.sts.fLastDelivered := fDlv;
-  refData.sts.fLastError := LREAL_TO_REAL(fDlv) - fTgt;
+  bBusy := FALSE;                 (* the whole dose took too long, or reached fMaxQuantityPerDose *)
+  refData.sts.fDeliveredLastDose := fDlv;
+  refData.sts.fLastDoseError := LREAL_TO_REAL(fDlv) - fTgt;
   eEnd := EndWhy(refSet := refData.set);
-  bFast := FALSE;
-  bSlow := FALSE;
+  bFastFeed := FALSE;
+  bSlowFeed := FALSE;
 END_IF;
-refData.sts.fTargetActive := fTgt;
-refData.sts.fPreactActive := fPUse;
+refData.sts.fQuantitySetpointInUse := fTgt;
+refData.sts.fStopEarlyInUse := fPUse;
 IF nStage = 1 THEN
   ePh := E_DosePhase.Fast;
 ELSIF nStage = 2 THEN
@@ -259,9 +259,9 @@ IF bNoFlowTrip THEN
          eVTrip := E_UtError.NoFlow, bVWarn := FALSE, eVWarn := E_UtError.None, eVPhase := ePh, tVLeft := tLeft);
 ELSE
   Finish(refCmd := refData, refSet := refData.set, refSts := refData.sts, bOk := bOk, bVTrip := bTolTrip,
-         eVTrip := E_UtError.OutOfTolerance, bVWarn := stWNoFlow.bWarn OR stWTol.bWarn
-                                                       OR stWNoFlow.bBadSetting OR stWTol.bBadSetting,
-         eVWarn := SEL(stWNoFlow.bWarn, E_UtError.OutOfTolerance, E_UtError.NoFlow), eVPhase := ePh, tVLeft := tLeft);
+         eVTrip := E_UtError.OutOfTolerance, bVWarn := stWNoFlow.bWarning OR stWTol.bWarning
+                                                       OR stWNoFlow.bSettingBad OR stWTol.bSettingBad,
+         eVWarn := SEL(stWNoFlow.bWarning, E_UtError.OutOfTolerance, E_UtError.NoFlow), eVPhase := ePh, tVLeft := tLeft);
 END_IF;
 
 END_FUNCTION_BLOCK

@@ -1,19 +1,20 @@
 TYPE
   ST_FlowTotalSet : STRUCT
-    eSource : E_FlowSource;
+    eCountFrom : E_FlowSource; (* what is counted: Rate (a flow), Runtime (fNominalRate while active) or Sample *)
     eRateUnit : E_RateUnit := E_RateUnit.PerHour; (* the flow's time base (Rate) and fNominalRate's *)
-    fLowCutoff : REAL; (* |flow| below this counts as 0 *)
-    bCountReverse : BOOL; (* negative flow into tot.fTotalOut *)
-    bOnlyActive : BOOL; (* Rate: count only while bActive *)
+    fZeroBelow : REAL; (* |flow| below this counts as 0 *)
+    bCountReverseFlow : BOOL; (* negative flow into tot.fTotalReverse *)
+    bCountOnlyWhilePumpRunning : BOOL; (* Rate: count only while bPumpRunning *)
     fNominalRate : REAL; (* Runtime, and the estimate while the meter is bad *)
-    bBadEstimate : BOOL; (* count fNominalRate while bActive and the meter is bad *)
-    tRateWindow : TIME := T#10s;
-    tSampleTime : TIME := T#1m; (* Sample: the value is read every this long *)
+    bEstimateWhenBad : BOOL; (* count fNominalRate while bPumpRunning and the meter is bad *)
+    tRateWindow : TIME := T#10s; (* the rate is worked out over this window *)
+    tSampleInterval : TIME := T#1m; (* Sample: the value is read every this long *)
     bSampleAsQuantity : BOOL; (* Sample: each sample is a quantity (the value), not a rate *)
-    fBatchTarget : LREAL; (* bBatchDone when the batch reaches it (0 = off) *)
-    eInUnit : E_Unit; (* the volume unit of the flow (None = no conversion) *)
-    eOutUnit : E_Unit; (* the volume unit of every total and of the rate (None = no conversion) *)
-    stInputBad : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#5s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0);
-    bConfirmReset : BOOL; (* a total reset needs the record's bCmdConfirm in the same write *)
+    fBatchSetpoint : LREAL; (* bBatchDone when the batch reaches it (0 = off) *)
+    eMeterUnit : E_Unit; (* the volume unit of the flow (None = no conversion) *)
+    eTotalUnit : E_Unit; (* the volume unit of every total and of the rate (None = no conversion) *)
+    stMeterBadFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#5s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#5s, nMaxRetriesBeforeLockout := 0);
+    bResetNeedsConfirm : BOOL; (* a total reset needs the record's bCmdConfirmReset in the same write *)
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

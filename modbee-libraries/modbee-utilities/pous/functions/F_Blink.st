@@ -2,8 +2,8 @@
 
 FUNCTION F_Blink : BOOL
   VAR_INPUT
-    tOnTime : TIME := T#500ms;
-    tOffTime : TIME := T#500ms;
+    tOnTime : TIME := T#500ms; (* on time *)
+    tOffTime : TIME := T#500ms; (* off time *)
   END_VAR
   VAR
     nPeriod : LINT;

@@ -2,9 +2,9 @@
 
 FUNCTION F_ClockOk : BOOL
   VAR_INPUT
-    dtUtc : DT;
+    dtClockUtc : DT; (* the controller clock (UTC) *)
   END_VAR
 
-F_ClockOk := dtUtc >= DT#2020-01-01-00:00:00 AND dtUtc < DT#2100-01-01-00:00:00;
+F_ClockOk := dtClockUtc >= DT#2020-01-01-00:00:00 AND dtClockUtc < DT#2100-01-01-00:00:00;
 
 END_FUNCTION

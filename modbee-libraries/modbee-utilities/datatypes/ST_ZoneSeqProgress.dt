@@ -1,11 +1,11 @@
 TYPE
   ST_ZoneSeqProgress : STRUCT
-    bActive : BOOL;
-    bLatched : BOOL;
-    nZone : INT;
-    nPass : INT;
-    nRunOnly : INT;
-    bDoseRun : BOOL;
+    bBusy : BOOL; (* kept progress: the program was on *)
+    bLatched : BOOL; (* kept progress: the program was a latched one (started by bStart) *)
+    nZoneWatering : INT; (* kept progress: the zone watering *)
+    nPassRunning : INT; (* kept progress: the pass running *)
+    nRunOnlyZone : INT; (* kept progress: the one zone of this run (0 = the program) *)
+    bDosingThisRun : BOOL; (* kept progress: this run doses *)
     tRunTime : TIME; (* the run's tRunTime pin (0 = each zone's own) *)
   END_STRUCT;
 END_TYPE

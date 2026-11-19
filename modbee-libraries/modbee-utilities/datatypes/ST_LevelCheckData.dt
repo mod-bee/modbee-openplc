@@ -1,7 +1,7 @@
 TYPE
   ST_LevelCheckData : STRUCT
-    bCmdReset : BOOL;
-    set : ST_LevelCheckSet;
-    sts : ST_LevelCheckSts;
+    bCmdResetFaults : BOOL; (* HMI: reset trips and alarms whose cause has gone (acts once, cleared by the block) *)
+    set : ST_LevelCheckSet; (* settings (kept) *)
+    sts : ST_LevelCheckSts; (* status *)
   END_STRUCT;
 END_TYPE

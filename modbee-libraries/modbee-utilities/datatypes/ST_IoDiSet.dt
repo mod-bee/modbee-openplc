@@ -1,10 +1,10 @@
 TYPE
   ST_IoDiSet : STRUCT
-    eSrc : E_IoSrc; (* where it is wired (None = not fitted) *)
-    nModule : USINT; (* 0..127 *)
-    nCh : USINT;
-    bNc : BOOL; (* normally-closed contact, inverted here (bQ TRUE = active) *)
-    bFailSafe : BOOL; (* bQ when the channel is missing, bad or its module not fitted *)
-    tDebounce : TIME; (* a new state must hold this long (0..40.95 s, in 10 ms steps) *)
+    eSource : E_IoSrc; (* where it is wired (None = not fitted) *)
+    nModuleNumber : USINT; (* 0..127 *)
+    nChannel : USINT; (* the channel number on the module *)
+    bNormallyClosed : BOOL; (* normally-closed contact, inverted here (bActive TRUE = active) *)
+    bFailSafeState : BOOL; (* bActive when the channel is missing, bad or its module not fitted *)
+    tDebounceTime : TIME; (* a new state must hold this long (0..40.95 s, in 10 ms steps) *)
   END_STRUCT;
 END_TYPE

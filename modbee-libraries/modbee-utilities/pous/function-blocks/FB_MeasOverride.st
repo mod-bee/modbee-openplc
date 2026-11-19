@@ -1,11 +1,15 @@
+(* FB_MeasOverride — simulation and what a bad value shows. bSimulate (the record; never kept: off after a power cut)
+gives fSimulatedValue, good, a warning (Simulated). While the input is bad, set.eWhenValueBad: Pass (its value), Hold (the last
+good value) or Substitute (set.fSubstituteValue); bIsGood stays FALSE (a consumer still knows), only the value changes. *)
+
 FUNCTION_BLOCK FB_MeasOverride EXTENDS FB_Object IMPLEMENTS I_Measurement
   VAR_INPUT
-    ipIn : I_Measurement;
-    refData : REFERENCE TO ST_MeasOverrideData;
+    ipMeasurement : I_Measurement; (* the measurement block it works on (FB_AnalogIn, FB_SwitchSet, FB_Vessel ...) *)
+    refData : REFERENCE TO ST_MeasOverrideData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    fValue : REAL;
-    bGood : BOOL;
+    fValue : REAL; (* the value passed on *)
+    bGood : BOOL; (* the value can be trusted *)
   END_VAR
   VAR RETAIN
     stKept : ST_MeasOverrideSet;
@@ -22,54 +26,54 @@ FUNCTION_BLOCK FB_MeasOverride EXTENDS FB_Object IMPLEMENTS I_Measurement
 (* the first bad setting (None: all good) *)
 METHOD PRIVATE SetWhy : E_UtError
   SetWhy := E_UtError.None;
-  IF NOT (ABS(refData.set.fSubstitute) <= REAL#3.4E38) THEN
+  IF NOT (ABS(refData.set.fSubstituteValue) <= REAL#3.4E38) THEN
     SetWhy := E_UtError.ValueBad;
-  ELSIF NOT (refData.set.eOnBad = E_OnBadValue.Pass OR refData.set.eOnBad = E_OnBadValue.Hold
-             OR refData.set.eOnBad = E_OnBadValue.Substitute) THEN
+  ELSIF NOT (refData.set.eWhenValueBad = E_OnBadValue.Pass OR refData.set.eWhenValueBad = E_OnBadValue.Hold
+             OR refData.set.eWhenValueBad = E_OnBadValue.Substitute) THEN
     SetWhy := E_UtError.ChoiceBad;
   END_IF;
 END_METHOD
 
-PROPERTY PUBLIC fActValue : REAL
+PROPERTY PUBLIC fActValue : REAL    // the value in its unit (held at the last good one while bad, when so set)
   GET
     fActValue := fValue;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bIsGood : BOOL
+PROPERTY PUBLIC bIsGood : BOOL    // the value can be trusted now
   GET
     bIsGood := bGood;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bHasValue : BOOL
+PROPERTY PUBLIC bHasValue : BOOL    // a continuous value (FALSE: switches only)
   GET
     bHasValue := FALSE;
-    IF ipIn <> NULL THEN bHasValue := ipIn.bHasValue; END_IF;
+    IF ipMeasurement <> NULL THEN bHasValue := ipMeasurement.bHasValue; END_IF;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC bIsFitted : BOOL
+PROPERTY PUBLIC bIsFitted : BOOL    // the sensor is on this site (FALSE: no value, no bands, no fault)
   GET
     bIsFitted := FALSE;
-    IF ipIn <> NULL THEN bIsFitted := ipIn.bIsFitted; END_IF;
+    IF ipMeasurement <> NULL THEN bIsFitted := ipMeasurement.bIsFitted; END_IF;
   END_GET
 END_PROPERTY
-PROPERTY PUBLIC eUnit : E_Unit
+PROPERTY PUBLIC eUnit : E_Unit    // the unit of the value
   GET
     eUnit := E_Unit.None;
-    IF ipIn <> NULL THEN eUnit := ipIn.eUnit; END_IF;
+    IF ipMeasurement <> NULL THEN eUnit := ipMeasurement.eUnit; END_IF;
   END_GET
 END_PROPERTY
 METHOD PUBLIC Band : BOOL
   VAR_INPUT
-    eBand : E_Band;
+    eBand : E_Band;    // the band asked about (LowLow, Low, High, HighHigh); returns TRUE while the value is in it
   END_VAR
   Band := FALSE;
-  IF ipIn <> NULL THEN Band := ipIn.Band(eBand := eBand); END_IF;
+  IF ipMeasurement <> NULL THEN Band := ipMeasurement.Band(eBand := eBand); END_IF;
 END_METHOD
 
-IF NOT __ISVALIDREF(refData) OR ipIn = NULL THEN
+IF NOT __ISVALIDREF(refData) OR ipMeasurement = NULL THEN
   bGood := FALSE;
   bError := TRUE;
-  IF ipIn = NULL THEN eErrorId := E_UtError.NoMeasurement; ELSE eErrorId := E_UtError.NoRecord; END_IF;
+  IF ipMeasurement = NULL THEN eErrorId := E_UtError.NoMeasurement; ELSE eErrorId := E_UtError.NoRecord; END_IF;
   eState := E_State.Fault;
   RETURN;
 END_IF;
@@ -84,37 +88,37 @@ IF bFirstScan THEN
 ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
-  refData.eRefusedWhy := SetWhy();
+  refData.sts.eSettingRefusedErrorId := SetWhy();
   refData.set := stKept;
-  refData.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
 END_IF;
 IF SystemReset() THEN                // the plant reset clears a refused write
-  refData.bRefused := FALSE;
-  refData.eRefusedWhy := E_UtError.None;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
-IF ipIn.bIsGood THEN
-  fLastGood := ipIn.fActValue;
+IF ipMeasurement.bIsGood THEN
+  fLastGood := ipMeasurement.fActValue;
 END_IF;
 IF refData.bSimulate THEN
-  fValue := refData.fSimValue;
+  fValue := refData.fSimulatedValue;
   bGood := TRUE;
-ELSIF ipIn.bIsGood THEN
-  fValue := ipIn.fActValue;
+ELSIF ipMeasurement.bIsGood THEN
+  fValue := ipMeasurement.fActValue;
   bGood := TRUE;
 ELSE
   bGood := FALSE;
-  CASE refData.set.eOnBad OF
+  CASE refData.set.eWhenValueBad OF
     E_OnBadValue.Hold: fValue := fLastGood;
-    E_OnBadValue.Substitute: fValue := refData.set.fSubstitute;
+    E_OnBadValue.Substitute: fValue := refData.set.fSubstituteValue;
   ELSE
-    fValue := ipIn.fActValue;
+    fValue := ipMeasurement.fActValue;
   END_CASE;
 END_IF;
 bError := FALSE;
-bWarning := refData.bSimulate OR refData.bRefused;
+bWarning := refData.bSimulate OR refData.sts.bSettingRefused;
 IF refData.bSimulate THEN
   eErrorId := E_UtError.Simulated;
-ELSIF refData.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;

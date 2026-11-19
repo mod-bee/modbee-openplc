@@ -1,7 +1,7 @@
 TYPE
   ST_RunPauseData : STRUCT
     bCmdPause : BOOL; (* cleared by the block *)
-    bCmdResume : BOOL; (* cleared by the block *)
-    bPaused : BOOL; (* status *)
+    bCmdResumeRun : BOOL; (* cleared by the block *)
+    sts : ST_RunPauseSts; (* the status *)
   END_STRUCT;
 END_TYPE

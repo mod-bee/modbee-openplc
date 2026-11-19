@@ -1,0 +1,7 @@
+TYPE
+  ST_MotorJogSts : STRUCT
+    bJogTimeUp : BOOL; (* tMaxJogTime ended the jog: release bJogButton *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+  END_STRUCT;
+END_TYPE

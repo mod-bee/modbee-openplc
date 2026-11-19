@@ -1,6 +1,6 @@
 TYPE
   ST_StatsTot : STRUCT
-    stCur : ST_StatsCur;
-    stPrev : ST_StatsPrev;
+    stCurrentPeriod : ST_StatsCur; (* the current period (kept) *)
+    stPreviousPeriod : ST_StatsPrev; (* the previous period (kept) *)
   END_STRUCT;
 END_TYPE

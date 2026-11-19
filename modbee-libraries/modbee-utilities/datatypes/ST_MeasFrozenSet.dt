@@ -1,6 +1,7 @@
 TYPE
   ST_MeasFrozenSet : STRUCT
-    fBand : REAL := 0.1; (* a change larger than this is a change *)
-    stFrozen : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#10m, eReset := E_ResetMode.Auto, tRecover := T#10s, nMaxRetries := 3);
+    fMinChange : REAL := 0.1; (* a change larger than this is a change *)
+    stFrozenFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#10m, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

@@ -1,18 +1,18 @@
 TYPE
   ST_ProtectionWork : STRUCT
-    tCauseSince : TIME;
-    tGoneSince : TIME;
-    tWindowStart : TIME;
-    bCausePrev : BOOL;
-    bActivePrev : BOOL;
-    bActive : BOOL;
-    bLatched : BOOL;
-    bNeedsReset : BOOL;
-    bTrip : BOOL;
-    bWarn : BOOL;
-    bSignal : BOOL;
-    bReset : BOOL; (* a reset that was needed happened this scan *)
-    bCleared : BOOL; (* an operator reset cleared an AUTO / RETRY latch early this scan *)
-    bBadSetting : BOOL;
+    tConditionCameAt : TIME; (* engine memory: when the condition came (TIME()) *)
+    tConditionWentAt : TIME; (* engine memory: when the condition went *)
+    tRetryWindowStartedAt : TIME; (* engine memory: when the retry window started *)
+    bConditionLastScan : BOOL; (* engine memory: the condition on the last scan *)
+    bActiveLastScan : BOOL; (* engine memory: active on the last scan *)
+    bActive : BOOL; (* the protection acts now (warn, trip or signal) *)
+    bLatched : BOOL; (* latched: waits for a reset *)
+    bResetNeeded : BOOL; (* a reset is needed to clear it *)
+    bTripping : BOOL; (* it trips now *)
+    bWarning : BOOL; (* it warns now *)
+    bSignalling : BOOL; (* it signals now (no stop, no warning) *)
+    bResetDone : BOOL; (* a reset that was needed happened this scan *)
+    bClearedEarly : BOOL; (* an operator reset cleared an AUTO / RETRY latch early this scan *)
+    bSettingBad : BOOL; (* a setting is out of range *)
   END_STRUCT;
 END_TYPE

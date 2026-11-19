@@ -1,18 +1,18 @@
 TYPE
   ST_StepSeqSts : STRUCT
-    nActiveStep : INT;
-    nCycles : UDINT;
-    bBusy : BOOL;
-    bPaused : BOOL;
-    bStopping : BOOL;
-    bStepTimeout : BOOL;
-    nTimedOutStep : INT;
-    bRecipeBad : BOOL;
-    nConfigStep : INT; (* the step the recipe problem is in (0 = the recipe as a whole) *)
-    eLastResult : E_StopReason;
-    tElapsed : TIME;
-    tRemaining : TIME;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    nCurrentStep : INT; (* the step running now (0 = idle) *)
+    nCycleCount : UDINT; (* cycles completed since power-up *)
+    bBusy : BOOL; (* the recipe is running *)
+    bPaused : BOOL; (* paused *)
+    bStopping : BOOL; (* running the stop steps *)
+    bStepTimedOut : BOOL; (* a step timed out (held as a fault) *)
+    nTimedOutStep : INT; (* the step that timed out *)
+    bRecipeBad : BOOL; (* the recipe has a bad setting *)
+    nBadRecipeStep : INT; (* the step the recipe problem is in (0 = the recipe as a whole) *)
+    eStopReason : E_StopReason; (* how the last cycle ended *)
+    tElapsedTime : TIME; (* time in the step so far *)
+    tTimeLeft : TIME; (* time left in the step *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

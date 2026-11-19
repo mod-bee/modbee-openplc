@@ -1,8 +1,8 @@
 TYPE
   ST_LocalControlSet : STRUCT
     eModeSource : E_ModeSource := E_ModeSource.Switch; (* the selector is fitted and sets the mode *)
-    bStopInAuto : BOOL := TRUE; (* the stop button also stops it in Auto *)
-    ePowerUp : E_PowerUp; (* Off: a selector out of Off at power-up is held Off until moved *)
-    eHmiMode : E_Mode := E_Mode.Auto; (* Remote: the operator's choice while the selector is in Auto *)
+    bStopButtonInAuto : BOOL := TRUE; (* the stop button also stops it in Auto *)
+    eSelectorAtPowerUp : E_PowerUp; (* Off: a selector out of Off at power-up is held Off until moved *)
+    eHmiModeInAuto : E_Mode := E_Mode.Auto; (* Remote: the operator's choice while the selector is in Auto *)
   END_STRUCT;
 END_TYPE

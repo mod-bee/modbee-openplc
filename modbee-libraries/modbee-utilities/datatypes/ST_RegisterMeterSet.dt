@@ -1,12 +1,13 @@
 TYPE
   ST_RegisterMeterSet : STRUCT
-    fScale : REAL := 1.0; (* total units per register unit *)
-    eInUnit : E_Unit; (* the volume unit of the register (None = no conversion) *)
-    eOutUnit : E_Unit; (* the volume unit of the total (None = no conversion) *)
-    fRolloverAt : LREAL; (* the register wraps to 0 here (0 = never) *)
-    fMaxStep : LREAL; (* a larger increase in one read is a glitch (0 = no limit) *)
-    tRateWindow : TIME := T#60s;
-    stInputBad : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#30s, eReset := E_ResetMode.Auto, tRecover := T#5s, nMaxRetries := 0);
-    bConfirmReset : BOOL; (* a total reset needs the record's bCmdConfirm in the same write *)
+    fTotalPerRegisterUnit : REAL := 1.0; (* total units per register unit *)
+    eMeterUnit : E_Unit; (* the volume unit of the register (None = no conversion) *)
+    eTotalUnit : E_Unit; (* the volume unit of the total (None = no conversion) *)
+    fRegisterWrapsAt : LREAL; (* the register wraps to 0 here (0 = never) *)
+    fMaxStepPerRead : LREAL; (* a larger increase in one read is a glitch (0 = no limit) *)
+    tRateWindow : TIME := T#60s; (* the rate is worked out over this window *)
+    stMeterBadFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#30s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#5s, nMaxRetriesBeforeLockout := 0);
+    bResetNeedsConfirm : BOOL; (* a total reset needs the record's bCmdConfirmReset in the same write *)
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

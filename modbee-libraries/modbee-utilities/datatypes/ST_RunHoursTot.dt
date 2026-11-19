@@ -1,7 +1,7 @@
 TYPE
   ST_RunHoursTot : STRUCT
-    nTotalMs : LINT;
-    nServiceMs : LINT;
-    nStarts : UDINT;
+    fRunHours : LREAL; (* lifetime run hours (kept), as FB_Motor's tot.fRunHours *)
+    fRunHoursSinceService : LREAL; (* run hours since the last service (kept) *)
+    nStartCount : UDINT; (* starts, lifetime (kept) *)
   END_STRUCT;
 END_TYPE

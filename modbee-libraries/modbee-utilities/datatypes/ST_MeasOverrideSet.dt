@@ -1,6 +1,6 @@
 TYPE
   ST_MeasOverrideSet : STRUCT
-    eOnBad : E_OnBadValue;
-    fSubstitute : REAL;
+    eWhenValueBad : E_OnBadValue; (* while the sensor is bad: Pass, Hold or Substitute *)
+    fSubstituteValue : REAL; (* the value used by Substitute *)
   END_STRUCT;
 END_TYPE

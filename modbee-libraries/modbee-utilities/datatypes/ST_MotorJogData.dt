@@ -1,8 +1,6 @@
 TYPE
   ST_MotorJogData : STRUCT
-    set : ST_MotorJogSet;
-    bLimited : BOOL; (* tJogMax ended the jog: release bJog *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    set : ST_MotorJogSet; (* settings (kept) *)
+    sts : ST_MotorJogSts; (* the status *)
   END_STRUCT;
 END_TYPE

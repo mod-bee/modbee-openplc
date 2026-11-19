@@ -1,12 +1,12 @@
 TYPE
   ST_ScheduleSts : STRUCT
-    bActive : BOOL;
-    bOverridden : BOOL;
+    bScheduleActive : BOOL; (* the schedule is on now *)
+    bOverrideActive : BOOL; (* an override is on *)
     dtNextChange : DT; (* local; DT#1970-01-01-00:00:00 = none / no clock *)
     nDayOfWeek : INT; (* 1 Monday ... 7 Sunday, 0 = no clock *)
-    nInMask : DWORD; (* bit per window on now *)
-    nConfigWindow : INT; (* the first window with a bad setting (0 none) *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    nActiveWindowBits : DWORD; (* bit per window on now *)
+    nBadSettingWindow : INT; (* the first window with a bad setting (0 none) *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

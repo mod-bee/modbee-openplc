@@ -3,7 +3,7 @@
 INTERFACE I_LevelControl EXTENDS I_PartOwner
 
 
-PROPERTY fActHighHigh : REAL
+PROPERTY fActHighHighLevel : REAL    // the high-high level in use
   GET
   END_GET
 END_PROPERTY

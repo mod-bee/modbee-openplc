@@ -1,58 +1,58 @@
 (* FB_Cascade — the staging of a pump cascade on one header holding a pressure or a flow. A cascade is built from
 blocks: FB_SpeedLoop (the PID, the setpoint, sleep, the protections) drives an FB_Group of pumps (the group passes
 the loop's speed to every pump it calls: one shared speed; rotation, failover, swap, staged stop, the jockey) and
-FB_Cascade decides how many: nExtra -> FB_Group.nExtra. A fixed-speed set uses FB_SpeedLoop with Fixed control
-(its fError still compares Pv with the setpoint) and set.bVsd FALSE here.
-Pins: fSpeed (the shared speed %, the loop's fSpeed), bRun (the loop is running), nMembers (duty pumps,
-FB_Group.nDuty), nRunning (duty pumps running, FB_Group.nDutyRunning; -1 = not wired: no settled check),
-bPermissive, fError (the loop's fError: how far the value is short of the setpoint; unwired = the speed alone),
-ePhase (the loop's ePhase; unwired = Control), ipFlow (the header flow: Flow / PerPump staging and the jockey;
-unwired = none), fCapacity (FB_Group.fRunCapacity), fJockeyCapacity (FB_Group.fJockeyCapacity), bJockeyReady
-(FB_Group.bJockeyReady), refData -> nExtra (-1 = the jockey alone), plus FB_Object's outputs. The record shows
-the rule in use (eStageUsed), the jockey's turn, bPvStaging, bFlowBad and fPerPump (the flow per running pump).
+FB_Cascade decides how many: nExtraPumps -> FB_Group.nExtraMembers. A fixed-speed set uses FB_SpeedLoop with Fixed control
+(its fShortOfSetpoint still compares Pv with the setpoint) and set.bPumpsOnVsd FALSE here.
+Pins: fSpeedSetpointPct (the shared speed %, the loop's fSpeedSetpointPct), bLoopRunning (the loop is running), nDutyPumps (duty pumps,
+FB_Group.nDutyMembers), nDutyPumpsRunning (duty pumps running, FB_Group.nDutyMembersRunning; -1 = not wired: no settled check),
+bPermissive, fShortOfSetpoint (the loop's fShortOfSetpoint: how far the value is short of the setpoint; unwired = the speed alone),
+eLoopPhase (the loop's eLoopPhase; unwired = Control), ipHeaderFlow (the header flow: Flow / PerPump staging and the jockey;
+unwired = none), fRunningCapacity (FB_Group.fRunningCapacity), fJockeyCapacity (FB_Group.fJockeyCapacity), bJockeyReady
+(FB_Group.bJockeyReady), refData -> nExtraPumps (-1 = the jockey alone), plus FB_Object's outputs. The record shows
+the rule in use (eStageRuleInUse), the jockey's turn, bPressureRuleFallback, bFlowNotGood and fFlowPerPump (the flow per running pump).
 Staging, one pump at a time, only while the loop is in Control (Manual speed: none added or dropped); the need
-must last set.tStageDelay (add) or set.tDestageDelay (drop); after a change the next one waits the delay again;
-a pump is added only when the group has settled (nRunning has reached 1 + nExtra) and bPermissive is on.
-set.eStageBy:
-  Pressure  set.bVsd: add with the speed at or above set.fStageAt and the value short of the setpoint by more
-            than set.fShortBand; drop at or below set.fDestageAt (set it to the loop's
-            minimum for "at the minimum only") when not short. No VSD (set.bVsd FALSE): add when the value is
-            set.fAddBand short of the setpoint, drop when it is set.fDropBand past it.
-  Flow      add above set.fAddPct % of the running capacity (fCapacity); drop below set.fDropPct % of the
+must last set.tAddPumpDelay (add) or set.tDropPumpDelay (drop); after a change the next one waits the delay again;
+a pump is added only when the group has settled (nDutyPumpsRunning has reached 1 + nExtraPumps) and bPermissive is on.
+set.eStageRule:
+  Pressure  set.bPumpsOnVsd: add with the speed at or above set.fAddPumpAtSpeedPct and the value short of the setpoint by more
+            than set.fAddWhenShortBy; drop at or below set.fDropPumpAtSpeedPct (set it to the loop's
+            minimum for "at the minimum only") when not short. No VSD (set.bPumpsOnVsd FALSE): add when the value is
+            set.fFixedAddWhenShortBy short of the setpoint, drop when it is set.fFixedDropWhenPastBy past it.
+  Flow      add above set.fAddAboveCapacityPct % of the running capacity (fRunningCapacity); drop below set.fDropBelowCapacityPct % of the
             capacity left after the drop.
-  PerPump   add when the flow per running pump is above set.fBepMax (and stays above set.fBepMin with one
-            more); drop below set.fBepMin (and stays below set.fBepMax with one fewer).
+  PerPump   add when the flow per running pump is above set.fAddAboveFlowPerPump (and stays above set.fDropBelowFlowPerPump with one
+            more); drop below set.fDropBelowFlowPerPump (and stays below set.fAddAboveFlowPerPump with one fewer).
 Flow / PerPump also add on the Pressure rule (the pressure is never left short: a warning PvStaging and the
 Pressure rule until the set next starts from none) and fall back to Pressure with a bad or missing meter
-(warning SensorBad) or unusable settings (no capacity known, fBepMax not above fBepMin: warning BadSetting).
+(warning SensorBad) or unusable settings (no capacity known, fAddAboveFlowPerPump not above fDropBelowFlowPerPump: warning BadSetting).
 Jockey (an FB_Group member with I_Pump role Jockey, bJockeyReady): a start from none begins with the jockey
-alone (nExtra -1; not while the loop fills the pipe). It hands over to a duty pump when it cannot keep up: the
-flow above fAddPct % of fJockeyCapacity, or the Pressure rule (short of pressure below its capacity: the
+alone (nExtraPumps -1; not while the loop fills the pipe). It hands over to a duty pump when it cannot keep up: the
+flow above fAddAboveCapacityPct % of fJockeyCapacity, or the Pressure rule (short of pressure below its capacity: the
 jockey is skipped until the next start). With one duty pump left and the demand falling (the flow below
-fDropPct % of fJockeyCapacity, or the Pressure drop rule) the set hands back to the jockey. The group keeps the
+fDropBelowCapacityPct % of fJockeyCapacity, or the Pressure drop rule) the set hands back to the jockey. The group keeps the
 jockey on until the duty pump runs.
-bRun FALSE drops them all (FB_Group's set.eStop decides at once or staged). A burst main:
+bLoopRunning FALSE drops them all (FB_Group's set.eStopOrder decides at once or staged). A burst main:
 an FB_LevelCheck (High) on the header flow meter as a part of the group. Its settings are kept by the block (a
-retained last-good copy): restored at power-up, a bad write put back (bRefused / eRefusedWhy, a warning until a
+retained last-good copy): restored at power-up, a bad write put back (bSettingRefused / eSettingRefusedErrorId, a warning until a
 reset). *)
 
 FUNCTION_BLOCK FB_Cascade EXTENDS FB_Object
   VAR_INPUT
-    fSpeed : REAL; (* the shared speed %, from the loop *)
-    bRun : BOOL; (* the loop is running *)
-    nMembers : INT := 2; (* duty pumps in the group (FB_Group.nDuty) *)
-    nRunning : INT := -1; (* FB_Group.nDutyRunning (-1 = not wired: no settled check) *)
+    fSpeedSetpointPct : REAL; (* the shared speed %, from the loop *)
+    bLoopRunning : BOOL; (* the loop is running *)
+    nDutyPumps : INT := 2; (* duty pumps in the group (FB_Group.nDutyMembers) *)
+    nDutyPumpsRunning : INT := -1; (* FB_Group.nDutyMembersRunning (-1 = not wired: no settled check) *)
     bPermissive : BOOL := TRUE; (* FALSE: no pump added *)
-    fError : REAL := 3.4E38; (* the loop's fError (unwired: the speed alone) *)
-    ePhase : E_LoopPhase := E_LoopPhase.Control; (* the loop's ePhase *)
-    ipFlow : I_Measurement; (* the header flow (unwired = none) *)
-    fCapacity : REAL; (* FB_Group.fRunCapacity *)
+    fShortOfSetpoint : REAL := 3.4E38; (* the loop's fShortOfSetpoint (unwired: the speed alone) *)
+    eLoopPhase : E_LoopPhase := E_LoopPhase.Control; (* the loop's eLoopPhase *)
+    ipHeaderFlow : I_Measurement; (* the header flow (unwired = none) *)
+    fRunningCapacity : REAL; (* FB_Group.fRunningCapacity *)
     fJockeyCapacity : REAL; (* FB_Group.fJockeyCapacity *)
     bJockeyReady : BOOL; (* FB_Group.bJockeyReady *)
-    refData : REFERENCE TO ST_CascadeData;
+    refData : REFERENCE TO ST_CascadeData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    nExtra : INT; (* -> FB_Group.nExtra (-1 = the jockey alone) *)
+    nExtraPumps : INT; (* -> FB_Group.nExtraMembers (-1 = the jockey alone) *)
   END_VAR
   VAR RETAIN
     stKept : ST_CascadeSet;
@@ -94,36 +94,36 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_CascadeSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (stS.fDestageAt >= 0.0) THEN
+  IF NOT (stS.fDropPumpAtSpeedPct >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fStageAt <= 100.0) THEN
+  ELSIF NOT (stS.fAddPumpAtSpeedPct <= 100.0) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fDestageAt < stS.fStageAt) THEN
+  ELSIF NOT (stS.fDropPumpAtSpeedPct < stS.fAddPumpAtSpeedPct) THEN
     SetWhy := E_UtError.LimitsBad;
-  ELSIF NOT (stS.tStageDelay >= T#0s) THEN
+  ELSIF NOT (stS.tAddPumpDelay >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tDestageDelay >= T#0s) THEN
+  ELSIF NOT (stS.tDropPumpDelay >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.fShortBand >= 0.0) THEN
+  ELSIF NOT (stS.fAddWhenShortBy >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fAddBand >= 0.0) THEN
+  ELSIF NOT (stS.fFixedAddWhenShortBy >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fDropBand >= 0.0) THEN
+  ELSIF NOT (stS.fFixedDropWhenPastBy >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fDropPct >= 0.0) THEN
+  ELSIF NOT (stS.fDropBelowCapacityPct >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fAddPct > stS.fDropPct) THEN
+  ELSIF NOT (stS.fAddAboveCapacityPct > stS.fDropBelowCapacityPct) THEN
     SetWhy := E_UtError.LimitsBad;
-  ELSIF NOT (stS.fAddPct <= 1000.0) THEN
+  ELSIF NOT (stS.fAddAboveCapacityPct <= 1000.0) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fBepMin >= 0.0) THEN
+  ELSIF NOT (stS.fDropBelowFlowPerPump >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fBepMax >= 0.0) THEN
+  ELSIF NOT (stS.fAddAboveFlowPerPump >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fBepMax <= 3.4E38) THEN
+  ELSIF NOT (stS.fAddAboveFlowPerPump <= 3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.eStageBy = E_StageBy.Pressure OR stS.eStageBy = E_StageBy.Flow
-             OR stS.eStageBy = E_StageBy.PerPump) THEN
+  ELSIF NOT (stS.eStageRule = E_StageBy.Pressure OR stS.eStageRule = E_StageBy.Flow
+             OR stS.eStageRule = E_StageBy.PerPump) THEN
     SetWhy := E_UtError.ChoiceBad;
   END_IF;
 END_METHOD
@@ -136,7 +136,7 @@ METHOD PRIVATE SetOk : BOOL
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
-  nExtra := 0;
+  nExtraPumps := 0;
   bError := TRUE;
   eErrorId := E_UtError.NoRecord;
   eState := E_State.Fault;
@@ -157,33 +157,33 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF SystemReset() THEN
-  refData.bRefused := FALSE;
-  refData.eRefusedWhy := E_UtError.None;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
 
 (* the flow, the rule in use *)
 bFlowOk := FALSE;
 fFlow := 0.0;
-IF ipFlow <> NULL THEN               // IEC AND does not short-circuit: test NULL on its own
-  IF ipFlow.bIsFitted AND ipFlow.bHasValue AND ipFlow.bIsGood THEN
-    fFlow := ipFlow.fActValue;
+IF ipHeaderFlow <> NULL THEN               // IEC AND does not short-circuit: test NULL on its own
+  IF ipHeaderFlow.bIsFitted AND ipHeaderFlow.bHasValue AND ipHeaderFlow.bIsGood THEN
+    fFlow := ipHeaderFlow.fActValue;
     bFlowOk := fFlow = fFlow AND ABS(fFlow) <= 3.4E38;
   END_IF;
 END_IF;
-IF nRunning > 0 THEN fRunD := INT_TO_REAL(nRunning); ELSE fRunD := INT_TO_REAL(MAX(0, 1 + nExtra)); END_IF;
-eCrit := refData.set.eStageBy;
+IF nDutyPumpsRunning > 0 THEN fRunD := INT_TO_REAL(nDutyPumpsRunning); ELSE fRunD := INT_TO_REAL(MAX(0, 1 + nExtraPumps)); END_IF;
+eCrit := refData.set.eStageRule;
 bCfgWarn := FALSE;
-refData.bFlowBad := eCrit <> E_StageBy.Pressure AND NOT bFlowOk;
-IF refData.bFlowBad THEN
+refData.sts.bFlowNotGood := eCrit <> E_StageBy.Pressure AND NOT bFlowOk;
+IF refData.sts.bFlowNotGood THEN
   eCrit := E_StageBy.Pressure;       // the meter has failed: stage on pressure
-ELSIF (eCrit = E_StageBy.Flow AND fRunD > 0.0 AND NOT (fCapacity > 0.0))
-      OR (eCrit = E_StageBy.PerPump AND NOT (refData.set.fBepMax > refData.set.fBepMin)) THEN
+ELSIF (eCrit = E_StageBy.Flow AND fRunD > 0.0 AND NOT (fRunningCapacity > 0.0))
+      OR (eCrit = E_StageBy.PerPump AND NOT (refData.set.fAddAboveFlowPerPump > refData.set.fDropBelowFlowPerPump)) THEN
   eCrit := E_StageBy.Pressure;
   bCfgWarn := TRUE;
 ELSIF bPvForced THEN
@@ -191,66 +191,66 @@ ELSIF bPvForced THEN
 END_IF;
 
 (* the staging conditions *)
-bWired := fError < 1.0E37;
-bShort := bWired AND fError > refData.set.fShortBand;
-IF refData.set.bVsd THEN
-  bPvAdd := fSpeed >= refData.set.fStageAt AND (bShort OR NOT bWired);
-  bPvDrop := fSpeed <= refData.set.fDestageAt AND NOT bShort;
+bWired := fShortOfSetpoint < 1.0E37;
+bShort := bWired AND fShortOfSetpoint > refData.set.fAddWhenShortBy;
+IF refData.set.bPumpsOnVsd THEN
+  bPvAdd := fSpeedSetpointPct >= refData.set.fAddPumpAtSpeedPct AND (bShort OR NOT bWired);
+  bPvDrop := fSpeedSetpointPct <= refData.set.fDropPumpAtSpeedPct AND NOT bShort;
 ELSE
-  bPvAdd := bWired AND fError > refData.set.fAddBand;
-  bPvDrop := bWired AND fError < -refData.set.fDropBand;
+  bPvAdd := bWired AND fShortOfSetpoint > refData.set.fFixedAddWhenShortBy;
+  bPvDrop := bWired AND fShortOfSetpoint < -refData.set.fFixedDropWhenPastBy;
   bCfgWarn := bCfgWarn OR NOT bWired;
 END_IF;
 IF fRunD > 0.0 THEN fPerPump := fFlow / fRunD; ELSE fPerPump := 0.0; END_IF;
-bJk := nExtra < 0;
+bJk := nExtraPumps < 0;
 bAdd := FALSE;
 bDrop := FALSE;
 bHandback := FALSE;
 bFlowAdd := TRUE;
-IF bRun AND bOk AND ePhase = E_LoopPhase.Control THEN
+IF bLoopRunning AND bOk AND eLoopPhase = E_LoopPhase.Control THEN
   IF bJk THEN
     IF fJockeyCapacity > 0.0 AND bFlowOk THEN
-      bFlowAdd := fFlow > refData.set.fAddPct / 100.0 * fJockeyCapacity;
+      bFlowAdd := fFlow > refData.set.fAddAboveCapacityPct / 100.0 * fJockeyCapacity;
       bAdd := bFlowAdd OR bPvAdd;
     ELSE
       bAdd := bPvAdd;
     END_IF;
   ELSE
-    bHandback := nExtra = 0 AND bJockeyReady AND NOT bJSkip;
+    bHandback := nExtraPumps = 0 AND bJockeyReady AND NOT bJSkip;
     CASE eCrit OF
       E_StageBy.Flow:
-        bFlowAdd := fFlow > refData.set.fAddPct / 100.0 * fCapacity;
+        bFlowAdd := fFlow > refData.set.fAddAboveCapacityPct / 100.0 * fRunningCapacity;
         bAdd := bFlowAdd OR bPvAdd;
         IF fRunD > 0.0 THEN
-          bDrop := nExtra > 0 AND fFlow < refData.set.fDropPct / 100.0 * (fCapacity - fCapacity / fRunD);
+          bDrop := nExtraPumps > 0 AND fFlow < refData.set.fDropBelowCapacityPct / 100.0 * (fRunningCapacity - fRunningCapacity / fRunD);
         END_IF;
       E_StageBy.PerPump:
         IF fRunD > 0.0 THEN
-          bFlowAdd := fPerPump > refData.set.fBepMax AND fFlow / (fRunD + 1.0) > refData.set.fBepMin;
+          bFlowAdd := fPerPump > refData.set.fAddAboveFlowPerPump AND fFlow / (fRunD + 1.0) > refData.set.fDropBelowFlowPerPump;
           bAdd := bFlowAdd OR bPvAdd;
-          bDrop := nExtra > 0 AND fPerPump < refData.set.fBepMin
-                   AND (fRunD <= 1.0 OR fFlow / MAX(fRunD - 1.0, 1.0) < refData.set.fBepMax);
+          bDrop := nExtraPumps > 0 AND fPerPump < refData.set.fDropBelowFlowPerPump
+                   AND (fRunD <= 1.0 OR fFlow / MAX(fRunD - 1.0, 1.0) < refData.set.fAddAboveFlowPerPump);
         END_IF;
     ELSE
       bAdd := bPvAdd;
-      bDrop := nExtra > 0 AND bPvDrop;
+      bDrop := nExtraPumps > 0 AND bPvDrop;
     END_CASE;
     IF bHandback THEN
       IF fJockeyCapacity > 0.0 AND bFlowOk THEN
-        bDrop := fFlow < refData.set.fDropPct / 100.0 * fJockeyCapacity;
+        bDrop := fFlow < refData.set.fDropBelowCapacityPct / 100.0 * fJockeyCapacity;
       ELSE
         bDrop := bPvDrop;
       END_IF;
     END_IF;
   END_IF;
 END_IF;
-IF NOT bAdd OR nExtra >= nMembers - 1 THEN tAddSince := tNow; END_IF;
+IF NOT bAdd OR nExtraPumps >= nDutyPumps - 1 THEN tAddSince := tNow; END_IF;
 IF NOT bDrop THEN tDropSince := tNow; END_IF;
 
 (* the stage *)
-refData.tTimeLeft := T#0s;
-IF NOT bRun OR NOT bOk THEN
-  nExtra := 0;
+refData.sts.tAddOrDropTimeLeft := T#0s;
+IF NOT bLoopRunning OR NOT bOk THEN
+  nExtraPumps := 0;
 ELSE
   IF NOT bRunPrev THEN
     (* from none: the jockey first (not for a pipe fill) *)
@@ -258,52 +258,52 @@ ELSE
     bPvForced := FALSE;
     tAddSince := tNow;
     tDropSince := tNow;
-    IF bJockeyReady AND ePhase <> E_LoopPhase.Filling THEN nExtra := -1; ELSE nExtra := 0; END_IF;
+    IF bJockeyReady AND eLoopPhase <> E_LoopPhase.Filling THEN nExtraPumps := -1; ELSE nExtraPumps := 0; END_IF;
   END_IF;
-  IF nExtra < 0 AND (NOT bJockeyReady OR ePhase = E_LoopPhase.Filling) THEN
-    nExtra := 0;                     // the jockey cannot, or a pipe fill: a duty pump
+  IF nExtraPumps < 0 AND (NOT bJockeyReady OR eLoopPhase = E_LoopPhase.Filling) THEN
+    nExtraPumps := 0;                     // the jockey cannot, or a pipe fill: a duty pump
   END_IF;
-  bSettled := nRunning < 0 OR nRunning >= MAX(0, 1 + nExtra);
-  IF ePhase <> E_LoopPhase.Control THEN
+  bSettled := nDutyPumpsRunning < 0 OR nDutyPumpsRunning >= MAX(0, 1 + nExtraPumps);
+  IF eLoopPhase <> E_LoopPhase.Control THEN
     ;                                // manual speed, filling, ...: none added or dropped
-  ELSIF bAdd AND nExtra < nMembers - 1 AND bSettled AND bPermissive AND tNow - tAddSince >= refData.set.tStageDelay THEN
-    IF nExtra < 0 THEN
-      nExtra := 0;                   // hand over to a duty pump
+  ELSIF bAdd AND nExtraPumps < nDutyPumps - 1 AND bSettled AND bPermissive AND tNow - tAddSince >= refData.set.tAddPumpDelay THEN
+    IF nExtraPumps < 0 THEN
+      nExtraPumps := 0;                   // hand over to a duty pump
       IF NOT bFlowAdd THEN bJSkip := TRUE; END_IF;   // short of pressure below its capacity
     ELSE
-      nExtra := nExtra + 1;
+      nExtraPumps := nExtraPumps + 1;
       IF NOT bFlowAdd THEN bPvForced := TRUE; END_IF;   // the flow rule left the pressure short
     END_IF;
     tAddSince := tNow;
     tDropSince := tNow;
-  ELSIF bDrop AND bSettled AND tNow - tDropSince >= refData.set.tDestageDelay THEN
-    IF nExtra > 0 THEN
-      nExtra := nExtra - 1;
+  ELSIF bDrop AND bSettled AND tNow - tDropSince >= refData.set.tDropPumpDelay THEN
+    IF nExtraPumps > 0 THEN
+      nExtraPumps := nExtraPumps - 1;
     ELSIF bHandback THEN
-      nExtra := -1;                  // hand back to the jockey
+      nExtraPumps := -1;                  // hand back to the jockey
     END_IF;
     tDropSince := tNow;
     tAddSince := tNow;
-  ELSIF bAdd AND nExtra < nMembers - 1 THEN
-    refData.tTimeLeft := MAX(T#0s, refData.set.tStageDelay - (tNow - tAddSince));   (* 0: waiting to settle *)
+  ELSIF bAdd AND nExtraPumps < nDutyPumps - 1 THEN
+    refData.sts.tAddOrDropTimeLeft := MAX(T#0s, refData.set.tAddPumpDelay - (tNow - tAddSince));   (* 0: waiting to settle *)
   ELSIF bDrop THEN
-    refData.tTimeLeft := MAX(T#0s, refData.set.tDestageDelay - (tNow - tDropSince));
+    refData.sts.tAddOrDropTimeLeft := MAX(T#0s, refData.set.tDropPumpDelay - (tNow - tDropSince));
   END_IF;
-  nExtra := LIMIT(-1, nExtra, MAX(0, nMembers - 1));
+  nExtraPumps := LIMIT(-1, nExtraPumps, MAX(0, nDutyPumps - 1));
 END_IF;
-bRunPrev := bRun AND bOk;
-refData.nExtra := nExtra;
-refData.eStageUsed := eCrit;
-refData.bJockeyTurn := nExtra < 0;
-refData.bPvStaging := bPvForced;
-IF bFlowOk THEN refData.fPerPump := fPerPump; ELSE refData.fPerPump := 0.0; END_IF;
+bRunPrev := bLoopRunning AND bOk;
+refData.sts.nExtraPumps := nExtraPumps;
+refData.sts.eStageRuleInUse := eCrit;
+refData.sts.bJockeyAlone := nExtraPumps < 0;
+refData.sts.bPressureRuleFallback := bPvForced;
+IF bFlowOk THEN refData.sts.fFlowPerPump := fPerPump; ELSE refData.sts.fFlowPerPump := 0.0; END_IF;
 bError := NOT bOk;
-bWarning := NOT bError AND (refData.bRefused OR bCfgWarn OR refData.bFlowBad OR bPvForced);
+bWarning := NOT bError AND (refData.sts.bSettingRefused OR bCfgWarn OR refData.sts.bFlowNotGood OR bPvForced);
 IF NOT bOk THEN
   eErrorId := E_UtError.BadSetting;
-ELSIF refData.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
-ELSIF refData.bFlowBad THEN
+ELSIF refData.sts.bFlowNotGood THEN
   eErrorId := E_UtError.SensorBad;
 ELSIF bCfgWarn THEN
   eErrorId := E_UtError.BadSetting;
@@ -314,7 +314,7 @@ ELSE
 END_IF;
 IF bError THEN
   eState := E_State.Fault;
-ELSIF NOT bRun THEN
+ELSIF NOT bLoopRunning THEN
   eState := E_State.Idle;
 ELSE
   eState := E_State.Running;

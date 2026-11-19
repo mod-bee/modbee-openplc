@@ -1,7 +1,7 @@
 TYPE
   ST_ValveFloatData : STRUCT
-    bCmdHome : BOOL; (* home now (cleared by the block) *)
-    set : ST_ValveFloatSet;
-    sts : ST_ValveFloatSts;
+    bCmdHomeNow : BOOL; (* home now (cleared by the block) *)
+    set : ST_ValveFloatSet; (* settings (kept) *)
+    sts : ST_ValveFloatSts; (* status *)
   END_STRUCT;
 END_TYPE

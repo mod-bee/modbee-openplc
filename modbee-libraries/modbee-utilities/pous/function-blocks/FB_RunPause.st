@@ -1,12 +1,17 @@
+(* FB_RunPause — operator pause / resume of a run. bPauseRun (a rising edge, or the record's bCmdPause) pauses the run
+it belongs to; bResumeRun (or bCmdResumeRun) carries on. The pause ends with the run: a run that ends (done, aborted,
+its maximum time or FB_Run's own set.tMaxPauseBeforeEnd) leaves no pause behind for the next one (no rung work-around needed). While paused the run is paused through the part list (E_PartAction.Stop): no run command,
+no counting. *)
+
 FUNCTION_BLOCK FB_RunPause EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT
     ipRun : I_Run; (* required *)
-    bPause : BOOL R_EDGE;
-    bResume : BOOL R_EDGE;
-    refData : REFERENCE TO ST_RunPauseData;
+    bPauseRun : BOOL R_EDGE; (* rising edge: pause the run *)
+    bResumeRun : BOOL R_EDGE; (* rising edge: resume the run *)
+    refData : REFERENCE TO ST_RunPauseData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    bPaused : BOOL;
+    bPaused : BOOL; (* the run is paused *)
   END_VAR
   VAR
     ipNext : I_Part;
@@ -19,12 +24,12 @@ FUNCTION_BLOCK FB_RunPause EXTENDS FB_Object IMPLEMENTS I_Part
 
 METHOD PUBLIC Evaluate : E_PartAction
   VAR_INPUT
-    bRunning : BOOL;              // the run's equipment is running (not used: ipRun.bIsActive is the run)
-    bResetWanted : BOOL;
-    bMasked : BOOL;
+    bOwnerRunCommand : BOOL;              // the run's equipment is running (not used: ipRun.bIsBusy is the run)
+    bResetRequest : BOOL;    // the owner's reset request this scan
+    bStartMaskOn : BOOL;    // the owner's start mask is on (checks set to mask at start ignore their cause)
   END_VAR
   VAR_OUTPUT
-    eErrorId : E_UtError;
+    eErrorId : E_UtError;    // the error this part stands for (when it warns or trips)
   END_VAR
   eErrorId := E_UtError.None;
   IF NOT bCalled AND bPaused THEN
@@ -33,7 +38,7 @@ METHOD PUBLIC Evaluate : E_PartAction
     RETURN;
   END_IF;
   bCalled := FALSE;
-  IF NOT ipRun.bIsActive THEN     (* bRunning is the equipment, off while paused: ask the run itself *)
+  IF NOT ipRun.bIsBusy THEN     (* bRunning is the equipment, off while paused: ask the run itself *)
     bPaused := FALSE;             (* the pause ends with the run *)
   ELSIF bResumeReq THEN
     bPaused := FALSE;
@@ -51,9 +56,9 @@ END_METHOD
 
 METHOD PUBLIC SetNext
   VAR_INPUT
-    ipNext : I_Part;
+    ipNextPart : I_Part;    // the next part in the owner's chain
   END_VAR
-  THIS^.ipNext := ipNext;
+  THIS^.ipNext := ipNextPart;
 END_METHOD
 
 METHOD PUBLIC GetNext : I_Part
@@ -71,12 +76,12 @@ IF NOT bAdded THEN
   bAdded := TRUE;
 END_IF;
 bCalled := TRUE;
-IF bPause THEN bPauseReq := TRUE; END_IF;
-IF bResume THEN bResumeReq := TRUE; END_IF;
+IF bPauseRun THEN bPauseReq := TRUE; END_IF;
+IF bResumeRun THEN bResumeReq := TRUE; END_IF;
 IF __ISVALIDREF(refData) THEN
   IF refData.bCmdPause THEN bPauseReq := TRUE; refData.bCmdPause := FALSE; END_IF;
-  IF refData.bCmdResume THEN bResumeReq := TRUE; refData.bCmdResume := FALSE; END_IF;
-  refData.bPaused := bPaused;
+  IF refData.bCmdResumeRun THEN bResumeReq := TRUE; refData.bCmdResumeRun := FALSE; END_IF;
+  refData.sts.bPaused := bPaused;
 END_IF;
 bError := FALSE;
 bWarning := FALSE;

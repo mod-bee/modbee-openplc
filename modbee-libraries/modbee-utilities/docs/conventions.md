@@ -16,8 +16,8 @@ The names follow Beckhoff's TwinCAT 3 style, in plain IEC 61131-3:
 | `I_` | an interface: a pin that takes another block's instance | `I_Measurement` |
 
 Pins, record fields and variables start with a small letter for their type, then a
-capital: `b` BOOL (`bRun`), `n` a whole number (`nStarts`), `f` a REAL / LREAL
-(`fSpeed`), `t` TIME (`tDelay`), `d` DATE, `dt` DATE_AND_TIME (`dtClock`), `e` a list
+capital: `b` BOOL (`bRun`), `n` a whole number (`nStartCount`), `f` a REAL / LREAL
+(`fSpeed`), `t` TIME (`tDelay`), `d` DATE, `dt` DATE_AND_TIME (`dtLocalTime`), `e` a list
 (`eMode`), `st` a structure (`stConfig`), `ip` an interface (`ipMotor`), `ref` a
 record reference (`refData`), `a` an array (`aZones`), `dw` a DWORD.
 
@@ -87,19 +87,19 @@ irrigation program's ends).
 Each block with settings has a **record**: one structure `ST_<Name>Data` that holds its
 HMI commands, its settings and its status. Declare one variable of that type per block
 instance and wire it to the block's `refData` pin. Variants add a second record pin
-for their own part (`FB_MotorVsd`: `refData` and `refVsd`).
+for their own part (`FB_MotorVsd`: `refData` and `refDriveData`).
 
 The record is in groups, the same in every block:
 
 | Group | What | Who writes it |
 | --- | --- | --- |
-| `bCmd…`, `nCmd…` (top level) | HMI commands | the HMI / SCADA writes; the block acts and sets it back |
+| `bRunCommand…`, `nCommandBits…` (top level) | HMI commands | the HMI / SCADA writes; the block acts and sets it back |
 | `set` | settings | the HMI / SCADA, or the declaration |
 | `sts` | status: what it is doing, what is wrong | the block |
 | `det` | details: times left, times so far | the block |
 | `tot` | totals: hours, starts, volumes, counts | the block (kept over a power cut) |
 
-**Commands.** A command acts when it is written TRUE (or a number for an `nCmd…`), and
+**Commands.** A command acts when it is written TRUE (or a number for an `nCommandBits…`), and
 the block sets it back to FALSE (or -1). A block page says when a command acts only
 once per write even if the master keeps writing TRUE.
 
@@ -122,7 +122,7 @@ be kept itself.
 - **A bad write is put back.** Every scan the block checks `set`. A good `set` becomes
   the kept copy. A bad one (a NaN, a negative time, a value out of range, a list value
   that does not exist) is replaced by the kept copy, **the whole set at once**, and
-  `sts.bRefused` comes on: a warning `SettingRefused` until a reset.
+  `sts.bSettingRefused` comes on: a warning `SettingRefused` until a reset.
 - **No good copy.** A `set` that is bad and was never good (a bad declaration) is
   `bError` `BadSetting`. What the block does then is safe for it and is on its page:
   most do nothing, a valve goes to its safe position with every output off, a stirrer
@@ -142,20 +142,20 @@ Motors, pumps and valves are **equipment** (they extend the base `FB_Equipment`)
 Equipment always has an owner and has **no Run / Start / Stop pins**:
 
 - **Off / Hand / Auto / Out of service** is the record's `set.eMode`, kept over a power cut
-  (`set.ePowerUp := E_PowerUp.Off` forces Off at every power-up).
+  (`set.eModeAtPowerUp := E_PowerUp.Off` forces Off at every power-up).
   - **Off**: nothing runs. Switching to Off resets the trips whose cause has gone
-    (`set.bResetByOff`).
+    (`set.bOffResetsFaults`).
   - **Hand**: the record's `bCmdStart` / `bCmdStop`, or an
     [FB_LocalControl](blocks/FB_LocalControl.md) on the panel door. A start waits out
     the restart delay. Hand never resumes by itself after a power cut. No owner
-    reaches it. `set.tHandMax` (0 = none) ends a Hand run after that long (stop
+    reaches it. `set.tMaxHandRunTime` (0 = none) ends a Hand run after that long (stop
     reason `MaxRun`).
   - **Jog** (Hand only): a held jog button
     ([FB_MotorJog](blocks/FB_MotorJog.md)) runs the motor while it is held, past its
     trips, restart delay and permissive; only Off and `bInterlock` stop it. A jog is a
     panel button only, never an HMI one.
   - **Auto**: it follows its **owner**. The owner is the block whose `ip…` pin you wire
-    this instance to: a pump's `ipMotor`, a level control's `ipTarget`, a group's
+    this instance to: a pump's `ipMotor`, a level control's `ipEquipment`, a group's
     `ipMember1`, a zone's `ipValve`, a route's `ipValve1`. The owner asks every scan;
     an owner that stops asking (its rung false, the block deleted) is `OwnerLost`
     and the equipment stops. A start waits for the permissive, the restart delay, the
@@ -170,9 +170,9 @@ Equipment always has an owner and has **no Run / Start / Stop pins**:
   is `eErrorId`.
 - **After a reset** clears a trip, it runs again at once while its owner still asks
   (`set.bRestartAfterReset`, default TRUE). FALSE: the owner's request must drop and
-  come back first, for machines that must not restart unexpectedly (`sts.bMustCycle`
+  come back first, for machines that must not restart unexpectedly (`sts.bWaitRequestDrop`
   shows it is waiting).
-- **`set.bWarnNotAuto`**: a warning (`NotAuto`) while it is not in Auto and the plant is
+- **`set.bWarnWhenNotAuto`**: a warning (`NotAuto`) while it is not in Auto and the plant is
   (the `ipSystem` block in Auto; unwired: always expected in Auto).
 
 Unwired, `bInterlock` and `bPermissive` are TRUE (OK).
@@ -184,7 +184,7 @@ The owner's request reaches the equipment on its next scan (one scan later).
 are the blocks that own the equipment.
 
 **Hand and HOA.** A panel's Off / Hand / Auto selector and start / stop buttons are an
-[FB_LocalControl](blocks/FB_LocalControl.md) wired to the equipment (`ipOwner`). Where
+[FB_LocalControl](blocks/FB_LocalControl.md) wired to the equipment (`ipEquipment`). Where
 the mode comes from is its `set.eModeSource` (an `E_ModeSource`):
 - `Hmi`: the selector is not used; the mode is the equipment's own (its record, the HMI).
 - `Switch` (the default on FB_LocalControl): the selector sets the mode (Hand, Auto,
@@ -204,7 +204,7 @@ owner without that choice ignores the button.
 **What owners read.** Every equipment block offers `I_Equipment`, which includes
 `fActRunHours` (its run hours; 0 where not counted), so a group can rotate by run hours.
 A pump also offers `I_Pump`: its role (`eActRole`: `Duty`, `Jockey` or `Booster`,
-from `set.eRole`) and its capacity (`fActCapacity`, from `set.fCapacity`), read by
+from `set.ePumpRole`) and its capacity (`fActCapacity`, from `set.fFlowAtFullSpeed`), read by
 FB_Group and FB_Cascade.
 
 **The system.** Wire the [FB_SystemMode](blocks/FB_SystemMode.md) instance to every
@@ -246,21 +246,21 @@ only watches a block and changes nothing. A missing observer rung stops nothing.
 
 Two motor add-ons are neither: [FB_MotorJog](blocks/FB_MotorJog.md) works the motor's
 jog command, and [FB_MotorSimulate](blocks/FB_MotorSimulate.md) sits between the field
-feedback and the motor's `bFeedback` pin.
+feedback and the motor's `bRunFeedback` pin.
 
 ## Rows (tables)
 
 Blocks that handle a list of items take **tables**: arrays the project declares, with
 one row per item, on in-out pins. Typically one table of settings and one of live rows:
-[FB_AlarmTable](blocks/FB_AlarmTable.md) takes `aAlarmSet : ARRAY[1..8] OF ST_AlarmSet`
-and `aAlarm : ARRAY[1..8] OF ST_Alarm`.
+[FB_AlarmTable](blocks/FB_AlarmTable.md) takes `aAlarmSettings : ARRAY[1..8] OF ST_AlarmSet`
+and `aAlarms : ARRAY[1..8] OF ST_Alarm`.
 
 - Declare the arrays any size (up to the block's limit) and with any lower bound. Row 1
   is always the first element: the row number is the item's number for the HMI.
 - Tables that belong together are declared the same size. Most blocks give `bError` when they are not;
   FB_Sequencer and FB_StepSeq use the rows both tables have.
 - The project writes its part of a live row on the item's own rung (a coil on
-  `aAlarm[3].bIn`); the block writes the rest.
+  `aAlarms[3].bConditionPresent`); the block writes the rest.
 
 ## Retained data
 
@@ -293,27 +293,27 @@ Every protection in every block works the same way. Its settings are an
 
 | `ST_ProtectionSet` | Meaning |
 | --- | --- |
-| `eResponse` | `Off` (ignored), `Warn` (a warning), `Trip` (stops: `bError`), `Signal` (the owner reacts, for example a pause, with no alarm) |
-| `tDelay` | The condition must last this long |
-| `eReset` | How it clears: `Auto`, `Retry` or `Manual` (below) |
-| `tRecover` | The cause must have been gone this long before it clears |
-| `nMaxRetries` | `Retry`: trips in the window before it locks out |
+| `eActionOnFault` | `Off` (ignored), `Warn` (a warning), `Trip` (stops: `bError`), `Signal` (the owner reacts, for example a pause, with no alarm) |
+| `tTripDelay` | The condition must last this long |
+| `eResetMode` | How it clears: `Auto`, `Retry` or `Manual` (below) |
+| `tAutoRecoverAfter` | The cause must have been gone this long before it clears |
+| `nMaxRetriesBeforeLockout` | `Retry`: trips in the window before it locks out |
 
 | `ST_ProtectionSts` | Meaning |
 | --- | --- |
-| `eState` | `Clear`, `Pending` (the delay runs), `Warning`, `Tripped`, `Locked`, `Recovering`, `Signal` |
-| `nRetries` | Trips counted in the retry window |
-| `nCount` | Trips since the counter was cleared |
+| `eFaultState` | `Clear`, `Pending` (the delay runs), `Warning`, `Tripped`, `Locked`, `Recovering`, `Signal` |
+| `nRetriesUsed` | Trips counted in the retry window |
+| `nTripCount` | Trips since the counter was cleared |
 | `tTimeLeft` | The delay before it acts, or the recover wait before it clears |
 
 Reset modes:
-- **Auto**: clears once the cause has been gone for `tRecover`, and the equipment
+- **Auto**: clears once the cause has been gone for `tAutoRecoverAfter`, and the equipment
   carries on.
-- **Retry**: as Auto, but after `nMaxRetries` trips within the block's
-  `set.tRetryWindow` it locks out and needs a reset.
+- **Retry**: as Auto, but after `nMaxRetriesBeforeLockout` trips within the block's
+  `set.tRetryCountWindow` it locks out and needs a reset.
 - **Manual**: stays until a reset, taken only while the cause is gone.
 
-A reset is the record's `bCmdReset`, a `bReset` pin where the block has one, the
+A reset is the record's `bCmdResetFaults`, a `bResetFaults` pin where the block has one, the
 system's reset button (`ipSystem`), or switching the equipment to Off. A reset clears
 trips only, never totals or counts: those have their own commands.
 
@@ -331,7 +331,7 @@ at the pin. A broken wire then reads as tripped, which is the safe side.
 Measurement blocks ([FB_AnalogIn](blocks/FB_AnalogIn.md),
 [FB_SwitchSet](blocks/FB_SwitchSet.md), [FB_Vessel](blocks/FB_Vessel.md),
 [FB_SignalSelect](blocks/FB_SignalSelect.md) and the decorators) offer
-`I_Measurement`: wire the instance to another block's `ipLevel`, `ipMeas`, `ipPv`,
+`I_Measurement`: wire the instance to another block's `ipLevel`, `ipMeasurement`, `ipProcessValue`,
 `ipPressure`, `ipFlow` pin. The consumer reads its value, its health, whether it is
 fitted on this site, its unit and its switch bands. A bad measurement is never used as
 if it were good.
@@ -343,7 +343,7 @@ offer `I_Meter`: the total, the rate per hour, and its health.
 Decorators ([FB_MeasFilter](blocks/FB_MeasFilter.md),
 [FB_MeasFrozen](blocks/FB_MeasFrozen.md), [FB_MeasOverride](blocks/FB_MeasOverride.md))
 sit between a measurement and its consumers: wire the measurement to the decorator's
-`ipIn`, and the decorator to the consumers.
+`ipMeasurement`, and the decorator to the consumers.
 
 ## Shared lists
 
@@ -351,7 +351,7 @@ sit between a measurement and its consumers: wire the measurement to the decorat
 | --- | --- |
 | `E_Mode` | `Off`, `Hand`, `Auto`, `OutOfService` (motors and valves) |
 | `E_ModeSource` | `Hmi`, `Switch`, `Remote` (where the mode comes from: FB_LocalControl, FB_SystemMode) |
-| `E_PumpRole` | `Duty`, `Jockey`, `Booster` (a pump's `set.eRole`) |
+| `E_PumpRole` | `Duty`, `Jockey`, `Booster` (a pump's `set.ePumpRole`) |
 | `E_LocalChoice` | `None`, `Low`, `High`, `Forward`, `Reverse`, `Pos1`, `Pos2`, `Pos3`, `Halt` (panel choices) |
 | `E_PowerUp` | `Last` (back in the mode it had), `Off` |
 | `E_SysMode` | `Off`, `Manual`, `Auto` (the plant, FB_SystemMode) |
@@ -362,6 +362,7 @@ sit between a measurement and its consumers: wire the measurement to the decorat
 | `E_RateUnit` | `PerSec`, `PerMin`, `PerHour`, `PerDay` |
 | `E_RunResume` | `Resume`, `Restart`, `None` (a run after a power cut) |
 | `E_Band` | `None`, `LowLow`, `Low`, `High`, `HighHigh` (switch bands) |
+| `E_OnBadValue` | `Pass`, `Hold`, `Substitute`, `Stop` (what a bad value leads to: `set.eWhenValueBad` on FB_MeasOverride and FB_SpeedLoop) |
 | `E_Unit` | `None`, `Bar`, `KPa`, `Psi`, `MetreH2O`, `LitrePerSec`, `LitrePerMin`, `M3PerHour`, `GalPerMin`, `Litre`, `M3`, `MegaLitre`, `Gallon`, `DegC`, `DegF`, `Kelvin`, `Mm`, `Cm`, `Metre`, `Inch`, `Foot`, `Percent`, `Amp`, `Hertz`, `KW`, `M3PerDay`, `MegaLitrePerDay`, `Kg`, `Tonne` |
 | `E_UnitKind` | `None`, `Pressure`, `Flow`, `Volume`, `Temperature`, `Length`, `Percent`, `Current`, `Frequency`, `Power`, `Mass` |
 | `E_IoSrc`, `E_IoKind`, `E_IoQ` | the IO map's sources, kinds and channel qualities ([FB_IoMapIn](blocks/FB_IoMapIn.md)) |

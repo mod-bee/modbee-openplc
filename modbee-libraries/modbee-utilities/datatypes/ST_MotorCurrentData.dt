@@ -1,7 +1,7 @@
 TYPE
   ST_MotorCurrentData : STRUCT
-    bCmdReset : BOOL; (* reset its trips whose cause has gone (cleared by the block) *)
-    set : ST_MotorCurrentSet;
-    sts : ST_MotorCurrentSts;
+    bCmdResetFaults : BOOL; (* reset its trips whose cause has gone (cleared by the block) *)
+    set : ST_MotorCurrentSet; (* settings (kept) *)
+    sts : ST_MotorCurrentSts; (* status *)
   END_STRUCT;
 END_TYPE

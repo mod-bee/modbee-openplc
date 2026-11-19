@@ -1,26 +1,26 @@
 (* FB_Stages — the extra level stages of a pump station. Stage 1 is FB_LevelControl's own start / stop; this block
-adds stages 2..4 and tells an FB_Group how many more pumps to call (nExtra -> FB_Group.nExtra). Stage n is on from
-its start point until its stop point: Empty starts above and stops below (fStart > fStop), Fill starts below and
-stops above (fStart < fStop); a stage the wrong way round, not a number, or both 0 is not used. Stages 2 and 3
-call one pump each; stage 4 calls every remaining pump of a station of more than 3 (nMembers). bRun FALSE (the
+adds stages 2..4 and tells an FB_Group how many more pumps to call (nExtraPumps -> FB_Group.nExtraMembers). Stage n is on from
+its start point until its stop point: Empty starts above and stops below (fStartLevel > fStopLevel), Fill starts below and
+stops above (fStartLevel < fStopLevel); a stage the wrong way round, not a number, or both 0 is not used. Stages 2 and 3
+call one pump each; stage 4 calls every remaining pump of a station of more than 3 (nPumps). bLevelControlRunning FALSE (the
 level control not running: off, level not trusted, inhibited) drops every stage. A bad level drops them too.
-bDemand (FB_LevelControl.bDemandActive): while a demand runs, at least set.nDemandPumps pumps run.
-Pins: ipLevel, eMode (the level control's), bRun, nMembers, bRunAll (every pump: FB_LevelFloats.bRunAll, the
-overflow backup), bDemand, refData -> nExtra, plus FB_Object's outputs. Its
+bDemandActive (FB_LevelControl.bDemandActive): while a demand runs, at least set.nDemandPumps pumps run.
+Pins: ipLevel, eControlMode (the level control's), bLevelControlRunning, nPumps, bRunAllPumps (every pump: FB_LevelFloats.bRunAllPumps, the
+overflow backup), bDemandActive, refData -> nExtraPumps, plus FB_Object's outputs. Its
 settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back. *)
 
 FUNCTION_BLOCK FB_Stages EXTENDS FB_Object
   VAR_INPUT
     ipLevel : I_Measurement; (* required *)
-    eMode : E_LevelMode; (* Empty (sump) or Fill (tank): the level control's *)
-    bRun : BOOL; (* the stages may act (the level control is running) *)
-    nMembers : INT := 2; (* pumps in the station *)
-    bRunAll : BOOL; (* every pump (FB_LevelFloats.bRunAll: the overflow backup) *)
-    bDemand : BOOL; (* a demand runs (FB_LevelControl.bDemandActive) *)
-    refData : REFERENCE TO ST_StagesData;
+    eControlMode : E_LevelMode; (* Empty (sump) or Fill (tank): the level control's *)
+    bLevelControlRunning : BOOL; (* the stages may act (the level control is running) *)
+    nPumps : INT := 2; (* pumps in the station *)
+    bRunAllPumps : BOOL; (* every pump (FB_LevelFloats.bRunAllPumps: the overflow backup) *)
+    bDemandActive : BOOL; (* a demand runs (FB_LevelControl.bDemandActive) *)
+    refData : REFERENCE TO ST_StagesData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    nExtra : INT; (* -> FB_Group.nExtra *)
+    nExtraPumps : INT; (* -> FB_Group.nExtraMembers *)
   END_VAR
   VAR RETAIN
     stKept : ST_StagesSet;
@@ -57,7 +57,7 @@ METHOD PRIVATE SetWhy : E_UtError
   END_IF;
   FOR nI := 2 TO 4 DO
     IF SetWhy = E_UtError.None
-       AND NOT (ABS(stS.aStage[nI].fStart) <= REAL#3.4E38 AND ABS(stS.aStage[nI].fStop) <= REAL#3.4E38) THEN
+       AND NOT (ABS(stS.aExtraPumpLevels[nI].fStartLevel) <= REAL#3.4E38 AND ABS(stS.aExtraPumpLevels[nI].fStopLevel) <= REAL#3.4E38) THEN
       SetWhy := E_UtError.ValueBad;
     END_IF;
   END_FOR;
@@ -71,7 +71,7 @@ METHOD PRIVATE SetOk : BOOL
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) OR ipLevel = NULL THEN
-  nExtra := 0;
+  nExtraPumps := 0;
   bError := TRUE;
   IF ipLevel = NULL THEN eErrorId := E_UtError.NoMeasurement; ELSE eErrorId := E_UtError.NoRecord; END_IF;
   eState := E_State.Fault;
@@ -89,51 +89,51 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOkSet := TRUE;
 END_IF;
 IF SystemReset() THEN                // the plant reset clears a refused write
-  refData.bRefused := FALSE;
-  refData.eRefusedWhy := E_UtError.None;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
-bEmpty := eMode = E_LevelMode.Empty;
+bEmpty := eControlMode = E_LevelMode.Empty;
 bGood := ipLevel.bIsGood;
 fLevel := ipLevel.fActValue;
 FOR nS := 2 TO 4 DO
-  bUsable := (bEmpty AND refData.set.aStage[nS].fStart > refData.set.aStage[nS].fStop)
-             OR (NOT bEmpty AND refData.set.aStage[nS].fStart < refData.set.aStage[nS].fStop);
-  IF NOT bRun OR NOT bUsable OR NOT bGood OR NOT (fLevel = fLevel) THEN
+  bUsable := (bEmpty AND refData.set.aExtraPumpLevels[nS].fStartLevel > refData.set.aExtraPumpLevels[nS].fStopLevel)
+             OR (NOT bEmpty AND refData.set.aExtraPumpLevels[nS].fStartLevel < refData.set.aExtraPumpLevels[nS].fStopLevel);
+  IF NOT bLevelControlRunning OR NOT bUsable OR NOT bGood OR NOT (fLevel = fLevel) THEN
     aLatch[nS] := FALSE;
   ELSIF bEmpty THEN
-    IF fLevel >= refData.set.aStage[nS].fStart THEN
+    IF fLevel >= refData.set.aExtraPumpLevels[nS].fStartLevel THEN
       aLatch[nS] := TRUE;
-    ELSIF fLevel <= refData.set.aStage[nS].fStop THEN
+    ELSIF fLevel <= refData.set.aExtraPumpLevels[nS].fStopLevel THEN
       aLatch[nS] := FALSE;
     END_IF;
-  ELSIF fLevel <= refData.set.aStage[nS].fStart THEN
+  ELSIF fLevel <= refData.set.aExtraPumpLevels[nS].fStartLevel THEN
     aLatch[nS] := TRUE;
-  ELSIF fLevel >= refData.set.aStage[nS].fStop THEN
+  ELSIF fLevel >= refData.set.aExtraPumpLevels[nS].fStopLevel THEN
     aLatch[nS] := FALSE;
   END_IF;
 END_FOR;
-nExtra := BOOL_TO_INT(aLatch[2]) + BOOL_TO_INT(aLatch[3]);
-IF aLatch[4] AND nMembers > 3 THEN
-  nExtra := nExtra + nMembers - 3;   (* stage 4: every remaining pump *)
+nExtraPumps := BOOL_TO_INT(aLatch[2]) + BOOL_TO_INT(aLatch[3]);
+IF aLatch[4] AND nPumps > 3 THEN
+  nExtraPumps := nExtraPumps + nPumps - 3;   (* stage 4: every remaining pump *)
 END_IF;
-IF bRun AND bDemand AND nExtra < refData.set.nDemandPumps - 1 THEN
-  nExtra := refData.set.nDemandPumps - 1;   (* a demand runs at least nDemandPumps *)
+IF bLevelControlRunning AND bDemandActive AND nExtraPumps < refData.set.nDemandPumps - 1 THEN
+  nExtraPumps := refData.set.nDemandPumps - 1;   (* a demand runs at least nDemandPumps *)
 END_IF;
-IF bRunAll THEN
-  nExtra := nMembers - 1;         (* the overflow backup: every pump *)
+IF bRunAllPumps THEN
+  nExtraPumps := nPumps - 1;         (* the overflow backup: every pump *)
 END_IF;
-nExtra := LIMIT(0, nExtra, MAX(0, nMembers - 1));
-refData.nExtra := nExtra;
+nExtraPumps := LIMIT(0, nExtraPumps, MAX(0, nPumps - 1));
+refData.sts.nExtraPumps := nExtraPumps;
 bError := FALSE;
-bWarning := refData.bRefused;
-IF refData.bRefused THEN eErrorId := E_UtError.SettingRefused; ELSE eErrorId := E_UtError.None; END_IF;
-IF nExtra > 0 THEN eState := E_State.Running; ELSE eState := E_State.Idle; END_IF;
+bWarning := refData.sts.bSettingRefused;
+IF refData.sts.bSettingRefused THEN eErrorId := E_UtError.SettingRefused; ELSE eErrorId := E_UtError.None; END_IF;
+IF nExtraPumps > 0 THEN eState := E_State.Running; ELSE eState := E_State.Idle; END_IF;
 bFirstScan := FALSE;
 
 END_FUNCTION_BLOCK

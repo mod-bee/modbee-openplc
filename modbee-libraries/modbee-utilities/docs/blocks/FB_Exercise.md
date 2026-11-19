@@ -8,15 +8,15 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `ipOwner` | `I_PartOwner` |  | required: the level control, or the valve. The owner's instance |
-| in | `bExercise` | `BOOL R_EDGE` |  | run one now Acts on its rising edge. |
-| in | `refData` | `REFERENCE TO ST_ExerciseData` |  | Its record (a variable of this type) |
-| in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
-| out | `bExercising` | `BOOL` |  | An exercise run is asked now |
-| out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
+| in | `ipOwner` | `I_PartOwner` |  | required: the level control, or the valve. An instance of a block that offers I_PartOwner (FB_Alarm, FB_AlarmBeacon, FB_AlarmTable, FB_AnalogIn, FB_AnalogOut, ...) |
+| in | `bExerciseNow` | `BOOL R_EDGE` |  | run one now |
+| in | `refData` | `REFERENCE TO ST_ExerciseData` |  | the block's record |
+| in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
+| out | `bExercising` | `BOOL` |  | an exercise run is asked now |
+| out | `bError` | `BOOL` |  | TRUE while a trip or setting fault is active *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
-| out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
-| out | `eState` | `E_State` |  | What it is doing now (Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault) *(from FB_Object)* |
+| out | `eErrorId` | `E_UtError` |  | which error: the first since the last reset, else the first warning; None when all is well *(from FB_Object)* |
+| out | `eState` | `E_State` |  | what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault *(from FB_Object)* |
 
 `bError`, `bWarning`, `eErrorId`, `eState` work as in every block: see [errors and state](../conventions.md#errors-and-state).
 
@@ -24,32 +24,37 @@ It is a **part**: it adds itself to its owner (`ipOwner`) and acts through the o
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `bCmdExercise` | `BOOL` |  | run one now (cleared by the block) |
-| `bExercising` | `BOOL` |  | status |
-| `tNextIn` | `TIME` |  |  |
-| `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
-| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
+| `bCmdExerciseNow` | `BOOL` |  | run one now (cleared by the block) |
 
 **Settings `set`** (`ST_ExerciseSet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `tInterval` | `TIME` | `T#7d` | 0 = off |
-| `tRun` | `TIME` | `T#30s` |  |
+| `tExerciseAfterIdle` | `TIME` | `T#7d` | 0 = off |
+| `tExerciseRunTime` | `TIME` | `T#30s` | how long each exercise run lasts |
+
+**Status `sts`** (`ST_ExerciseSts`)
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `bExercising` | `BOOL` |  | an exercise run is asked now |
+| `tNextExerciseTimeLeft` | `TIME` |  | time until the next exercise run |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and the last good value put back (until a reset) |
+| `eSettingRefusedErrorId` | `E_UtError` |  | why the last write was refused (cleared with bSettingRefused) |
 
 ## How it works
 
-Keeps idle equipment from seizing: after `set.tInterval` with its owner not running, it asks the owner for a run of `set.tRun`. Its owner (`ipOwner`) is a block that honours a part's Request:
+Keeps idle equipment from seizing: after `set.tExerciseAfterIdle` with its owner not running, it asks the owner for a run of `set.tExerciseRunTime`. Its owner (`ipOwner`) is a block that honours a part's Request:
 
 ```
   FB_LevelControl  the run goes through its pump or group, so the group's rotation exercises each member in turn
                    (a pump always has an owner, so a pump's exercise is its level control's)
-  a valve          FB_Valve, FB_ValveLatch, FB_ValveMotor, FB_Valve3Pos (to set.nAutoPos), FB_ValveMod,
-                   FB_ValveFloat (fully open): opened in Auto for tRun, then back to where its owner wants it;
+  a valve          FB_Valve, FB_ValveLatch, FB_ValveMotor, FB_Valve3Pos (to set.nAutoPosition), FB_ValveMod,
+                   FB_ValveFloat (fully open): opened in Auto for tExerciseRunTime, then back to where its owner wants it;
                    the interlock, trips and the permissive still apply, and an owner's own request wins
 ```
 
-`bExercise` (a rising edge) or `bCmdExercise` runs one now. Any run by the owner restarts the interval; `set.tInterval` 0 = off. The interval counts power-on time only (no clock).
+`bExerciseNow` (a rising edge) or `bCmdExerciseNow` runs one now. Any run by the owner restarts the interval; `set.tExerciseAfterIdle` 0 = off. The interval counts power-on time only (no clock).
 
 ## Example
 
@@ -60,6 +65,6 @@ Exercise the pumps of a station once a week.
 | `ipOwner` | `fbLevelCtl` (the FB_LevelControl) |
 | `refData` | `stExercise` |
 
-Set `stExercise.set.tInterval := T#7d` and `tRun`.
+Set `stExercise.set.tExerciseAfterIdle := T#7d` and `tExerciseRunTime`.
 
 **Back to** [the index](../README.md).

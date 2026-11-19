@@ -2,33 +2,33 @@
 open (not closed). An owner (a PID loop such as FB_SpeedLoop, a zone, a route) drives it through
 I_Equipment.Request: bRun = open, fSpeed = the position % (none: 100 %).
 
-Pins: ipPosFb (I_Measurement, the position feedback in %; NULL = the variant's travel estimate), bOpenLs /
-bClosedLs (end switches, with set.bUseOpenLs / bUseClosedLs), refData -> fPosition (the position in use: the
+Pins: ipPositionFeedback (I_Measurement, the position feedback in %; NULL = the variant's travel estimate), bOpenLimitSwitch /
+bClosedLimitSwitch (end switches, with set.bOpenLimitSwitchFitted / bClosedLimitSwitchFitted), refData -> fPositionPct (the position in use: the
 feedback when good, else the estimate; never the demand alone), bIsOpen, bIsClosed, plus FB_Equipment's
 bInterlock, bPermissive, ipSystem and FB_Object's outputs.
-Where it goes (fAim, for the variant):
-  open (bRun)                Hand: set.fHandPos (kept; on entering Hand it takes the position now: bumpless);
+Where it goes (fPositionSetpointPct, for the variant):
+  open (bRun)                Hand: set.fHandPositionPct (kept; on entering Hand it takes the position now: bumpless);
                              Auto: the owner's fSpeed (none: 100 %)
-  not open                   set.fRestPos
-  Off / interlock / a trip   set.fSafePos (< 0: stays; set.bHoldOnFault: a trip holds)
-Protections: position feedback (outside -5..105 % or not good; set.stPosFb, default Trip after 500 ms: the
-estimate takes over) and deviation (|demand - feedback| above set.fDevLimit while settled; set.stDeviation,
-default Warn after 10 s). bIsOpen / bIsClosed: an end switch, or the position past set.fOpenThreshold /
-fClosedThreshold. Exercise: an FB_Exercise part on the valve (ipOwner := the valve) opens an idle valve in Auto
-fully (100 %) for its run time. The variant moves the valve (fDemand, fEstimate, bSettled) after SUPER^().
+  not open                   set.fRestPositionPct
+  Off / interlock / a trip   set.fSafePositionPct (< 0: stays; set.bHoldWhenTripped: a trip holds)
+Protections: position feedback (outside -5..105 % or not good; set.stPositionFeedbackFault, default Trip after 500 ms: the
+estimate takes over) and deviation (|demand - feedback| above set.fDeviationAbovePct while settled; set.stDeviationFault,
+default Warn after 10 s). bIsOpen / bIsClosed: an end switch, or the position past set.fOpenAtOrAbovePct /
+fClosedAtOrBelowPct. Exercise: an FB_Exercise part on the valve (ipOwner := the valve) opens an idle valve in Auto
+fully (100 %) for its run time. The variant moves the valve (fDemandPct, fEstimatedPct, bSettled) after SUPER^().
 Settings are kept by the block (a retained last-good copy): restored at power-up, a bad write put back. *)
 
 FUNCTION_BLOCK ABSTRACT FB_ValvePos EXTENDS FB_Equipment
   VAR_INPUT
-    ipPosFb : I_Measurement; (* position feedback, %; NULL = the travel estimate *)
-    bOpenLs : BOOL;
-    bClosedLs : BOOL;
-    refData : REFERENCE TO ST_ValvePosData;
+    ipPositionFeedback : I_Measurement; (* position feedback, %; NULL = the travel estimate *)
+    bOpenLimitSwitch : BOOL; (* open end switch (TRUE = made) *)
+    bClosedLimitSwitch : BOOL; (* closed end switch (TRUE = made) *)
+    refData : REFERENCE TO ST_ValvePosData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    fPosition : REAL; (* the position in use, % (-1: not known yet) *)
-    bIsOpen : BOOL;
-    bIsClosed : BOOL;
+    fPositionPct : REAL; (* the position in use, % (-1: not known yet) *)
+    bIsOpen : BOOL; (* open: its end switch, or the travel time passed *)
+    bIsClosed : BOOL; (* closed: its end switch, or the travel time passed *)
   END_VAR
   VAR RETAIN
     stKept : ST_ValvePosSet;
@@ -72,16 +72,16 @@ METHOD PROTECTED Drive
   bAimShaped := TRUE;
   IF NOT bRun AND (eStop = E_StopReason.Off OR eStop = E_StopReason.Interlock OR eStop = E_StopReason.Fault) THEN
     bAimShaped := FALSE;
-    IF (eStop = E_StopReason.Fault AND refData.set.bHoldOnFault) OR refData.set.fSafePos < 0.0 THEN
+    IF (eStop = E_StopReason.Fault AND refData.set.bHoldWhenTripped) OR refData.set.fSafePositionPct < 0.0 THEN
       bAimHold := TRUE;
       fAim := fDemand;
     ELSE
-      fAim := LIMIT(0.0, refData.set.fSafePos, 100.0);
+      fAim := LIMIT(0.0, refData.set.fSafePositionPct, 100.0);
     END_IF;
   ELSIF NOT bRun THEN
-    fAim := LIMIT(0.0, refData.set.fRestPos, 100.0);
+    fAim := LIMIT(0.0, refData.set.fRestPositionPct, 100.0);
   ELSIF refData.set.eMode = E_Mode.Hand THEN
-    fAim := LIMIT(0.0, refData.set.fHandPos, 100.0);
+    fAim := LIMIT(0.0, refData.set.fHandPositionPct, 100.0);
   ELSIF bExercising THEN
     fAim := 100.0;                (* an exercise: the full stroke *)
   ELSIF fSpeedReq >= 0.0 AND fSpeedReq = fSpeedReq THEN
@@ -109,7 +109,7 @@ METHOD PRIVATE ProtOk : BOOL
   VAR_INPUT
     stP : REFERENCE TO ST_ProtectionSet;
   END_VAR
-  ProtOk := stP.tDelay >= T#0s AND stP.tRecover >= T#0s AND stP.nMaxRetries >= 0;
+  ProtOk := stP.tTripDelay >= T#0s AND stP.tAutoRecoverAfter >= T#0s AND stP.nMaxRetriesBeforeLockout >= 0;
 END_METHOD
 
 METHOD PRIVATE SetWhy : E_UtError
@@ -117,33 +117,33 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_ValvePosSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (stS.tRetryWindow >= T#0s) THEN
+  IF NOT (stS.tRetryCountWindow >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (ABS(stS.fSafePos) <= REAL#3.4E38) THEN
+  ELSIF NOT (ABS(stS.fSafePositionPct) <= REAL#3.4E38) THEN
     SetWhy := E_UtError.ValueBad;
-  ELSIF NOT (stS.fRestPos >= 0.0) THEN
+  ELSIF NOT (stS.fRestPositionPct >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fRestPos <= 100.0) THEN
+  ELSIF NOT (stS.fRestPositionPct <= 100.0) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fHandPos >= 0.0) THEN
+  ELSIF NOT (stS.fHandPositionPct >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fHandPos <= 100.0) THEN
+  ELSIF NOT (stS.fHandPositionPct <= 100.0) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fDeadband >= 0.0) THEN
+  ELSIF NOT (stS.fPositionDeadbandPct >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fDeadband <= 50.0) THEN
+  ELSIF NOT (stS.fPositionDeadbandPct <= 50.0) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fDevLimit >= 0.0) THEN
+  ELSIF NOT (stS.fDeviationAbovePct >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fClosedThreshold >= 0.0) THEN
+  ELSIF NOT (stS.fClosedAtOrBelowPct >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (stS.fOpenThreshold <= 100.0) THEN
+  ELSIF NOT (stS.fOpenAtOrAbovePct <= 100.0) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (stS.fClosedThreshold < stS.fOpenThreshold) THEN
+  ELSIF NOT (stS.fClosedAtOrBelowPct < stS.fOpenAtOrAbovePct) THEN
     SetWhy := E_UtError.LimitsBad;
-  ELSIF NOT (ProtOk(stP := stS.stDeviation)) THEN
+  ELSIF NOT (ProtOk(stP := stS.stDeviationFault)) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (ProtOk(stP := stS.stPosFb)) THEN
+  ELSIF NOT (ProtOk(stP := stS.stPositionFeedbackFault)) THEN
     SetWhy := E_UtError.ProtectionBad;
   END_IF;
 END_METHOD
@@ -171,16 +171,16 @@ IF bFirstScan THEN
 ELSIF SetOk(stS := refData.set) THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
 END_IF;
 
 bReset := Begin(refCmd := refData, refSet := refData.set, refSts := refData.sts);
 
 (* Hand: bumpless on entry *)
-IF refData.set.eMode = E_Mode.Hand AND eModeWas <> E_Mode.Hand AND NOT bFirstScan AND fPosition >= 0.0 THEN
-  refData.set.fHandPos := LIMIT(0.0, fPosition, 100.0);
+IF refData.set.eMode = E_Mode.Hand AND eModeWas <> E_Mode.Hand AND NOT bFirstScan AND fPositionPct >= 0.0 THEN
+  refData.set.fHandPositionPct := LIMIT(0.0, fPositionPct, 100.0);
 END_IF;
 eModeWas := refData.set.eMode;
 
@@ -188,53 +188,53 @@ eModeWas := refData.set.eMode;
 bFbFit := FALSE;
 fFbV := 0.0;
 bFbBad := FALSE;
-IF ipPosFb <> NULL THEN
-  IF ipPosFb.bIsFitted THEN
+IF ipPositionFeedback <> NULL THEN
+  IF ipPositionFeedback.bIsFitted THEN
     bFbFit := TRUE;
-    fFbV := ipPosFb.fActValue;
-    bFbBad := NOT ipPosFb.bIsGood OR NOT (fFbV = fFbV) OR fFbV < -5.0 OR fFbV > 105.0;
+    fFbV := ipPositionFeedback.fActValue;
+    bFbBad := NOT ipPositionFeedback.bIsGood OR NOT (fFbV = fFbV) OR fFbV < -5.0 OR fFbV > 105.0;
   END_IF;
 END_IF;
 bFbOk := bFbFit AND NOT bFbBad;
-F_Protect(tNow := tNow, bCause := bFbFit AND bFbBad, bResetReq := bReset, tRetryWindow := refData.set.tRetryWindow,
-          stSet := refData.set.stPosFb, stSts := refData.sts.stPosFb, stWork := stWPosFb);
-F_Protect(tNow := tNow, bCause := bFbOk AND bSettled AND ABS(fDemand - fFbV) > refData.set.fDevLimit,
-          bResetReq := bReset, tRetryWindow := refData.set.tRetryWindow,
-          stSet := refData.set.stDeviation, stSts := refData.sts.stDeviation, stWork := stWDev);
+F_Protect(tNow := tNow, bConditionPresent := bFbFit AND bFbBad, bResetRequest := bReset, tRetryCountWindow := refData.set.tRetryCountWindow,
+          stSettings := refData.set.stPositionFeedbackFault, stStatus := refData.sts.stPositionFeedbackFault, stWorking := stWPosFb);
+F_Protect(tNow := tNow, bConditionPresent := bFbOk AND bSettled AND ABS(fDemand - fFbV) > refData.set.fDeviationAbovePct,
+          bResetRequest := bReset, tRetryCountWindow := refData.set.tRetryCountWindow,
+          stSettings := refData.set.stDeviationFault, stStatus := refData.sts.stDeviationFault, stWorking := stWDev);
 IF bFbOk THEN
-  fPosition := LIMIT(0.0, fFbV, 100.0);
+  fPositionPct := LIMIT(0.0, fFbV, 100.0);
 ELSE
-  fPosition := fEstimate;
+  fPositionPct := fEstimate;
 END_IF;
-bLsO := refData.set.bUseOpenLs AND bOpenLs;
-bLsC := refData.set.bUseClosedLs AND bClosedLs;
-bIsOpen := bLsO OR (fPosition >= 0.0 AND fPosition >= refData.set.fOpenThreshold);
-bIsClosed := bLsC OR (fPosition >= 0.0 AND fPosition <= refData.set.fClosedThreshold);
+bLsO := refData.set.bOpenLimitSwitchFitted AND bOpenLimitSwitch;
+bLsC := refData.set.bClosedLimitSwitchFitted AND bClosedLimitSwitch;
+bIsOpen := bLsO OR (fPositionPct >= 0.0 AND fPositionPct >= refData.set.fOpenAtOrAbovePct);
+bIsClosed := bLsC OR (fPositionPct >= 0.0 AND fPositionPct <= refData.set.fClosedAtOrBelowPct);
 IF bLsO AND bLsC THEN
   bIsOpen := FALSE;               (* both made: neither *)
   bIsClosed := FALSE;
 END_IF;
 
-bTrip := stWPosFb.bTrip OR stWDev.bTrip;
-bWarn := stWPosFb.bWarn OR stWDev.bWarn;
+bTrip := stWPosFb.bTripping OR stWDev.bTripping;
+bWarn := stWPosFb.bWarning OR stWDev.bWarning;
 eOwn := E_UtError.None;
-IF stWPosFb.bTrip OR stWPosFb.bWarn THEN
+IF stWPosFb.bTripping OR stWPosFb.bWarning THEN
   eOwn := E_UtError.SensorBad;
-ELSIF stWDev.bTrip OR stWDev.bWarn THEN
+ELSIF stWDev.bTripping OR stWDev.bWarning THEN
   eOwn := E_UtError.PositionDeviation;
 END_IF;
 Finish(refCmd := refData, refSet := refData.set, refSts := refData.sts,
        bOwnTrip := bTrip, bOwnWarn := bWarn, eOwnError := eOwn, bReset := bReset, tRestartDelay := T#0s);
 
-refData.sts.fAim := fAim;
-refData.sts.fPosition := fPosition;
-refData.sts.bFbOk := bFbOk;
+refData.sts.fPositionSetpointPct := fAim;
+refData.sts.fPositionPct := fPositionPct;
+refData.sts.bFeedbackGood := bFbOk;
 IF bFbFit THEN
-  refData.sts.fFeedback := fFbV;
+  refData.sts.fFeedbackPct := fFbV;
 ELSE
-  refData.sts.fFeedback := -1.0;
+  refData.sts.fFeedbackPct := -1.0;
 END_IF;
-refData.sts.bOpen := bIsOpen;
-refData.sts.bClosed := bIsClosed;
+refData.sts.bIsOpen := bIsOpen;
+refData.sts.bIsClosed := bIsClosed;
 
 END_FUNCTION_BLOCK

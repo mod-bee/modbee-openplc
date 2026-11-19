@@ -1,10 +1,10 @@
 TYPE
   ST_SequencerSet : STRUCT
-    eStopMode : E_SeqStopMode;
-    eOnLoss : E_SeqLoss;
+    eStopOrder : E_SeqStopMode; (* Reverse (last started first stopped), AllAtOnce or Forward *)
+    eWhenStepLost : E_SeqLoss; (* a running step loses its feedback: Cascade, StopAll or DownstreamOnly *)
     bAutoRestart : BOOL; (* restart by itself after a fault stop (bRun held) *)
-    tRestartDelay : TIME := T#30s;
-    nMaxRetries : INT := 3; (* auto restarts within tRetryWindow, then a reset is needed *)
-    tRetryWindow : TIME := T#1h;
+    tAutoRestartAfter : TIME := T#30s; (* wait this long before an auto restart (bRestarting on: a pre-start horn) *)
+    nMaxRetriesBeforeLockout : INT := 3; (* auto restarts within tRetryCountWindow, then a reset is needed *)
+    tRetryCountWindow : TIME := T#1h; (* Retry counts trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

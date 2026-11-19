@@ -6,16 +6,16 @@ A run-hour and start meter with a service interval, for anything that runs.
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `bRunning` | `BOOL` |  | It runs (status) |
-| in | `bResetService` | `BOOL R_EDGE` |  | the service is done Acts on its rising edge. |
-| in | `refData` | `REFERENCE TO ST_RunHoursData` |  | Its record (a variable of this type) |
-| in | `ipSystem` | `I_SystemMode` |  | The FB_SystemMode instance (optional): system Auto, the power-up hold and the plant reset *(from FB_Object)* |
-| out | `fHours` | `LREAL` |  | lifetime |
-| out | `bServiceDue` | `BOOL` |  | a warning, ServiceDue |
-| out | `bError` | `BOOL` |  | TRUE while a trip or a setting fault is active: a fault lamp, an alarm *(from FB_Object)* |
+| in | `bRunning` | `BOOL` |  | it runs |
+| in | `bServiceDone` | `BOOL R_EDGE` |  | rising edge: the service is done |
+| in | `refData` | `REFERENCE TO ST_RunHoursData` |  | the block's record |
+| in | `ipSystem` | `I_SystemMode` |  | the system mode block; unwired: no system Auto / power-up hold / reset. An instance of a block that offers I_SystemMode (FB_SystemMode) *(from FB_Object)* |
+| out | `fRunHours` | `LREAL` |  | run hours, lifetime |
+| out | `bServiceDue` | `BOOL` |  | the service is due (a warning) |
+| out | `bError` | `BOOL` |  | TRUE while a trip or setting fault is active *(from FB_Object)* |
 | out | `bWarning` | `BOOL` |  | TRUE while a warning is active (no trip) *(from FB_Object)* |
-| out | `eErrorId` | `E_UtError` |  | Which error: the first since the last reset, else the first warning; `None` when all is well *(from FB_Object)* |
-| out | `eState` | `E_State` |  | What it is doing now (Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault) *(from FB_Object)* |
+| out | `eErrorId` | `E_UtError` |  | which error: the first since the last reset, else the first warning; None when all is well *(from FB_Object)* |
+| out | `eState` | `E_State` |  | what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault *(from FB_Object)* |
 
 `bError`, `bWarning`, `eErrorId`, `eState` work as in every block: see [errors and state](../conventions.md#errors-and-state).
 
@@ -23,36 +23,36 @@ A run-hour and start meter with a service interval, for anything that runs.
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `bCmdResetService` | `BOOL` |  | cleared by the block |
-| `bCmdPreset` | `BOOL` |  | cleared by the block |
-| `fPresetHours` | `LREAL` |  | 0 .. 1E7 |
-| `tCurrentRun` | `TIME` |  | detail |
+| `bCmdServiceDone` | `BOOL` |  | cleared by the block |
+| `bCmdPresetHours` | `BOOL` |  | cleared by the block |
+| `fPresetRunHours` | `LREAL` |  | 0 .. 1E7 |
+| `tThisRunTime` | `TIME` |  | detail |
 
 **Settings `set`** (`ST_RunHoursSet`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `fServiceInterval` | `LREAL` |  | hours between services (0 = off) |
+| `fServiceIntervalHours` | `LREAL` |  | hours between services (0 = off) |
 
 **Status `sts`** (`ST_RunHoursSts`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `fHours` | `LREAL` |  | lifetime |
-| `fServiceHours` | `LREAL` |  | since the last service |
-| `fServiceLeft` | `LREAL` |  |  |
-| `bServiceDue` | `BOOL` |  | a warning, ServiceDue |
-| `tLastRun` | `TIME` |  | written at each run end |
-| `bRefused` | `BOOL` |  | A setting write was refused and put back (until a reset) |
-| `eRefusedWhy` | `E_UtError` |  | why the last write was refused (cleared with bRefused) |
+| `fRunHours` | `LREAL` |  | lifetime |
+| `fHoursSinceService` | `LREAL` |  | since the last service |
+| `fHoursToService` | `LREAL` |  | run hours left until the next service |
+| `bServiceDue` | `BOOL` |  | the service is due (a warning, ServiceDue) |
+| `tLastRunTime` | `TIME` |  | written at each run end |
+| `bSettingRefused` | `BOOL` |  | a setting write was refused and the last good value put back (until a reset) |
+| `eSettingRefusedErrorId` | `E_UtError` |  | why the last write was refused (cleared with bSettingRefused) |
 
 **Totals `tot`** (`ST_RunHoursTot`)
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `nTotalMs` | `LINT` |  |  |
-| `nServiceMs` | `LINT` |  |  |
-| `nStarts` | `UDINT` |  | Starts, lifetime (kept) |
+| `fRunHours` | `LREAL` |  | lifetime run hours (kept), as FB_Motor's tot.fRunHours |
+| `fRunHoursSinceService` | `LREAL` |  | run hours since the last service (kept) |
+| `nStartCount` | `UDINT` |  | starts, lifetime (kept) |
 
 ## How it works
 
@@ -67,7 +67,7 @@ Run hours of a blower with a 2000-hour service interval.
 | Pin | Wire |
 | --- | --- |
 | `bRunning` | `DI_Blower_Running` |
-| `bResetService` | `DI_ServiceDone` |
+| `bServiceDone` | `DI_ServiceDone` |
 | `refData` | `stBlowerHours` |
 | `bServiceDue` | a lamp |
 

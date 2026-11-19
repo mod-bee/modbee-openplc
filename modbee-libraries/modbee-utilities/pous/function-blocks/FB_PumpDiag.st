@@ -1,26 +1,26 @@
 (* FB_PumpDiag — the likely cause of a pump's hydraulic trouble from its pressure, flow and suction. An observer: it
 only tells, the pump's FB_LevelCheck parts act.
-While bRunning (the pump runs), after set.tDelay of the same finding:
+While bPumpRunning (the pump runs), after set.tDiagnosisDelay of the same finding:
   Blocked   pressure high and flow low (a closed valve, a blocked line)
   Burst     pressure low and flow high (a burst or open line)
   Suction   suction low (a dry well, a blocked inlet)
   NoLift    pressure low and flow low (air-locked, worn, turning backwards)
 in that order. Each measurement is optional (unwired, not fitted or not good: its tests are left out); each limit
 0 is off. Not running: Normal.
-Pins: bRunning, ipPressure, ipFlow, ipSuction, refData -> eDiagnosis, plus FB_Object's outputs (bWarning while a
+Pins: bPumpRunning, ipPressure, ipFlow, ipSuction, refData -> eDiagnosis, plus FB_Object's outputs (bWarning while a
 diagnosis other than Normal stands, eErrorId PumpDiagnosis). Settings are kept (a retained last-good copy, a bad
 write put back). *)
 
 FUNCTION_BLOCK FB_PumpDiag EXTENDS FB_Object
   VAR_INPUT
-    bRunning : BOOL; (* the pump runs *)
+    bPumpRunning : BOOL; (* the pump runs *)
     ipPressure : I_Measurement; (* optional *)
     ipFlow : I_Measurement; (* optional *)
     ipSuction : I_Measurement; (* optional *)
-    refData : REFERENCE TO ST_PumpDiagData;
+    refData : REFERENCE TO ST_PumpDiagData; (* the block's record *)
   END_VAR
   VAR_OUTPUT
-    eDiagnosis : E_PumpDiag;
+    eDiagnosis : E_PumpDiag; (* Normal, Blocked, Burst, NoLift or Suction *)
   END_VAR
   VAR RETAIN
     stKept : ST_PumpDiagSet;
@@ -49,11 +49,11 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_PumpDiagSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (stS.tDelay >= T#0s) THEN
+  IF NOT (stS.tDiagnosisDelay >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.fPressureHigh <= 0.0 OR stS.fPressureLow <= 0.0 OR stS.fPressureLow < stS.fPressureHigh) THEN
+  ELSIF NOT (stS.fHighPressureAbove <= 0.0 OR stS.fLowPressureBelow <= 0.0 OR stS.fLowPressureBelow < stS.fHighPressureAbove) THEN
     SetWhy := E_UtError.LimitsBad;
-  ELSIF NOT (stS.fFlowHigh <= 0.0 OR stS.fFlowLow <= 0.0 OR stS.fFlowLow < stS.fFlowHigh) THEN
+  ELSIF NOT (stS.fHighFlowAbove <= 0.0 OR stS.fLowFlowBelow <= 0.0 OR stS.fLowFlowBelow < stS.fHighFlowAbove) THEN
     SetWhy := E_UtError.LimitsBad;
   END_IF;
 END_METHOD
@@ -98,30 +98,30 @@ bOk := SetOk(stS := refData.set);
 IF bOk THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOk := TRUE;
 END_IF;
 IF SystemReset() THEN
-  refData.bRefused := FALSE;
-  refData.eRefusedWhy := E_UtError.None;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
 
 (* the findings now *)
 bPHigh := FALSE; bPLow := FALSE; bFHigh := FALSE; bFLow := FALSE; bSLow := FALSE;
 IF Usable(ipM := ipPressure) THEN
-  bPHigh := refData.set.fPressureHigh > 0.0 AND ipPressure.fActValue >= refData.set.fPressureHigh;
-  bPLow := refData.set.fPressureLow > 0.0 AND ipPressure.fActValue <= refData.set.fPressureLow;
+  bPHigh := refData.set.fHighPressureAbove > 0.0 AND ipPressure.fActValue >= refData.set.fHighPressureAbove;
+  bPLow := refData.set.fLowPressureBelow > 0.0 AND ipPressure.fActValue <= refData.set.fLowPressureBelow;
 END_IF;
 IF Usable(ipM := ipFlow) THEN
-  bFHigh := refData.set.fFlowHigh > 0.0 AND ipFlow.fActValue >= refData.set.fFlowHigh;
-  bFLow := refData.set.fFlowLow > 0.0 AND ipFlow.fActValue <= refData.set.fFlowLow;
+  bFHigh := refData.set.fHighFlowAbove > 0.0 AND ipFlow.fActValue >= refData.set.fHighFlowAbove;
+  bFLow := refData.set.fLowFlowBelow > 0.0 AND ipFlow.fActValue <= refData.set.fLowFlowBelow;
 END_IF;
 IF Usable(ipM := ipSuction) THEN
-  bSLow := refData.set.fSuctionLow > 0.0 AND ipSuction.fActValue <= refData.set.fSuctionLow;
+  bSLow := refData.set.fLowSuctionBelow > 0.0 AND ipSuction.fActValue <= refData.set.fLowSuctionBelow;
 END_IF;
-IF NOT bRunning OR NOT bOk THEN
+IF NOT bPumpRunning OR NOT bOk THEN
   eNow := E_PumpDiag.Normal;
 ELSIF bPHigh AND bFLow THEN
   eNow := E_PumpDiag.Blocked;
@@ -141,25 +141,25 @@ IF eNow <> eSeen THEN
 END_IF;
 IF eNow = E_PumpDiag.Normal THEN
   eDiagnosis := E_PumpDiag.Normal;
-ELSIF tNow - tSeenAt >= refData.set.tDelay THEN
+ELSIF tNow - tSeenAt >= refData.set.tDiagnosisDelay THEN
   eDiagnosis := eNow;
 END_IF;
-refData.eDiagnosis := eDiagnosis;
+refData.sts.eDiagnosis := eDiagnosis;
 
 bError := NOT bOk;
-bWarning := NOT bError AND (eDiagnosis <> E_PumpDiag.Normal OR refData.bRefused);
+bWarning := NOT bError AND (eDiagnosis <> E_PumpDiag.Normal OR refData.sts.bSettingRefused);
 IF bError THEN
   eErrorId := E_UtError.BadSetting;
 ELSIF eDiagnosis <> E_PumpDiag.Normal THEN
   eErrorId := E_UtError.PumpDiagnosis;
-ELSIF refData.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;
 END_IF;
 IF bError THEN
   eState := E_State.Fault;
-ELSIF bRunning THEN
+ELSIF bPumpRunning THEN
   eState := E_State.Running;
 ELSE
   eState := E_State.Idle;

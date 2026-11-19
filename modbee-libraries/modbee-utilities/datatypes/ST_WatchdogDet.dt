@@ -1,6 +1,6 @@
 TYPE
   ST_WatchdogDet : STRUCT
-    tLastChange : TIME; (* time since the remote last changed *)
-    tDownTime : TIME; (* total time the link was dead *)
+    tSinceLastHeard : TIME; (* time since the remote last changed *)
+    tTotalOutageTime : TIME; (* total time the link was dead *)
   END_STRUCT;
 END_TYPE

@@ -1,6 +1,6 @@
 TYPE
   ST_DoseTimedData EXTENDS ST_DoseData : STRUCT
-    set : ST_DoseTimedSet;
-    sts : ST_DoseTimedSts;
+    set : ST_DoseTimedSet; (* settings (kept) *)
+    sts : ST_DoseTimedSts; (* status *)
   END_STRUCT;
 END_TYPE

@@ -1,11 +1,11 @@
 TYPE
   ST_RateSts : STRUCT
     fRate : REAL; (* the rate, per unit *)
-    bRisingFast : BOOL;
-    bFallingFast : BOOL;
-    bReady : BOOL; (* a full window of good readings has been measured *)
-    bBadInput : BOOL; (* fIn not usable now: fRate held *)
-    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bRisingFast : BOOL; (* rising faster than fRisingFastAbove *)
+    bFallingFast : BOOL; (* falling faster than fFallingFastAbove *)
+    bWindowFull : BOOL; (* a full window of good readings has been measured *)
+    bInputNotGood : BOOL; (* fIn not usable now: fRate held *)
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

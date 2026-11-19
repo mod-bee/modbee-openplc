@@ -1,6 +1,6 @@
 TYPE
   ST_VsdData : STRUCT
-    set : ST_VsdSet;
-    sts : ST_VsdSts;
+    set : ST_VsdSet; (* settings (kept) *)
+    sts : ST_VsdSts; (* status *)
   END_STRUCT;
 END_TYPE

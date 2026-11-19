@@ -6,10 +6,10 @@ The settings-check rule for a TIME: why a value is refused, or `None`.
 
 | | Pin | Type | Default | What to wire |
 | --- | --- | --- | --- | --- |
-| in | `tValue` | `TIME` |  | The value |
-| in | `tMin` | `TIME` |  | Lowest allowed |
-| in | `tMax` | `TIME` |  | Highest allowed |
-| out | *(result)* | `E_UtError` | | `None`, or why the value is refused |
+| in | `tValue` | `TIME` |  | the value to check |
+| in | `tLowestAllowed` | `TIME` |  | lowest value allowed |
+| in | `tHighestAllowed` | `TIME` |  | highest value allowed |
+| out | *(result)* | `E_UtError` |  | the first problem, None when the value is good |
 
 ## How it works
 
@@ -20,7 +20,7 @@ The settings-check rule for a TIME: why `tValue` is refused (`LimitsBad`, `Below
 | Pin | Wire |
 | --- | --- |
 | `tValue` | `tNewDelay` |
-| `tMin` | `T#0s` |
-| `tMax` | `T#1h` |
+| `tLowestAllowed` | `T#0s` |
+| `tHighestAllowed` | `T#1h` |
 
 **Back to** [the index](../README.md).

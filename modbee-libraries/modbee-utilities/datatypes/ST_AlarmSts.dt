@@ -1,17 +1,17 @@
 TYPE
   ST_AlarmSts : STRUCT
-    eIsaState : E_IsaState;
-    bActive : BOOL;
-    bUnacked : BOOL;
-    bQ : BOOL;
-    nCount : UDINT;
-    tLastDuration : TIME;
-    nSequence : UDINT; (* when it was last raised (ms), orders the first-out *)
-    dtRaisedAt : DT;
-    dtAckedAt : DT;
-    dtClearedAt : DT;
-    eCode : E_UtError;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    eAlarmState : E_IsaState; (* ISA-18.2 state: Normal, Unacked, Acked, RtnUnacked, Shelved, Suppressed, OutOfService, Latched, Locked *)
+    bConditionActive : BOOL; (* the condition now, after the delays *)
+    bUnacknowledged : BOOL; (* an alarm is waiting to be acknowledged *)
+    bAlarmOn : BOOL; (* the alarm annunciates now *)
+    nRaiseCount : UDINT; (* times raised since the count was cleared *)
+    tLastAlarmDuration : TIME; (* how long the last alarm lasted *)
+    nRaisedAtMs : UDINT; (* when it was last raised (ms), orders the first-out *)
+    dtRaisedAt : DT; (* when it was last raised (blank without a clock) *)
+    dtAcknowledgedAt : DT; (* when it was last acknowledged (blank without a clock) *)
+    dtClearedAt : DT; (* when it last cleared (blank without a clock) *)
+    eAlarmCode : E_UtError; (* which alarm is shown now *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

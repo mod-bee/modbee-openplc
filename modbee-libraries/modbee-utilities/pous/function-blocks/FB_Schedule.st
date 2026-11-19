@@ -1,38 +1,38 @@
 (* FB_Schedule — weekly time-of-day schedule, a local fallback (the platform holds the real calendar).
-aWindow (the project's table, one row per time window, at most 16 kept): a window runs from todStart to todStop
-on each day in its nDays bits (bit 0 Monday ... bit 6 Sunday); a todStop earlier than todStart crosses midnight
-(the part after midnight belongs to the day it started); todStart = todStop is empty. nEveryDays N (2 or more)
-runs it only every N-th day from dStartDate. bActive is on inside any window; nWindow is the first one on
-(1 = the first row), sts.nInMask has a bit per window (bit 0 = the first row, up to 32).
-Clock: dtClock, local time from F_LocalTime (the boards have no real-time clock: unwired = no clock, the schedule
-is off); set.tUtcOffset is added. bClockOk is off when the clock is implausible (F_ClockOk) or has not moved for
+aWindows (the project's table, one row per time window, at most 16 kept): a window runs from todStartTime to todStopTime
+on each day in its nWeekdayBits bits (bit 0 Monday ... bit 6 Sunday); a todStopTime earlier than todStartTime crosses midnight
+(the part after midnight belongs to the day it started); todStartTime = todStopTime is empty. nDaysBetweenRuns N (2 or more)
+runs it only every N-th day from dStartDate. bScheduleActive is on inside any window; nActiveWindow is the first one on
+(1 = the first row), sts.nActiveWindowBits has a bit per window (bit 0 = the first row, up to 32).
+Clock: dtLocalTime, local time from F_LocalTime (the boards have no real-time clock: unwired = no clock, the schedule
+is off); set.nUtcOffsetMinutes is added. bClockSynced is off when the clock is implausible (F_ClockOk) or has not moved for
 5 s: the schedule is then off (an override still works), warning NoClock. bHourPulse / bDayPulse give one scan on
 each new hour / at midnight, never doubled by a clock set back.
 Overrides (bOverrideOn / bOverrideOff pins, bCmdOverrideOn / bCmdOverrideOff / bCmdCancelOverride, each once per
-write): bActive on / off for set.tOverrideFor (0 = until the schedule next changes); Off wins, then Cancel, then
-On. bEnable FALSE (pin or set.bEnable) cancels an override. sts.dtNextChange is the next time the schedule
+write): bScheduleActive on / off for set.tOverrideTime (0 = until the schedule next changes); Off wins, then Cancel, then
+On. bEnable FALSE (pin or set.bScheduleOn) cancels an override. sts.dtNextChange is the next time the schedule
 changes (within 8 days; DT#1970-01-01-00:00:00 = none or no clock).
 Kept (a retained last-good copy, restored at power-up, a bad write put back): set and the window rows. A window
-with a bad setting and no good copy is left out: warning BadSetting, sts.nConfigWindow names it. *)
+with a bad setting and no good copy is left out: warning BadSetting, sts.nBadSettingWindow names it. *)
 
 FUNCTION_BLOCK FB_Schedule EXTENDS FB_Object
   VAR_INPUT
-    bEnable : BOOL := TRUE; (* AND-ed with set.bEnable *)
-    dtClock : DT := DT#1970-01-01-00:00:00; (* local time (optional): unwired = no clock, the schedule is off *)
-    bOverrideOn : BOOL R_EDGE; (* bActive on for set.tOverrideFor *)
-    bOverrideOff : BOOL R_EDGE; (* bActive off for set.tOverrideFor *)
-    refData : REFERENCE TO ST_ScheduleData;
+    bEnable : BOOL := TRUE; (* AND-ed with set.bScheduleOn *)
+    dtLocalTime : DT := DT#1970-01-01-00:00:00; (* local time (optional): unwired = no clock, the schedule is off *)
+    bOverrideOn : BOOL R_EDGE; (* bScheduleActive on for set.tOverrideTime *)
+    bOverrideOff : BOOL R_EDGE; (* bScheduleActive off for set.tOverrideTime *)
+    refData : REFERENCE TO ST_ScheduleData; (* the block's record *)
   END_VAR
   VAR_IN_OUT
-    aWindow : ARRAY [*] OF ST_SCHEDWINDOW;
+    aWindows : ARRAY [*] OF ST_SCHEDWINDOW; (* the project's table, one row per time window (at most 16 kept) *)
   END_VAR
   VAR_OUTPUT
-    bActive : BOOL;
-    nWindow : INT; (* the first window on, 1 = the first row; 0 none *)
-    bHourPulse : BOOL;
-    bDayPulse : BOOL;
-    bClockOk : BOOL;
-    bOverridden : BOOL;
+    bScheduleActive : BOOL; (* the schedule is on now *)
+    nActiveWindow : INT; (* the first window on, 1 = the first row; 0 none *)
+    bHourPulse : BOOL; (* one scan at each new hour *)
+    bDayPulse : BOOL; (* one scan at midnight *)
+    bClockSynced : BOOL; (* the clock is set and moving *)
+    bOverrideActive : BOOL; (* an override is on *)
   END_VAR
   VAR RETAIN
     stKept : ST_ScheduleSet;
@@ -89,11 +89,11 @@ METHOD PRIVATE SetWhy : E_UtError
     stS : REFERENCE TO ST_ScheduleSet;
   END_VAR
   SetWhy := E_UtError.None;
-  IF NOT (stS.tOverrideFor >= T#0s) THEN
+  IF NOT (stS.tOverrideTime >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tUtcOffset >= -T#24h) THEN
+  ELSIF NOT (stS.nUtcOffsetMinutes >= -1440) THEN
     SetWhy := E_UtError.TimeBad;
-  ELSIF NOT (stS.tUtcOffset <= T#24h) THEN
+  ELSIF NOT (stS.nUtcOffsetMinutes <= 1440) THEN
     SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
@@ -110,11 +110,11 @@ METHOD PRIVATE WindowWhy : E_UtError
     stW : REFERENCE TO ST_SchedWindow;
   END_VAR
   WindowWhy := E_UtError.None;
-  IF NOT (stW.nEveryDays >= 0) THEN
+  IF NOT (stW.nDaysBetweenRuns >= 0) THEN
     WindowWhy := E_UtError.BelowMin;
-  ELSIF NOT (stW.nEveryDays <= 366) THEN
+  ELSIF NOT (stW.nDaysBetweenRuns <= 366) THEN
     WindowWhy := E_UtError.AboveMax;
-  ELSIF NOT (stW.nDays <= 16#7F) THEN
+  ELSIF NOT (stW.nWeekdayBits <= 16#7F) THEN
     WindowWhy := E_UtError.AboveMax;
   END_IF;
 END_METHOD
@@ -144,19 +144,19 @@ METHOD PRIVATE WindowIn : BOOL
     nSDay : LINT;
   END_VAR
   WindowIn := FALSE;
-  IF WindowOk(stW := stW) AND stW.bEnable AND stW.todStart <> stW.todStop THEN
+  IF WindowOk(stW := stW) AND stW.bWindowOn AND stW.todStartTime <> stW.todStopTime THEN
     nDayP := nAt / 86400;
     nDow := LINT_TO_INT((nDayP + 3) MOD 7);
     nDowPrev := (nDow + 6) MOD 7;
     nMs := LINT_TO_DINT(nAt MOD 86400) * 1000;
-    nSt := TOD_TO_DINT(stW.todStart);
-    nSp := TOD_TO_DINT(stW.todStop);
-    bDayOk := (stW.nDays AND SHL(BYTE#1, nDow)) <> 0;
-    bPrevOk := (stW.nDays AND SHL(BYTE#1, nDowPrev)) <> 0;
-    IF stW.nEveryDays >= 2 THEN
+    nSt := TOD_TO_DINT(stW.todStartTime);
+    nSp := TOD_TO_DINT(stW.todStopTime);
+    bDayOk := (stW.nWeekdayBits AND SHL(BYTE#1, nDow)) <> 0;
+    bPrevOk := (stW.nWeekdayBits AND SHL(BYTE#1, nDowPrev)) <> 0;
+    IF stW.nDaysBetweenRuns >= 2 THEN
       nSDay := DATE_TO_LINT(stW.dStartDate) / 86400;
-      bDayOk := bDayOk AND nDayP >= nSDay AND (nDayP - nSDay) MOD INT_TO_LINT(stW.nEveryDays) = 0;
-      bPrevOk := bPrevOk AND nDayP - 1 >= nSDay AND (nDayP - 1 - nSDay) MOD INT_TO_LINT(stW.nEveryDays) = 0;
+      bDayOk := bDayOk AND nDayP >= nSDay AND (nDayP - nSDay) MOD INT_TO_LINT(stW.nDaysBetweenRuns) = 0;
+      bPrevOk := bPrevOk AND nDayP - 1 >= nSDay AND (nDayP - 1 - nSDay) MOD INT_TO_LINT(stW.nDaysBetweenRuns) = 0;
     END_IF;
     IF nSt < nSp THEN
       WindowIn := bDayOk AND nMs >= nSt AND nMs < nSp;
@@ -178,26 +178,26 @@ METHOD PRIVATE WindowNext : LINT
     nB : LINT;
   END_VAR
   WindowNext := -1;
-  IF WindowOk(stW := stW) AND stW.bEnable AND stW.todStart <> stW.todStop THEN
+  IF WindowOk(stW := stW) AND stW.bWindowOn AND stW.todStartTime <> stW.todStopTime THEN
     nDay0 := (nAt / 86400) * 86400;
-    nA := nDay0 + (TOD_TO_LINT(stW.todStart) + 999) / 1000;
+    nA := nDay0 + (TOD_TO_LINT(stW.todStartTime) + 999) / 1000;
     IF nA <= nAt THEN nA := nA + 86400; END_IF;
-    nB := nDay0 + (TOD_TO_LINT(stW.todStop) + 999) / 1000;
+    nB := nDay0 + (TOD_TO_LINT(stW.todStopTime) + 999) / 1000;
     IF nB <= nAt THEN nB := nB + 86400; END_IF;
     WindowNext := MIN(nA, nB);
   END_IF;
 END_METHOD
 
 IF NOT __ISVALIDREF(refData) THEN
-  bActive := FALSE;
+  bScheduleActive := FALSE;
   bError := TRUE;
   eErrorId := E_UtError.NoRecord;
   eState := E_State.Fault;
   RETURN;
 END_IF;
 tNow := TIME();
-nLo := LOWER_BOUND(aWindow, 1);
-nHi := UPPER_BOUND(aWindow, 1);
+nLo := LOWER_BOUND(aWindows, 1);
+nHi := UPPER_BOUND(aWindows, 1);
 
 (* kept settings and windows; a bad write is put back *)
 IF bFirstScan THEN
@@ -205,7 +205,7 @@ IF bFirstScan THEN
     refData.set := stKept;
     FOR nI := 1 TO MIN(nHi - nLo + 1, cMaxKept) DO
       IF (nKeptMask AND SHL(WORD#1, nI - 1)) <> 0 THEN
-        aWindow[nLo + nI - 1] := aKeptWindow[nI];
+        aWindows[nLo + nI - 1] := aKeptWindow[nI];
       END_IF;
     END_FOR;
   ELSE
@@ -217,65 +217,65 @@ bOkSet := SetOk(stS := refData.set);
 IF bOkSet THEN
   stKept := refData.set;
 ELSIF SetOk(stS := stKept) THEN
-  refData.sts.eRefusedWhy := SetWhy(stS := refData.set);
+  refData.sts.eSettingRefusedErrorId := SetWhy(stS := refData.set);
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
   bOkSet := TRUE;
 END_IF;
-refData.sts.nConfigWindow := 0;
+refData.sts.nBadSettingWindow := 0;
 FOR nI := 1 TO nHi - nLo + 1 DO
   nJ := nLo + nI - 1;
   nBit := 0;
   IF nI <= cMaxKept THEN
     nBit := SHL(WORD#1, nI - 1);
   END_IF;
-  IF WindowOk(stW := aWindow[nJ]) THEN
+  IF WindowOk(stW := aWindows[nJ]) THEN
     IF nI <= cMaxKept THEN
-      aKeptWindow[nI] := aWindow[nJ];
+      aKeptWindow[nI] := aWindows[nJ];
       nKeptMask := nKeptMask OR nBit;
     END_IF;
   ELSIF nBit <> 0 AND (nKeptMask AND nBit) <> 0 THEN
-    refData.sts.eRefusedWhy := WindowWhy(stW := aWindow[nJ]);
-    aWindow[nJ] := aKeptWindow[nI];
-    refData.sts.bRefused := TRUE;
-  ELSIF refData.sts.nConfigWindow = 0 THEN
-    refData.sts.nConfigWindow := DINT_TO_INT(nI);
+    refData.sts.eSettingRefusedErrorId := WindowWhy(stW := aWindows[nJ]);
+    aWindows[nJ] := aKeptWindow[nI];
+    refData.sts.bSettingRefused := TRUE;
+  ELSIF refData.sts.nBadSettingWindow = 0 THEN
+    refData.sts.nBadSettingWindow := DINT_TO_INT(nI);
   END_IF;
 END_FOR;
 bHourPulse := FALSE;
 bDayPulse := FALSE;
-bEn := bEnable AND refData.set.bEnable AND bOkSet;
+bEn := bEnable AND refData.set.bScheduleOn AND bOkSet;
 
 (* the clock: no real-time clock on the board, unwired = no clock (never the system clock) *)
-nSecs := DT_TO_LINT(dtClock);
+nSecs := DT_TO_LINT(dtLocalTime);
 IF NOT bSeen OR nSecs <> nLastSecs THEN
   bSeen := TRUE;
   nLastSecs := nSecs;
   tLastMove := tNow;
 END_IF;
-bClockOk := F_ClockOk(dtUtc := dtClock) AND tNow - tLastMove <= T#5s;
-nLocal := nSecs + TIME_TO_LINT(refData.set.tUtcOffset) / 1000;
-refData.det.dtLocal := LINT_TO_DT(nLocal);
+bClockSynced := F_ClockOk(dtClockUtc := dtLocalTime) AND tNow - tLastMove <= T#5s;
+nLocal := nSecs + INT_TO_LINT(refData.set.nUtcOffsetMinutes) * 60;
+refData.det.dtLocalTime := LINT_TO_DT(nLocal);
 
 (* the windows now *)
 bSched := FALSE;
-nWindow := 0;
-refData.sts.nInMask := 0;
-IF bClockOk THEN
+nActiveWindow := 0;
+refData.sts.nActiveWindowBits := 0;
+IF bClockSynced THEN
   FOR nI := 1 TO nHi - nLo + 1 DO
-    IF WindowIn(stW := aWindow[nLo + nI - 1], nAt := nLocal) THEN
+    IF WindowIn(stW := aWindows[nLo + nI - 1], nAt := nLocal) THEN
       bSched := TRUE;
-      IF nWindow = 0 THEN
-        nWindow := DINT_TO_INT(nI);
+      IF nActiveWindow = 0 THEN
+        nActiveWindow := DINT_TO_INT(nI);
       END_IF;
       IF nI <= 32 THEN
-        refData.sts.nInMask := refData.sts.nInMask OR SHL(DWORD#1, nI - 1);
+        refData.sts.nActiveWindowBits := refData.sts.nActiveWindowBits OR SHL(DWORD#1, nI - 1);
       END_IF;
     END_IF;
   END_FOR;
 END_IF;
 
-IF bClockOk THEN
+IF bClockSynced THEN
   nDayNo := nLocal / 86400;
   nHourNo := nLocal / 3600;
   refData.sts.nDayOfWeek := LINT_TO_INT((nDayNo + 3) MOD 7) + 1;
@@ -305,7 +305,7 @@ IF bClockOk THEN
     FOR nC := 1 TO 64 DO
       nCand := -1;
       FOR nJ := nLo TO nHi DO
-        nW := WindowNext(stW := aWindow[nJ], nAt := nProbe);
+        nW := WindowNext(stW := aWindows[nJ], nAt := nProbe);
         IF nW > 0 AND (nCand < 0 OR nW < nCand) THEN
           nCand := nW;
         END_IF;
@@ -315,7 +315,7 @@ IF bClockOk THEN
       END_IF;
       bFound := FALSE;
       FOR nJ := nLo TO nHi DO
-        IF WindowIn(stW := aWindow[nJ], nAt := nCand) THEN
+        IF WindowIn(stW := aWindows[nJ], nAt := nCand) THEN
           bFound := TRUE;
         END_IF;
       END_FOR;
@@ -336,10 +336,10 @@ ELSE
   refData.sts.dtNextChange := DT#1970-01-01-00:00:00;
   nCalcSecs := -1;
 END_IF;
-IF bClockOk AND DT_TO_LINT(refData.sts.dtNextChange) > nLocal THEN
-  refData.det.tNextChangeIn := LINT_TO_TIME((DT_TO_LINT(refData.sts.dtNextChange) - nLocal) * 1000);
+IF bClockSynced AND DT_TO_LINT(refData.sts.dtNextChange) > nLocal THEN
+  refData.det.tNextChangeTimeLeft := LINT_TO_TIME((DT_TO_LINT(refData.sts.dtNextChange) - nLocal) * 1000);
 ELSE
-  refData.det.tNextChangeIn := T#0s;
+  refData.det.tNextChangeTimeLeft := T#0s;
 END_IF;
 
 (* overrides: once per request; Off wins, then Cancel, then On *)
@@ -353,56 +353,56 @@ refData.bCmdOverrideOn := FALSE;
 refData.bCmdOverrideOff := FALSE;
 refData.bCmdCancelOverride := FALSE;
 IF bReqOff THEN
-  bOverridden := TRUE;
+  bOverrideActive := TRUE;
   bOvState := FALSE;
   tOvStart := tNow;
   bOvSched := bSched;
 ELSIF bReqCancel THEN
-  bOverridden := FALSE;
+  bOverrideActive := FALSE;
 ELSIF bReqOn THEN
-  bOverridden := TRUE;
+  bOverrideActive := TRUE;
   bOvState := TRUE;
   tOvStart := tNow;
   bOvSched := bSched;
 END_IF;
-refData.det.tOverrideLeft := T#0s;
+refData.det.tOverrideTimeLeft := T#0s;
 IF NOT bEn THEN
-  bOverridden := FALSE;
-ELSIF bOverridden THEN
-  IF refData.set.tOverrideFor > T#0s THEN
-    IF tNow - tOvStart >= refData.set.tOverrideFor THEN
-      bOverridden := FALSE;
+  bOverrideActive := FALSE;
+ELSIF bOverrideActive THEN
+  IF refData.set.tOverrideTime > T#0s THEN
+    IF tNow - tOvStart >= refData.set.tOverrideTime THEN
+      bOverrideActive := FALSE;
     ELSE
-      refData.det.tOverrideLeft := refData.set.tOverrideFor - (tNow - tOvStart);
+      refData.det.tOverrideTimeLeft := refData.set.tOverrideTime - (tNow - tOvStart);
     END_IF;
   ELSIF bSched <> bOvSched THEN
-    bOverridden := FALSE;         (* untimed: ends when the schedule changes *)
+    bOverrideActive := FALSE;         (* untimed: ends when the schedule changes *)
   END_IF;
 END_IF;
 IF NOT bEn THEN
-  bActive := FALSE;
-  nWindow := 0;
-ELSIF bOverridden THEN
-  bActive := bOvState;
+  bScheduleActive := FALSE;
+  nActiveWindow := 0;
+ELSIF bOverrideActive THEN
+  bScheduleActive := bOvState;
 ELSE
-  bActive := bSched;
+  bScheduleActive := bSched;
 END_IF;
 IF SystemReset() THEN
-  refData.sts.bRefused := FALSE;
-  refData.sts.eRefusedWhy := E_UtError.None;
+  refData.sts.bSettingRefused := FALSE;
+  refData.sts.eSettingRefusedErrorId := E_UtError.None;
 END_IF;
-refData.sts.bActive := bActive;
-refData.sts.bOverridden := bOverridden;
+refData.sts.bScheduleActive := bScheduleActive;
+refData.sts.bOverrideActive := bOverrideActive;
 
 bError := NOT bOkSet;
-bWarning := NOT bError AND ((bEn AND NOT bClockOk) OR refData.sts.nConfigWindow > 0 OR refData.sts.bRefused);
+bWarning := NOT bError AND ((bEn AND NOT bClockSynced) OR refData.sts.nBadSettingWindow > 0 OR refData.sts.bSettingRefused);
 IF bError THEN
   eErrorId := E_UtError.BadSetting;
-ELSIF bEn AND NOT bClockOk THEN
+ELSIF bEn AND NOT bClockSynced THEN
   eErrorId := E_UtError.NoClock;
-ELSIF refData.sts.nConfigWindow > 0 THEN
+ELSIF refData.sts.nBadSettingWindow > 0 THEN
   eErrorId := E_UtError.BadSetting;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;
@@ -411,7 +411,7 @@ IF bError THEN
   eState := E_State.Fault;
 ELSIF NOT bEn THEN
   eState := E_State.Off;
-ELSIF bActive THEN
+ELSIF bScheduleActive THEN
   eState := E_State.Running;
 ELSE
   eState := E_State.Idle;

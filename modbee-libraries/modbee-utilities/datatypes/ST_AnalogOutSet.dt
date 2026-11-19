@@ -1,15 +1,15 @@
 TYPE
   ST_AnalogOutSet : STRUCT
-    fEngMin : REAL; (* engineering value at fRawMin *)
-    fEngMax : REAL := 100.0; (* engineering value at fRawMax *)
-    fOutMin : REAL; (* lowest output (clamp) *)
-    fOutMax : REAL := 100.0; (* highest output (clamp) *)
-    fRampUp : REAL; (* engineering units per eRateUnit rising (0 = off) *)
-    fRampDown : REAL; (* falling (0 = off) *)
-    eRateUnit : E_RateUnit;
-    fFailValue : REAL; (* output while bInterlock is FALSE *)
-    bHoldOnInterlock : BOOL; (* TRUE: hold the output instead *)
-    bManual : BOOL; (* Manual chosen (kept) *)
-    fManualValue : REAL; (* output in Manual (kept) *)
+    fValueAtSignalLow : REAL; (* engineering value at fRawAtSignalLow *)
+    fValueAtSignalHigh : REAL := 100.0; (* engineering value at fRawAtSignalHigh *)
+    fMinOutput : REAL; (* lowest output (clamp) *)
+    fMaxOutput : REAL := 100.0; (* highest output (clamp) *)
+    fRampUpRate : REAL; (* engineering units per eRateUnit rising (0 = off) *)
+    fRampDownRate : REAL; (* falling (0 = off) *)
+    eRateUnit : E_RateUnit; (* the time unit of the ramp rates: per second, minute, hour or day *)
+    fValueWhenInterlocked : REAL; (* output while bInterlock is FALSE *)
+    bHoldWhenInterlocked : BOOL; (* TRUE: hold the output instead *)
+    bManualSelected : BOOL; (* Manual chosen (kept) *)
+    fManualOutput : REAL; (* output in Manual (kept) *)
   END_STRUCT;
 END_TYPE

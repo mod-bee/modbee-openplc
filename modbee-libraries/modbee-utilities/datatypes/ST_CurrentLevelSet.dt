@@ -1,6 +1,6 @@
 TYPE
   ST_CurrentLevelSet EXTENDS ST_ProtectionSet : STRUCT
-    fPercent : REAL; (* % of full load *)
-    fDeadband : REAL := 5.0; (* % of full load: clears this far back *)
+    fLevelPct : REAL; (* % of full load *)
+    fClearDeadbandPct : REAL := 5.0; (* % of full load: clears this far back *)
   END_STRUCT;
 END_TYPE

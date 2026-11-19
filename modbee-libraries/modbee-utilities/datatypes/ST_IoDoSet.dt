@@ -1,7 +1,7 @@
 TYPE
   ST_IoDoSet : STRUCT
-    eSrc : E_IoSrc;
-    nModule : USINT;
-    nCh : USINT;
+    eSource : E_IoSrc; (* where the channel is: None (not on this site), Board, I2c, Field or Remote *)
+    nModuleNumber : USINT; (* the module number within that source (0..127) *)
+    nChannel : USINT; (* the channel number on the module *)
   END_STRUCT;
 END_TYPE

@@ -1,16 +1,18 @@
 TYPE
   ST_EquipmentSts : STRUCT
-    eState : E_State;
+    eState : E_State; (* what it is doing now: Off, Idle, Waiting, Starting, Running, Stopping, Held, Fault *)
     eErrorId : E_UtError; (* first-out: the first error since the last reset *)
-    eStopReason : E_StopReason;
-    bRunning : BOOL;
+    eStopReason : E_StopReason; (* why it last stopped *)
+    bRunning : BOOL; (* running now *)
     bReady : BOOL; (* could start now if asked *)
     bAvailable : BOOL; (* in Auto, not tripped, not interlocked *)
-    bLinked : BOOL; (* an owner is driving it *)
-    bInterlocked : BOOL;
-    bRefused : BOOL; (* a setting write was refused and put back *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bOwnerDriving : BOOL; (* an owner is driving it *)
+    bInterlocked : BOOL; (* the interlock is off: it cannot run *)
+    bSettingRefused : BOOL; (* a setting write was refused and put back *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
     bJogging : BOOL; (* jogging (FB_MotorJog, Hand only) *)
-    bMustCycle : BOOL; (* a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) *)
+    bWaitRequestDrop : BOOL; (* a reset cleared a trip: waiting for the request to drop (bRestartAfterReset) *)
+    bFaulted : BOOL; (* tripped now (as the bIsFaulted property) *)
+    eModeInUse : E_Mode; (* the mode it is in now (as the eActMode property) *)
   END_STRUCT;
 END_TYPE

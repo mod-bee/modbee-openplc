@@ -1,16 +1,16 @@
-(* F_IoForceSlot — one commissioning force slot: bCmdForce starts it (or starts its time again), bCmdRelease or
-bRelease ends it, it ends by itself after tForceTime, a wrong address (eWhere not Ok) or
+(* F_IoForceSlot — one commissioning force slot: bCmdForceNow starts it (or starts its time again), bCmdReleaseNow or
+bReleaseAllForces ends it, it ends by itself after tForceTime, a wrong address (eAddressQuality not Ok) or
 no permit refuses / ends it. A command held on acts once. Returns TRUE while it forces. *)
 
 FUNCTION F_IoForceSlot : BOOL
   VAR_IN_OUT
-    stS : ST_IoForce;
+    stForceSlot : ST_IoForce; (* the force slot *)
   END_VAR
   VAR_INPUT
-    eWhere : E_IoQ; (* Ok, or why the address is wrong (NoModule, NoChannel) *)
-    bPermit : BOOL; (* forcing allowed now (outputs: system Off) *)
-    bRelease : BOOL; (* release now and refuse new forces *)
-    tNow : TIME;
+    eAddressQuality : E_IoQ; (* Ok, or why the address is wrong (NoModule, NoChannel) *)
+    bForcingAllowed : BOOL; (* forcing allowed now (outputs: system Off) *)
+    bReleaseAllForces : BOOL; (* release now and refuse new forces *)
+    tNow : TIME; (* TIME() of this scan *)
     tForceTime : TIME; (* how long a force lasts (already limited by the caller) *)
   END_VAR
   VAR
@@ -20,50 +20,50 @@ FUNCTION F_IoForceSlot : BOOL
   END_VAR
 
 
-bDoForce := stS.bCmdForce AND NOT stS.bForceSeen;
-stS.bForceSeen := stS.bCmdForce;
-stS.bCmdForce := FALSE;
-bDoRelease := stS.bCmdRelease AND NOT stS.bReleaseSeen;
-stS.bReleaseSeen := stS.bCmdRelease;
-stS.bCmdRelease := FALSE;
-IF bDoRelease OR bRelease THEN
-  stS.bActive := FALSE;
-  stS.eState := E_IoQ.Unused;
+bDoForce := stForceSlot.bCmdForceNow AND NOT stForceSlot.bForceCommandTaken;
+stForceSlot.bForceCommandTaken := stForceSlot.bCmdForceNow;
+stForceSlot.bCmdForceNow := FALSE;
+bDoRelease := stForceSlot.bCmdReleaseNow AND NOT stForceSlot.bReleaseCommandTaken;
+stForceSlot.bReleaseCommandTaken := stForceSlot.bCmdReleaseNow;
+stForceSlot.bCmdReleaseNow := FALSE;
+IF bDoRelease OR bReleaseAllForces THEN
+  stForceSlot.bForcing := FALSE;
+  stForceSlot.eForceState := E_IoQ.Unused;
 ELSIF bDoForce THEN
-  IF eWhere <> E_IoQ.Ok THEN
-    stS.bActive := FALSE;
-    stS.eState := eWhere;
-  ELSIF NOT bPermit THEN
-    stS.bActive := FALSE;
-    stS.eState := E_IoQ.NotPermitted;
+  IF eAddressQuality <> E_IoQ.Ok THEN
+    stForceSlot.bForcing := FALSE;
+    stForceSlot.eForceState := eAddressQuality;
+  ELSIF NOT bForcingAllowed THEN
+    stForceSlot.bForcing := FALSE;
+    stForceSlot.eForceState := E_IoQ.NotPermitted;
   ELSE
-    stS.bActive := TRUE;
-    stS.tEndAt := tNow + tForceTime;
+    stForceSlot.bForcing := TRUE;
+    stForceSlot.tReleasesAt := tNow + tForceTime;
   END_IF;
-ELSIF stS.bActive THEN
-  IF eWhere <> E_IoQ.Ok THEN
-    stS.bActive := FALSE;         // the address was changed to a wrong one
-    stS.eState := eWhere;
-  ELSIF NOT bPermit THEN
-    stS.bActive := FALSE;
-    stS.eState := E_IoQ.NotPermitted;
-  ELSIF stS.tEndAt - tNow > tForceTime THEN
-    stS.tEndAt := tNow + tForceTime;   // the force time was shortened
+ELSIF stForceSlot.bForcing THEN
+  IF eAddressQuality <> E_IoQ.Ok THEN
+    stForceSlot.bForcing := FALSE;         // the address was changed to a wrong one
+    stForceSlot.eForceState := eAddressQuality;
+  ELSIF NOT bForcingAllowed THEN
+    stForceSlot.bForcing := FALSE;
+    stForceSlot.eForceState := E_IoQ.NotPermitted;
+  ELSIF stForceSlot.tReleasesAt - tNow > tForceTime THEN
+    stForceSlot.tReleasesAt := tNow + tForceTime;   // the force time was shortened
   END_IF;
 END_IF;
 tLeft := T#0s;
-IF stS.bActive THEN
-  tLeft := stS.tEndAt - tNow;
+IF stForceSlot.bForcing THEN
+  tLeft := stForceSlot.tReleasesAt - tNow;
   IF tLeft <= T#0s THEN
-    stS.bActive := FALSE;
-    stS.eState := E_IoQ.Unused;
+    stForceSlot.bForcing := FALSE;
+    stForceSlot.eForceState := E_IoQ.Unused;
     tLeft := T#0s;
   END_IF;
 END_IF;
-IF stS.bActive THEN
-  stS.eState := E_IoQ.Forced;
+IF stForceSlot.bForcing THEN
+  stForceSlot.eForceState := E_IoQ.Forced;
 END_IF;
-stS.tTimeLeft := tLeft;
-F_IoForceSlot := stS.bActive;
+stForceSlot.tTimeLeft := tLeft;
+F_IoForceSlot := stForceSlot.bForcing;
 
 END_FUNCTION

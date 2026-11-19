@@ -1,9 +1,9 @@
 TYPE
   ST_MotorRevSet : STRUCT
-    tReversalDelay : TIME := T#2s;
+    tReversingDeadTime : TIME := T#2s; (* wait this long between forward and reverse *)
     bStopBeforeReverse : BOOL; (* a direction change stops first; a new start needed *)
-    tChangeover : TIME := T#2s;
-    stChangeover : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0);
-    bHandReverse : BOOL; (* Hand direction chosen last (kept) *)
+    tAuxFeedbackTimeout : TIME := T#2s; (* an aux contact must follow its coil within this time *)
+    stAuxFeedbackFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#0s, eResetMode := E_ResetMode.Manual, tAutoRecoverAfter := T#0s, nMaxRetriesBeforeLockout := 0);
+    bHandReverseSelected : BOOL; (* Hand direction chosen last (kept) *)
   END_STRUCT;
 END_TYPE

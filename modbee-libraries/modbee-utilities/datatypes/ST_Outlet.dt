@@ -1,6 +1,6 @@
 TYPE
   ST_Outlet : STRUCT
-    eKind : E_OutletKind;
-    nPreset : SINT := -1; (* -1 none, 0 normal, 1 low, 2 high (the speed control's presets) *)
+    eOutletKind : E_OutletKind; (* None, Irrigation, Storage or Other *)
+    nSpeedPreset : SINT := -1; (* -1 none, 0 normal, 1 low, 2 high (the speed control's presets) *)
   END_STRUCT;
 END_TYPE

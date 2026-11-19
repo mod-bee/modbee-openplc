@@ -1,17 +1,17 @@
 TYPE
   ST_ValveSet EXTENDS ST_EquipmentSet : STRUCT
-    eType : E_ValveType;
-    eSafe : E_SafePos;
-    tOpenTime : TIME := T#5s; (* travel time (also the end switch timeout base) *)
-    tCloseTime : TIME := T#5s;
-    bUseOpenLs : BOOL;
-    bUseClosedLs : BOOL;
-    stTravel : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Retry, tRecover := T#10s, nMaxRetries := 3);
-    stBothLimits : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#1s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0);
-    stPositionLost : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#2s, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 0);
-    tStrokeWarn : TIME; (* a stroke slower than this warns (0 = off; needs the end switch) *)
-    stSlowStroke : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#0s, eReset := E_ResetMode.Auto, tRecover := T#0s, nMaxRetries := 3);
-    stActLocal : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#2s, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 3);
-    stNoMovement : ST_ProtectionSet := (eResponse := E_Response.Off, tDelay := T#2s, eReset := E_ResetMode.Retry, tRecover := T#1m, nMaxRetries := 3);
+    eValveType : E_ValveType; (* the valve kind: SpringNc, SpringNo or DoubleHeld *)
+    eSafePosition : E_SafePos; (* where it goes on Off, the interlock or a trip: Closed or Open *)
+    tOpenStrokeTime : TIME := T#5s; (* travel time (also the end switch timeout base) *)
+    tCloseStrokeTime : TIME := T#5s; (* travel time to close (also the end switch timeout base) *)
+    bOpenLimitSwitchFitted : BOOL; (* the open end switch (bOpenLimitSwitch) is fitted and used *)
+    bClosedLimitSwitchFitted : BOOL; (* the closed end switch (bClosedLimitSwitch) is fitted and used *)
+    stStrokeTimeoutFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#0s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
+    stBothLimitsFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#1s, eResetMode := E_ResetMode.Manual, tAutoRecoverAfter := T#0s, nMaxRetriesBeforeLockout := 0);
+    stPositionLostFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#2s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#2s, nMaxRetriesBeforeLockout := 0);
+    tSlowStrokeAbove : TIME; (* a stroke slower than this warns (0 = off; needs the end switch) *)
+    stSlowStrokeFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#0s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#0s, nMaxRetriesBeforeLockout := 3);
+    stActuatorInLocalFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#2s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#2s, nMaxRetriesBeforeLockout := 3);
+    stNoMovementFault : ST_ProtectionSet := (eActionOnFault := E_Response.Off, tTripDelay := T#2s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#1m, nMaxRetriesBeforeLockout := 3);
   END_STRUCT;
 END_TYPE

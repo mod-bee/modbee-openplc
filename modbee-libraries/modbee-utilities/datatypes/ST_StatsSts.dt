@@ -1,9 +1,9 @@
 TYPE
   ST_StatsSts : STRUCT
     fMinimum : REAL; (* current period (0 while no samples) *)
-    fMaximum : REAL;
+    fMaximum : REAL; (* the current period's highest value *)
     fAverage : REAL; (* time-weighted *)
-    bRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

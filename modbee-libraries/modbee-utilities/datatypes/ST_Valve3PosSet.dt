@@ -1,20 +1,20 @@
 TYPE
   ST_Valve3PosSet EXTENDS ST_EquipmentSet : STRUCT
-    eKind : E_Valve3Kind;
-    bUseLs1 : BOOL;
-    bUseLs2 : BOOL;
-    bUseLs3 : BOOL;
-    tTravel : TIME := T#10s; (* per move: arrival without a switch; the timeout base with one *)
-    tMid : TIME; (* motor without bLs2: end -> mid (0 = half tTravel) *)
-    tReversal : TIME := T#500ms; (* motor: pause between the two directions *)
-    nSafePos : INT := 2;
-    nRestPos : INT := 2; (* when nothing is asked *)
-    nHandPos : INT := 2; (* Hand position (kept) *)
-    stTravel : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#0s, eReset := E_ResetMode.Retry, tRecover := T#10s, nMaxRetries := 3);
-    nAutoPos : INT := 3; (* the position asked with no number *)
-    bPosLatch : BOOL; (* the last position asked stays when the request ends *)
-    stBothLimits : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#1s, eReset := E_ResetMode.Manual, tRecover := T#0s, nMaxRetries := 0);
-    stPositionLost : ST_ProtectionSet := (eResponse := E_Response.Warn, tDelay := T#2s, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 0);
-    stNoMovement : ST_ProtectionSet := (eResponse := E_Response.Off, tDelay := T#2s, eReset := E_ResetMode.Retry, tRecover := T#1m, nMaxRetries := 3);
+    eValveKind : E_Valve3Kind; (* SpringCentre, ThreeCoil or Motor *)
+    bPosition1SwitchFitted : BOOL; (* the position 1 switch is fitted and used *)
+    bPosition2SwitchFitted : BOOL; (* the position 2 switch is fitted and used *)
+    bPosition3SwitchFitted : BOOL; (* the position 3 switch is fitted and used *)
+    tStrokeTime : TIME := T#10s; (* per move: arrival without a switch; the timeout base with one *)
+    tEndToMiddleTime : TIME; (* motor without bPosition2Switch: end -> mid (0 = half tStrokeTime) *)
+    tReversingDeadTime : TIME := T#500ms; (* motor: pause between the two directions *)
+    nSafePosition : INT := 2; (* position on Off, the interlock or a trip (1..3) *)
+    nRestPosition : INT := 2; (* when nothing is asked *)
+    nHandPosition : INT := 2; (* Hand position (kept) *)
+    stStrokeTimeoutFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#0s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#10s, nMaxRetriesBeforeLockout := 3);
+    nAutoPosition : INT := 3; (* the position asked with no number *)
+    bKeepLastPosition : BOOL; (* the last position asked stays when the request ends *)
+    stBothLimitsFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#1s, eResetMode := E_ResetMode.Manual, tAutoRecoverAfter := T#0s, nMaxRetriesBeforeLockout := 0);
+    stPositionLostFault : ST_ProtectionSet := (eActionOnFault := E_Response.Warn, tTripDelay := T#2s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#2s, nMaxRetriesBeforeLockout := 0);
+    stNoMovementFault : ST_ProtectionSet := (eActionOnFault := E_Response.Off, tTripDelay := T#2s, eResetMode := E_ResetMode.Retry, tAutoRecoverAfter := T#1m, nMaxRetriesBeforeLockout := 3);
   END_STRUCT;
 END_TYPE

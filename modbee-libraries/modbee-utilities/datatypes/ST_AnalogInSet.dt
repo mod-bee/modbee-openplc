@@ -1,11 +1,12 @@
 TYPE
   ST_AnalogInSet : STRUCT
-    bFitted : BOOL := TRUE; (* FALSE: not on this site (not good, no fault) *)
-    fEngMin : REAL; (* engineering value at fRawMin *)
-    fEngMax : REAL := 100.0; (* engineering value at fRawMax *)
-    fTrim : REAL; (* field zero trim, engineering units *)
-    fAltFactor : REAL := 1.0; (* fValueAlt = fValue * fAltFactor + fAltOffset (a second unit) *)
-    fAltOffset : REAL;
-    stFault : ST_ProtectionSet := (eResponse := E_Response.Trip, tDelay := T#2s, eReset := E_ResetMode.Auto, tRecover := T#2s, nMaxRetries := 3);
+    bSensorFitted : BOOL := TRUE; (* FALSE: not on this site (not good, no fault) *)
+    fValueAtSignalLow : REAL; (* engineering value at fRawAtSignalLow *)
+    fValueAtSignalHigh : REAL := 100.0; (* engineering value at fRawAtSignalHigh *)
+    fZeroTrim : REAL; (* field zero trim, engineering units *)
+    fSecondUnitFactor : REAL := 1.0; (* fValueSecondUnit = fValue * fSecondUnitFactor + fSecondUnitOffset (a second unit) *)
+    fSecondUnitOffset : REAL; (* second unit: the offset added after the factor *)
+    stSignalFault : ST_ProtectionSet := (eActionOnFault := E_Response.Trip, tTripDelay := T#2s, eResetMode := E_ResetMode.Auto, tAutoRecoverAfter := T#2s, nMaxRetriesBeforeLockout := 3);
+    tRetryCountWindow : TIME := T#1h; (* a Retry protection counts its trips within this window (0 = until a reset) *)
   END_STRUCT;
 END_TYPE

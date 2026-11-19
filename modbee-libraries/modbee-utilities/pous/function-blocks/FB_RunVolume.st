@@ -1,23 +1,23 @@
 (* FB_RunVolume — a volume target for a run, as a part of it.
 
 Pins: ipRun (the run, required), ipMeter (the meter it counts on, required), refData.
-When the run starts (a restart too: ipRun.nActRunId changes), the meter's total is the start; the run ends Done when set.fTarget has been delivered
+When the run starts (a restart too: ipRun.nActRunId changes), the meter's total is the start; the run ends Done when set.fVolumeSetpoint has been delivered
 (0 = no target: it only watches the meter). Meter failed: while the run is running, the meter not good, or its
-total not rising for set.stMeterFailed's delay, trips the run (MeterFailed). The delivered volume and what is
+total not rising for set.stMeterFailedFault's delay, trips the run (MeterFailed). The delivered volume and what is
 left are in its status.
-A run with a volume target always has a safety time cap on its counted time: the target at set.fMinFlow (the
-least flow expected, per hour in the meter's unit) takes at most fTarget / fMinFlow hours; with fMinFlow 0 the
-cap is set.tDefaultCap (sts.bDefaultCap shows it). When the run's counted time reaches the cap before the
+A run with a volume target always has a safety time cap on its counted time: the target at set.fMinExpectedFlow (the
+least flow expected, per hour in the meter's unit) takes at most fVolumeSetpoint / fMinExpectedFlow hours; with fMinExpectedFlow 0 the
+cap is set.tDefaultTimeCap (sts.bDefaultTimeCapInUse shows it). When the run's counted time reaches the cap before the
 target, the run ends with stop reason TimeCap and the warning RunCapped (E_PartAction.Cap). The run's own
-set.tMaxTime still applies: whichever is first ends the run. sts.tCap shows the cap in use.
-A bad settings write is put back (sts.bRefused / sts.eRefusedWhy) and warns its owner (SettingRefused) until the
+set.tMaxTimeFromStart still applies: whichever is first ends the run. sts.tTimeCapInUse shows the cap in use.
+A bad settings write is put back (sts.bSettingRefused / sts.eSettingRefusedErrorId) and warns its owner (SettingRefused) until the
 run's reset. *)
 
 FUNCTION_BLOCK FB_RunVolume EXTENDS FB_Object IMPLEMENTS I_Part
   VAR_INPUT
     ipRun : I_Run; (* required *)
     ipMeter : I_Meter; (* required *)
-    refData : REFERENCE TO ST_RunVolumeData;
+    refData : REFERENCE TO ST_RunVolumeData; (* the block's record *)
   END_VAR
   VAR RETAIN
     stKept : ST_RunVolumeSet;
@@ -45,27 +45,29 @@ FUNCTION_BLOCK FB_RunVolume EXTENDS FB_Object IMPLEMENTS I_Part
 (* the first bad setting (None: all good) *)
 METHOD PRIVATE SetWhy : E_UtError
   SetWhy := E_UtError.None;
-  IF NOT (refData.set.fTarget >= 0.0) THEN
+  IF NOT (refData.set.fVolumeSetpoint >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (refData.set.stMeterFailed.tDelay >= T#0s) THEN
+  ELSIF NOT (refData.set.stMeterFailedFault.tTripDelay >= T#0s) THEN
     SetWhy := E_UtError.ProtectionBad;
-  ELSIF NOT (refData.set.fMinFlow >= 0.0) THEN
+  ELSIF NOT (refData.set.fMinExpectedFlow >= 0.0) THEN
     SetWhy := E_UtError.BelowMin;
-  ELSIF NOT (refData.set.fMinFlow <= REAL#3.4E38) THEN
+  ELSIF NOT (refData.set.fMinExpectedFlow <= REAL#3.4E38) THEN
     SetWhy := E_UtError.AboveMax;
-  ELSIF NOT (refData.set.tDefaultCap > T#0s) THEN
+  ELSIF NOT (refData.set.tDefaultTimeCap > T#0s) THEN
+    SetWhy := E_UtError.TimeBad;
+  ELSIF NOT (refData.set.tRetryCountWindow >= T#0s) THEN
     SetWhy := E_UtError.TimeBad;
   END_IF;
 END_METHOD
 
 METHOD PUBLIC Evaluate : E_PartAction
   VAR_INPUT
-    bRunning : BOOL;
-    bResetWanted : BOOL;
-    bMasked : BOOL;
+    bOwnerRunCommand : BOOL;    // the owner is running (its run command)
+    bResetRequest : BOOL;    // the owner's reset request this scan
+    bStartMaskOn : BOOL;    // the owner's start mask is on (checks set to mask at start ignore their cause)
   END_VAR
   VAR_OUTPUT
-    eErrorId : E_UtError;
+    eErrorId : E_UtError;    // the error this part stands for (when it warns or trips)
   END_VAR
   VAR
     bTrip : BOOL;
@@ -75,34 +77,34 @@ METHOD PUBLIC Evaluate : E_PartAction
     Evaluate := E_PartAction.Warn;
     RETURN;
   END_IF;
-  IF NOT bCalled AND refData.sts.stMeterFailed.eState <> E_ProtState.Clear THEN
+  IF NOT bCalled AND refData.sts.stMeterFailedFault.eFaultState <> E_ProtState.Clear THEN
     eErrorId := E_UtError.PartLost;
     Evaluate := E_PartAction.Trip;
     RETURN;
   END_IF;
   bCalled := FALSE;
-  IF bResetWanted THEN
-    refData.sts.bRefused := FALSE;
-    refData.sts.eRefusedWhy := E_UtError.None;
+  IF bResetRequest THEN
+    refData.sts.bSettingRefused := FALSE;
+    refData.sts.eSettingRefusedErrorId := E_UtError.None;
   END_IF;
   (* each rise restarts the delay: meter failed = not good, or no rise, for the whole delay while running *)
-  bTrip := F_Protect(tNow := TIME(), bCause := bRunning AND (NOT ipMeter.bIsGood OR NOT bRose),
-                     bResetReq := bResetWanted, tRetryWindow := T#1h,
-                     stSet := refData.set.stMeterFailed, stSts := refData.sts.stMeterFailed, stWork := stWork);
-  IF stWork.bTrip THEN
+  bTrip := F_Protect(tNow := TIME(), bConditionPresent := bOwnerRunCommand AND (NOT ipMeter.bIsGood OR NOT bRose),
+                     bResetRequest := bResetRequest, tRetryCountWindow := refData.set.tRetryCountWindow,
+                     stSettings := refData.set.stMeterFailedFault, stStatus := refData.sts.stMeterFailedFault, stWorking := stWork);
+  IF stWork.bTripping THEN
     Evaluate := E_PartAction.Trip;
-  ELSIF ipRun.bIsActive AND bActivePrev AND nRunSeen = ipRun.nActRunId AND refData.set.fTarget > 0.0
-        AND refData.sts.fDelivered >= refData.set.fTarget THEN
-    (* bActivePrev, nRunSeen: its rung has seen this run start, so fDelivered is this run's *)
+  ELSIF ipRun.bIsBusy AND bActivePrev AND nRunSeen = ipRun.nActRunId AND refData.set.fVolumeSetpoint > 0.0
+        AND refData.sts.fDeliveredThisRun >= refData.set.fVolumeSetpoint THEN
+    (* bActiveLastScan, nRunSeen: its rung has seen this run start, so fDeliveredThisRun is this run's *)
     Evaluate := E_PartAction.Done;
-  ELSIF ipRun.bIsActive AND bActivePrev AND nRunSeen = ipRun.nActRunId AND refData.set.fTarget > 0.0
-        AND refData.sts.tCap > T#0s
-        AND ipRun.tActElapsed >= refData.sts.tCap THEN
+  ELSIF ipRun.bIsBusy AND bActivePrev AND nRunSeen = ipRun.nActRunId AND refData.set.fVolumeSetpoint > 0.0
+        AND refData.sts.tTimeCapInUse > T#0s
+        AND ipRun.tActElapsed >= refData.sts.tTimeCapInUse THEN
     Evaluate := E_PartAction.Cap;
     eErrorId := E_UtError.RunCapped;
-  ELSIF stWork.bWarn THEN
+  ELSIF stWork.bWarning THEN
     Evaluate := E_PartAction.Warn;
-  ELSIF refData.sts.bRefused THEN
+  ELSIF refData.sts.bSettingRefused THEN
     eErrorId := E_UtError.SettingRefused;
     Evaluate := E_PartAction.Warn;
   ELSE
@@ -112,9 +114,9 @@ END_METHOD
 
 METHOD PUBLIC SetNext
   VAR_INPUT
-    ipNext : I_Part;
+    ipNextPart : I_Part;    // the next part in the owner's chain
   END_VAR
-  THIS^.ipNext := ipNext;
+  THIS^.ipNext := ipNextPart;
 END_METHOD
 
 METHOD PUBLIC GetNext : I_Part
@@ -135,56 +137,56 @@ IF bFirstScan THEN
     fStart := ipMeter.fActTotal;
     nKeptLayout := cLayout;
   END_IF;
-  bActivePrev := ipRun.bIsActive;
+  bActivePrev := ipRun.bIsBusy;
   nRunSeen := ipRun.nActRunId;
   fLastTotal := ipMeter.fActTotal;
   bFirstScan := FALSE;
 ELSIF SetWhy() = E_UtError.None THEN
   stKept := refData.set;
 ELSE
-  refData.sts.eRefusedWhy := SetWhy();
+  refData.sts.eSettingRefusedErrorId := SetWhy();
   refData.set := stKept;
-  refData.sts.bRefused := TRUE;
+  refData.sts.bSettingRefused := TRUE;
 END_IF;
 IF NOT bAdded THEN
   ipRun.AddPart(ipPart := THIS^);
   bAdded := TRUE;
 END_IF;
-IF ipRun.bIsActive AND (NOT bActivePrev OR ipRun.nActRunId <> nRunSeen) THEN
+IF ipRun.bIsBusy AND (NOT bActivePrev OR ipRun.nActRunId <> nRunSeen) THEN
   fStart := ipMeter.fActTotal;    // a new run, or a restart
 END_IF;
-bActivePrev := ipRun.bIsActive;
+bActivePrev := ipRun.bIsBusy;
 nRunSeen := ipRun.nActRunId;
 bRose := ipMeter.fActTotal > fLastTotal;
 fLastTotal := ipMeter.fActTotal;
-IF ipRun.bIsActive THEN
-  refData.sts.fDelivered := ipMeter.fActTotal - fStart;
-  IF refData.set.fTarget > refData.sts.fDelivered THEN
-    refData.sts.fLeft := refData.set.fTarget - refData.sts.fDelivered;
+IF ipRun.bIsBusy THEN
+  refData.sts.fDeliveredThisRun := ipMeter.fActTotal - fStart;
+  IF refData.set.fVolumeSetpoint > refData.sts.fDeliveredThisRun THEN
+    refData.sts.fVolumeLeft := refData.set.fVolumeSetpoint - refData.sts.fDeliveredThisRun;
   ELSE
-    refData.sts.fLeft := 0.0;
+    refData.sts.fVolumeLeft := 0.0;
   END_IF;
 END_IF;
 (* the safety time cap of a volume target *)
-refData.sts.bDefaultCap := FALSE;
-refData.sts.tCap := T#0s;
-IF refData.set.fTarget > 0.0 THEN
-  IF refData.set.fMinFlow > 0.0 THEN
-    fCapMs := refData.set.fTarget * 3600000.0 / REAL_TO_LREAL(refData.set.fMinFlow);
+refData.sts.bDefaultTimeCapInUse := FALSE;
+refData.sts.tTimeCapInUse := T#0s;
+IF refData.set.fVolumeSetpoint > 0.0 THEN
+  IF refData.set.fMinExpectedFlow > 0.0 THEN
+    fCapMs := refData.set.fVolumeSetpoint * 3600000.0 / REAL_TO_LREAL(refData.set.fMinExpectedFlow);
     IF fCapMs < 10.0 THEN fCapMs := 10.0; END_IF;
     IF fCapMs > 8.64E7 * 365.0 THEN fCapMs := 8.64E7 * 365.0; END_IF;
-    refData.sts.tCap := LINT_TO_TIME(LREAL_TO_LINT(fCapMs));
+    refData.sts.tTimeCapInUse := LINT_TO_TIME(LREAL_TO_LINT(fCapMs));
   ELSE
-    refData.sts.tCap := refData.set.tDefaultCap;
-    refData.sts.bDefaultCap := TRUE;
+    refData.sts.tTimeCapInUse := refData.set.tDefaultTimeCap;
+    refData.sts.bDefaultTimeCapInUse := TRUE;
   END_IF;
 END_IF;
 bCalled := TRUE;
-bError := stWork.bTrip;
-bWarning := stWork.bWarn OR refData.sts.bRefused;
-IF bError OR stWork.bWarn THEN
+bError := stWork.bTripping;
+bWarning := stWork.bWarning OR refData.sts.bSettingRefused;
+IF bError OR stWork.bWarning THEN
   eErrorId := E_UtError.MeterFailed;
-ELSIF refData.sts.bRefused THEN
+ELSIF refData.sts.bSettingRefused THEN
   eErrorId := E_UtError.SettingRefused;
 ELSE
   eErrorId := E_UtError.None;

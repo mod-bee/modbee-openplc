@@ -1,9 +1,9 @@
 TYPE
   ST_DoseBatchSts EXTENDS ST_DoseSts : STRUCT
-    fTargetActive : REAL;
-    fPreactActive : REAL;
-    fLastError : REAL; (* delivered - target of the last dose *)
-    stNoFlow : ST_ProtectionSts;
-    stOutOfTolerance : ST_ProtectionSts;
+    fQuantitySetpointInUse : REAL; (* the target this dose uses *)
+    fStopEarlyInUse : REAL; (* the stop-early amount this dose uses (learned or set) *)
+    fLastDoseError : REAL; (* delivered - target of the last dose *)
+    stNoFlowFault : ST_ProtectionSts; (* the delivered quantity does not rise while feeding *)
+    stOutOfToleranceFault : ST_ProtectionSts; (* a dose ended out of tolerance (default a warning) *)
   END_STRUCT;
 END_TYPE

@@ -1,7 +1,7 @@
 TYPE
   ST_MeterSelectData : STRUCT
-    bCmdResetTotal : BOOL; (* the total back to 0 (cleared) *)
-    sts : ST_MeterSelectSts;
-    tot : ST_MeterSelectTot;
+    bCmdResetTotals : BOOL; (* the total back to 0 (cleared) *)
+    sts : ST_MeterSelectSts; (* the status *)
+    tot : ST_MeterSelectTot; (* the totals (kept) *)
   END_STRUCT;
 END_TYPE

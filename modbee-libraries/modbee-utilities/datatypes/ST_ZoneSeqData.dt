@@ -1,14 +1,14 @@
 TYPE
   ST_ZoneSeqData : STRUCT
-    bCmdStart : BOOL;
-    bCmdStop : BOOL;
-    bCmdSkip : BOOL;
-    bCmdReset : BOOL;
-    nCmdRunZone : INT := -1; (* run only this zone (index in aZones): a start; then -1 *)
-    set : ST_ZoneSeqSet;
-    sts : ST_ZoneSeqSts;
+    bCmdStart : BOOL; (* HMI: start the program (acts once, cleared by the block) *)
+    bCmdStop : BOOL; (* HMI: stop the program (acts once, cleared by the block) *)
+    bCmdSkipZone : BOOL; (* HMI: the watering zone is done now (acts once) *)
+    bCmdResetFaults : BOOL; (* HMI: reset trips and alarms whose cause has gone (acts once, cleared by the block) *)
+    nCmdRunOnlyZone : INT := -1; (* run only this zone (index in aZones): a start; then -1 *)
+    set : ST_ZoneSeqSet; (* settings (kept) *)
+    sts : ST_ZoneSeqSts; (* status *)
     bCmdPause : BOOL; (* pause (latched until bCmdResume, or the program ends); cleared by the block *)
     bCmdResume : BOOL; (* cleared by the block *)
-    det : ST_ZoneSeqDet;
+    det : ST_ZoneSeqDet; (* details, sent while viewed *)
   END_STRUCT;
 END_TYPE

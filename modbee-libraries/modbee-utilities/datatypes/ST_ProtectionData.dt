@@ -1,9 +1,9 @@
 TYPE
   ST_ProtectionData : STRUCT
-    bCmdReset : BOOL;
-    bRefused : BOOL; (* a bad settings write was put back (cleared by its reset) *)
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    set : ST_ProtectionPartSet;
-    sts : ST_ProtectionSts;
+    bCmdResetFaults : BOOL; (* HMI: reset trips and alarms whose cause has gone (acts once, cleared by the block) *)
+    bSettingRefused : BOOL; (* a bad settings write was put back (cleared by its reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    set : ST_ProtectionPartSet; (* settings (kept) *)
+    sts : ST_ProtectionSts; (* status *)
   END_STRUCT;
 END_TYPE

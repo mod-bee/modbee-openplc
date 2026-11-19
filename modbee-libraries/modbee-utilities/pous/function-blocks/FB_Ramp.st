@@ -1,34 +1,34 @@
 (* FB_Ramp — rate-limited setpoint.
 
-fOut moves toward fIn at fRateUp (rising) or fRateDown (falling), in units per
-eRateUnit (second by default; minute, hour or day), and stops exactly on fIn
+fOut moves toward fSetpoint at fRampUpRate (rising) or fRampDownRate (falling), in units per
+eRateUnit (second by default; minute, hour or day), and stops exactly on fSetpoint
 (no overshoot). A rate of 0, or infinity,
 means no limit: fOut jumps. The sign of a rate is ignored.
 
-fOut starts at 0 after a restart and ramps to fIn. bTrack makes fOut follow fIn
+fOut starts at 0 after a restart and ramps to fSetpoint. bFollowAtOnce makes fOut follow fSetpoint
 at once (for example while the drive is stopped), and the ramp carries on
-from there when bTrack goes FALSE.
+from there when bFollowAtOnce goes FALSE.
 
 Time is measured from TIME() differences in whole milliseconds; the part of a
 millisecond left over is carried to the next scan, so the rate is exact at
 any task interval.
 
-A value that is not a number (fIn NaN or infinite, a rate NaN) holds fOut where
-it is and sets bBadInput; the time it lasted does not count, so fOut does not
+A value that is not a number (fSetpoint NaN or infinite, a rate NaN) holds fOut where
+it is and sets bInputNotANumber; the time it lasted does not count, so fOut does not
 catch up with a jump afterwards. *)
 
 FUNCTION_BLOCK FB_Ramp
   VAR_INPUT
-    fIn : REAL; (* target *)
-    fRateUp : REAL := 10.0; (* units per eRateUnit rising (0 = jump) *)
-    fRateDown : REAL := 10.0; (* units per eRateUnit falling (0 = jump) *)
+    fSetpoint : REAL; (* target *)
+    fRampUpRate : REAL := 10.0; (* units per eRateUnit rising (0 = jump) *)
+    fRampDownRate : REAL := 10.0; (* units per eRateUnit falling (0 = jump) *)
     eRateUnit : E_RateUnit := E_RateUnit.PerSec; (* the rates are per second, minute, hour or day *)
-    bTrack : BOOL; (* fOut follows fIn at once *)
+    bFollowAtOnce : BOOL; (* fOut follows fSetpoint at once *)
   END_VAR
   VAR_OUTPUT
-    fOut : REAL;
-    bRamping : BOOL; (* fOut is still moving toward fIn *)
-    bBadInput : BOOL; (* fIn or a rate is not a number: fOut is held *)
+    fOut : REAL; (* the ramped value *)
+    bRamping : BOOL; (* fOut is still moving toward fSetpoint *)
+    bInputNotANumber : BOOL; (* fSetpoint or a rate is not a number: fOut is held *)
   END_VAR
   VAR
     bStarted : BOOL;
@@ -42,11 +42,11 @@ FUNCTION_BLOCK FB_Ramp
   END_VAR
 
 
-bBadInput := NOT (fIn = fIn) OR fIn > 3.4E38 OR fIn < -3.4E38
-            OR NOT (fRateUp = fRateUp) OR NOT (fRateDown = fRateDown);
-fX := REAL_TO_LREAL(fIn);
+bInputNotANumber := NOT (fSetpoint = fSetpoint) OR fSetpoint > 3.4E38 OR fSetpoint < -3.4E38
+            OR NOT (fRampUpRate = fRampUpRate) OR NOT (fRampDownRate = fRampDownRate);
+fX := REAL_TO_LREAL(fSetpoint);
 
-IF NOT bStarted OR bBadInput THEN
+IF NOT bStarted OR bInputNotANumber THEN
   tPrev := TIME();               (* nothing to catch up on *)
   bStarted := TRUE;
 ELSE
@@ -62,14 +62,14 @@ ELSE
     END_CASE;
     dtS := LINT_TO_LREAL(dMs) / 1000.0 / fPerS;
     IF fX > fY THEN
-      fRateAbs := ABS(REAL_TO_LREAL(fRateUp));
+      fRateAbs := ABS(REAL_TO_LREAL(fRampUpRate));
       IF fRateAbs = 0.0 THEN
         fY := fX;
       ELSE
         fY := MIN(fX, fY + fRateAbs * dtS);
       END_IF;
     ELSIF fX < fY THEN
-      fRateAbs := ABS(REAL_TO_LREAL(fRateDown));
+      fRateAbs := ABS(REAL_TO_LREAL(fRampDownRate));
       IF fRateAbs = 0.0 THEN
         fY := fX;
       ELSE
@@ -79,10 +79,10 @@ ELSE
   END_IF;
 END_IF;
 
-IF bTrack AND NOT bBadInput THEN
+IF bFollowAtOnce AND NOT bInputNotANumber THEN
   fY := fX;
 END_IF;
 fOut := LREAL_TO_REAL(fY);
-bRamping := NOT bBadInput AND fY <> fX;
+bRamping := NOT bInputNotANumber AND fY <> fX;
 
 END_FUNCTION_BLOCK

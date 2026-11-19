@@ -1,19 +1,19 @@
 (* FB_Tonr — retentive (accumulating) on-delay timer. Like a TON, but the elapsed time is kept when bIn goes off
-and timing carries on from there the next time bIn is on. bQ once bIn has been on for tPT in total. bReset clears
+and timing carries on from there the next time bIn is on. bQ once bIn has been on for tPresetTime in total. bReset clears
 the time (wins while held). As Siemens TONR / Rockwell RTO, the time lives only while powered (nothing retained).
-tET stops at tPT; tPT lowered below the time gathered: bQ at once; tPT <= 0: bQ as soon as bIn is on. Each scan
+tElapsedTime stops at tPresetTime; tPresetTime lowered below the time gathered: bQ at once; tPresetTime <= 0: bQ as soon as bIn is on. Each scan
 interval counts if bIn was on at its start. *)
 
 FUNCTION_BLOCK FB_Tonr
   VAR_INPUT
     bIn : BOOL; (* gathers time while TRUE *)
-    tPT : TIME := T#10s; (* preset *)
-    bReset : BOOL; (* clears tET (wins) *)
+    tPresetTime : TIME := T#10s; (* preset *)
+    bReset : BOOL; (* clears tElapsedTime (wins) *)
   END_VAR
   VAR_OUTPUT
-    bQ : BOOL; (* tET has reached tPT *)
-    tET : TIME; (* time gathered (stops at tPT) *)
-    tRT : TIME; (* time remaining *)
+    bQ : BOOL; (* tElapsedTime has reached tPresetTime *)
+    tElapsedTime : TIME; (* time gathered (stops at tPresetTime) *)
+    tTimeLeft : TIME; (* time remaining *)
     bTiming : BOOL; (* gathering time now *)
   END_VAR
   VAR
@@ -29,7 +29,7 @@ FUNCTION_BLOCK FB_Tonr
 
 
 tCur := TIME();
-tPreset := tPT;
+tPreset := tPresetTime;
 IF tPreset < T#0s THEN
   tPreset := T#0s;
 END_IF;
@@ -52,11 +52,11 @@ END_IF;
 tPrev := tCur;
 bQ := bStarted AND tAcc >= tPreset;
 IF tAcc < tPreset THEN
-  tET := tAcc;
+  tElapsedTime := tAcc;
 ELSE
-  tET := tPreset;
+  tElapsedTime := tPreset;
 END_IF;
-tRT := tPreset - tET;
+tTimeLeft := tPreset - tElapsedTime;
 bTiming := bIn AND NOT bReset AND NOT bQ;
 
 END_FUNCTION_BLOCK

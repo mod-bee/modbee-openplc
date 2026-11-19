@@ -1,20 +1,20 @@
 TYPE
   ST_ZoneSts : STRUCT
-    bWatering : BOOL;
-    bOpen : BOOL;
-    bDone : BOOL;
-    tWatered : TIME;
-    fWatered : LREAL;
-    tTimeLeft : TIME;
-    nCycle : INT; (* cycles finished *)
-    bSoaking : BOOL;
-    tSoakLeft : TIME;
-    bFlowTrip : BOOL; (* the flow check has taken the zone out *)
-    bCapped : BOOL; (* the last cycle ended on its time cap *)
-    stFlowCheck : ST_ProtectionSts;
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bWatering : BOOL; (* watering now *)
+    bValveOpen : BOOL; (* its valve is proven open (or, with no valve, after tPlainValveOpenTime) *)
+    bZoneDone : BOOL; (* done in this program *)
+    tWateredTime : TIME; (* watering time so far *)
+    fWateredVolume : LREAL; (* volume so far *)
+    tTimeLeft : TIME; (* time left in the cycle or phase running now *)
+    nCycleCount : INT; (* cycles finished *)
+    bSoaking : BOOL; (* soaking between cycles *)
+    tSoakTimeLeft : TIME; (* soak time left *)
+    bOutOnFlowCheck : BOOL; (* the flow check has taken the zone out *)
+    bEndedOnTimeCap : BOOL; (* the last cycle ended on its time cap *)
+    stFlowOutOfBandFault : ST_ProtectionSts; (* the flow left the band while watering *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
     bSkipped : BOOL; (* skipped in this program (a skip, the rain, its valve, the pump wait) *)
-    eResult : E_StopReason; (* how it ended in this program (None: not yet) *)
+    eLastOutcome : E_StopReason; (* how it ended in this program (None: not yet) *)
   END_STRUCT;
 END_TYPE

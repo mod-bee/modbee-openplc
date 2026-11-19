@@ -1,10 +1,10 @@
 TYPE
   ST_ValveData EXTENDS ST_EquipmentData : STRUCT
-    set : ST_ValveSet;
-    sts : ST_ValveSts;
-    tot : ST_ValveTot;
+    set : ST_ValveSet; (* settings (kept) *)
+    sts : ST_ValveSts; (* status *)
+    tot : ST_ValveTot; (* totals (kept) *)
     bSimulate : BOOL; (* the end switches follow the command (travel times); not kept *)
-    bCmdPreset : BOOL; (* set tot.nStrokes to nPresetStrokes (cleared by the block) *)
-    nPresetStrokes : UDINT;
+    bCmdPresetStrokes : BOOL; (* set tot.nStrokeCount to nPresetStrokeCount (cleared by the block) *)
+    nPresetStrokeCount : UDINT; (* the stroke count bCmdPresetStrokes writes *)
   END_STRUCT;
 END_TYPE

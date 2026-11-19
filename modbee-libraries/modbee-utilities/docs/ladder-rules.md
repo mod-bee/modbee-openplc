@@ -15,11 +15,11 @@ This matters even more for equipment: it stops when its owner's rung stops calli
 
 ## 2. Wire signals to named pins
 Rung power only enables the block; it doesn't drive any pin. Put every signal on the
-pin it belongs to: `bFeedback := DI_M1_Aux`, `bOverload := DI_M1_Overload`.
+pin it belongs to: `bRunFeedback := DI_M1_Aux`, `bOverloadTripped := DI_M1_Overload`.
 
 ## 3. Wire blocks to blocks by their instance
 An `ip…` pin takes another block's **instance**: write the instance name on the pin.
-`ipMotor := fbMotor1` on a pump, `ipTarget := fbPump1` on a level control,
+`ipMotor := fbMotor1` on a pump, `ipEquipment := fbPump1` on a level control,
 `ipLevel := fbSumpLevel` on anything that reads the level, `ipSystem := fbSystem` on
 everything. That one wire carries the request, the status and the measurement both
 ways: there is nothing else to connect.
@@ -35,10 +35,10 @@ Record fields work like any other variable:
 ```
 |--[ stPump1.sts.bRunning ]-------------------( DO_P1_Lamp )----|
 |--[ fbPump1.bError ]-------------------------( DO_FaultLamp )--|
-|--[ DI_HighFloat ]---------------------------( aAlm[2].bIn )---|
+|--[ DI_HighFloat ]---------------------------( aAlm[2].bConditionPresent )|
 ```
 
-An HMI command is a coil on the record's `bCmd…` field; the block sets it back.
+An HMI command is a coil on the record's `bRunCommand…` field; the block sets it back.
 
 ## 6. Tables
 Declare a table as an array of the row type, for example
@@ -46,9 +46,9 @@ Declare a table as an array of the row type, for example
 row's input with one coil, read each row's result with one contact:
 
 ```
-|--[ fbPump1.bError ]--------------------( aAlm[1].bIn )--------|
-|--[ aStep[2].bCmd ]---------------------( bConveyor2Run )------|
-|--[ DI_Conveyor2_Running ]--------------( aStep[2].bFeedback )-|
+|--[ fbPump1.bError ]--------------------( aAlm[1].bConditionPresent )----|
+|--[ aSteps[2].bRunCommand ]---------------------( bConveyor2Run )------|
+|--[ DI_Conveyor2_Running ]--------------( aSteps[2].bRunFeedback )|
 ```
 
 ## 7. Methods and properties are for ST
@@ -66,8 +66,8 @@ or a record field.
 6. The IO map out ([FB_IoMapOut](blocks/FB_IoMapOut.md)) last.
 
 ## 9. Analog I/O
-`FB_AnalogIn.fIn` is a REAL: put an `INT_TO_REAL` (or `UINT_TO_REAL`) block in front
-of a raw `%IW` value. `FB_AnalogOut.nOutRaw` and `FB_ValveMod.nOutRaw` are UINT and
+`FB_AnalogIn.fRawIn` is a REAL: put an `INT_TO_REAL` (or `UINT_TO_REAL`) block in front
+of a raw `%IW` value. `FB_AnalogOut.nRawOutput` and `FB_ValveMod.nRawOutput` are UINT and
 connect straight to `%QW`.
 
 **Back to** [the index](README.md).

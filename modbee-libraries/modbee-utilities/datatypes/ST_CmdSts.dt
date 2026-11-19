@@ -1,10 +1,10 @@
 TYPE
   ST_CmdSts : STRUCT
-    eLastSource : E_CmdFrom;
-    nLastCmd : DWORD;
-    nLastMode : INT := -1;
-    nLastSel : INT := -1;
-    nRefusedCount : UDINT; (* remote requests refused (not kept) *)
-    bLocalOnly : BOOL; (* under local control now *)
+    eLastCommandFrom : E_CmdFrom; (* who gave the last accepted command: Local or Remote *)
+    nLastCommandBits : DWORD; (* the last accepted command bits *)
+    nLastModeRequest : INT := -1; (* the last accepted mode request (-1 = none) *)
+    nLastSelection : INT := -1; (* the last accepted selection (-1 = none) *)
+    nRemoteRefusedCount : UDINT; (* remote requests refused (not kept) *)
+    bLocalControlOnly : BOOL; (* under local control now *)
   END_STRUCT;
 END_TYPE

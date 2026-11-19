@@ -1,11 +1,11 @@
 TYPE
   ST_PulseMeterSts : STRUCT
-    bGood : BOOL;
-    fRate : REAL; (* per hour *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
-    stInputBad : ST_ProtectionSts;
-    nPulses : UDINT; (* pulses counted since power-up *)
-    bTooFast : BOOL; (* pulses at the scan-rate limit (a pulse every second scan; held 5 s) *)
+    bGood : BOOL; (* counting: the meter can be trusted *)
+    fFlowPerHour : REAL; (* per hour *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
+    stMeterBadFault : ST_ProtectionSts; (* the meter's input is bad (default a warning) *)
+    nPulseCount : UDINT; (* pulses counted since power-up *)
+    bPulsesTooFast : BOOL; (* pulses at the scan-rate limit (a pulse every second scan; held 5 s) *)
   END_STRUCT;
 END_TYPE

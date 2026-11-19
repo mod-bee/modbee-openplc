@@ -1,8 +1,8 @@
 TYPE
   ST_ValveLatchSts : STRUCT
-    bPulsing : BOOL;
-    nLastPos : USINT; (* the kept position: 0 unknown, 1 closed, 2 open *)
-    bRefused : BOOL;
-    eRefusedWhy : E_UtError; (* why the last write was refused (cleared with bRefused) *)
+    bPulsing : BOOL; (* a coil pulse is being sent *)
+    nKeptPosition : USINT; (* the kept position: 0 unknown, 1 closed, 2 open *)
+    bSettingRefused : BOOL; (* a setting write was refused and the last good value put back (until a reset) *)
+    eSettingRefusedErrorId : E_UtError; (* why the last write was refused (cleared with bSettingRefused) *)
   END_STRUCT;
 END_TYPE

@@ -1,8 +1,8 @@
 TYPE
   ST_PumpDet : STRUCT
-    tRunTime : TIME; (* this run *)
+    tThisRunTime : TIME; (* this run *)
     tTimeLeft : TIME; (* of the start delay, minimum run or stop delay now counting *)
     tIdleTime : TIME; (* since the last stop (0 while running) *)
-    tHandLeft : TIME; (* a Hand run's time left under set.tHandMax (0 = none counting) *)
+    tHandTimeLeft : TIME; (* a Hand run's time left under set.tMaxHandRunTime (0 = none counting) *)
   END_STRUCT;
 END_TYPE
