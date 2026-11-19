@@ -14,7 +14,7 @@ because no status code can say which of forty things went wrong at a socket.
 | *No route to host* | wrong subnet, or a firewall |
 | *Connection timed out* | a firewall dropping rather than refusing |
 | *that transport needs a board, not the Runtime* | `eTransport` names an Arduino link on the Runtime |
-| *set sHost to the broker* | the pin is empty |
+| *set sHostName to the broker* | the pin is empty |
 
 If `sLastError` is empty and `eConnectionState` sits at `E_MqttState.Connecting`, the socket
 opened and the broker has not answered. That is a broker that accepted a
@@ -31,7 +31,7 @@ If that fails too, the PLC is not the problem.
 
 ## It connects, then drops, then connects again
 
-`nReconnects` from `mqtt.Statistics` climbing is the symptom.
+`nReconnectCount` from `mqtt.Statistics` climbing is the symptom.
 
 | | |
 | --- | --- |
@@ -58,17 +58,17 @@ If that shows nothing, the problem is upstream of this PLC.
 is not established - usually not connected, sometimes refused by an access
 rule, in which case the call returns `E_MqttResult.NotAuthorized`.
 
-**Check `nMalformed`.** Climbing means messages *are* arriving and none of them
+**Check `nMalformedCount`.** Climbing means messages *are* arriving and none of them
 parse as `anyValue`'s type. A publisher sending `23,5` to a `REAL`, or JSON to a
 number. Use `Message` to see the raw text.
 
 ## A value arrives but eQuality is never Good
 
-`tExpect` is shorter than the publisher's own interval. Quality is
+`tExpectedInterval` is shorter than the publisher's own interval. Quality is
 judged against the interval *you* asked for, so asking for a value every
 second from something that publishes every minute is permanently overdue.
 
-Set it to a little more than the publisher's `tPeriod`.
+Set it to a little more than the publisher's `tSendInterval`.
 
 ## eQuality is Unknown and stays Unknown
 
@@ -85,7 +85,7 @@ nobody was listening. The link is fine.
 **Check retain.** A subscriber that connects afterwards hears nothing unless
 the message was retained.
 
-**Check the prefix if a bridge is involved.** `sRemotePrefix := 'sites/site7/'`
+**Check the prefix if a bridge is involved.** `sRemoteTopicPrefix := 'sites/site7/'`
 means the far side sees `sites/site7/plant/intake/level`, not
 `plant/intake/level`.
 
@@ -97,7 +97,7 @@ it never does:
 - the link dropped mid-flight - it ends with `E_MqttResult.NotConnected`
 - the broker's receive maximum is exhausted - `E_MqttResult.QuotaExceededByPeer`
 
-`Request` ends at `tTimeout` with `E_MqttResult.KeepAliveTimeout`. Left at
+`Request` ends at `tTimeout` with `E_MqttResult.NoReply`. Left at
 `T#0s` that is five seconds.
 
 ## Publish says NotConnected
@@ -109,13 +109,13 @@ Gate the edge on `mqtt.bConnected`, or raise it again when the link is back.
 ## A method says E_MqttResult.NotSupportedByProtocol
 
 You asked for something 3.1.1 cannot express, on a 3.1.1 connection. Check
-`nVersion` from `mqtt.Statistics` - if it says 4, the fallback happened.
+`nProtocolVersion` from `mqtt.Statistics` - if it says 4, the fallback happened.
 
 `Request` and `Response` are the usual ones: Response Topic and Correlation Data do not
 exist before 5.0, and sending the request stripped would mean the responder
 has nowhere to reply to. Refused rather than sent into the void.
 
-A Will **delay** (`stWillConfig.tDelay`) is the other. The client refuses to connect at 3.1.1 with a
+A Will **delay** (`stWill.tWillDelayInterval`) is the other. The client refuses to connect at 3.1.1 with a
 delay set, rather than dropping it - a delay silently lost turns a flapping
 link into a stream of false offline alarms, which is the exact failure the
 delay was set to prevent.
@@ -138,9 +138,9 @@ A connection carries one Will, and an `FB_SparkplugHost` or a second
 `FB_SparkplugNode` on the same `FB_MqttClient` has it. Give the second one an
 `FB_MqttClient` of its own.
 
-`stWillConfig` on that client is the other way round: the node keeps the
+`stWill` on that client is the other way round: the node keeps the
 Will and the client says *"the Will is Sparkplug's on this client: leave
-stWillConfig.sTopic empty"* with `E_MqttResult.Refused` - Sparkplug's birth and
+stWill.sTopic empty"* with `E_MqttResult.Refused` - Sparkplug's birth and
 death certificates are the presence.
 
 ## Everything works but feels slow
@@ -164,13 +164,13 @@ number, for when the line is not enough.
 
 | `sLastError` on a board | What to do |
 | --- | --- |
-| *a board needs the CA in MQTT_CA_CERT_PEM* | `E_MqttSecurity.TlsVerify` with no CA defined. For the site's own broker use `E_MqttSecurity.TlsPinned` with `bTrustNew`; for a signed one, add the CA to the board package |
-| *no pinned key yet - set bTrustNew once to learn it* | `E_MqttSecurity.TlsPinned` on a link that has never connected |
-| *cannot connect to the broker* | nothing answered on `sHost` and `nPort`: the broker is down, the port is wrong, or the network is not up. On cellular the modem's own reason is shown instead when it has one |
+| *a board needs the CA in MQTT_CA_CERT_PEM* | `E_MqttSecurity.TlsVerify` with no CA defined. For the site's own broker use `E_MqttSecurity.TlsPinned` with `bTrustFirstBrokerKey`; for a signed one, add the CA to the board package |
+| *no pinned key yet - set bTrustFirstBrokerKey once to learn it* | `E_MqttSecurity.TlsPinned` on a link that has never connected |
+| *cannot connect to the broker* | nothing answered on `sHostName` and `nHostPort`: the broker is down, the port is wrong, or the network is not up. On cellular the modem's own reason is shown instead when it has one |
 | *TLS: certificate not trusted* | `MQTT_CA_CERT_PEM` is not the CA that signed this broker - or the broker sends its certificate without the intermediate |
-| *TLS: wrong host name* | `sHost` is not a name on the certificate. Use the name it was issued to, not the address |
+| *TLS: wrong host name* | `sHostName` is not a name on the certificate. Use the name it was issued to, not the address |
 | *TLS: bad certificate* | the broker's certificate failed some other check (its key usage, its signature) or would not read |
-| *TLS: not the pinned key* | the broker was replaced, or `sHost` is wrong. `sBrokerKey` shows the key it presented. To accept a replacement, switch `bTrustNew` off and on |
+| *TLS: not the pinned key* | the broker was replaced, or `sHostName` is wrong. `sBrokerKeyFingerprint` shows the key it presented. To accept a replacement, switch `bTrustFirstBrokerKey` off and on |
 | *TLS: broker sent no cert* | pinned, and the broker sent no certificate to compare |
 | *TLS: broker refused us* | the broker ended the handshake. Most often it wants a client certificate (`MQTT_CLIENT_CERT_PEM`), or refuses the one sent |
 | *TLS: no common version/cipher* | the broker allows only TLS 1.3, or only cipher suites a board does not offer. Allow TLS 1.2 on the broker |
@@ -181,12 +181,12 @@ number, for when the line is not enough.
 | *the last connect is still finishing* | the attempt before outlived `tConnectTimeout` and its socket is still opening; the next attempt waits for it. Raise `stSessionConfig.tConnectTimeout` for a slow link |
 | *no memory for the connect task* | the board could not find the few kB of internal memory the connect runs in; it tries again after the backoff. Something else is holding the internal memory |
 | *broker closed the connection* / *TLS: connection dropped* | the connection ended after it was up: the broker closed it, or the network went |
-| *TLS over Ethernet needs an ESP32, or SSLClient* / *the modem's TLS checks no certificate* | a board without the ESP32's mbedTLS: only what its medium offers |
+| *TLS over Ethernet needs an ESP32; use E_MqttTransport.External* / *modem TLS checks no certificate: use E_MqttSecurity.TlsInsecure* | a board without the ESP32's mbedTLS: only what its medium offers |
 
 On the Runtime `sLastError` carries the TLS library's own words instead, and a
 key that is not the pinned one names both fingerprints.
 
-**Check `stNetworkConfig`**: `sMac` and `sIp` set for Ethernet, `sSsid` for
+**Check `stNetworkConfig`**: `sMacAddress` and `sIpAddress` set for Ethernet, `sSsid` for
 Wi-Fi (or node-uio's `NETWORK` joining it). A board with no MAC cannot open
 an Ethernet link - *set MAC on MQTT_ARDUINO* is that message, naming the
 structure by its 0.1 name - and every board on a segment needs its own.
@@ -213,7 +213,7 @@ both, so the text does not tell you which of the two pins is wrong.
 **It retries only every five minutes, and that is deliberate.** A password
 does not become correct by itself, and a PLC repeating a rejected one every
 second is how a site gets itself banned. Fix the login and cycle `bConnect`,
-or set `stSessionConfig.bRetryRejectedCredential := TRUE` if the credential
+or set `stSessionConfig.bRetryRefusedLogin := TRUE` if the credential
 genuinely is expected to become valid on its own. Page 03.
 
 ## The broker block reports and does nothing
@@ -224,7 +224,7 @@ Four things make it report instead:
 **No network library on the include path.** WiFi comes with the ESP32 core;
 Ethernet needs `MQTT_ENABLE_ETHERNET`, same as the client.
 
-**`sCertFile` or `sKeyFile` set on a board.** They are paths, and a board has
+**`sServerCertificateFile` or `sServerPrivateKeyFile` set on a board.** They are paths, and a board has
 no file system this block may assume. Clear them and let it mint its own, or
 serve plain.
 

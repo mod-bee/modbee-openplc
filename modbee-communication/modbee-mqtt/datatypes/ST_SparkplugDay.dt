@@ -1,6 +1,6 @@
 TYPE
   ST_SparkplugDay : STRUCT
-    dDay   : DATE;                         (* the day the total belongs to: the local date, from dtClock *)
-    fTotal : REAL;                         (* that day's total, in the units the total is kept in *)
+    dDay : DATE; (* the local date this total belongs to *)
+    fTotal : REAL; (* that day's total, in the total's own units *)
   END_STRUCT;
 END_TYPE

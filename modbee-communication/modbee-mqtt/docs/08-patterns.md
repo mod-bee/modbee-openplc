@@ -25,16 +25,16 @@ The shape most PLCs want. One block and a call per value.
 ```st
 VAR
   mqtt : FB_MqttClient;
-  will : ST_MqttWillConfig := (sTopic := 'plant/intake/status', tDelay := T#30s);
+  will : ST_MqttWillConfig := (sTopic := 'plant/intake/status', tWillDelayInterval := T#30s);
 END_VAR
 
-mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHost := '10.0.0.20',
-     sClientId := 'plc-intake', stWillConfig := will);
+mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHostName := '10.0.0.20',
+     sClientId := 'plc-intake', stWill := will);
 
 mqtt.Report(anyValue := PLANT.rLevel, sTopic := 'plant/intake/level',
-            fDeadband := 0.05, tPeriod := T#1m, bRetain := TRUE);
+            fDeadband := 0.05, tSendInterval := T#1m, bRetain := TRUE);
 mqtt.Report(anyValue := PLANT.rFlow, sTopic := 'plant/intake/flow',
-            fDeadband := 0.5, tPeriod := T#1m, bRetain := TRUE);
+            fDeadband := 0.5, tSendInterval := T#1m, bRetain := TRUE);
 ```
 
 Each `Report` call keeps its own last value and its own deadband, found by its
@@ -80,7 +80,7 @@ mqtt.Publish(anyValue := iAlarmCode, sTopic := 'plant/intake/alarm',
              eQos := E_MqttQos.ExactlyOnceDelivery, bRetain := FALSE,
              bExecute := bAlarmRising);
 mqtt.Report(anyValue := bAlarmActive, sTopic := 'plant/intake/alarm-active',
-            tPeriod := T#1m, bRetain := TRUE);
+            tSendInterval := T#1m, bRetain := TRUE);
 ```
 
 `bRetain := FALSE` on the event. A retained alarm keeps announcing itself to
@@ -94,20 +94,20 @@ topic holding the state as a `BOOL`, with the event topic kept for events.
 The PLC is the broker; a bridge carries a subset upstream.
 
 ```st
-broker(bEnable := TRUE, nPort := 1883, nMaxClients := 32);
+broker(bEnable := TRUE, nLocalPort := 1883, nMaxClients := 32);
 
 bridge(bEnable := TRUE,
-       sLocalHost := '127.0.0.1',
-       sRemoteHost := 'mqtt.example.com',
+       sLocalHostName := '127.0.0.1',
+       sRemoteHostName := 'mqtt.example.com',
        eRemoteSecurity := E_MqttSecurity.TlsVerify,
        sRemoteUserName := 'site7', sRemoteUserPassword := sPassword,
        sBridgeName := 'site7',
        sTopic := 'plant/#', eDirection := E_MqttDirection.Out,
        eQos := E_MqttQos.AtLeastOnceDelivery,
-       sRemotePrefix := 'sites/site7/');
+       sRemoteTopicPrefix := 'sites/site7/');
 
 bridge(bEnable := TRUE, sTopic := 'cmd/#', eDirection := E_MqttDirection.In,
-       eQos := E_MqttQos.ExactlyOnceDelivery, sRemotePrefix := 'sites/site7/');
+       eQos := E_MqttQos.ExactlyOnceDelivery, sRemoteTopicPrefix := 'sites/site7/');
 ```
 
 Twenty sensors connect to the PLC, not to head office. The site keeps working
@@ -140,7 +140,7 @@ other off for ever, each looking healthy on its own.
 **Decide a topic scheme before the second device.** Nothing enforces one, and
 retrofitting is a site visit. `site/area/device/measurement` works.
 
-**Always set `tPeriod` on a `Report`.** Without it a value that never changes
+**Always set `tSendInterval` on a `Report`.** Without it a value that never changes
 is indistinguishable from a device that has died.
 
 **Retain state, never events.**
@@ -154,7 +154,7 @@ variable in two `Report` calls is one record pulled two ways.
 
 **Put the client in its own task.**
 
-**Set `stSessionConfig.tMaxSilence` on cellular**, and consider
+**Set `stSessionConfig.tReconnectAfterSilence` on cellular**, and consider
 `bAutoReconnect := FALSE` with your own reconnect logic where you can afford
 the stall.
 
@@ -162,10 +162,10 @@ the stall.
 
 **A retained value that is older than the device.** A broker will serve a
 retained message from something that died last Tuesday and nothing marks it as
-old. Pair every publisher with presence (`stWillConfig`) and subscribe to the
+old. Pair every publisher with presence (`stWill`) and subscribe to the
 status topic, or you are trusting a ghost.
 
-**`fDeadband` without `tPeriod`.** Covered above, and the most common one.
+**`fDeadband` without `tSendInterval`.** Covered above, and the most common one.
 
 **Publishing every scan.** MQTT has no rate limit and a broker will accept
 everything you send it until it falls over. Use `Report`, not `Publish` on a

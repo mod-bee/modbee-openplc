@@ -5,14 +5,14 @@ connections and takes no client. The OpenPLC Runtime only.
 
 ```st
 bridge(bEnable := TRUE,
-       sLocalHost := '127.0.0.1',
-       sRemoteHost := 'mqtt.example.com',
+       sLocalHostName := '127.0.0.1',
+       sRemoteHostName := 'mqtt.example.com',
        eRemoteSecurity := E_MqttSecurity.TlsVerify,
        sRemoteUserName := 'site7', sRemoteUserPassword := sPassword,
        sBridgeName := 'site7',
        sTopic := 'plant/#', eDirection := E_MqttDirection.Out,
        eQos := E_MqttQos.AtLeastOnceDelivery,
-       sRemotePrefix := 'sites/site7/');
+       sRemoteTopicPrefix := 'sites/site7/');
 ```
 
 ## It is not a client either
@@ -40,8 +40,8 @@ always does. Two security pins rather than one: `eLocalSecurity` and
 `sTopic` is the topic filter **without either prefix**. The prefixes are what
 each side actually sees.
 
-With `sTopic := 'plant/#'`, an empty `sLocalPrefix` and
-`sRemotePrefix := 'sites/site7/'`:
+With `sTopic := 'plant/#'`, an empty `sLocalTopicPrefix` and
+`sRemoteTopicPrefix := 'sites/site7/'`:
 
 ```
 local   plant/intake/level
@@ -70,12 +70,12 @@ Call the same instance several times in a scan, each with a different
 starts:
 
 ```st
-bridge(bEnable := TRUE, sLocalHost := '127.0.0.1', sRemoteHost := 'mqtt.example.com',
+bridge(bEnable := TRUE, sLocalHostName := '127.0.0.1', sRemoteHostName := 'mqtt.example.com',
        sBridgeName := 'site7',
        sTopic := 'plant/#', eDirection := E_MqttDirection.Out,
-       eQos := E_MqttQos.AtLeastOnceDelivery, sRemotePrefix := 'sites/site7/');
+       eQos := E_MqttQos.AtLeastOnceDelivery, sRemoteTopicPrefix := 'sites/site7/');
 bridge(bEnable := TRUE, sTopic := 'cmd/#', eDirection := E_MqttDirection.In,
-       eQos := E_MqttQos.ExactlyOnceDelivery, sRemotePrefix := 'sites/site7/');
+       eQos := E_MqttQos.ExactlyOnceDelivery, sRemoteTopicPrefix := 'sites/site7/');
 ```
 
 The rules are collected on the first scan and the connections built on the
@@ -100,7 +100,7 @@ stale reading sitting on a head-office dashboard is worse than no reading at
 all - nobody can tell it is three days old.
 
 Turn it on for values where the upstream end genuinely needs the last known
-state on connecting, and pair it with presence (`stWillConfig` on the
+state on connecting, and pair it with presence (`stWill` on the
 publishing client) so the age is knowable.
 
 ## Reading it
@@ -108,9 +108,9 @@ publishing client) so the age is knowable.
 | | |
 | --- | --- |
 | `eBridgeState` | `Idle`, `Connecting`, `Up` or `Degraded` |
-| `bLocalUp` / `bRemoteUp` | each end |
-| `nForwardedOut` / `nForwardedIn` | running totals carried |
-| `nRefusedOut` / `nRefusedIn` | the far side would not take it |
+| `bLocalBrokerConnected` / `bRemoteBrokerConnected` | each end |
+| `nForwardedToRemoteCount` / `nForwardedToLocalCount` | running totals carried |
+| `nRefusedByRemoteCount` / `nRefusedByLocalCount` | the far side would not take it |
 
 **`E_MqttBridgeState.Degraded` is the state worth alarming on.** One end is
 connected and the other is not, so half the traffic flows and the other half
@@ -135,7 +135,7 @@ each broker, carrying nothing, and looking healthy on every pin. Call the block
 at least once with a topic.
 
 **`E_MqttSecurity.TlsPinned` on either side.** Pinning needs a key, and this
-block has nowhere to keep one - `FB_MqttClient` has `bTrustNew` and its own
+block has nowhere to keep one - `FB_MqttClient` has `bTrustFirstBrokerKey` and its own
 retained key for that. Refused rather than quietly falling back to
 `TlsVerify`, which would mean trusting every public CA when the engineer asked
 for exactly one broker.

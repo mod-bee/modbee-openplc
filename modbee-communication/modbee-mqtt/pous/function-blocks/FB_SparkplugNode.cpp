@@ -11,7 +11,7 @@ sEdgeNodeId this node's ID. sGroupId and sEdgeNodeId together are the node's
            address in the whole system and MUST be unique in it.
 sPrimaryHostId  the Sparkplug Host ID this node answers to, or empty for none.
            EMPTY BY DEFAULT - see below.
-tRebirthHoldoff  the shortest time between two answers to rebirth requests
+tMinTimeBetweenRebirths  the shortest time between two answers to rebirth requests
            (Node Control/Rebirth): requests in between are answered together,
            once, when it is up. T#2s by default. On a metered link (a cellular
            SIM) set a minute or more: a host that asks again and again then
@@ -24,10 +24,10 @@ stReportConfig  ST_SparkplugReportConfig, how Record's classes report:
              tLiveInterval  how often the live class sends what moved, and
                             the log class while someone views. T#30s by
                             default. T#0s is refused, never every scan
-             fDeadbandPct   the log class's deadband, in % of the value last
+             fLogDeadbandPct  the log class's deadband, in % of the value last
                             sent, for a REAL or LREAL member whose clause
                             gives no pct=. 0 = none
-             bRemoteControl TRUE: the host may write the cmd and set classes.
+             bAllowHostWrites TRUE: the host may write the cmd and set classes.
                             FALSE: a write is dropped at once and the value
                             reported back unchanged, so the host sees it did
                             not take. Never kept for later
@@ -39,12 +39,12 @@ fbClient    the FB_MqttClient this node rides on. Must be assigned.
            keep-alive, protocol - and the device's own topics and its firmware
            updates share the one session.
 
-bLinkUp     the client's session is up.
-bBorn       the birth certificate has gone. NOT the same as bLinkUp: a node
+bConnected  the client's bConnected: the broker has accepted it.
+bBirthSent       the birth certificate has gone. NOT the same as bConnected: a node
            waiting for its primary host is connected and not born.
-nSeq        the current sequence number, 0-255.
-nBdSeq      the birth/death sequence number of this connection.
-nPoints     metrics declared, node and devices together. No limit but memory:
+nSequenceNumber  the current sequence number, 0-255.
+nBirthDeathSequenceNumber  the birth/death sequence number of this connection.
+nMetrics    metrics declared, node and devices together. No limit but memory:
            past it the declaration is refused and sLastError says "out of
            memory for metrics or devices".
 bError, eErrorId  E_MqttResult.Ok when fine. WrongTask: this block is not in
@@ -65,12 +65,12 @@ sLastError  what the node waits for, or what failed:
                                     "tLiveInterval is T#0s", "message not
                                     queued"
            Empty once born.
-bClockSet   the timestamps are real time. Always on the Runtime; on a board
+bClockSynced  the timestamps are real time. Always on the Runtime; on a board
            once FB_MqttClock has set the clock. Until then they count from
            boot - a date in January 1970 - which a host should take as "not
            synced" and replace with the time it received the message.
-bViewed     Live Demand: a host says someone is viewing this node now.
-sDemand     Live Demand: the devices demanded now, e.g. 'live,cfg-pump'.
+bHostViewing  Live Demand: a host says someone is viewing this node now.
+sDevicesDemanded  Live Demand: the devices demanded now, e.g. 'live,cfg-pump'.
 
 METHODS
 
@@ -83,14 +83,14 @@ QueueFull. A BIRTH CARRIES EVERY METRIC: declare on the first scans and the
 node births with all of them (it waits up to 2 s for the first declaration).
 A metric first declared after the birth makes the node birth again.
 
-  sp.Record(anyData, sSettings, sPrefix, bSend, nMetricCnt =>, nBadClause =>)
+  sp.Record(anyData, anyPointList, sMetricNamePrefix, bSendOnRequest, nRecordMetrics =>, nFirstBadClause =>)
      A WHOLE STRUCT, EACH MEMBER BY ITS CLASS. anyData is the record (nested
-     STRUCTs and arrays included); sSettings its point list, a STRING of any
-     length or a literal; sPrefix goes before every metric name. A record is
-     found by its declared name and type and sPrefix: the same STRUCT with
-     two prefixes is two records. nMetricCnt: metrics it declared.
-     nBadClause: the first clause that cannot be used, counting from 1; 0
-     none; -1 when anyData is not a STRUCT or sSettings not a STRING. The
+     STRUCTs and arrays included); anyPointList its point list, a STRING of any
+     length or a literal; sMetricNamePrefix goes before every metric name. A record is
+     found by its declared name and type and sMetricNamePrefix: the same STRUCT with
+     two prefixes is two records. nRecordMetrics: metrics it declared.
+     nFirstBadClause: the first clause that cannot be used, counting from 1; 0
+     none; -1 when anyData is not a STRUCT or anyPointList not a STRING. The
      other clauses still apply.
 
      THE POINT LIST is clauses split by ';':
@@ -105,19 +105,19 @@ A metric first declared after the birth makes the node birth again.
      <class> says when it goes, where, and whether the host may write it:
        now         at once, always. Read only. Alarms, states, faults
        cmd         at once, always; the host writes it while
-                   stReportConfig.bRemoteControl is TRUE
-       view        at once while someone views (bViewed); otherwise held
+                   stReportConfig.bAllowHostWrites is TRUE
+       view        at once while someone views (bHostViewing); otherwise held
        log         what moved past its deadband, every tLogInterval (every
                    tLiveInterval while someone views). For a metered link:
                    a value that sits still costs nothing
        live        on device 'live': what moved, every tLiveInterval, while
                    a host demands it
        set:<page>  on device 'cfg-<page>': at once while demanded; the host
-                   writes it while bRemoteControl is TRUE. <page> up to 43
+                   writes it while bAllowHostWrites is TRUE. <page> up to 43
                    characters, no + / #
        every:<time>  all of them every <time> (T#1m, 30s, 1h30m), moved or
                    not; a birth counts as a send
-       onreq       all of them on a rising edge of Record's bSend
+       onreq       all of them on a rising edge of Record's bSendOnRequest
      A value takes the class of the LAST now/cmd/view/log/every/onreq clause
      covering it, on the node and, separately, on each dev= device; it may
      also be in live and in any number of set pages, each a metric of its own
@@ -127,7 +127,7 @@ A metric first declared after the birth makes the node birth again.
        db=<n>      deadband in the member's units: a move this size or less
                    from the value last sent is not reported
        pct=<n>     deadband in % of the value last sent. With db=, a move
-                   must clear both. Not given on a log REAL: fDeadbandPct
+                   must clear both. Not given on a log REAL: fLogDeadbandPct
        u=<text>    engineering units, in the birth (engUnit). A TIME says
                    'ms' by itself
        u=@<member> the units are that STRING member of anyUnits
@@ -145,7 +145,7 @@ A metric first declared after the birth makes the node birth again.
      covered by a wider path, the BOOL simply reports every change. A value
      the host writes is always reported back, whatever the deadband.
 
-     METRIC NAMES are sPrefix and the path: 'pump/' and sts.fault give
+     METRIC NAMES are sMetricNamePrefix and the path: 'pump/' and sts.fault give
      'pump/sts.fault'; array elements count from 1 whatever the bounds. The
      live class drops a leading 'det.' and a set page a leading 'set.', so
      det.rate on 'live' is 'pump/rate' and set.onLevel on 'cfg-pump' is
@@ -154,13 +154,13 @@ A metric first declared after the birth makes the node birth again.
      left out.
 
      WHICH MEMBERS, AND THEIR CLASS, ARE READ AT THE FIRST CALL. Options
-     follow later changes of the text, of anyUnits and of fDeadbandPct (units
+     follow later changes of the text, of anyUnits and of fLogDeadbandPct (units
      and ranges show at the next birth); adding or removing a clause later is
-     reported on nBadClause - restart the PLC to change membership.
+     reported on nFirstBadClause - restart the PLC to change membership.
      A record is found by where it is, so two instances of one block can
-     each record their own local; give each its own sPrefix, as their metric
-     names would otherwise collide (refused: InvalidArgument, nBadClause -4).
-     nLostCnt counts host writes to cmd and set members dropped because four
+     each record their own local; give each its own sMetricNamePrefix, as their metric
+     names would otherwise collide (refused: InvalidArgument, nFirstBadClause -4).
+     nLostWriteCount counts host writes to cmd and set members dropped because four
      were already waiting.
      Ok, NotConnected, InvalidArgument (a bad clause, or tLogInterval or
      tLiveInterval T#0s where it is used), QueueFull (out of memory, or a message
@@ -172,18 +172,18 @@ A metric first declared after the birth makes the node birth again.
          {"devices":["live","cfg-pump"],"required":false}
      A host viewing the node writes it:
          {"demand":true,"leaseS":120,"devices":["live","cfg-pump"]}
-     Then bViewed is TRUE for leaseS seconds (120 when missing or outside 1
+     Then bHostViewing is TRUE for leaseS seconds (120 when missing or outside 1
      to 86399): the view class sends, the log class goes at tLiveInterval,
      and each device listed is born (DBIRTH) and sends; a device not listed
      dies (DDEATH). The host writes again before the lease ends to keep it;
      {"demand":false} ends it at once; a write without "demand", or longer
      than 200 characters, is ignored. The offer is put back after every
-     write. sDemand lists the devices demanded now. Devices 'live' and
+     write. sDevicesDemanded lists the devices demanded now. Devices 'live' and
      'cfg-...' are the node's: Device and Metric refuse them.
 
   sp.Metric(anyValue, sMetricName, sDeviceId, sUnits, eQuality, fDeadband,
-            bWritable, bPublish, bUpdate, nAlias =>, nWrittenCnt =>,
-            nLostCnt =>)
+            bHostCanWrite, bSendChangesAtOnce, bTakeNewValues, nMetricAlias =>, nHostWriteCount =>,
+            nLostWriteCount =>)
      ONE VALUE THE PROGRAM SETS. anyValue's declared type is the metric's
      datatype, declared at the first call; sMetricName is the name the host
      sees (case matters); sDeviceId puts it under a device of this node,
@@ -191,77 +191,77 @@ A metric first declared after the birth makes the node birth again.
      added it. sUnits goes in the birth. eQuality (Good by default) goes
      with the value: Uncertain as stale, Bad and Unknown as bad. fDeadband:
      a move this size or less from the value last sent is not reported
-     (numbers only; InvalidArgument on a BOOL or STRING). bWritable TRUE at
+     (numbers only; InvalidArgument on a BOOL or STRING). bHostCanWrite TRUE at
      the first call declares it writable: a host command is written into
-     anyValue, one a call, oldest first, up to four waiting (nLostCnt counts
-     the dropped); bWritable FALSE later drops a write at once and reports
-     the value back. bUpdate FALSE holds the last value and takes no
-     command. nAlias: the alias the host sees, 0 refused. nWrittenCnt: host
+     anyValue, one a call, oldest first, up to four waiting (nLostWriteCount counts
+     the dropped); bHostCanWrite FALSE later drops a write at once and reports
+     the value back. bTakeNewValues FALSE holds the last value and takes no
+     command. nMetricAlias: the alias the host sees, 0 refused. nHostWriteCount: host
      commands written. Ok, NotConnected, InvalidArgument (empty name, a type
      with no Sparkplug datatype, a name taken, a device the node manages),
      QueueFull.
 
-  sp.Device(sDeviceId, bOnline, bDeviceOnline =>, nBirthCnt =>,
-            nDeathCnt =>)
+  sp.Device(sDeviceId, bBringOnline, bDeviceBirthSent =>, nBirthCount =>,
+            nDeathCount =>)
      A DEVICE THE PROGRAM BRINGS ONLINE AND OFFLINE: a pump skid, a remote
      I/O drop - something that can be lost while the node is fine. Acts on a
-     change of bOnline (TRUE: DBIRTH, FALSE: DDEATH), never every scan, and
+     change of bBringOnline (TRUE: DBIRTH, FALSE: DDEATH), never every scan, and
      births the device again after every node birth. Its metrics are
-     Metric calls with this sDeviceId. bDeviceOnline: its birth has gone.
-     nBirthCnt, nDeathCnt: births gone, deaths of an online device. Ok,
+     Metric calls with this sDeviceId. bDeviceBirthSent: its birth has gone.
+     nBirthCount, nDeathCount: births gone, deaths of an online device. Ok,
      NotConnected, InvalidArgument (empty, or 'live' or 'cfg-...', which
      Live Demand manages), QueueFull.
 
-  sp.Command(sMetricName, sDeviceId, bAck, bPending =>, fValue =>,
-             bValue =>, sText =>, nCmdCnt =>, nRefusedCnt =>, nLostCnt =>)
+  sp.Command(sMetricName, sDeviceId, bTakeCommand, bCommandWaiting =>, fValue =>,
+             bValue =>, sText =>, nCommandCount =>, nRefusedCommandCount =>, nLostWriteCount =>)
      A HOST'S WRITE FOR THE PROGRAM TO DECIDE ON, on a metric declared
-     writable with Metric; call it BEFORE that Metric call. bPending shows
+     writable with Metric; call it BEFORE that Metric call. bCommandWaiting shows
      the oldest write waiting, read without taking it, so a rung can look
-     before it decides; a rising edge of bAck takes it, so two rungs cannot
+     before it decides; a rising edge of bTakeCommand takes it, so two rungs cannot
      both act on one command. fValue: its value as a number (bValue = fValue
-     <> 0), sText a String metric's value cut to 126 characters. nCmdCnt:
-     commands seen on this metric. nRefusedCnt: commands the node refused -
+     <> 0), sText a String metric's value cut to 126 characters. nCommandCount:
+     commands seen on this metric. nRefusedCommandCount: commands the node refused -
      undeclared, read only or the wrong type - all metrics together.
-     nLostCnt: writes dropped with four waiting. Ok, NotInitialised (the
+     nLostWriteCount: writes dropped with four waiting. Ok, NotInitialised (the
      metric is not declared yet), InvalidArgument (not writable), QueueFull.
 
-  sp.History(nSource, nCode, fValue, sMetricPrefix, nDepth, nBatch, tPeriod,
-             bAdd, nStoredCnt =>, nLostCnt =>, nSentCnt =>, bReplaying =>)
-     EVENTS KEPT THROUGH AN OUTAGE. bAdd TRUE records one event on this call
-     - wire a one-scan pulse - with what it is about (nSource: a pump, an
-     alarm number), what happened (nCode) and a number (fValue). While the
+  sp.History(nEventSource, nEventCode, fValue, sMetricPrefix, nMaxEventsKept, nEventsPerMessage, tCatchUpInterval,
+             bRecordEvent, nEventsWaiting =>, nLostEventCount =>, nSentEventCount =>, bCatchingUp =>)
+     EVENTS KEPT THROUGH AN OUTAGE. bRecordEvent TRUE records one event on this call
+     - wire a one-scan pulse - with what it is about (nEventSource: a pump, an
+     alarm number), what happened (nEventCode) and a number (fValue). While the
      node is born it goes at once as live data; recorded while it is not, it
      waits and goes after the next node birth flagged historical, at its own
-     time, oldest first, nBatch at a time (at most 64) every tPeriod. Each
+     time, oldest first, nEventsPerMessage at a time (at most 64) every tCatchUpInterval. Each
      event is the metrics <sMetricPrefix>/source, /code, /value and /seq (a
      count from 1, so the host sees a gap), plus /lost. Calls with one
-     sMetricPrefix share one buffer of nDepth events (256: about a week of a
-     normal site, 24 bytes each, in PSRAM on a board); nDepth and nBatch are
-     fixed at the first call. A full buffer drops the oldest (nLostCnt).
+     sMetricPrefix share one buffer of nMaxEventsKept events (256: about a week of a
+     normal site, 24 bytes each, in PSRAM on a board); nMaxEventsKept and nEventsPerMessage are
+     fixed at the first call. A full buffer drops the oldest (nLostEventCount).
      Not retained. Sent at least once: an event is forgotten only after the
      node stays born on the same birth for half a second; a device's birth
      does not count. Events recorded before the clock is set are placed on
      it once set; they wait for the clock up to five minutes after a birth.
-     nStoredCnt waiting, nSentCnt sent, bReplaying catching up. Ok,
+     nEventsWaiting waiting, nSentEventCount sent, bCatchingUp catching up. Ok,
      NotConnected, NotInitialised (no memory for the buffer),
      InvalidArgument (the metrics could not be declared), QueueFull.
 
-  sp.DayTotals(anyDays, sMetricName, fValue, dtClock, tSaveEvery, nDays =>,
-               nSentCnt =>)
+  sp.DayTotals(anyDays, sMetricName, fTodayTotal, dtLocalTime, tSaveInterval, nClosedDays =>,
+               nSentDayCount =>)
      DAILY TOTALS, sent on every node birth as historical values, so a host
      fills in the days the link was down. anyDays is a RETAINED ARRAY OF
      ST_SparkplugDay, two rows or more: the first is today, the rest closed
-     days, newest first. fValue is today's running total; dtClock the local
-     date and time the totaliser rolls its day on. When dtClock's date
+     days, newest first. fTodayTotal is today's running total; dtLocalTime the local
+     date and time the totaliser rolls its day on. When dtLocalTime's date
      changes the day is closed with the total of its last call and becomes
      the newest closed day; the oldest falls off. A day that ended during a
      power cut is closed when the PLC returns, from the total last saved:
-     today's total is written into anyDays every tSaveEvery (T#1h; T#0s
+     today's total is written into anyDays every tSaveInterval (T#1h; T#0s
      every call). Each closed day goes as a value of sMetricName stamped
-     00:00 of its date (the date as dtClock has it, written as UTC: read
+     00:00 of its date (the date as dtLocalTime has it, written as UTC: read
      the date, not the hour), on every node birth and every close - not on
      a device's birth. The live value is the last closed day. Nothing
-     happens while the clock is not set. nDays: closed days held. Ok,
+     happens while the clock is not set. nClosedDays: closed days held. Ok,
      NotConnected, InvalidArgument (anyDays is not an ARRAY OF
      ST_SparkplugDay of two rows or more, or the metric could not be
      declared), QueueFull.
@@ -294,7 +294,7 @@ broken, so the default is the one that cannot be mistaken.
 
 ONE CONNECTION, SHARED. This node is a layer on fbClient's session, not a
 second connection. What Sparkplug needs of that session it takes on every
-CONNECT: the Will is this node's NDEATH, so no stWillConfig on that client
+CONNECT: the Will is this node's NDEATH, so no stWill on that client
 (the birth and death certificates are the presence); the session is always
 clean, whatever stSessionConfig says; and the transmit buffer grows to hold
 the birth certificate. Started on a session already up, the node reconnects
@@ -317,29 +317,29 @@ the program notices. *)
 
 FUNCTION_BLOCK FB_SparkplugNode
   VAR_INPUT
-    sGroupId        : STRING(47);           (* the Sparkplug Group ID *)
+    sGroupId        : STRING(47);           (* the Sparkplug Group ID: a site, a line, a cell *)
     sEdgeNodeId     : STRING(47);           (* this node's Edge Node ID; with sGroupId unique in the system *)
-    sPrimaryHostId  : STRING(47);           (* the Primary Host this node answers to; empty for none *)
-    tRebirthHoldoff : TIME := T#2s;         (* the shortest time between two answers to rebirth requests *)
-    bEnable         : BOOL := TRUE;         (* FALSE keeps the node down without losing its metrics *)
-    stReportConfig  : ST_SparkplugReportConfig; (* Record: intervals, log deadband, remote control *)
-    anyUnits        : ANY;                  (* Record: a STRUCT of STRINGs that u=@<member> names; optional *)
+    sPrimaryHostId  : STRING(47);           (* the host this node waits for before birthing; empty for none *)
+    tMinTimeBetweenRebirths : TIME := T#2s; (* shortest time between two rebirths a host asks for; a minute on cellular *)
+    bEnable : BOOL := TRUE; (* FALSE sends the death and keeps the node down, keeping its metrics *)
+    stReportConfig : ST_SparkplugReportConfig; (* Record's intervals, log deadband and host writes *)
+    anyUnits : ANY; (* optional STRUCT of STRINGs a point list names with u=@<member> *)
   END_VAR
   VAR_IN_OUT
-    fbClient        : FB_MqttClient;        (* the connection this node rides on *)
+    fbClient : FB_MqttClient; (* the connection this node rides on *)
   END_VAR
   VAR_OUTPUT
-    bLinkUp         : BOOL;                 (* the client's session is up *)
-    bBorn           : BOOL;                 (* the birth certificate has gone *)
-    nSeq            : USINT;                (* the current sequence number *)
-    nBdSeq          : USINT;                (* the birth/death sequence number of this connection *)
-    nPoints         : INT;                  (* metrics declared *)
-    bError          : BOOL;
-    eErrorId        : E_MqttResult;
-    sLastError      : STRING(64);           (* what the node waits for, or what failed *)
-    bClockSet       : BOOL;                 (* the timestamps are real time *)
-    bViewed         : BOOL;                 (* Live Demand: someone views this node now *)
-    sDemand         : STRING(200);          (* Live Demand: the devices demanded now, e.g. 'live,cfg-pump' *)
+    bConnected : BOOL; (* the client's broker connection is accepted (the client's bConnected): interlock on this *)
+    bBirthSent : BOOL; (* the node birth (NBIRTH) has gone; data flows *)
+    nSequenceNumber : USINT; (* the current Sparkplug sequence number, 0-255 *)
+    nBirthDeathSequenceNumber : USINT; (* the birth/death sequence number of this connection; Sparkplug bdSeq *)
+    nMetrics : INT; (* metrics declared, node and devices together *)
+    bError : BOOL; (* something failed *)
+    eErrorId : E_MqttResult; (* why; Ok when fine, WrongTask, QueueFull, InvalidArgument *)
+    sLastError : STRING(64); (* what the node waits for, or what failed; empty once born *)
+    bClockSynced : BOOL; (* timestamps are real time (same name as FB_MqttClock) *)
+    bHostViewing : BOOL; (* Live Demand: a host says someone is viewing this node now *)
+    sDevicesDemanded : STRING(200); (* Live Demand: the devices demanded now, e.g. 'live,cfg-pump' *)
   END_VAR
   VAR
     nApi            : __XWORD;              (* the node, for the methods *)
@@ -353,7 +353,6 @@ FUNCTION_BLOCK FB_SparkplugNode
     nPointsBorn     : UDINT;
     nMethodCalls    : __XWORD;              (* the per-call table of Metric, Device, Command, History, DayTotals *)
   END_VAR
-
 (* A STRUCT's members as metrics, each by its class, from one point list of
    clauses '<members> = <class> [, <option>]*' split by ';'. Classes now,
    cmd, view, log, live, set:<page>; options db=, pct=, u=, u=@<member>,
@@ -362,14 +361,14 @@ FUNCTION_BLOCK FB_SparkplugNode
 METHOD PUBLIC Record : E_MqttResult
   VAR_INPUT
     anyData    : ANY;                       (* the record: a STRUCT *)
-    sSettings  : ANY;                       (* its point list: a STRING of any length, or a literal *)
-    sPrefix    : STRING(32);                (* put before every metric name *)
-    bSend      : BOOL;                      (* onreq: a rising edge sends those members, all of them *)
+    anyPointList  : ANY;                       (* its point list: a STRING of any length, or a literal (ANY, so the any prefix) *)
+    sMetricNamePrefix    : STRING(32);                (* put before every metric name, e.g. 'pump/' *)
+    bSendOnRequest      : BOOL;                      (* onreq class: rising edge sends those members *)
   END_VAR
   VAR_OUTPUT
-    nMetricCnt : INT;                       (* metrics the record declared *)
-    nBadClause : INT;                       (* the first clause that cannot be used, from 1; 0 none *)
-    nLostCnt   : DINT;                      (* host writes to cmd and set members dropped with four already waiting *)
+    nRecordMetrics : INT;                       (* metrics this record declared *)
+    nFirstBadClause : INT;                       (* the first point-list clause that cannot be used, from 1; 0 none *)
+    nLostWriteCount   : DINT;                      (* host writes to cmd/set members dropped with four already waiting *)
   END_VAR
 END_METHOD
 
@@ -378,56 +377,56 @@ END_METHOD
    NotConnected while not (the value goes in the next birth). *)
 METHOD PUBLIC Metric : E_MqttResult
   VAR_INPUT
-    anyValue        : ANY;                  (* the value; a host command is written here when bWritable *)
+    anyValue        : ANY;                  (* the value; a host write lands here when bHostCanWrite *)
     sMetricName     : STRING(96);           (* the name the host sees; case matters *)
     sDeviceId       : STRING(47);           (* a device of this node; empty for a node metric *)
-    sUnits          : STRING(16);           (* engUnit in the birth *)
-    eQuality        : E_MqttQuality := E_MqttQuality.Good; (* Uncertain goes as stale, Unknown as bad *)
-    fDeadband       : REAL;                 (* numbers: a move this size or less from the value last sent is not reported *)
-    bWritable       : BOOL;                 (* a host may command it; declared once, writes dropped while FALSE *)
-    bPublish        : BOOL := TRUE;         (* asks the node for this scan's data message *)
-    bUpdate         : BOOL := TRUE;         (* FALSE holds the last value and takes no command *)
+    sUnits          : STRING(16);           (* engineering units, sent in the birth *)
+    eQuality        : E_MqttQuality := E_MqttQuality.Good; (* quality sent with the value: Uncertain as stale, Bad/Unknown as bad *)
+    fDeadband       : REAL;                 (* numbers: a move this size or less is not reported *)
+    bHostCanWrite       : BOOL;                 (* the host may command it; read at the first call *)
+    bSendChangesAtOnce        : BOOL := TRUE;         (* TRUE: a change goes in this scan's data message; FALSE: it waits for the next data message another call asks for, or the next birth *)
+    bTakeNewValues         : BOOL := TRUE;         (* FALSE holds the last value sent and takes no command *)
   END_VAR
   VAR_OUTPUT
-    nAlias          : UDINT;                (* the alias the host sees after the birth; 0 refused *)
-    nWrittenCnt     : DINT;                 (* host commands written into anyValue *)
-    nLostCnt        : DINT;                 (* writes dropped with four already waiting *)
+    nMetricAlias          : UDINT;                (* the alias the host sees after the birth; 0 refused *)
+    nHostWriteCount     : DINT;                 (* host commands written into anyValue *)
+    nLostWriteCount        : DINT;                 (* host writes dropped with four already waiting *)
   END_VAR
 END_METHOD
 
 (* A device the program brings online and offline, called every scan. Acts on
-   a change of bOnline; births it again after every node birth. Ok while the
+   a change of bBringOnline; births it again after every node birth. Ok while the
    node is born. Devices the node manages itself ('live', 'cfg-...') are
    refused. *)
 METHOD PUBLIC Device : E_MqttResult
   VAR_INPUT
-    sDeviceId       : STRING(47);           (* unique among this node's devices *)
-    bOnline         : BOOL := TRUE;         (* TRUE births the device, FALSE sends its death *)
+    sDeviceId       : STRING(47);           (* the device, unique among this node's devices *)
+    bBringOnline         : BOOL := TRUE;         (* TRUE births the device, FALSE sends its death *)
   END_VAR
   VAR_OUTPUT
-    bDeviceOnline   : BOOL;                 (* its birth has gone *)
-    nBirthCnt       : DINT;                 (* births gone; one more after every node birth *)
-    nDeathCnt       : DINT;                 (* deaths of an online device *)
+    bDeviceBirthSent   : BOOL;                 (* the device birth (DBIRTH) has gone (same words as bBirthSent) *)
+    nBirthCount       : DINT;                 (* births sent; one more after every node birth *)
+    nDeathCount       : DINT;                 (* deaths sent while the device was online *)
   END_VAR
 END_METHOD
 
 (* A host command on a writable metric, for the program to decide on, called
-   every scan. bPending shows the oldest write; a rising edge of bAck takes it.
+   every scan. bCommandWaiting shows the oldest write; a rising edge of bTakeCommand takes it.
    NotInitialised until the metric is declared. *)
 METHOD PUBLIC Command : E_MqttResult
   VAR_INPUT
     sMetricName     : STRING(96);           (* a metric declared writable *)
     sDeviceId       : STRING(47);           (* its device; empty for a node metric *)
-    bAck            : BOOL;                 (* rising edge takes the pending command *)
+    bTakeCommand            : BOOL;                 (* rising edge takes the waiting command *)
   END_VAR
   VAR_OUTPUT
-    bPending        : BOOL;                 (* a command waits, not taken *)
-    fValue          : LREAL;                (* its value as a number, from the call it was first seen *)
+    bCommandWaiting        : BOOL;                 (* a host command waits, not yet taken *)
+    fValue          : LREAL;                (* the waiting command's value as a number *)
     bValue          : BOOL;                 (* fValue <> 0 *)
-    sText           : STRING(126);          (* a String metric's value, cut to 126 characters *)
-    nCmdCnt         : DINT;                 (* commands seen on this metric *)
-    nRefusedCnt     : DINT;                 (* commands the node refused, all metrics together *)
-    nLostCnt        : DINT;                 (* writes dropped on this metric with four already waiting *)
+    sText           : STRING(126);          (* a String metric's command text, cut to 126 characters *)
+    nCommandCount         : DINT;                 (* commands seen on this metric *)
+    nRefusedCommandCount     : DINT;                 (* commands the node refused, all metrics together *)
+    nLostWriteCount        : DINT;                 (* writes on this metric dropped with four already waiting *)
   END_VAR
 END_METHOD
 
@@ -436,37 +435,37 @@ END_METHOD
    with one sMetricPrefix share one buffer. *)
 METHOD PUBLIC History : E_MqttResult
   VAR_INPUT
-    nSource         : UINT;                 (* what the event is about: a pump, an alarm number *)
-    nCode           : UINT;                 (* what happened: a status, fault or stop code *)
-    fValue          : REAL;                 (* a number that goes with it *)
-    sMetricPrefix   : STRING(24) := 'Event'; (* metrics <prefix>/source, /code, /value, /seq, /lost *)
-    nDepth          : UINT := 256;          (* events kept; fixed at the first call *)
-    nBatch          : UINT := 20;           (* events a catch-up message, at most 64; fixed at the first call *)
-    tPeriod         : TIME := T#1s;         (* between catch-up messages *)
-    bAdd            : BOOL;                 (* TRUE records one event on this call *)
+    nEventSource         : UINT;                 (* what the event is about: a pump, an alarm number *)
+    nEventCode           : UINT;                 (* what happened: a status, fault or stop code *)
+    fValue          : REAL;                 (* a number that goes with the event *)
+    sMetricPrefix   : STRING(24) := 'Event'; (* metrics <prefix>/source, /code, /value, /seq, /lost; default 'Event' *)
+    nMaxEventsKept          : UINT := 256;          (* events the buffer holds; fixed at the first call *)
+    nEventsPerMessage          : UINT := 20;           (* events per catch-up message, at most 64; fixed at the first call *)
+    tCatchUpInterval         : TIME := T#1s;         (* time between catch-up messages after an outage *)
+    bRecordEvent            : BOOL;                 (* TRUE records one event on this call (wire a one-scan pulse) *)
   END_VAR
   VAR_OUTPUT
-    nStoredCnt      : UINT;                 (* events waiting to be sent *)
-    nLostCnt        : UDINT;                (* events dropped with the buffer full: the oldest go *)
-    nSentCnt        : UDINT;                (* events sent since the program started *)
-    bReplaying      : BOOL;                 (* sending what was kept during an outage *)
+    nEventsWaiting      : UINT;                 (* events waiting to be sent (now, not a total) *)
+    nLostEventCount        : UDINT;                (* events dropped with the buffer full, oldest first *)
+    nSentEventCount        : UDINT;                (* events sent since the program started *)
+    bCatchingUp      : BOOL;                 (* sending events kept during an outage *)
   END_VAR
 END_METHOD
 
 (* A table of daily totals kept by the program and sent on every birth as
    historical values, so the host fills in the days the link was down. Called
-   every scan. A change of date on dtClock closes the day. Ok while born. *)
+   every scan. A change of date on dtLocalTime closes the day. Ok while born. *)
 METHOD PUBLIC DayTotals : E_MqttResult
   VAR_INPUT
-    anyDays         : ANY;                  (* ARRAY OF ST_SparkplugDay, retained, 2 rows or more: today, then closed days newest first *)
+    anyDays         : ANY;                  (* RETAINED ARRAY OF ST_SparkplugDay, 2+ rows: today, then closed days newest first *)
     sMetricName     : STRING(32);           (* the metric; its live value is the last closed day *)
-    fValue          : REAL;                 (* today's running total *)
-    dtClock         : DT;                   (* local date and time, the clock the total rolls its day on *)
-    tSaveEvery      : TIME := T#1h;         (* how often today's total is written into anyDays; T#0s every call *)
+    fTodayTotal          : REAL;                 (* today's running total *)
+    dtLocalTime         : DT;                   (* local date and time; a change of date closes the day *)
+    tSaveInterval      : TIME := T#1h;         (* how often today's total is written into anyDays; T#0s every call *)
   END_VAR
   VAR_OUTPUT
-    nDays           : INT;                  (* closed days held *)
-    nSentCnt        : UDINT;                (* day values sent since the program started *)
+    nClosedDays           : INT;                  (* closed days held *)
+    nSentDayCount        : UDINT;                (* day values sent since the program started *)
   END_VAR
 END_METHOD
 
@@ -519,7 +518,7 @@ bool mq_memberIsPublishable(const strucpp::MemberDesc& member);
 
 // --- What the methods reach through nApi ---
 //
-// Null until the node has been built, which is what bLinkUp says. A handle
+// Null until the node has been built. A handle
 // rather than a pointer on the pin because that is what an IEC XWORD is.
 MqttSparkplugNode* mq_spNodeOf(strucpp::XWORD_t handle) {
     return (MqttSparkplugNode*)(uintptr_t)handle;
@@ -715,7 +714,7 @@ bool mq_spWriteAny(const strucpp::IEC_ANY& any,
 // RECORD: a STRUCT's members as metrics, each by its class
 // =============================================================================
 //
-// One call per record: sp.Record(anyData := DEV.pump, sSettings := '...').
+// One call per record: sp.Record(anyData := DEV.pump, anyPointList := '...').
 // The point list names members and gives each a class (when it goes, on which
 // device, whether the host may write it) and its options. The node keeps one
 // group per class and device of the record: its members (where each value is,
@@ -732,7 +731,7 @@ enum MqSpKind : uint8_t {
     MQ_SP_LIVE,       // device 'live': what moved, every live interval, while demanded
     MQ_SP_SET,        // device 'cfg-<page>': at once, while demanded; written while remote control is on
     MQ_SP_EVERY,      // every:<time>: all members every period, whether they moved or not
-    MQ_SP_ONREQ       // onreq: all members on a rising edge of Record's bSend
+    MQ_SP_ONREQ       // onreq: all members on a rising edge of Record's bSendOnRequest
 };
 
 // A member of a group, walked every born scan: 8 bytes. Its clause, which
@@ -786,7 +785,7 @@ struct MqSpRecord {
     const uint8_t* address = nullptr;  // a cache of where the record is
     const strucpp::TypeDesc* type = nullptr;
     std::vector<MqSpGroup> groups;
-    uint32_t settingsLength = 0;       // sSettings as last applied: its length
+    uint32_t settingsLength = 0;       // anyPointList as last applied: its length
     uint64_t settingsHash = 0;         // and its hash (mq_spTextHash)
     const char* namePtr = nullptr;     // the descriptor's NAME and TYPENAME as last seen:
     const char* typePtr = nullptr;     // the same pointer is the same text
@@ -801,7 +800,7 @@ struct MqSpRecord {
     int32_t pulsing = 0;               // members whose pulse= is running, in all groups
     uint8_t kinds = 0;                 // 1 << MqSpKind of each group
     bool dormant = false;              // the node was not born at the last call
-    uint32_t lostSeen = 0;             // the node's writesLost() when nLostCnt was counted
+    uint32_t lostSeen = 0;             // the node's writesLost() when nLostWriteCount was counted
     int32_t lost = 0;
     uint32_t unitsSum = 0;
     float defaultPct = -1.0f;
@@ -809,7 +808,7 @@ struct MqSpRecord {
     int16_t points = 0;
     int16_t bad = 0;                   // the first clause that could not be used
     int16_t declareBad = 0;            // the same, found when the members were declared
-    bool lastSend = false;             // bSend at the last call, for onreq's edge
+    bool lastSend = false;             // bSendOnRequest at the last call, for onreq's edge
     uint32_t calledCycle = 0;          // the node cycle of its last call
     bool applied = false;
     bool usesUnits = false;
@@ -842,7 +841,7 @@ struct MqSpReport {
     std::vector<uint8_t> demanded;
     std::vector<uint8_t> online;
     std::string offer;
-    std::string demandList;            // sDemand
+    std::string demandList;            // sDevicesDemanded
     int demandPoint = -1;
     bool viewed = false;
     mq_time_t viewedAt = 0;
@@ -950,7 +949,7 @@ static int64_t mq_spDurationMs(const std::string& text) {
 }
 
 // The point list, clause by clause, bounded by the STRING's size. A clause that
-// cannot be read is kept with `fault` set, so nBadClause points at it.
+// cannot be read is kept with `fault` set, so nFirstBadClause points at it.
 static void mq_spParseClauses(const char* text, int32_t bound,
                               std::vector<MqSpClause>& out) {
     out.clear();
@@ -1309,7 +1308,7 @@ static void mq_spDemandWrite(MqSpReport& report, const std::string& text,
 }
 
 // Every scan, after the node's poll: Live Demand's writes, its lease, and the
-// devices it brings on and off line. sDemand lists the devices demanded now.
+// devices it brings on and off line. sDevicesDemanded lists the devices demanded now.
 static void mq_spDemandStep(MqttSparkplugNode* node, MqSpReport& report) {
     std::string& demandList = report.demandList;
     const mq_time_t now = mq_millis();
@@ -1681,8 +1680,8 @@ struct MqSpCall {
     uint32_t births = 0;               // node->birthCount()
     uint32_t polls = 0;                // node->pollPublishes()
     uint32_t applied = 0;              // node->commandsApplied()
-    bool remote = false;               // stReportConfig.bRemoteControl
-    bool request = false;              // Record's bSend rose this scan (onreq)
+    bool remote = false;               // stReportConfig.bAllowHostWrites
+    bool request = false;              // Record's bSendOnRequest rose this scan (onreq)
 };
 
 // One group's scan while the node is born: writes in (or refused while the
@@ -1810,7 +1809,7 @@ static uint8_t mq_spGroupScan(MqttSparkplugNode* node, MqSpReport& report, MqSpR
 
     bool ask = false;
     if (wholeSet) {
-        // The whole set: every period, or on bSend's edge; one the node could
+        // The whole set: every period, or on bSendOnRequest's edge; one the node could
         // not queue is asked for again at once.
         const bool due = group.kind == MQ_SP_ONREQ
                              ? call.request
@@ -1975,7 +1974,7 @@ static E_MQTTRESULT mq_spRecordFail(MqSpReport& report, const strucpp::IEC_ANY& 
     } else if (bad == -3) {
         report.failText += ": tLogInterval is T#0s";
     } else if (bad == -4) {
-        report.failText += ": recorded from another variable with the same sPrefix";
+        report.failText += ": recorded from another variable with the same sMetricNamePrefix";
     } else if (bad == -5) {
         report.failText += ": out of memory";
     } else if (bad < 0) {
@@ -2001,15 +2000,15 @@ static void mq_spRecordClear(MqSpReport& report, const strucpp::IEC_ANY& data,
 
 void setup()
 {
-    bLinkUp = false;
-    bBorn = false;
-    nSeq = 0;
-    nBdSeq = 0;
-    nPoints = 0;
+    bConnected = false;
+    bBirthSent = false;
+    nSequenceNumber = 0;
+    nBirthDeathSequenceNumber = 0;
+    nMetrics = 0;
     bError = false;
     eErrorId = E_MQTTRESULT::OK;
     sLastError = "";
-    bClockSet = false;
+    bClockSynced = false;
     nApi = (strucpp::XWORD_t)0;
     nClient = (strucpp::XWORD_t)0;
     bConnectAsked = false;
@@ -2018,8 +2017,8 @@ void setup()
     nReport = (strucpp::XWORD_t)0;
     nBirthsSeen = 0;
     nPointsBorn = 0;
-    bViewed = false;
-    sDemand = "";
+    bHostViewing = false;
+    sDevicesDemanded = "";
 }
 
 void loop()
@@ -2030,13 +2029,13 @@ void loop()
     // --- THE CONNECTION IS FB_MqttClient'S ---
     //
     // Where, how, as whom and whether to be connected at all: its pins, its
-    // stSessionConfig, stTlsConfig and stNetworkConfig. This node rides on that session,
+    // stSessionConfig, stTls and stNetworkConfig. This node rides on that session,
     // with the device's own topics and its firmware updates beside it, and
     // takes what Sparkplug needs of it on every CONNECT: the Will (its NDEATH),
     // Clean Start, and a transmit buffer that holds the birth certificate.
     if (!mq_inTask((strucpp::XWORD_t)fbClient.NTASK)) {   // one task per client: see FB_MqttClient
-        bLinkUp = false;
-        bBorn = false;
+        bConnected = false;
+        bBirthSent = false;
         bError = true;
         eErrorId = E_MQTTRESULT::WRONGTASK;
         sLastError = "put FB_SparkplugNode in its FB_MqttClient's task";
@@ -2046,8 +2045,8 @@ void loop()
     if (client == nullptr) {
         // Not built yet - its first scan has not run, or it is out of memory,
         // which it says itself.
-        bLinkUp = false;
-        bBorn = false;
+        bConnected = false;
+        bBirthSent = false;
         bError = false;
         eErrorId = E_MQTTRESULT::NOTINITIALISED;
         sLastError = "waiting for its FB_MqttClient";
@@ -2062,8 +2061,8 @@ void loop()
             node->disconnect();
             node->poll();
         }
-        bLinkUp = client->isConnected();
-        bBorn = false;
+        bConnected = client->isConnected();
+        bBirthSent = false;
         bConnectAsked = false;
         bError = false;
         eErrorId = E_MQTTRESULT::OK;
@@ -2134,7 +2133,7 @@ void loop()
         // The methods declare on this scan, wherever they
         // sit in the program; the node connects on a later one.
         nDeclaredAt = (int32_t)mq_millis();
-        bLinkUp = client->isConnected();
+        bConnected = client->isConnected();
         return;
     }
     if ((strucpp::XWORD_t)(uintptr_t)client != (strucpp::XWORD_t)nClient) {
@@ -2145,7 +2144,7 @@ void loop()
     }
 
     // The shortest time between two answers to rebirth requests. Read every scan.
-    const int32_t holdoffMs = mq_millisOf(tRebirthHoldoff);
+    const int32_t holdoffMs = mq_millisOf(tMinTimeBetweenRebirths);
     node->rebirthHoldoff((mq_time_t)(holdoffMs > 0 ? holdoffMs : 0));
 
     // --- A NEW IDENTITY IS A NEW sEdgeNodeId TO THE HOST ---
@@ -2158,8 +2157,8 @@ void loop()
         nSessionKey = identity;
         node->disconnect();
         if (!applyIdentity(node)) {
-            bLinkUp = client->isConnected();
-            bBorn = false;
+            bConnected = client->isConnected();
+            bBirthSent = false;
             return;
         }
         bConnectAsked = false;
@@ -2173,7 +2172,7 @@ void loop()
         if (node->pointCount() == 0 &&
             (int32_t)mq_elapsed((mq_time_t)(uint32_t)nDeclaredAt, mq_millis()) < 2000) {
             node->poll();
-            bLinkUp = client->isConnected();
+            bConnected = client->isConnected();
             return;
         }
         // Refused only when another layer owns the client's Will - a
@@ -2211,16 +2210,16 @@ void loop()
     if (report != nullptr) {
         if (report->usesUnits) report->unitsSum = mq_spUnitsSum(anyUnits);
         mq_spDemandStep(node, *report);
-        bViewed = report->viewed;
-        sDemand = report->demandList.c_str();
+        bHostViewing = report->viewed;
+        sDevicesDemanded = report->demandList.c_str();
     }
 
-    bLinkUp = client->isConnected();
-    bBorn = node->isBorn();
-    nSeq = (uint8_t)node->sequence();
-    nBdSeq = (uint8_t)node->birthDeathSequence();
-    nPoints = (int16_t)node->pointCount();
-    bClockSet = node->clockIsSet();
+    bConnected = client->isConnected();
+    bBirthSent = node->isBorn();
+    nSequenceNumber = (uint8_t)node->sequence();
+    nBirthDeathSequenceNumber = (uint8_t)node->birthDeathSequence();
+    nMetrics = (int16_t)node->pointCount();
+    bClockSynced = node->clockIsSet();
 
     if (!bConnectAsked) {
         bError = true;
@@ -2248,7 +2247,7 @@ void loop()
         sLastError = report->failText.c_str();
         return;
     }
-    if (!bLinkUp) {
+    if (!bConnected) {
         // Why the link is down is FB_MqttClient's to say, on its own pins.
         bError = false;
         eErrorId = E_MQTTRESULT::NOTCONNECTED;
@@ -2260,28 +2259,28 @@ void loop()
     sLastError = node->waitingFor();
 }
 
-// sp.Record(anyData := DEV.pump, sSettings := '...', sPrefix := 'pump/'):
+// sp.Record(anyData := DEV.pump, anyPointList := '...', sMetricNamePrefix := 'pump/'):
 // a standing method, called every scan while the record is to be reported.
 E_MQTTRESULT Record()
 {
-    nMetricCnt = 0;
-    nBadClause = 0;
-    nLostCnt = 0;
+    nRecordMetrics = 0;
+    nFirstBadClause = 0;
+    nLostWriteCount = 0;
     if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
     MqttSparkplugNode* node = mq_spNodeOf((strucpp::XWORD_t)nApi);
     MqSpReport* report = mq_spReportOf((strucpp::XWORD_t)nReport);
     if (node == nullptr || report == nullptr) return E_MQTTRESULT::NOTINITIALISED;
 
-    const char* prefix = sPrefix.c_str();
+    const char* prefix = sMetricNamePrefix.c_str();
     if (anyData.TYPECLASS != strucpp::TYPE_USERDEF || anyData.TYPEDESC == nullptr ||
-        anyData.PVALUE == nullptr || !sSettings.wired() ||
-        sSettings.TYPECLASS != strucpp::TYPE_STRING || sSettings.PVALUE == nullptr) {
+        anyData.PVALUE == nullptr || !anyPointList.wired() ||
+        anyPointList.TYPECLASS != strucpp::TYPE_STRING || anyPointList.PVALUE == nullptr) {
         // One STRUCT and its point list as a STRING: anything else is refused.
-        nBadClause = -1;
+        nFirstBadClause = -1;
         return mq_spRecordFail(*report, anyData, prefix, E_MQTTRESULT::INVALIDARGUMENT, -1);
     }
-    const char* text = (const char*)sSettings.PVALUE;
-    const int32_t bound = sSettings.DISIZE;
+    const char* text = (const char*)anyPointList.PVALUE;
+    const int32_t bound = anyPointList.DISIZE;
 
     // --- Once a node cycle: the clock and the intervals, for every call and group ---
     if (report->clockCycle != report->cycle) {
@@ -2315,10 +2314,10 @@ E_MQTTRESULT Record()
         MqSpRecord* r = report->records[i];
         if (r->type == anyData.TYPEDESC && mq_spRecordIs(*r, anyData, prefix)) {
             // The same name and prefix from another variable still in use
-            // (two instances of one block, one sPrefix): the metrics would
+            // (two instances of one block, one sMetricNamePrefix): the metrics would
             // collide, so the second is refused. Moved (an online change): taken.
             if (r->calledCycle + 1 >= report->cycle && r->address != anyData.PVALUE) {
-                nBadClause = -4;
+                nFirstBadClause = -4;
                 return mq_spRecordFail(*report, anyData, prefix, E_MQTTRESULT::INVALIDARGUMENT, -4);
             }
             r->address = anyData.PVALUE;
@@ -2359,7 +2358,7 @@ E_MQTTRESULT Record()
     uint32_t length = 0;
     const uint64_t hash = mq_spTextHash(text, bound, &length);
     const bool newText = length != record->settingsLength || hash != record->settingsHash;
-    float pct = (float)stReportConfig.FDEADBANDPCT;
+    float pct = (float)stReportConfig.FLOGDEADBANDPCT;
     if (!(pct >= 0.0f)) pct = 0.0f;
     if (!record->applied || newText || pct != record->defaultPct ||
         (record->usesUnits && report->unitsSum != record->unitsSum)) {
@@ -2385,8 +2384,8 @@ E_MQTTRESULT Record()
         }
     }
     record->calledCycle = report->cycle;
-    nMetricCnt = record->points;
-    nBadClause = record->bad;
+    nRecordMetrics = record->points;
+    nFirstBadClause = record->bad;
 
     // --- The shadow, made at the first call; until there is one, nothing is reported ---
     if (record->shadow == nullptr && record->room > 0) {
@@ -2399,8 +2398,8 @@ E_MQTTRESULT Record()
     // --- Each class on its own clock ---
     const int32_t logMs = report->logMs;
     const int32_t liveMs = report->liveMs;
-    const bool request = (bool)bSend && !record->lastSend;
-    record->lastSend = (bool)bSend;
+    const bool request = (bool)bSendOnRequest && !record->lastSend;
+    record->lastSend = (bool)bSendOnRequest;
     bool queueFull = false;
     // Never "every scan": a whole record at the task rate floods the link.
     int noInterval = 0;                // -2 tLiveInterval, -3 tLogInterval
@@ -2434,7 +2433,7 @@ E_MQTTRESULT Record()
         call.births = node->birthCount();
         call.polls = node->pollPublishes();
         call.applied = node->commandsApplied();
-        call.remote = (bool)stReportConfig.BREMOTECONTROL;
+        call.remote = (bool)stReportConfig.BALLOWHOSTWRITES;
         call.request = request;
         for (MqSpGroup& group : record->groups) {
             int32_t interval = 0;
@@ -2459,7 +2458,7 @@ E_MQTTRESULT Record()
         }
         record->lost = lost;
     }
-    nLostCnt = record->lost;
+    nLostWriteCount = record->lost;
 
     if (record->bad != 0) {
         return mq_spRecordFail(*report, anyData, prefix, E_MQTTRESULT::INVALIDARGUMENT,
@@ -2518,7 +2517,7 @@ struct MqSpmCall {
 struct MqSpmMetric : MqSpmCall {
     bool declared = false;
     E_MQTTRESULT refused = E_MQTTRESULT::OK;   // the declaration's refusal, kept
-    bool writable = false;        // as declared, whatever bWritable says later
+    bool writable = false;        // as declared, whatever bHostCanWrite says later
     float deadband = 0.0f;
     int32_t quality = MQ_SP_QUALITY_GOOD;
     std::string units;
@@ -2581,9 +2580,9 @@ struct MqSpmDays : MqSpmCall {
     int index = -1;
     uint32_t births = 0;
     bool owed = false;
-    float live = 0.0f;            // fValue on the last call
+    float live = 0.0f;            // fTodayTotal on the last call
     int64_t liveDay = -1;         // the day of that call (-1: none yet)
-    int64_t savedNs = -1;         // dtClock when today's row was last written
+    int64_t savedNs = -1;         // dtLocalTime when today's row was last written
     uint32_t sent = 0;
 };
 
@@ -2756,9 +2755,9 @@ E_MQTTRESULT Metric()
                             sDeviceId.c_str(), sMetricName.c_str()};
     MqSpmMetric* r = mq_spmRowOf<MqSpmMetric>(table, MQ_SPM_METRIC, parts, 4);
     if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
-    nAlias = r->alias;
-    nWrittenCnt = r->written;
-    nLostCnt = r->lost;
+    nMetricAlias = r->alias;
+    nHostWriteCount = r->written;
+    nLostWriteCount = r->lost;
 
     if (sMetricName.length() == 0) return E_MQTTRESULT::INVALIDARGUMENT;
     const char* device = sDeviceId.length() != 0 ? sDeviceId.c_str() : nullptr;
@@ -2782,7 +2781,7 @@ E_MQTTRESULT Metric()
         // Only the call that adds the device brings it online: one a Device
         // call added is that call's to switch.
         const bool addedHere = device != nullptr && node->addDevice(device);
-        r->writable = (bool)bWritable;
+        r->writable = (bool)bHostCanWrite;
         r->quality = quality;
         r->units = sUnits.c_str();
         uint64_t alias = 0;
@@ -2795,7 +2794,7 @@ E_MQTTRESULT Metric()
             alias = node->declare(name, type, r->units.empty() ? nullptr : r->units.c_str(), quality);
         }
         r->alias = (uint32_t)alias;
-        nAlias = r->alias;
+        nMetricAlias = r->alias;
         if (alias == 0) {
             r->refused = E_MQTTRESULT::INVALIDARGUMENT;
             return r->refused;
@@ -2833,10 +2832,10 @@ E_MQTTRESULT Metric()
         if (!ok && band != 0.0) return E_MQTTRESULT::INVALIDARGUMENT;
     }
 
-    // --- Declared writable and bWritable FALSE: a write is dropped at once,
+    // --- Declared writable and bHostCanWrite FALSE: a write is dropped at once,
     // never kept for later, and the value put back so the host sees it did
     // not take ---
-    if (r->writable && !(bool)bWritable) {
+    if (r->writable && !(bool)bHostCanWrite) {
         MqttSparkplugValue value;
         bool dropped = false;
         while (node->commandPendingFor(device, name) && node->takeFor(device, name, value)) {
@@ -2849,28 +2848,28 @@ E_MQTTRESULT Metric()
     }
 
     const bool born = node->isBorn();
-    if (!(bool)bUpdate) return born ? E_MQTTRESULT::OK : E_MQTTRESULT::NOTCONNECTED;
+    if (!(bool)bTakeNewValues) return born ? E_MQTTRESULT::OK : E_MQTTRESULT::NOTCONNECTED;
 
     // A command in before the value out, so a setpoint written this scan is
     // reported back in the same message. One write a call, the oldest first:
     // a host writing 1 then 0 within a scan gives anyValue each for a scan.
     bool refusedWrite = false;
-    if (born && (bool)bWritable && node->commandPendingFor(device, name)) {
+    if (born && (bool)bHostCanWrite && node->commandPendingFor(device, name)) {
         MqttSparkplugValue value;
         if (node->takeFor(device, name, value)) {
             if (mq_spWriteAny(anyValue, value)) {
                 r->written = r->written + 1;
-                nWrittenCnt = r->written;
+                nHostWriteCount = r->written;
             } else {
                 refusedWrite = true;   // too long for the STRING, or a TIME out of range
             }
         }
     }
-    if (born && (bool)bWritable) {
+    if (born && (bool)bHostCanWrite) {
         const int index = node->indexOf(device, name);
         if (index >= 0) {
             r->lost = (int32_t)node->writesLostAt((size_t)index);
-            nLostCnt = r->lost;
+            nLostWriteCount = r->lost;
         }
     }
 
@@ -2885,7 +2884,7 @@ E_MQTTRESULT Metric()
 
     // Asked, not sent: the node sends one data message on its next scan for
     // everything that moved, however many calls asked.
-    if ((bool)bPublish) node->publishAtPoll();
+    if ((bool)bSendChangesAtOnce) node->publishAtPoll();
     return refusedWrite ? E_MQTTRESULT::INVALIDARGUMENT : E_MQTTRESULT::OK;
 }
 
@@ -2898,9 +2897,9 @@ E_MQTTRESULT Device()
     const char* parts[1] = {sDeviceId.c_str()};
     MqSpmDevice* r = mq_spmRowOf<MqSpmDevice>(table, MQ_SPM_DEVICE, parts, 1);
     if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
-    bDeviceOnline = r->online;
-    nBirthCnt = r->births;
-    nDeathCnt = r->deaths;
+    bDeviceBirthSent = r->online;
+    nBirthCount = r->births;
+    nDeathCount = r->deaths;
 
     if (sDeviceId.length() == 0) return E_MQTTRESULT::INVALIDARGUMENT;
     const char* device = sDeviceId.c_str();
@@ -2915,9 +2914,9 @@ E_MQTTRESULT Device()
         node->addDevice(device);
     }
 
-    // ON A CHANGE, and on the first call: bOnline held TRUE must not birth it
+    // ON A CHANGE, and on the first call: bBringOnline held TRUE must not birth it
     // every scan, which a host would see as a rebirth storm.
-    const bool wanted = (bool)bOnline;
+    const bool wanted = (bool)bBringOnline;
     if (!r->asked || wanted != r->wanted) {
         r->asked = true;
         r->wanted = wanted;
@@ -2928,7 +2927,7 @@ E_MQTTRESULT Device()
             if (!node->deviceOffline(device)) return E_MQTTRESULT::INVALIDARGUMENT;
             if (wasOnline) {
                 r->deaths = r->deaths + 1;
-                nDeathCnt = r->deaths;
+                nDeathCount = r->deaths;
             }
         }
     }
@@ -2942,8 +2941,8 @@ E_MQTTRESULT Device()
     const bool online = node->deviceIsOnline(device);
     if (online && !r->online) r->births = r->births + 1;
     r->online = online;
-    bDeviceOnline = online;
-    nBirthCnt = r->births;
+    bDeviceBirthSent = online;
+    nBirthCount = r->births;
     return born ? E_MQTTRESULT::OK : E_MQTTRESULT::NOTCONNECTED;
 }
 
@@ -2956,7 +2955,7 @@ E_MQTTRESULT Command()
     const char* parts[2] = {sDeviceId.c_str(), sMetricName.c_str()};
     MqSpmCommand* r = mq_spmRowOf<MqSpmCommand>(table, MQ_SPM_COMMAND, parts, 2);
     if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
-    const bool ack = (bool)bAck;
+    const bool ack = (bool)bTakeCommand;
     const bool rising = ack && !r->lastAck;
     r->lastAck = ack;
 
@@ -3007,7 +3006,7 @@ E_MQTTRESULT Command()
                 }
             }
             r->pending = pending;
-            // A rising edge of bAck consumes it, so two rungs cannot both act
+            // A rising edge of bTakeCommand consumes it, so two rungs cannot both act
             // on one command.
             if (rising && pending) {
                 MqttSparkplugValue taken;
@@ -3019,13 +3018,13 @@ E_MQTTRESULT Command()
             if (!node->isBorn()) result = E_MQTTRESULT::NOTCONNECTED;
         }
     }
-    if (node != nullptr) nRefusedCnt = (int32_t)node->commandsRefused();
-    bPending = r->pending;
+    if (node != nullptr) nRefusedCommandCount = (int32_t)node->commandsRefused();
+    bCommandWaiting = r->pending;
     fValue = r->value;
     bValue = r->value != 0.0;
     sText = r->text.c_str();
-    nCmdCnt = r->count;
-    nLostCnt = r->lost;
+    nCommandCount = r->count;
+    nLostWriteCount = r->lost;
     return result;
 }
 
@@ -3043,8 +3042,8 @@ E_MQTTRESULT History()
     // --- The buffer, on the first call: a scan, long after PSRAM is up ---
     if (!h->begun) {
         h->begun = true;
-        const size_t depth = (uint16_t)nDepth != 0 ? (size_t)(uint16_t)nDepth : 256u;
-        size_t batch = (uint16_t)nBatch != 0 ? (size_t)(uint16_t)nBatch : 20u;
+        const size_t depth = (uint16_t)nMaxEventsKept != 0 ? (size_t)(uint16_t)nMaxEventsKept : 256u;
+        size_t batch = (uint16_t)nEventsPerMessage != 0 ? (size_t)(uint16_t)nEventsPerMessage : 20u;
         if (batch > 64) batch = 64;
         h->ring.begin(depth);
         void* raw = mq_allocLarge(batch * 4 * sizeof(MqttSparkplugRecord));
@@ -3059,12 +3058,12 @@ E_MQTTRESULT History()
             h->names[k] = std::string(prefix) + kParts[k];
         }
     }
-    nSentCnt = h->sent;
-    bReplaying = false;
+    nSentEventCount = h->sent;
+    bCatchingUp = false;
     if (!h->ring.ready() || h->scratch == nullptr) {
-        if ((bool)bAdd) h->ring.add(MqttSparkplugEvent());   // counted as lost
-        nStoredCnt = 0;
-        nLostCnt = h->ring.lost();
+        if ((bool)bRecordEvent) h->ring.add(MqttSparkplugEvent());   // counted as lost
+        nEventsWaiting = 0;
+        nLostEventCount = h->ring.lost();
         return E_MQTTRESULT::NOTINITIALISED;   // no memory for the buffer
     }
 
@@ -3072,10 +3071,10 @@ E_MQTTRESULT History()
     const mq_time_t now = mq_millis();
 
     // --- Record, whatever the node is doing ---
-    if ((bool)bAdd) {
+    if ((bool)bRecordEvent) {
         MqttSparkplugEvent event;
-        event.source = (uint16_t)nSource;
-        event.code = (uint16_t)nCode;
+        event.source = (uint16_t)nEventSource;
+        event.code = (uint16_t)nEventCode;
         event.value = (float)fValue;
         h->seq = h->seq + 1u;
         event.seq = h->seq;
@@ -3089,8 +3088,8 @@ E_MQTTRESULT History()
         if (node == nullptr || !node->isBorn()) event.flags |= MQ_SP_EVENT_OFFLINE;
         h->ring.add(event);
     }
-    nStoredCnt = (uint16_t)h->ring.count();
-    nLostCnt = h->ring.lost();
+    nEventsWaiting = (uint16_t)h->ring.count();
+    nLostEventCount = h->ring.lost();
     if (node == nullptr) return E_MQTTRESULT::NOTCONNECTED;
 
     // --- Declared once, before the node births ---
@@ -3132,9 +3131,9 @@ E_MQTTRESULT History()
             h->pending = 0;
         }
     }
-    nStoredCnt = (uint16_t)h->ring.count();
-    nSentCnt = h->sent;
-    bReplaying = born && h->ring.count() > 0 &&
+    nEventsWaiting = (uint16_t)h->ring.count();
+    nSentEventCount = h->sent;
+    bCatchingUp = born && h->ring.count() > 0 &&
                  (h->ring.peek(0)->flags & MQ_SP_EVENT_OFFLINE) != 0;
     if (!born) return E_MQTTRESULT::NOTCONNECTED;
     if (h->pending > 0 || h->ring.empty()) return E_MQTTRESULT::OK;
@@ -3148,7 +3147,7 @@ E_MQTTRESULT History()
         return E_MQTTRESULT::OK;   // waits for the clock up to five minutes after the birth
     }
     if (historical) {
-        const int32_t period = mq_millisOf(tPeriod) > 0 ? mq_millisOf(tPeriod) : 1000;
+        const int32_t period = mq_millisOf(tCatchUpInterval) > 0 ? mq_millisOf(tCatchUpInterval) : 1000;
         if ((int32_t)(now - (mq_time_t)(uint32_t)h->sentAt) < period) return E_MQTTRESULT::OK;
     }
     size_t limit = h->limit != 0 ? (size_t)h->limit : 1u;
@@ -3189,12 +3188,12 @@ E_MQTTRESULT DayTotals()
                             sMetricName.c_str()};
     MqSpmDays* d = mq_spmRowOf<MqSpmDays>(table, MQ_SPM_DAYS, parts, 3);
     if (d == nullptr) return E_MQTTRESULT::QUEUEFULL;
-    nSentCnt = d->sent;
+    nSentDayCount = d->sent;
 
     uint32_t dayAt = 0;
     uint32_t totalAt = 0;
     if (!mq_spmDayLayout(anyDays, &dayAt, &totalAt) || anyDays.DICOUNT < 2) {
-        nDays = 0;
+        nClosedDays = 0;
         return E_MQTTRESULT::INVALIDARGUMENT;   // not an ARRAY OF ST_SparkplugDay of two rows or more
     }
     const int32_t rows = anyDays.DICOUNT;
@@ -3202,12 +3201,12 @@ E_MQTTRESULT DayTotals()
     auto totalOf = [&](int32_t row) -> float& { return *(float*)(anyDays.at(row) + totalAt); };
 
     // --- Today, and the close of a day ---
-    const int64_t clockNs = (int64_t)dtClock.get();
+    const int64_t clockNs = (int64_t)dtLocalTime.get();
     const int64_t today = clockNs >= 0 ? clockNs / MQ_SPM_NS_PER_DAY : -1;
     bool closed = false;
     if (today >= MQ_SPM_DAY_PLAUSIBLE) {
         const int64_t openDay = dayOf(0);
-        const int64_t saveNs = (int64_t)mq_millisOf(tSaveEvery) * 1000000LL;
+        const int64_t saveNs = (int64_t)mq_millisOf(tSaveInterval) * 1000000LL;
         if (openDay >= MQ_SPM_DAY_PLAUSIBLE && openDay != today) {
             // The first row's day has ended: it becomes the newest closed day,
             // with the total of its last call - or, if the PLC was off when it
@@ -3223,22 +3222,22 @@ E_MQTTRESULT DayTotals()
         }
         if (openDay != today) {
             dayOf(0) = today;
-            totalOf(0) = (float)fValue;
+            totalOf(0) = (float)fTodayTotal;
             d->savedNs = clockNs;
         } else if (d->savedNs < 0 || clockNs < d->savedNs) {
             d->savedNs = clockNs;   // the first call, or the clock set back: the period starts
         } else if (saveNs <= 0 || clockNs - d->savedNs >= saveNs) {
-            totalOf(0) = (float)fValue;
+            totalOf(0) = (float)fTodayTotal;
             d->savedNs = clockNs;
         }
-        d->live = (float)fValue;
+        d->live = (float)fTodayTotal;
         d->liveDay = today;
     }
     int16_t closedDays = 0;
     for (int32_t i = 1; i < rows; i++) {
         if (dayOf(i) >= MQ_SPM_DAY_PLAUSIBLE) closedDays++;
     }
-    nDays = closedDays;
+    nClosedDays = closedDays;
 
     MqttSparkplugNode* node = mq_spNodeOf((strucpp::XWORD_t)nApi);
     if (node == nullptr) return E_MQTTRESULT::NOTCONNECTED;
@@ -3274,7 +3273,7 @@ E_MQTTRESULT DayTotals()
     for (int32_t i = rows - 1; i >= 1 && ok; i--) {   // oldest first
         const int64_t day = dayOf(i);
         if (day >= MQ_SPM_DAY_PLAUSIBLE) {
-            // At 00:00 of its date, the date as dtClock has it written as UTC.
+            // At 00:00 of its date, the date as dtLocalTime has it written as UTC.
             records[n].index = (size_t)index;
             records[n].value = mq_spFloat(totalOf(i));
             records[n].timestamp = (uint64_t)day * 86400000ULL;
@@ -3287,7 +3286,7 @@ E_MQTTRESULT DayTotals()
         }
     }
     d->sent = d->sent + sent;
-    nSentCnt = d->sent;
+    nSentDayCount = d->sent;
     if (ok) d->owed = false;   // otherwise the next call tries again
     return E_MQTTRESULT::OK;
 }

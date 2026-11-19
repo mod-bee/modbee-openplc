@@ -28,14 +28,14 @@ eSecurity   plain or TLS, and which kind of TLS. Separate from eTransport,
              E_MqttSecurity.TlsPinned    a broker nobody signed for: a ModBee
                                          PLC broker, a site's own Mosquitto.
                                          Trusts ONE key and skips chain and
-                                         expiry on purpose. See bTrustNew
+                                         expiry on purpose. See bTrustFirstBrokerKey
              E_MqttSecurity.TlsInsecure  encrypted and NOT checked. For a
                                          bench, never for a plant
-sHost       the broker: a name or an address. Empty is refused.
-nPort       0 for the standard one: 1883 plain, 8883 TLS.
+sHostName   the broker: a name or an address. Empty is refused.
+nHostPort   0 for the standard one: 1883 plain, 8883 TLS.
 sClientId   what the broker calls this device. EVERY DEVICE ON A BROKER NEEDS
            ITS OWN: two sharing one knock each other off for ever. Empty asks
-           the broker to assign one, shown on sAssignedId. Provision uses it
+           the broker to assign one, shown on sClientIdInUse. Provision uses it
            as the PLC's name.
 eProtocol   which MQTT version to speak. E_MqttProtocol.V5ThenV311 (the
            default) tries 5.0 and drops to 3.1.1 only when the broker says the
@@ -47,11 +47,11 @@ nExternalLink  a transport another block made, for
 bConnect    TRUE connects and stays connected. FALSE says goodbye properly -
            the broker publishes no Will - and keeps the client, so every
            method's record survives the gap.
-bTrustNew   for E_MqttSecurity.TlsPinned only. TRUE lets the FIRST key a broker
+bTrustFirstBrokerKey  for E_MqttSecurity.TlsPinned only. TRUE lets the FIRST key a broker
            shows be learned and kept, in this block's own retained memory
            (trust on first use, as SSH does). Once learned it is ENFORCED,
-           whether bTrustNew stays TRUE or not and across restarts: a broker
-           showing another key is refused and sBrokerKey shows the key it
+           whether bTrustFirstBrokerKey stays TRUE or not and across restarts: a broker
+           showing another key is refused and sBrokerKeyFingerprint shows the key it
            presented. Wiring it TRUE is therefore safe. To accept a broker
            REPLACED ON PURPOSE, switch it FALSE and TRUE again: the rising
            edge forgets the stored key and the next connection learns the new
@@ -67,25 +67,25 @@ stSessionConfig  ST_MqttSessionConfig, everything about the session. Every
                             right for a sensor with nothing to catch up on.
                             FALSE keeps the session for what must not be
                             lost across a drop, at the broker's memory
-             tSessionExpiry MQTT 5: how long the broker keeps the session
+             tSessionExpiryInterval MQTT 5: how long the broker keeps the session
                             after a disconnect. T#0s = not at all
              sUserName      the login; empty for none. Leave empty when
                             Provision gives the login
              sUserPassword  its password. In the clear unless eSecurity is
                             TLS. Put it in a variable, not a literal
-             nMaxPending    publishes and subscribes that may wait for the
+             nMaxPendingOperations  publishes and subscribes that may wait for the
                             broker at once (QoS 1 and 2). 0 = 32. Past it a
                             method gets QueueFull, never a silent drop
-             nMaxMsgIn      the largest message received, bytes. 0 = 4096.
+             nMaxIncomingMessageBytes  the largest message received, bytes. 0 = 4096.
                             Raise it on the subscribing end for JSON
-             nMaxMsgOut     the largest message sent, bytes. 0 = 4096. A
+             nMaxOutgoingMessageBytes  the largest message sent, bytes. 0 = 4096. A
                             larger publish is refused with PacketTooLarge
-             tReconnect     the first wait before reconnecting. T#0s = 1 s
-             tReconnectMax  the longest wait between attempts. T#0s = 1 min
+             tFirstReconnectAfter  the first wait before reconnecting. T#0s = 1 s
+             tMaxReconnectAfter  the longest wait between attempts. T#0s = 1 min
              tConnectTimeout how long a broker that accepts a socket may say
                             nothing. T#0s = 20 s. Raise it for a slow
                             cellular or TLS link
-             tMaxSilence    reconnect when nothing at all arrives for this
+             tReconnectAfterSilence  reconnect when nothing at all arrives for this
                             long, whatever our own sending looks like.
                             T#0s = never. On cellular, three keep-alives: a
                             modem takes our bytes and says "sent" whether or
@@ -93,52 +93,53 @@ stSessionConfig  ST_MqttSessionConfig, everything about the session. Every
              bAutoReconnect TRUE (default) reconnects by itself after a loss.
                             On cellular the reconnect can stall a scan:
                             consider FALSE and reconnect from your logic
-             bRetryRejectedCredential  TRUE retries a refused login at the
+             bRetryRefusedLogin        TRUE retries a refused login at the
                             usual backoff. FALSE (default) tries a refused
                             login again only every five minutes
-stTlsConfig  ST_MqttTlsConfig, what to trust. Files on the Runtime; a board
+stTls        ST_MqttTlsConfig, what to trust. Files on the Runtime; a board
            takes them from the board package's defines (below).
-             sCaFile        the certificate authority. Empty = the system's
-             sCertFile      this client's certificate, for mutual TLS
-             sKeyFile       its private key. One without the other is refused
+             sCaCertificateFile  the certificate authority. Empty = the system's
+             sClientCertificateFile  this client's certificate, for mutual TLS
+             sClientPrivateKeyFile  its private key. One without the other is refused
 stNetworkConfig  ST_MqttNetworkConfig, what only a board has. Refused on the
            Runtime, which uses its machine's network.
              sSsid          ArduinoWiFi: the network to join. Empty when
                             node-uio's NETWORK joins it
              sWiFiPassword  its password; empty for an open network
-             sMac           ArduinoEthernet: this board's MAC,
+             sMacAddress    ArduinoEthernet: this board's MAC,
                             'DE:AD:BE:EF:FE:ED'. Each board needs its own
-             sIp            a fixed address; empty or 'dhcp' = DHCP. A fixed
+             sIpAddress     a fixed address; empty or 'dhcp' = DHCP. A fixed
                             address is what you want: DHCP is bounded to 1 s
                             an attempt and retried, a stall each time, and a
                             plant network rarely runs it
-             sGateway       the router, with a fixed address
-             sSubnet        the mask, with a fixed address
-stWillConfig  ST_MqttWillConfig, presence: 'online' on every connection and
+             sGatewayAddress  the router, with a fixed address
+             sSubnetMask    the mask, with a fixed address
+stWill        ST_MqttWillConfig, presence: 'online' on every connection and
            the Will the broker sends when this device is gone without a
            goodbye. Not with a Sparkplug node or host on this client: their
            birth and death certificates are the presence.
              sTopic         where; empty = no presence
-             sOnline        sent on every connection. Empty = 'online'
-             sOffline       the Will. Empty = 'offline'
+             sOnlineMessage  sent on every connection. Empty = 'online'
+             sOfflineMessage  the Will. Empty = 'offline'
              bRetain        TRUE (default): late subscribers are told too
              eQos           for both
-             tDelay         MQTT 5: how long the broker waits before sending
+             tWillDelayInterval  MQTT 5: how long the broker waits before sending
                             the Will. A reconnect inside it sends nothing, so
                             a marginal radio does not cry wolf. Refused at
                             3.1.1, which cannot carry it
 
-bLinkUp     the client exists and its link is open.
+bLinkOpen   the socket to the broker is open: TCP (and TLS) is up. The
+           broker may not have accepted us yet - bConnected says that.
 bConnected  the broker has acknowledged us. THE ONE TO INTERLOCK ON. FALSE
            while Provision is connected only with its key.
-tHeardAgo   how long since anything arrived from the broker on this
+tSinceLastHeard  how long since anything arrived from the broker on this
            connection (T#0s while not connected). A healthy broker is heard at
            least once a keep-alive - it answers our ping - so "bConnected and
-           tHeardAgo under three keep-alives" proves the broker is really
+           tSinceLastHeard under three keep-alives" proves the broker is really
            there, which a modem that only buffers our bytes cannot fake.
 bSessionPresent  the broker had our session waiting. FALSE after a clean
            start and on a first connection.
-sAssignedId the client identifier in force, ours or the broker's.
+sClientIdInUse the client identifier in force, ours or the broker's.
 eConnectionState  where the connection is up to: Idle, Connecting,
            AwaitingConnAck, Authenticating, Connected, Disconnecting,
            Reconnecting.
@@ -151,9 +152,9 @@ sLastError  in words: the operating system's ("Connection refused", "Name or
            fixed line with the TLS library's code ("TLS: wrong host name",
            "TLS: broker refused us -0x7780"; docs/09 lists them). "out of
            memory for topics or subscriptions" when a method's topic could not
-           be held; "out of memory for MAX_PENDING - the queue holds N" when
-           stSessionConfig.nMaxPending could not be taken.
-sBrokerKey  the SHA-256 of the key the broker presented, 64 hexadecimal
+           be held; "nMaxPendingOperations: no memory, the queue holds N" when
+           stSessionConfig.nMaxPendingOperations could not be taken.
+sBrokerKeyFingerprint  the SHA-256 of the key the broker presented, 64 hexadecimal
            characters, pinned or not. Write it down at commissioning. Empty on
            a plain connection.
 
@@ -191,94 +192,94 @@ kept no session.
      InvalidArgument (a type the wire cannot carry), InvalidTopic,
      QueueFull, or the broker's refusal.
 
-  mqtt.Report(anyValue, sTopic, eTrigger, fDeadband, tPeriod, eQos, bRetain,
-              bEnable, bExecute, nSent =>, tAge =>)
+  mqtt.Report(anyValue, sTopic, eTrigger, fDeadband, tSendInterval, eQos, bRetain,
+              bEnable, bExecute, nMessageSentCount =>, tSinceLastSent =>)
      A VARIABLE, published when it is worth publishing. eTrigger:
        E_MqttTrigger.OnChange    when it moves by fDeadband or more from the
-                                 value last sent, and every tPeriod anyway.
+                                 value last sent, and every tSendInterval anyway.
                                  A STRING (no number) when its text changes
-       E_MqttTrigger.OnInterval  every tPeriod, which must be set
+       E_MqttTrigger.OnInterval  every tSendInterval, which must be set
        E_MqttTrigger.OnRequest   on bExecute's rising edge; nothing else, no
                                  first value, no heartbeat
-     ALWAYS SET tPeriod WITH OnChange: a value that never moves otherwise
+     ALWAYS SET tSendInterval WITH OnChange: a value that never moves otherwise
      publishes nothing, and the far end cannot tell that from a dead device.
      A BOOL counts as 1.0 or 0.0, so leave fDeadband 0 for anything that is
      not an analogue. bEnable FALSE stops it, keeping the record; an edge of
      bExecute raised meanwhile does not fire on enabling. A new sTopic sends
-     its first value at once. nSent counts messages; tAge is the time since
-     the last one (T#0s before the first, which nSent = 0 tells apart).
+     its first value at once. nMessageSentCount counts messages; tSinceLastSent is the time since
+     the last one (T#0s before the first, which nMessageSentCount = 0 tells apart).
      Ok, NotConnected, InvalidArgument (a type the wire cannot carry,
-     OnInterval with no tPeriod, E_MqttTrigger.ChangedEvery, which is
+     OnInterval with no tSendInterval, E_MqttTrigger.ChangedEvery, which is
      Sparkplug's), QueueFull, or the broker's refusal.
 
-  mqtt.Subscribe(anyValue, sTopic, eQos, tExpect, bEnable, bSubscribed =>,
-                 eQuality =>, bSeen =>, tAge =>, nReceived =>, nMalformed =>,
-                 bNewValue =>)
+  mqtt.Subscribe(anyValue, sTopic, eQos, tExpectedInterval, bEnable, bSubscribed =>,
+                 eQuality =>, bValueEverReceived =>, tValueAge =>, nMessageReceivedCount =>, nMalformedCount =>,
+                 bValueReceived =>)
      A VARIABLE KEPT UP TO DATE from sTopic (wildcards allowed: the variable
      then holds whichever arrived last). A payload is read as anyValue's
      declared type and written straight into it; one that does not parse is
-     counted on nMalformed and leaves anyValue alone. eQos is the most the
-     broker may use. eQuality is judged against tExpect, the interval YOU
+     counted on nMalformedCount and leaves anyValue alone. eQos is the most the
+     broker may use. eQuality is judged against tExpectedInterval, the interval YOU
      expect a value in:
        E_MqttQuality.Unknown    nothing has EVER arrived: a desk fault - a
                                 topic typo, a publisher never deployed
        E_MqttQuality.Bad        the link is down, or more than twice overdue:
                                 a plant fault
        E_MqttQuality.Uncertain  overdue, but not by twice
-       E_MqttQuality.Good       arrived inside tExpect. tExpect T#0s = no
+       E_MqttQuality.Good       arrived inside tExpectedInterval. tExpectedInterval T#0s = no
                                 promise: Good once anything has arrived
-     bSeen is the same distinction as a BOOL, for a ladder rung, which cannot
-     compare an enumeration. tAge is the time since the last accepted value.
-     bNewValue: this call wrote anyValue. A new sTopic is a new subscription,
+     bValueEverReceived is the same distinction as a BOOL, for a ladder rung, which cannot
+     compare an enumeration. tValueAge is the time since the last accepted value.
+     bValueReceived: this call wrote anyValue. A new sTopic is a new subscription,
      Unknown until it speaks. bEnable FALSE unsubscribes, keeping the record.
      Ok, NotConnected, QueueFull, or the broker's refusal.
 
-  mqtt.PublishStruct(anyData, sBase, eTrigger, tPeriod, eQos, bRetain,
-                     bEnable, bExecute, nPoints =>, nSkipped =>, nSent =>,
-                     nChanged =>)
-     A WHOLE STRUCT, each member on sBase/<member>: the member name IS the
+  mqtt.PublishStruct(anyData, sBaseTopic, eTrigger, tSendInterval, eQos, bRetain,
+                     bEnable, bExecute, nMembers =>, nMembersRefused =>, nMessageSentCount =>,
+                     nMessagesSentThisScan =>)
+     A WHOLE STRUCT, each member on sBaseTopic/<member>: the member name IS the
      topic, so the STRUCT is the topic scheme. OnChange sends a member when
-     it changes and every tPeriod anyway; OnInterval the whole set every
-     tPeriod; OnRequest the whole set on bExecute's rising edge, changed or
+     it changes and every tSendInterval anyway; OnInterval the whole set every
+     tSendInterval; OnRequest the whole set on bExecute's rising edge, changed or
      not. No deadband, on purpose: one number over mixed types would freeze
      a BOOL. A member the wire cannot carry - an array, a nested STRUCT, a
-     TIME - is refused, counted on nSkipped, and the call returns
-     InvalidArgument; the other members still go. nPoints: members
-     published. nSent: messages for this record. nChanged: sent by this
+     TIME - is refused, counted on nMembersRefused, and the call returns
+     InvalidArgument; the other members still go. nMembers: members
+     published. nMessageSentCount: messages for this record. nMessagesSentThisScan: sent by this
      call. Ok, NotConnected, InvalidArgument (also: not a STRUCT, OnInterval
-     with no tPeriod, ChangedEvery), InvalidTopic, QueueFull.
+     with no tSendInterval, ChangedEvery), InvalidTopic, QueueFull.
 
-  mqtt.SubscribeStruct(anyData, sBase, eQos, tExpect, bEnable, nPoints =>,
-                       nSkipped =>, bSubscribed =>, eQuality =>, bSeen =>,
-                       tOldest =>, nReceived =>, nMalformed =>,
-                       nNewValues =>)
-     A WHOLE STRUCT KEPT UP TO DATE, each member from sBase/<member>.
-     eQuality is the WORST member's: a recipe with one stale setpoint is not
-     a recipe to run. bSeen is FALSE, and tOldest T#0s, while any member has
-     never had a value; tOldest is the oldest member's age. nNewValues:
+  mqtt.SubscribeStruct(anyData, sBaseTopic, eQos, tExpectedInterval, bEnable, nMembers =>,
+                       nMembersRefused =>, bSubscribed =>, eWorstMemberQuality =>, bAllMembersEverReceived =>,
+                       tOldestMemberAge =>, nMessageReceivedCount =>, nMalformedCount =>,
+                       nMembersReceivedThisScan =>)
+     A WHOLE STRUCT KEPT UP TO DATE, each member from sBaseTopic/<member>.
+     eWorstMemberQuality is the WORST member's: a recipe with one stale setpoint is not
+     a recipe to run. bAllMembersEverReceived is FALSE, and tOldestMemberAge T#0s, while any member has
+     never had a value; tOldestMemberAge is the oldest member's age. nMembersReceivedThisScan:
      members written by this call. Members it cannot carry as for
-     PublishStruct. Link down: eQuality Bad. Ok, NotConnected,
+     PublishStruct. Link down: eWorstMemberQuality Bad. Ok, NotConnected,
      InvalidArgument, InvalidTopic, QueueFull.
 
-  mqtt.Request(anyValue, sTopic, sReplyTopic, eQos, tTimeout, bExecute,
-               sReply =>, nReplyLen =>)
+  mqtt.Request(anyRequest, sTopic, sResponseTopic, eQos, tTimeout, bExecute,
+               sReply =>, nReplyLength =>)
      A QUESTION AND ITS ANSWER, MQTT 5 only. The rising edge of bExecute
-     clears sReply and publishes anyValue on sTopic with sReplyTopic as its
-     Response Topic and a counted Correlation Data; sReplyTopic is
+     clears sReply and publishes anyRequest on sTopic with sResponseTopic as its
+     Response Topic and a counted Correlation Data; sResponseTopic is
      subscribed beforehand, so the answer cannot arrive before anyone
-     listens. Give each requester its own sReplyTopic. Queued until the
-     answer (Ok, its text in sReply, up to 254 characters, nReplyLen
-     characters) or tTimeout (T#0s = 5 s: KeepAliveTimeout). NotConnected,
-     InvalidTopic (no sReplyTopic), NotSupportedByProtocol (a 3.1.1
+     listens. Give each requester its own sResponseTopic. Queued until the
+     answer (Ok, its text in sReply, up to 254 characters, nReplyLength
+     characters) or tTimeout (T#0s = 5 s: NoReply). NotConnected,
+     InvalidTopic (no sResponseTopic), NotSupportedByProtocol (a 3.1.1
      connection: refused rather than sent with nowhere to answer),
      InvalidArgument, QueueFull.
 
   mqtt.Response(anyRequest, sTopic, anyReply, eQos, bEnable, bExecute,
-                bNewRequest =>, bAwaitingReply =>, sResponseTopic =>,
-                nReceived =>, nMalformed =>)
+                bRequestReceived =>, bAwaitingReply =>, sResponseTopic =>,
+                nRequestReceivedCount =>, nMalformedCount =>)
      ANSWERS ANOTHER DEVICE'S MQTT 5 REQUEST. Requests arriving on sTopic
      (wildcards allowed) are written into anyRequest as its declared type;
-     one that does not parse counts on nMalformed. bNewRequest: this call
+     one that does not parse counts on nMalformedCount. bRequestReceived: this call
      took one. bAwaitingReply: the last request gave a Response Topic
      (sResponseTopic) and is not answered yet. A rising edge of bExecute
      sends anyReply there, quoting the request's Correlation Data, once per
@@ -286,48 +287,48 @@ kept no session.
      answer), NotSupportedByProtocol (3.1.1), InvalidArgument (anyReply's
      type).
 
-  mqtt.Message(anyPayload, sTopic, eQos, bEnable, nLen =>, bTruncated =>,
-               nReceived =>, bNewMessage =>)
+  mqtt.Message(anyPayload, sTopic, eQos, bEnable, nPayloadLength =>, bTruncated =>,
+               nMessageReceivedCount =>, bMessageReceived =>)
      THE TEXT OF WHATEVER ARRIVES on sTopic (wildcards allowed), written into
      the STRING variable anyPayload, one message per call. For JSON you
-     parse yourself, a state name, a command word. bNewMessage reports an
+     parse yourself, a state name, a command word. bMessageReceived reports an
      ARRIVAL, not a change: "open" sent twice is two messages. An EMPTY
      message is not nothing - with retain it is how MQTT withdraws a value:
-     bNewMessage with nLen 0. bTruncated: longer than anyPayload or the
+     bMessageReceived with nPayloadLength 0. bTruncated: longer than anyPayload or the
      client's buffer - check it before trusting a JSON document. Ok,
      NotConnected, InvalidArgument (anyPayload is not a STRING variable),
      QueueFull.
 
-  mqtt.Provision(sKey, bForget, bProvisioned =>, bPending =>, bRefused =>,
-                 sUserName =>, sGroup =>, sPrefix =>, sReason =>)
+  mqtt.Provision(sProvisioningKey, bForgetStoredLogin, bProvisioned =>, bAwaitingApproval =>, bRegistrationRefused =>,
+                 sProvisionedUserName =>, sGroupId =>, sTopicPrefix =>, sRefusalReason =>)
      ON A MODBEE BROKER, THE PLC GETS ITS OWN LOGIN by itself. sClientId is
-     its name and must be set; sKey comes from `modbee key create` on the
+     its name and must be set; sProvisioningKey comes from `modbee key create` on the
      broker. The first start connects with the key, asks for a login and
      keeps it in this block's retained memory, then reconnects as itself;
      bConnected stays FALSE until then. Leave stSessionConfig's login empty.
      Call it every scan, before this block's own call. bProvisioned: this
-     PLC has its own login and is connected with it. bPending: waiting for
-     approval on the broker (asked again every 30 s). bRefused: the broker
-     said no, sReason why (asked again every 5 minutes). sUserName: the
-     login in use. sGroup and sPrefix: what the key hands its devices - the
+     PLC has its own login and is connected with it. bAwaitingApproval: waiting for
+     approval on the broker (asked again every 30 s). bRegistrationRefused: the broker
+     said no, sRefusalReason why (asked again every 5 minutes). sProvisionedUserName: the
+     login in use. sGroupId and sTopicPrefix: what the key hands its devices - the
      Sparkplug group and a topic prefix - kept with the login and valid from
      the first scan. A login that stops working is replaced by itself; a
-     rising edge of bForget throws it away and registers again. Ok,
-     InvalidArgument (no sClientId; no sKey and no stored login),
+     rising edge of bForgetStoredLogin throws it away and registers again. Ok,
+     InvalidArgument (no sClientId; no sProvisioningKey and no stored login),
      NotAuthorized (refused), QueueFull.
 
-  mqtt.Statistics(nVersion =>, nConnects =>, nDisconnects =>,
-                  nReconnects =>, nPublished =>, nReceived =>,
-                  nPublishFailures =>, nProtocolErrors =>, nPending =>,
-                  nReasonCode =>)
+  mqtt.Statistics(nProtocolVersion =>, nConnectCount =>, nDisconnectCount =>,
+                  nReconnectCount =>, nMessageSentCount =>, nMessageReceivedCount =>,
+                  nPublishFailureCount =>, nProtocolErrorCount =>, nPendingOperations =>,
+                  nLastReasonCode =>)
      THE CONNECTION'S COUNTERS, running totals since the program started.
-     nVersion: 5 or 4, the protocol in force. nReconnects climbing at the
+     nProtocolVersion: the protocol in force, 5 = MQTT 5.0, 4 = MQTT 3.1.1. nReconnectCount climbing at the
      same time each day is a lease or a job; with the weather, a radio.
-     nPublishFailures in a steady ratio to nPublished: something refuses
-     messages - read the sending method's result. nPending: operations
+     nPublishFailureCount in a steady ratio to nMessageSentCount: something refuses
+     messages - read the sending method's result. nPendingOperations: operations
      accepted and not yet concluded; climbing and never falling is a broker
-     that stopped acknowledging. nProtocolErrors not 0: one end has a bug.
-     nReasonCode: the broker's last reason code (always 0 at 3.1.1). Ok;
+     that stopped acknowledging. nProtocolErrorCount not 0: one end has a bug.
+     nLastReasonCode: the broker's last reason code (always 0 at 3.1.1). Ok;
      NotConnected while there is no link, the figures still written (they count across outages).
 
 ---
@@ -343,7 +344,7 @@ A REFUSED LOGIN STOPS, AND SAYS WHY. eErrorId NotAuthorized and sLastError
 the broker's own reason. It is tried again every five minutes, not at the
 usual backoff: a PLC repeating a rejected password every second is how a
 site gets itself banned, and a broker fixed at the other end still gets the
-PLC back by itself. stSessionConfig.bRetryRejectedCredential TRUE retries at
+PLC back by itself. stSessionConfig.bRetryRefusedLogin TRUE retries at
 the backoff, for a broker whose access list loads after it listens.
 
 NOTHING HERE BLOCKS. connect() does not wait for the broker; it starts the
@@ -360,14 +361,14 @@ every method has been called once first, wherever it sits in the program.
 TLS ON A BOARD IS THE SAME ON EVERY MEDIUM. On an ESP32, Wi-Fi, Ethernet and
 cellular all open a PLAIN connection and the TLS runs on the controller, with
 the mbedTLS the board already carries for its Wi-Fi - so every eSecurity
-works on every eTransport, sBrokerKey is filled, bTrustNew learns, and the
+works on every eTransport, sBrokerKeyFingerprint is filled, bTrustFirstBrokerKey learns, and the
 handshake runs beside the scan instead of in it. A TLS session holds about
 40 kB while it is up, in PSRAM where the board has it. The CA comes from
 MQTT_CA_CERT_PEM and a certificate of the board's own, for mutual TLS, from
 MQTT_CLIENT_CERT_PEM and MQTT_CLIENT_KEY_PEM - defines in the board package's
 compiler flags, since an OpenPLC project has no build flags of its own; an
 IEC STRING stops at 254 characters and a PEM is about eight times that. For
-the site's own broker none is needed: E_MqttSecurity.TlsPinned with bTrustNew
+the site's own broker none is needed: E_MqttSecurity.TlsPinned with bTrustFirstBrokerKey
 and a login. A board WITHOUT mbedTLS keeps what its medium offers:
 WiFiClientSecure (no TlsPinned), no TLS over Ethernet, and the modem's own
 TLS (TlsInsecure only). Ethernet itself needs MQTT_ENABLE_ETHERNET in the
@@ -380,7 +381,7 @@ say - and the client says goodbye on the old settings and connects with the
 new ones, on the same client: every method's record carries on, nothing
 needs a restart. The medium is rebuilt only when what it is made from
 changed. A pinned key stays pinned: a new broker address shows a different
-key and is refused until bTrustNew is switched off and on, as for a replaced
+key and is refused until bTrustFirstBrokerKey is switched off and on, as for a replaced
 broker.
 
 PROTOCOLS THAT RIDE ON IT, as layers on this one connection - one radio, one
@@ -388,7 +389,7 @@ login, one session for everything the device says:
 
   FB_SparkplugNode, FB_SparkplugHost  Sparkplug B. Each takes the Will (its
                  death certificate) and a clean session on every connection,
-                 so not with stWillConfig, and one of them per client.
+                 so not with stWill, and one of them per client.
   FB_OtaNode     firmware updates (modbee-ota), on topics of its own; its
                  Sparkplug method reports them as a node's metrics.
 
@@ -403,65 +404,45 @@ from another thread. See docs/10-scan-rate.md. *)
 
 FUNCTION_BLOCK FB_MqttClient
   VAR_INPUT
-    eTransport : E_MqttTransport;    (* where the bytes go: RuntimeTcp, ArduinoWiFi, ArduinoEthernet, Cellular, External *)
-    eSecurity : E_MqttSecurity;  (* Plain, TlsVerify, TlsPinned or TlsInsecure *)
-    sHost : STRING(64);          (* the broker: a name or an address *)
-    nPort : UINT;                (* 0 for the standard one: 1883 plain, 8883 TLS *)
-    sClientId : STRING(48);      (* what the broker calls this device; unique on the broker *)
-    eProtocol : E_MqttProtocol;  (* V5ThenV311 (default), V5 or V311 *)
-    nExternalLink : __XWORD;     (* eTransport External: a transport another block made *)
-    bConnect : BOOL := TRUE;     (* TRUE connects and stays connected; FALSE says goodbye *)
-    bTrustNew : BOOL;            (* TlsPinned: learn the first key a broker shows; an edge forgets it *)
-    stSessionConfig : ST_MqttSessionConfig;   (* keep-alive, session, login, queue and message sizes, reconnecting *)
-    stTlsConfig : ST_MqttTlsConfig;           (* certificate authority and client certificate (Runtime) *)
-    stNetworkConfig : ST_MqttNetworkConfig;   (* a board's Wi-Fi or Ethernet *)
-    stWillConfig : ST_MqttWillConfig;         (* presence: online on connect, the Will when gone *)
+    eTransport : E_MqttTransport;    (* where the bytes go: Runtime TCP, board Wi-Fi, board Ethernet, cellular modem, external link *)
+    eSecurity : E_MqttSecurity;  (* plain, or which TLS: verified, pinned key, or unchecked (bench only) *)
+    sHostName : STRING(64); (* the broker's host name or IP address *)
+    nHostPort : UINT; (* the broker's port; 0 = 1883 plain, 8883 TLS *)
+    sClientId : STRING(48); (* this device's name on the broker, unique there; empty = the broker assigns one *)
+    eProtocol : E_MqttProtocol; (* MQTT version: 5.0 then 3.1.1 (default), 5.0 only, 3.1.1 only *)
+    nExternalLink : __XWORD; (* eTransport External: the link another block made; never wired by hand *)
+    bConnect : BOOL := TRUE; (* TRUE connects and stays connected; FALSE disconnects cleanly, no Will *)
+    bTrustFirstBrokerKey : BOOL; (* TlsPinned: learn and keep the first key the broker shows; a new rising edge forgets it *)
+    stSessionConfig : ST_MqttSessionConfig; (* keep-alive, session, login, queue and message sizes, reconnecting *)
+    stTls : ST_MqttTlsConfig; (* certificate authority and client certificate (Runtime) *)
+    stNetworkConfig : ST_MqttNetworkConfig; (* a board's Wi-Fi or Ethernet settings *)
+    stWill : ST_MqttWillConfig; (* presence: online on connect, the Will when gone *)
   END_VAR
   VAR_OUTPUT
-    bLinkUp : BOOL;              (* the client exists and its link is open *)
-    bConnected : BOOL;           (* the broker has acknowledged us: the one to interlock on *)
-    tHeardAgo : TIME;            (* since anything last arrived from the broker *)
-    bSessionPresent : BOOL;      (* the broker had our session waiting *)
-    sAssignedId : STRING(48);    (* the client identifier in force *)
-    eConnectionState : E_MqttState;  (* where the connection is up to *)
-    bError : BOOL;               (* something failed *)
-    eErrorId : E_MqttResult;     (* why; Ok when fine *)
-    sLastError : STRING(64);     (* why, in words *)
-    sBrokerKey : STRING(64);     (* SHA-256 of the key the broker presented, hexadecimal *)
+    bLinkOpen : BOOL; (* the socket to the broker is open (TCP/TLS up, the broker may not have accepted us yet) *)
+    bConnected : BOOL; (* the broker has accepted us: the one to interlock on *)
+    tSinceLastHeard : TIME; (* time since anything arrived from the broker; T#0s while not connected *)
+    bSessionPresent : BOOL; (* the broker still had this device's session from before *)
+    sClientIdInUse : STRING(48); (* the client identifier in force: sClientId, or the broker's when that is empty *)
+    eConnectionState : E_MqttState; (* where the connection is up to *)
+    bError : BOOL; (* something failed; eErrorId and sLastError say what *)
+    eErrorId : E_MqttResult; (* why; Ok when fine, NotAuthorized when the login was refused, NoReply when a Request got no answer *)
+    sLastError : STRING(64); (* why, in words *)
+    sBrokerKeyFingerprint : STRING(64); (* SHA-256 of the key the broker presented, 64 hex characters; empty when plain *)
   END_VAR
 
   VAR RETAIN
-    (* THE PIN, AND IT IS THE BLOCK'S OWN RETAINED VARIABLE - not a pin somebody
-       has to wire, name or type.
-
-       IEC 61131-3 6.5.6.2 allows RETAIN on a variable declared in a function
-       block TYPE, and says that declaration overrides whatever the instance
-       says - so a user cannot accidentally un-retain it, and there is nothing
-       to get wrong. StruC++ implements exactly that: its debug table generator
-       applies the flag per var block and lets NON_RETAIN clear it down a
-       subtree.
-
-       ONE STRING, AND IT IS FROZEN. A retained variable inside a library block
-       joins the project's retain layout, so the layout hash covers it. If a
-       later version of this library adds, removes or retypes a retained member,
-       that hash changes and the WHOLE project's retained blob is refused -
-       including the user's own setpoints. So this is one STRING, declared once,
-       and treated as fixed ABI from here on.
-
-       64 characters because that is a SHA-256 written in hexadecimal, and
-       because a retained IEC STRING is a fixed 127 bytes whatever width it was
-       declared - a value longer than that is truncated rather than refused. The
-       PEM of the key itself is 178 characters and would have been silently cut
-       in half. *)
+    (* The pinned broker key (SHA-256, hexadecimal), retained. Do not change its
+       name or type: it is part of the project's retain layout. *)
     sPinnedKey : STRING(64);
   END_VAR
   VAR
     (* Whether sPinnedKey has been handed to the link. NOT retained: a fresh
        program start builds a fresh link and must hand it over again. *)
     bPinApplied : BOOL;
-    (* bTrustNew as it was last scan, and whether there has BEEN a last scan.
+    (* bTrustFirstBrokerKey as it was last scan, and whether there has BEEN a last scan.
        The rising edge is what forgets a stored key, and it must not fire at
-       program start - a bTrustNew wired TRUE would otherwise forget the pin on
+       program start - a bTrustFirstBrokerKey wired TRUE would otherwise forget the pin on
        every reboot, which is the one moment retaining it exists for. *)
     bLastTrust : BOOL;
     bTrustSeen : BOOL;
@@ -483,8 +464,8 @@ FUNCTION_BLOCK FB_MqttClient
     sProvPassword : STRING(127);
     bProvisioning : BOOL;
     (* SETTINGS AS THEY WERE WHEN THE LINK WAS BUILT, as two short
-       fingerprints: what the medium is made from (eTransport, eSecurity, sHost,
-       nPort, the TLS files, the board's network settings) and what the bConnect
+       fingerprints: what the medium is made from (eTransport, eSecurity, sHostName,
+       nHostPort, the TLS files, the board's network settings) and what the bConnect
        says (sClientId, eProtocol, the login, keepalive, session, Will). A change
        of either reconnects, the first on a rebuilt medium. Not retained: a
        program start builds from what the pins say anyway. *)
@@ -497,7 +478,7 @@ FUNCTION_BLOCK FB_MqttClient
     (* The task this block runs in, for its methods and the blocks given it:
        see ONE TASK in the comment above. *)
     nTask : __XWORD;
-    (* The connection whose 'online' (stWillConfig) has gone. *)
+    (* The connection whose 'online' (stWill) has gone. *)
     nWillConnects : DINT;
   END_VAR
   VAR RETAIN
@@ -511,9 +492,8 @@ FUNCTION_BLOCK FB_MqttClient
   VAR
     (* The methods' state: their records, Provision's progress. *)
     nMethods : __XWORD;
+    bLinkBuilt : BOOL; (* the link and the client are built and asked to connect; bLinkOpen says whether the socket is open *)
   END_VAR
-
-
 (* Sends anyValue to sTopic once, on a rising edge of bExecute. Inputs are
    taken at the edge. Returns E_MqttResult.Queued until the broker has it
    (QoS 1 and 2) or it has left (QoS 0), then E_MqttResult.Ok or the reason
@@ -521,122 +501,122 @@ FUNCTION_BLOCK FB_MqttClient
    E_MqttResult.NotConnected, nothing queued. *)
 METHOD PUBLIC Publish : E_MqttResult
   VAR_INPUT
-    anyValue : ANY;              (* what to send, as its declared type: 23.5, 42, true, text *)
+    anyValue : ANY;              (* what to send, as the text of its type: 23.5, 42, true, a STRING *)
     sTopic : STRING(128);        (* where it goes; no wildcards *)
-    eQos : E_MqttQos;            (* AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery *)
-    bRetain : BOOL;              (* the broker keeps it for later subscribers *)
-    bExecute : BOOL;             (* rising edge sends *)
+    eQos : E_MqttQos;            (* delivery guarantee *)
+    bRetain : BOOL;              (* the broker keeps it for later subscribers; for states, never events *)
+    bExecute : BOOL;             (* rising edge sends once *)
   END_VAR
 END_METHOD
 
 (* Publishes anyValue on sTopic, called every scan. eTrigger says when:
-   OnChange (moved by fDeadband, and every tPeriod anyway), OnInterval (every
-   tPeriod, which must be set) or OnRequest (bExecute's rising edge).
+   OnChange (moved by fDeadband, and every tSendInterval anyway), OnInterval (every
+   tSendInterval, which must be set) or OnRequest (bExecute's rising edge).
    E_MqttResult.Ok while the record is valid. *)
 METHOD PUBLIC Report : E_MqttResult
   VAR_INPUT
     anyValue : ANY;              (* the variable to report *)
     sTopic : STRING(128);        (* where it goes; no wildcards *)
-    eTrigger : E_MqttTrigger;    (* OnChange (default), OnInterval or OnRequest *)
-    fDeadband : LREAL;           (* OnChange: the least change worth a message; 0 = any change *)
-    tPeriod : TIME;              (* OnChange: resend unchanged after this, T#0s never; OnInterval: the interval *)
-    eQos : E_MqttQos;            (* AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery *)
+    eTrigger : E_MqttTrigger;    (* when it sends: OnChange (default), OnInterval or OnRequest *)
+    fDeadband : LREAL;           (* OnChange: smallest change worth a message; 0 = any change *)
+    tSendInterval : TIME;              (* OnChange: resend unchanged after this (T#0s never); OnInterval: the interval *)
+    eQos : E_MqttQos;            (* delivery guarantee *)
     bRetain : BOOL;              (* the broker keeps the last one for later subscribers *)
     bEnable : BOOL := TRUE;      (* FALSE stops reporting, keeping the record *)
     bExecute : BOOL;             (* OnRequest: rising edge sends *)
   END_VAR
   VAR_OUTPUT
-    nSent : DINT;                (* messages sent for this record *)
-    tAge : TIME;                 (* since the last one; T#0s before the first *)
+    nMessageSentCount : DINT;                (* messages sent for this record *)
+    tSinceLastSent : TIME;                 (* time since the last message; T#0s before the first *)
   END_VAR
 END_METHOD
 
 (* Keeps anyValue up to date from sTopic, called every scan. A payload is read
    as anyValue's declared type; one that does not parse is counted on
-   nMalformed and leaves anyValue alone. *)
+   nMalformedCount and leaves anyValue alone. *)
 METHOD PUBLIC Subscribe : E_MqttResult
   VAR_INPUT
     anyValue : ANY;              (* the variable kept up to date *)
-    sTopic : STRING(128);        (* wildcards allowed *)
+    sTopic : STRING(128);        (* the topic; wildcards allowed *)
     eQos : E_MqttQos;            (* the most the broker may use *)
-    tExpect : TIME;              (* how often a value is expected; drives eQuality. T#0s = no promise *)
+    tExpectedInterval : TIME;              (* how often a value should arrive; drives eQuality; T#0s = no promise *)
     bEnable : BOOL := TRUE;      (* FALSE unsubscribes, keeping the record *)
   END_VAR
   VAR_OUTPUT
     bSubscribed : BOOL;          (* the subscription is in force *)
-    eQuality : E_MqttQuality;    (* Unknown: never arrived; Bad: link down or twice overdue *)
-    bSeen : BOOL;                (* a value has arrived for this record *)
-    tAge : TIME;                 (* since the last accepted value *)
-    nReceived : DINT;            (* values accepted *)
-    nMalformed : DINT;           (* payloads that did not parse *)
-    bNewValue : BOOL;            (* this call wrote anyValue *)
+    eQuality : E_MqttQuality;    (* Unknown never arrived, Bad link down or twice overdue, Uncertain overdue, Good *)
+    bValueEverReceived : BOOL;                (* a value has arrived at least once (eQuality not Unknown, for ladder) *)
+    tValueAge : TIME;                 (* time since the last accepted value *)
+    nMessageReceivedCount : DINT;            (* values accepted *)
+    nMalformedCount : DINT;           (* payloads that did not parse as anyValue's type *)
+    bValueReceived : BOOL;            (* this call wrote anyValue *)
   END_VAR
 END_METHOD
 
-(* Publishes every member of the STRUCT anyData on sBase/<member>, called every
-   scan. OnChange: a member when it changes, and every tPeriod anyway;
-   OnInterval: the whole set every tPeriod; OnRequest: the whole set on
+(* Publishes every member of the STRUCT anyData on sBaseTopic/<member>, called every
+   scan. OnChange: a member when it changes, and every tSendInterval anyway;
+   OnInterval: the whole set every tSendInterval; OnRequest: the whole set on
    bExecute's rising edge. A member the wire cannot carry is counted on
-   nSkipped and returns E_MqttResult.InvalidArgument. *)
+   nMembersRefused and returns E_MqttResult.InvalidArgument. *)
 METHOD PUBLIC PublishStruct : E_MqttResult
   VAR_INPUT
-    anyData : ANY;               (* a STRUCT *)
-    sBase : STRING(128);         (* the topic the members hang off *)
-    eTrigger : E_MqttTrigger;    (* OnChange (default), OnInterval or OnRequest *)
-    tPeriod : TIME;              (* OnChange: resend unchanged after this; OnInterval: the interval *)
-    eQos : E_MqttQos;            (* AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery *)
+    anyData : ANY;               (* the STRUCT; each member goes on sBaseTopic/<member> *)
+    sBaseTopic : STRING(128);         (* the topic the members hang off *)
+    eTrigger : E_MqttTrigger;    (* when it sends: OnChange (default), OnInterval or OnRequest *)
+    tSendInterval : TIME;              (* OnChange: resend unchanged after this; OnInterval: the interval *)
+    eQos : E_MqttQos;            (* delivery guarantee *)
     bRetain : BOOL;              (* the broker keeps the last one for later subscribers *)
     bEnable : BOOL := TRUE;      (* FALSE stops it, keeping the record *)
-    bExecute : BOOL;             (* OnRequest: rising edge sends the set *)
+    bExecute : BOOL;             (* OnRequest: rising edge sends every member *)
   END_VAR
   VAR_OUTPUT
-    nPoints : INT;               (* members published *)
-    nSkipped : INT;              (* members refused *)
-    nSent : DINT;                (* messages sent for this record *)
-    nChanged : INT;              (* messages sent by this call *)
+    nMembers : INT;               (* members being published *)
+    nMembersRefused : INT;              (* members the wire cannot carry (arrays, nested STRUCTs, TIME) *)
+    nMessageSentCount : DINT;                (* messages sent for this record *)
+    nMessagesSentThisScan : INT;              (* messages sent by this call *)
   END_VAR
 END_METHOD
 
-(* Keeps every member of the STRUCT anyData up to date from sBase/<member>,
-   called every scan. eQuality is the worst member's, tOldest the oldest
+(* Keeps every member of the STRUCT anyData up to date from sBaseTopic/<member>,
+   called every scan. eWorstMemberQuality is the worst member's, tOldestMemberAge the oldest
    member's age. *)
 METHOD PUBLIC SubscribeStruct : E_MqttResult
   VAR_INPUT
-    anyData : ANY;               (* a STRUCT *)
-    sBase : STRING(128);         (* the topic the members hang off *)
-    eQos : E_MqttQos;            (* AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery *)
-    tExpect : TIME;              (* how often a value is expected; drives eQuality. T#0s = no promise *)
+    anyData : ANY;               (* the STRUCT kept up to date from sBaseTopic/<member> *)
+    sBaseTopic : STRING(128);         (* the topic the members hang off *)
+    eQos : E_MqttQos;            (* the most the broker may use *)
+    tExpectedInterval : TIME;              (* how often each value should arrive; drives eWorstMemberQuality; T#0s = no promise *)
     bEnable : BOOL := TRUE;      (* FALSE stops it, keeping the record *)
   END_VAR
   VAR_OUTPUT
-    nPoints : INT;               (* members bound *)
-    nSkipped : INT;              (* members refused *)
+    nMembers : INT;               (* members bound to a topic *)
+    nMembersRefused : INT;              (* members the wire cannot carry *)
     bSubscribed : BOOL;          (* the subscription is in force *)
-    eQuality : E_MqttQuality;    (* the worst member's quality *)
-    bSeen : BOOL;                (* every member has had a value *)
-    tOldest : TIME;              (* the oldest member's age *)
-    nReceived : DINT;            (* values accepted *)
-    nMalformed : DINT;           (* payloads that did not parse *)
-    nNewValues : INT;            (* members written by this call *)
+    eWorstMemberQuality : E_MqttQuality;    (* the worst member's quality *)
+    bAllMembersEverReceived : BOOL;                (* every member has had a value *)
+    tOldestMemberAge : TIME;              (* age of the oldest member's value; T#0s while any never arrived *)
+    nMessageReceivedCount : DINT;            (* values accepted *)
+    nMalformedCount : DINT;           (* payloads that did not parse *)
+    nMembersReceivedThisScan : INT;            (* members written by this call *)
   END_VAR
 END_METHOD
 
-(* Asks a question on sTopic and waits for the answer on sReplyTopic, MQTT 5
+(* Asks a question on sTopic and waits for the answer on sResponseTopic, MQTT 5
    only. The request carries Response Topic and Correlation Data. Rising edge
    of bExecute starts it; E_MqttResult.Queued until the answer
-   (E_MqttResult.Ok, in sReply) or tTimeout (E_MqttResult.KeepAliveTimeout). *)
+   (E_MqttResult.Ok, in sReply) or tTimeout (E_MqttResult.NoReply). *)
 METHOD PUBLIC Request : E_MqttResult
   VAR_INPUT
-    anyValue : ANY;              (* the question *)
-    sTopic : STRING(128);        (* where it goes *)
-    sReplyTopic : STRING(128);   (* where the answer comes back; one per requester *)
-    eQos : E_MqttQos;            (* AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery *)
-    tTimeout : TIME;             (* T#0s = 5 s *)
-    bExecute : BOOL;             (* rising edge starts it *)
+    anyRequest : ANY;              (* the question sent (pairs with Response's anyRequest) *)
+    sTopic : STRING(128);        (* where the question goes *)
+    sResponseTopic : STRING(128);   (* the MQTT 5 Response Topic: where the answer comes back; one per requester *)
+    eQos : E_MqttQos;            (* delivery guarantee *)
+    tTimeout : TIME;             (* how long to wait for the answer; T#0s = 5 s; no answer returns NoReply *)
+    bExecute : BOOL;             (* rising edge asks *)
   END_VAR
   VAR_OUTPUT
     sReply : STRING(254);        (* the answer's text *)
-    nReplyLen : INT;             (* characters in sReply *)
+    nReplyLength : INT;             (* characters in sReply *)
   END_VAR
 END_METHOD
 
@@ -645,19 +625,19 @@ END_METHOD
    anyReply to the last request's Response Topic with its Correlation Data. *)
 METHOD PUBLIC Response : E_MqttResult
   VAR_INPUT
-    anyRequest : ANY;            (* the request, read as its declared type *)
+    anyRequest : ANY;            (* the request received, read as its declared type *)
     sTopic : STRING(128);        (* where requests arrive; wildcards allowed *)
-    anyReply : ANY;              (* the answer *)
-    eQos : E_MqttQos;            (* AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery *)
+    anyReply : ANY;              (* the answer to send *)
+    eQos : E_MqttQos;            (* delivery guarantee *)
     bEnable : BOOL := TRUE;      (* FALSE unsubscribes, keeping the record *)
-    bExecute : BOOL;             (* rising edge answers *)
+    bExecute : BOOL;             (* rising edge sends anyReply to the last request *)
   END_VAR
   VAR_OUTPUT
-    bNewRequest : BOOL;          (* this call took a request *)
-    bAwaitingReply : BOOL;       (* the last request has a Response Topic and is not answered yet *)
-    sResponseTopic : STRING(128); (* where the last request asked its answer to go *)
-    nReceived : DINT;            (* requests received *)
-    nMalformed : DINT;           (* payloads that did not parse *)
+    bRequestReceived : BOOL;          (* this call took a request *)
+    bAwaitingReply : BOOL;       (* the last request asked for an answer and has none yet *)
+    sResponseTopic : STRING(128); (* the MQTT 5 Response Topic the last request asked its answer to go to (same name as Request) *)
+    nRequestReceivedCount : DINT;            (* requests received *)
+    nMalformedCount : DINT;           (* requests that did not parse *)
   END_VAR
 END_METHOD
 
@@ -665,16 +645,16 @@ END_METHOD
    anyPayload, one message per call. Called every scan. *)
 METHOD PUBLIC Message : E_MqttResult
   VAR_INPUT
-    anyPayload : ANY;            (* a STRING variable *)
-    sTopic : STRING(128);        (* wildcards allowed *)
-    eQos : E_MqttQos;            (* AtMostOnceDelivery (default), AtLeastOnceDelivery, ExactlyOnceDelivery *)
+    anyPayload : ANY;            (* the STRING variable each message's text is written into *)
+    sTopic : STRING(128);        (* the topic; wildcards allowed *)
+    eQos : E_MqttQos;            (* the most the broker may use *)
     bEnable : BOOL := TRUE;      (* FALSE stops it, keeping the record *)
   END_VAR
   VAR_OUTPUT
-    nLen : INT;                  (* characters written *)
+    nPayloadLength : INT;                  (* characters written; 0 for an empty (withdrawn) message *)
     bTruncated : BOOL;           (* the message was longer than anyPayload or the client's buffer *)
-    nReceived : DINT;            (* messages received *)
-    bNewMessage : BOOL;          (* this call wrote anyPayload *)
+    nMessageReceivedCount : DINT;            (* messages received *)
+    bMessageReceived : BOOL;          (* this call wrote anyPayload (an arrival, not a change) *)
   END_VAR
 END_METHOD
 
@@ -683,33 +663,33 @@ END_METHOD
    scan, before the client's own call on the first scan. *)
 METHOD PUBLIC Provision : E_MqttResult
   VAR_INPUT
-    sKey : STRING(127);          (* from `modbee key create` on the broker *)
-    bForget : BOOL;              (* rising edge forgets the stored login *)
+    sProvisioningKey : STRING(127);          (* the key from `modbee key create` on the broker *)
+    bForgetStoredLogin : BOOL;              (* rising edge throws the stored login away and registers again *)
   END_VAR
   VAR_OUTPUT
     bProvisioned : BOOL;         (* connected with this PLC's own login *)
-    bPending : BOOL;             (* waiting for approval on the broker *)
-    bRefused : BOOL;             (* the broker said no; sReason says why *)
-    sUserName : STRING(64);      (* the login the key handed this PLC *)
-    sGroup : STRING(64);         (* the Sparkplug group the key hands its devices *)
-    sPrefix : STRING(127);       (* the topic prefix the key hands its devices *)
-    sReason : STRING(64);        (* why the broker refused, when bRefused *)
+    bAwaitingApproval : BOOL;             (* waiting for approval on the broker *)
+    bRegistrationRefused : BOOL;             (* the broker said no; sRefusalReason says why *)
+    sProvisionedUserName : STRING(64);      (* the login the key handed this PLC (not stSessionConfig's) *)
+    sGroupId : STRING(64);         (* the Sparkplug Group ID the key hands this PLC's devices *)
+    sTopicPrefix : STRING(127);       (* the topic prefix the key hands this PLC's devices *)
+    sRefusalReason : STRING(64);        (* why the broker refused *)
   END_VAR
 END_METHOD
 
 (* The connection's counters. *)
 METHOD PUBLIC Statistics : E_MqttResult
   VAR_OUTPUT
-    nVersion : BYTE;             (* 5 or 4: the protocol in force *)
-    nConnects : DINT;            (* connections made *)
-    nDisconnects : DINT;         (* connections ended *)
-    nReconnects : DINT;          (* reconnections after a loss *)
-    nPublished : DINT;           (* messages published *)
-    nReceived : DINT;            (* messages received *)
-    nPublishFailures : DINT;     (* publishes that failed *)
-    nProtocolErrors : DINT;      (* broker packets the standard does not allow *)
-    nPending : DINT;             (* operations accepted and not yet concluded *)
-    nReasonCode : BYTE;          (* the last reason code from the broker, read with nVersion *)
+    nProtocolVersion : BYTE;             (* the MQTT version in force: 5 = 5.0, 4 = 3.1.1 *)
+    nConnectCount : DINT;            (* connections made since start *)
+    nDisconnectCount : DINT;         (* connections ended *)
+    nReconnectCount : DINT;          (* reconnections after a loss *)
+    nMessageSentCount : DINT;           (* messages published (PUBLISH packets sent) *)
+    nMessageReceivedCount : DINT;            (* messages received *)
+    nPublishFailureCount : DINT;     (* publishes that failed *)
+    nProtocolErrorCount : DINT;      (* broker packets the standard does not allow *)
+    nPendingOperations : DINT;             (* operations accepted and not yet concluded (now, not a total) *)
+    nLastReasonCode : BYTE;          (* the broker's last reason code; always 0 at 3.1.1 *)
   END_VAR
 END_METHOD
 
@@ -893,7 +873,7 @@ struct MqLink {
     virtual void pinKey(const char* fingerprint) { (void)fingerprint; }
 
     // Forget the pin and accept whatever the next handshake shows, so it can
-    // be learned. What bTrustNew's rising edge does when a broker has been
+    // be learned. What bTrustFirstBrokerKey's rising edge does when a broker has been
     // replaced on purpose. BOTH halves are needed: a link that was built with
     // a stored pin was never told to skip chain verification, so dropping only
     // the pin would leave it verifying against a system store that has never
@@ -1045,7 +1025,7 @@ struct MqCellularLink : MqLink {
 // MqttChannelTlsTransport, with the mbedTLS the ESP32 core already links. So
 // Wi-Fi, Ethernet and cellular check the broker the same way and can do
 // everything the Runtime's MqTlsLink can: verify by CA, pin a key, learn one
-// (bTrustNew), report it (sBrokerKey), and present a certificate.
+// (bTrustFirstBrokerKey), report it (sBrokerKeyFingerprint), and present a certificate.
 //
 // It replaces three things that each did less: WiFiClientSecure (could not
 // pin, never reported the key), nothing at all over Ethernet (it needed
@@ -1146,7 +1126,7 @@ struct MqNode {
 // E_MQTTSECURITY::TLSVERIFY, E_MQTTSECURITY::TLSPINNED and E_MQTTSECURITY::TLSINSECURE alike, with the
 // trust the Runtime uses: the CA from MQTT_CA_CERT_PEM, the pin from the
 // block's stored key, and the rule that PINNED with nothing stored needs
-// bTrustNew. The refusals below the #else are for a board WITHOUT the core's
+// bTrustFirstBrokerKey. The refusals below the #else are for a board WITHOUT the core's
 // mbedTLS, which still has only what its medium offers.
 //
 // It builds the link and nothing else. Bringing the medium up is not its job:
@@ -1163,7 +1143,7 @@ struct MqNode {
 #if MQTT_CHANNEL_TLS
 // A BOARD'S OWN CERTIFICATE, for a broker that wants one, comes from the same
 // place as its CA and for the same reason: a PEM does not fit an IEC STRING,
-// and a certificate is firmware. stTlsConfig's sCertFile and sKeyFile stay the
+// and a certificate is firmware. stTls's sClientCertificateFile and sClientPrivateKeyFile stay the
 // Runtime's - they are paths, and a board has no files.
 #if defined(MQTT_CLIENT_CERT_PEM) != defined(MQTT_CLIENT_KEY_PEM)
 #error "mutual TLS on a board needs both MQTT_CLIENT_CERT_PEM and MQTT_CLIENT_KEY_PEM"
@@ -1194,7 +1174,7 @@ static MqLink* mq_trustedLink(MqChannelTlsLink<ChannelType>* made,
         } else if (!trustNew) {
             delete made;
             *status = E_MQTTRESULT::NOTAUTHORIZED;
-            *why = "no pinned key yet - set bTrustNew once to learn it";
+            *why = "no pinned key yet - set bTrustFirstBrokerKey once to learn it";
             return nullptr;
         } else {
             // Trust on first use: up unvalidated exactly once, so the key can
@@ -1266,7 +1246,7 @@ static MqLink* mq_boardLink(E_MQTTTRANSPORT link, E_MQTTSECURITY security,
                 // WiFiClientSecure has no key-pinning call - setCACert,
                 // setInsecure and a pre-shared key are the whole surface.
                 *status = E_MQTTRESULT::NOTSUPPORTEDBYPROTOCOL;
-                *why = "E_MQTTSECURITY::TLSPINNED needs an ESP32 or the Runtime";
+                *why = "E_MqttSecurity.TlsPinned needs an ESP32 or the Runtime";
                 return nullptr;
             }
 #if !defined(MQTT_CA_CERT_PEM)
@@ -1316,7 +1296,7 @@ static MqLink* mq_boardLink(E_MQTTTRANSPORT link, E_MQTTSECURITY security,
                                   status, why);
 #else
             *status = E_MQTTRESULT::NOTSUPPORTEDBYPROTOCOL;
-            *why = "TLS over Ethernet needs an ESP32, or SSLClient; use external";
+            *why = "TLS over Ethernet needs an ESP32; use E_MqttTransport.External";
             return nullptr;
 #endif
         }
@@ -1361,7 +1341,7 @@ static MqLink* mq_boardLink(E_MQTTTRANSPORT link, E_MQTTSECURITY security,
         if (security == E_MQTTSECURITY::TLSVERIFY ||
             security == E_MQTTSECURITY::TLSPINNED) {
             *status = E_MQTTRESULT::NOTSUPPORTEDBYPROTOCOL;
-            *why = "the modem's TLS checks no certificate; use E_MQTTSECURITY::TLSINSECURE";
+            *why = "modem TLS checks no certificate: use E_MqttSecurity.TlsInsecure";
             return nullptr;
         }
 #endif
@@ -1826,7 +1806,7 @@ bool mq_memberTopic(const char* base, const char* name, char* out, size_t cap)
 }
 
 // The client every other block reaches through its CLIENT pin. Null until the
-// client has opened its link, which is what bLinkUp says.
+// client has been built.
 MqttClient* mq_clientOf(strucpp::XWORD_t handle) {
     return (MqttClient*)(uintptr_t)handle;
 }
@@ -1837,7 +1817,7 @@ MqttClient* mq_clientOf(strucpp::XWORD_t handle) {
 // death certificate the plant must see whenever the connection ends: a
 // settings change and bConnect := FALSE included, as Sparkplug requires of an
 // intentional disconnect. So the broker is asked to publish it (at 3.1.1 the
-// client publishes it, just ahead of the DISCONNECT). A stWillConfig Will
+// client publishes it, just ahead of the DISCONNECT). A stWill Will
 // is not owned, and keeps the plain goodbye it has always had.
 static uint8_t mq_goodbyeReason(const MqttClient& client) {
     return client.willOwner() != nullptr ? MQ_REASON_DISCONNECT_WITH_WILL
@@ -2148,7 +2128,8 @@ static E_MQTTRESULT mq_noteCall(strucpp::XWORD_t held, const char* method,
         m->failAt = mq_millis();
         m->failText = key + ": " +
                       (result == E_MQTTRESULT::WRONGTASK ? "wrong task"
-                                                         : mq_resultName((MqttResult)(int)result));
+                       : result == E_MQTTRESULT::NOREPLY  ? "no reply"
+                                                          : mq_resultName((MqttResult)(int)result));
     } else if (m->failKey == key) {
         m->failKey.clear();
         m->failText.clear();
@@ -2243,14 +2224,23 @@ static bool mq_provisionField(const char* doc, size_t length, const char* name, 
     return false;
 }
 
+// bLinkOpen: the socket to the broker is open - TCP (and TLS) up, from the CONNECT
+// until the socket closes, whether or not the broker has accepted us yet.
+static bool mq_socketOpen(E_MQTTSTATE state) {
+    return state == E_MQTTSTATE::AWAITINGCONNACK || state == E_MQTTSTATE::AUTHENTICATING ||
+           state == E_MQTTSTATE::CONNECTED || state == E_MQTTSTATE::DISCONNECTING;
+}
+
 void setup()
 {
-    bLinkUp = false;
+    bLinkBuilt = false;
+    bLinkOpen = false;
     bConnected = false;
-    tHeardAgo = mq_timeOf(0);
+    tSinceLastHeard = mq_timeOf(0);
     bSessionPresent = false;
-    sAssignedId = "";
+    sClientIdInUse = "";
     eConnectionState = E_MQTTSTATE::IDLE;
+    bLinkOpen = mq_socketOpen((E_MQTTSTATE)eConnectionState);
     bError = false;
     eErrorId = E_MQTTRESULT::OK;
     sLastError = "";
@@ -2285,7 +2275,7 @@ void loop()
         uint32_t h = 2166136261u;
         const int32_t link = (int32_t)(E_MQTTTRANSPORT)eTransport;
         const int32_t security = (int32_t)(E_MQTTSECURITY)eSecurity;
-        const uint16_t port = (uint16_t)nPort;
+        const uint16_t port = (uint16_t)nHostPort;
         const uintptr_t external = (uintptr_t)(strucpp::XWORD_t)nExternalLink;
         const int32_t timeout = (int32_t)mq_millisOf(stSessionConfig.TCONNECTTIMEOUT);
         h = mq_fingerprint(h, &link, sizeof link);
@@ -2293,14 +2283,14 @@ void loop()
         h = mq_fingerprint(h, &port, sizeof port);
         h = mq_fingerprint(h, &external, sizeof external);
         h = mq_fingerprint(h, &timeout, sizeof timeout);
-        h = mq_fingerprintText(h, sHost.c_str());
-        h = mq_fingerprintText(h, stTlsConfig.SCAFILE.c_str());
-        h = mq_fingerprintText(h, stTlsConfig.SCERTFILE.c_str());
-        h = mq_fingerprintText(h, stTlsConfig.SKEYFILE.c_str());
-        h = mq_fingerprintText(h, stNetworkConfig.SMAC.c_str());
-        h = mq_fingerprintText(h, stNetworkConfig.SIP.c_str());
-        h = mq_fingerprintText(h, stNetworkConfig.SGATEWAY.c_str());
-        h = mq_fingerprintText(h, stNetworkConfig.SSUBNET.c_str());
+        h = mq_fingerprintText(h, sHostName.c_str());
+        h = mq_fingerprintText(h, stTls.SCACERTIFICATEFILE.c_str());
+        h = mq_fingerprintText(h, stTls.SCLIENTCERTIFICATEFILE.c_str());
+        h = mq_fingerprintText(h, stTls.SCLIENTPRIVATEKEYFILE.c_str());
+        h = mq_fingerprintText(h, stNetworkConfig.SMACADDRESS.c_str());
+        h = mq_fingerprintText(h, stNetworkConfig.SIPADDRESS.c_str());
+        h = mq_fingerprintText(h, stNetworkConfig.SGATEWAYADDRESS.c_str());
+        h = mq_fingerprintText(h, stNetworkConfig.SSUBNETMASK.c_str());
         return h;
     };
     // The board's Wi-Fi login, which stNetworkConfig hands to this block.
@@ -2315,10 +2305,10 @@ void loop()
         const int32_t protocol = (int32_t)(E_MQTTPROTOCOL)eProtocol;
         const uint16_t keepAlive = (uint16_t)mq_secondsOf(stSessionConfig.TKEEPALIVE);
         const bool clean = (bool)stSessionConfig.BCLEANSTART;
-        const int32_t expiry = (int32_t)mq_secondsOf(stSessionConfig.TSESSIONEXPIRY);
-        const uint8_t qos = (uint8_t)(int)(E_MQTTQOS)stWillConfig.EQOS;
-        const bool retain = (bool)stWillConfig.BRETAIN;
-        const int32_t delay = (int32_t)mq_secondsOf(stWillConfig.TDELAY);
+        const int32_t expiry = (int32_t)mq_secondsOf(stSessionConfig.TSESSIONEXPIRYINTERVAL);
+        const uint8_t qos = (uint8_t)(int)(E_MQTTQOS)stWill.EQOS;
+        const bool retain = (bool)stWill.BRETAIN;
+        const int32_t delay = (int32_t)mq_secondsOf(stWill.TWILLDELAYINTERVAL);
         h = mq_fingerprint(h, &protocol, sizeof protocol);
         h = mq_fingerprint(h, &keepAlive, sizeof keepAlive);
         h = mq_fingerprint(h, &clean, sizeof clean);
@@ -2329,8 +2319,8 @@ void loop()
         h = mq_fingerprintText(h, sClientId.c_str());
         h = mq_fingerprintText(h, stSessionConfig.SUSERNAME.c_str());
         h = mq_fingerprintText(h, stSessionConfig.SUSERPASSWORD.c_str());
-        h = mq_fingerprintText(h, stWillConfig.STOPIC.c_str());
-        h = mq_fingerprintText(h, (stWillConfig.SOFFLINE.length() > 0 ? stWillConfig.SOFFLINE.c_str() : "offline"));
+        h = mq_fingerprintText(h, stWill.STOPIC.c_str());
+        h = mq_fingerprintText(h, (stWill.SOFFLINEMESSAGE.length() > 0 ? stWill.SOFFLINEMESSAGE.c_str() : "offline"));
         return h;
     };
     // What the client is told on bConnect, from the pins and the helpers as
@@ -2344,12 +2334,12 @@ void loop()
         connection.keepAlive = (uint16_t)mq_secondsOf(stSessionConfig.TKEEPALIVE) != 0
             ? (uint16_t)mq_secondsOf(stSessionConfig.TKEEPALIVE) : 60;
         connection.cleanStart = (bool)stSessionConfig.BCLEANSTART;
-        if ((int32_t)mq_secondsOf(stSessionConfig.TSESSIONEXPIRY) > 0) {
-            connection.sessionExpiryInterval = (uint32_t)(int32_t)mq_secondsOf(stSessionConfig.TSESSIONEXPIRY);
+        if ((int32_t)mq_secondsOf(stSessionConfig.TSESSIONEXPIRYINTERVAL) > 0) {
+            connection.sessionExpiryInterval = (uint32_t)(int32_t)mq_secondsOf(stSessionConfig.TSESSIONEXPIRYINTERVAL);
             connection.hasSessionExpiry = true;
         }
         // Asking with Provision's key: a registration session, which sends
-        // no Will (stWillConfig's or FB_SparkplugNode's) - it may publish nothing
+        // no Will (stWill's or FB_SparkplugNode's) - it may publish nothing
         // but its request, and a broker refuses a Will it may not publish.
         connection.registration = (bool)bProvisioning;
         if (sProvUser.length() > 0) {
@@ -2385,11 +2375,11 @@ void loop()
                 (wanted == E_MQTTPROTOCOL::V5THENV311);
         }
 
-        if (stWillConfig.STOPIC.length() > 0) {
-            connection.will.set(stWillConfig.STOPIC.c_str(), (stWillConfig.SOFFLINE.length() > 0 ? stWillConfig.SOFFLINE.c_str() : "offline"),
-                                (uint8_t)(int)(E_MQTTQOS)stWillConfig.EQOS, (bool)stWillConfig.BRETAIN);
-            if ((int32_t)mq_secondsOf(stWillConfig.TDELAY) > 0) {
-                connection.will.delayInterval = (uint32_t)(int32_t)mq_secondsOf(stWillConfig.TDELAY);
+        if (stWill.STOPIC.length() > 0) {
+            connection.will.set(stWill.STOPIC.c_str(), (stWill.SOFFLINEMESSAGE.length() > 0 ? stWill.SOFFLINEMESSAGE.c_str() : "offline"),
+                                (uint8_t)(int)(E_MQTTQOS)stWill.EQOS, (bool)stWill.BRETAIN);
+            if ((int32_t)mq_secondsOf(stWill.TWILLDELAYINTERVAL) > 0) {
+                connection.will.delayInterval = (uint32_t)(int32_t)mq_secondsOf(stWill.TWILLDELAYINTERVAL);
             }
         }
 
@@ -2404,7 +2394,7 @@ void loop()
         if (client) {
             // Whatever it is doing - connected, dialling, or waiting to try
             // again - unless it has already stopped or is saying goodbye.
-            // Not bLinkUp: a settings change clears that while the client may
+            // Not bLinkBuilt: a settings change clears that while the client may
             // still be retrying, and a stop then never reached it.
             if (mq_stillGoing(client->client)) {
                 client->client.disconnect(mq_goodbyeReason(client->client));
@@ -2413,19 +2403,21 @@ void loop()
             // sees a deliberate goodbye rather than a lost link.
             client->client.poll();
             eConnectionState = (E_MQTTSTATE)(int32_t)(int)client->client.status().state;
+            bLinkOpen = mq_socketOpen((E_MQTTSTATE)eConnectionState);
         } else {
             eConnectionState = E_MQTTSTATE::IDLE;
+            bLinkOpen = mq_socketOpen((E_MQTTSTATE)eConnectionState);
         }
-        bLinkUp = false;
+        bLinkBuilt = false;
         bConnected = false;
-        tHeardAgo = mq_timeOf(0);
+        tSinceLastHeard = mq_timeOf(0);
         bTried = false;
         bConnectAsked = false;
         bWanted = false;
         return;
     }
 
-    if (!(bool)bLinkUp) {
+    if (!(bool)bLinkBuilt) {
         // ONE SCAN BEFORE OPENING.
         //
         // Its methods - Provision among them - write into
@@ -2478,15 +2470,15 @@ void loop()
                 // The session settings changed (login, client id, version,
                 // keepalive, Will): the next bConnect says the new ones. The
                 // medium is the same, so the host and port are the link's.
-                const uint16_t samePort = (uint16_t)nPort != 0
-                    ? (uint16_t)nPort
+                const uint16_t samePort = (uint16_t)nHostPort != 0
+                    ? (uint16_t)nHostPort
                     : (uint16_t)(eSecurity != E_MQTTSECURITY::PLAIN ? MQ_PORT_TLS
                                                                        : MQ_PORT_TCP);
                 const std::string sameHost = client->link ? client->link->host : std::string();
                 client->client.reconfigure(buildConnection(sameHost, samePort));
                 bReconfigure = false;
             }
-            bLinkUp = true;
+            bLinkBuilt = true;
             bConnectAsked = false;
             bError = false;
             eErrorId = E_MQTTRESULT::OK;
@@ -2524,15 +2516,15 @@ void loop()
         }
 #endif
 
-        if (!external && sHost.length() == 0) {
+        if (!external && sHostName.length() == 0) {
             bError = true;
             eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
-            sLastError = "set sHost to the broker";
+            sLastError = "set sHostName to the broker";
             return;
         }
 
-        const uint16_t port = (uint16_t)nPort != 0
-            ? (uint16_t)nPort
+        const uint16_t port = (uint16_t)nHostPort != 0
+            ? (uint16_t)nHostPort
             : (uint16_t)(wantsTls ? MQ_PORT_TLS : MQ_PORT_TCP);
 
         MqLink* made = nullptr;
@@ -2554,7 +2546,7 @@ void loop()
         else if (!wantsTls) {
             MqTcpLink* tcp = new (std::nothrow) MqTcpLink();
             if (tcp) {
-                tcp->host = std::string(sHost.c_str(), sHost.length());
+                tcp->host = std::string(sHostName.c_str(), sHostName.length());
                 tcp->tcp.configure(tcp->host.c_str(), port);
             }
             made = tcp;
@@ -2562,15 +2554,15 @@ void loop()
 #if MQTT_TLS_AVAILABLE
             MqTlsLink* tls = new (std::nothrow) MqTlsLink();
             if (tls) {
-                tls->host = std::string(sHost.c_str(), sHost.length());
+                tls->host = std::string(sHostName.c_str(), sHostName.length());
                 tls->tls.configure(tls->host.c_str(), port);
-                if (stTlsConfig.SCAFILE.length() > 0) tls->tls.setCaFile(stTlsConfig.SCAFILE.c_str());
+                if (stTls.SCACERTIFICATEFILE.length() > 0) tls->tls.setCaFile(stTls.SCACERTIFICATEFILE.c_str());
 #if defined(MQTT_CA_CERT_PEM)
                 tls->tls.setCaCertificate(MQTT_CA_CERT_PEM);
 #endif
-                if (stTlsConfig.SCERTFILE.length() > 0 && stTlsConfig.SKEYFILE.length() > 0) {
-                    tls->tls.setClientCertificate(stTlsConfig.SCERTFILE.c_str(),
-                                                  stTlsConfig.SKEYFILE.c_str());
+                if (stTls.SCLIENTCERTIFICATEFILE.length() > 0 && stTls.SCLIENTPRIVATEKEYFILE.length() > 0) {
+                    tls->tls.setClientCertificate(stTls.SCLIENTCERTIFICATEFILE.c_str(),
+                                                  stTls.SCLIENTPRIVATEKEYFILE.c_str());
                 }
                 // Named at length in the library on purpose, and named here
                 // too: this is the pin that turns a verified connection into
@@ -2589,7 +2581,7 @@ void loop()
                     if (sPinnedKey.length() > 0) {
                         tls->tls.setPinnedKeyFingerprint(sPinnedKey.c_str());
                         bPinApplied = true;
-                    } else if (!bTrustNew) {
+                    } else if (!bTrustFirstBrokerKey) {
                         // Nothing stored and nobody commissioning. Refused
                         // rather than connected unchecked, because a pinned
                         // link that silently falls back to trusting anybody is
@@ -2597,7 +2589,7 @@ void loop()
                         delete tls;
                         bError = true;
                         eErrorId = E_MQTTRESULT::NOTAUTHORIZED;
-                        sLastError = "no pinned key yet - set bTrustNew once to learn it";
+                        sLastError = "no pinned key yet - set bTrustFirstBrokerKey once to learn it";
                         return;
                     } else {
                         // Trust on first use. The connection comes up
@@ -2612,7 +2604,7 @@ void loop()
 #else
             bError = true;
             eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
-            sLastError = "this build has no TLS - no OpenSSL on the target";
+            sLastError = "no TLS in this Runtime build: use E_MqttSecurity.Plain";
             return;
 #endif
         }
@@ -2639,9 +2631,9 @@ void loop()
             {
                 E_MQTTRESULT refusedAs = E_MQTTRESULT::OK;
                 const char* refusal = "";
-                made = mq_boardLink(link, security, sHost.c_str(), port,
+                made = mq_boardLink(link, security, sHostName.c_str(), port,
                                     (int32_t)mq_millisOf(stSessionConfig.TCONNECTTIMEOUT),
-                                    sPinnedKey.c_str(), (bool)bTrustNew,
+                                    sPinnedKey.c_str(), (bool)bTrustFirstBrokerKey,
                                     &refusedAs, &refusal);
                 if (!made) {
                     bError = true;
@@ -2669,7 +2661,7 @@ void loop()
             if (wantsTls) {
                 bError = true;
                 eErrorId = E_MQTTRESULT::NOTSUPPORTEDBYPROTOCOL;
-                sLastError = "TLS over Ethernet needs an ESP32, or SSLClient; use external";
+                sLastError = "TLS over Ethernet needs an ESP32; use E_MqttTransport.External";
                 return;
             }
 #endif
@@ -2678,25 +2670,25 @@ void loop()
             // task is not a delay, it is a stopped PLC. Bounded to one second
             // here and retried by this block's own timer instead.
             uint8_t mac[6] = {0};
-            if (!mq_parseMac(stNetworkConfig.SMAC.c_str(), mac)) {
+            if (!mq_parseMac(stNetworkConfig.SMACADDRESS.c_str(), mac)) {
                 bError = true;
                 eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
-                sLastError = "set stNetworkConfig.sMac - each board needs one";
+                sLastError = "set stNetworkConfig.sMacAddress - each board needs one";
                 return;
             }
-            if (stNetworkConfig.SIP.length() == 0 || strcmp(stNetworkConfig.SIP.c_str(), "dhcp") == 0) {
+            if (stNetworkConfig.SIPADDRESS.length() == 0 || strcmp(stNetworkConfig.SIPADDRESS.c_str(), "dhcp") == 0) {
                 if (Ethernet.begin(mac, 1000, 1000) == 0) {
                     bError = true;
                     eErrorId = E_MQTTRESULT::NOTCONNECTED;
-                    sLastError = "no DHCP lease - set stNetworkConfig.sIp";
+                    sLastError = "no DHCP lease - set stNetworkConfig.sIpAddress";
                     return;
                 }
             } else {
                 IPAddress ip;
-                if (!ip.fromString(stNetworkConfig.SIP.c_str())) {
+                if (!ip.fromString(stNetworkConfig.SIPADDRESS.c_str())) {
                     bError = true;
                     eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
-                    sLastError = "stNetworkConfig.sIp is not an address";
+                    sLastError = "stNetworkConfig.sIpAddress is not an address";
                     return;
                 }
                 Ethernet.begin(mac, ip);
@@ -2704,9 +2696,9 @@ void loop()
             {
                 E_MQTTRESULT refusedAs = E_MQTTRESULT::OK;
                 const char* refusal = "";
-                made = mq_boardLink(link, security, sHost.c_str(), port,
+                made = mq_boardLink(link, security, sHostName.c_str(), port,
                                     (int32_t)mq_millisOf(stSessionConfig.TCONNECTTIMEOUT),
-                                    sPinnedKey.c_str(), (bool)bTrustNew,
+                                    sPinnedKey.c_str(), (bool)bTrustFirstBrokerKey,
                                     &refusedAs, &refusal);
                 if (!made) {
                     bError = true;
@@ -2735,9 +2727,9 @@ void loop()
             {
                 E_MQTTRESULT refusedAs = E_MQTTRESULT::OK;
                 const char* refusal = "";
-                made = mq_boardLink(link, security, sHost.c_str(), port,
+                made = mq_boardLink(link, security, sHostName.c_str(), port,
                                     (int32_t)mq_millisOf(stSessionConfig.TCONNECTTIMEOUT),
-                                    sPinnedKey.c_str(), (bool)bTrustNew,
+                                    sPinnedKey.c_str(), (bool)bTrustFirstBrokerKey,
                                     &refusedAs, &refusal);
                 if (!made) {
                     bError = true;
@@ -2804,28 +2796,28 @@ void loop()
         fresh->link = made;
 
         MqttClientConfig behaviour;
-        if ((int32_t)stSessionConfig.NMAXPENDING > 0) {
-            behaviour.queueCapacity = (size_t)(int32_t)stSessionConfig.NMAXPENDING;
+        if ((int32_t)stSessionConfig.NMAXPENDINGOPERATIONS > 0) {
+            behaviour.queueCapacity = (size_t)(int32_t)stSessionConfig.NMAXPENDINGOPERATIONS;
         }
-        if ((int32_t)stSessionConfig.NMAXMSGIN > 0) {
-            behaviour.receiveBufferSize = (size_t)(int32_t)stSessionConfig.NMAXMSGIN;
+        if ((int32_t)stSessionConfig.NMAXINCOMINGMESSAGEBYTES > 0) {
+            behaviour.receiveBufferSize = (size_t)(int32_t)stSessionConfig.NMAXINCOMINGMESSAGEBYTES;
         }
-        if ((int32_t)stSessionConfig.NMAXMSGOUT > 0) {
-            behaviour.transmitBufferSize = (size_t)(int32_t)stSessionConfig.NMAXMSGOUT;
+        if ((int32_t)stSessionConfig.NMAXOUTGOINGMESSAGEBYTES > 0) {
+            behaviour.transmitBufferSize = (size_t)(int32_t)stSessionConfig.NMAXOUTGOINGMESSAGEBYTES;
         }
-        if ((int32_t)mq_millisOf(stSessionConfig.TRECONNECT) > 0) {
-            behaviour.reconnectInitialMs = (mq_time_t)(int32_t)mq_millisOf(stSessionConfig.TRECONNECT);
+        if ((int32_t)mq_millisOf(stSessionConfig.TFIRSTRECONNECTAFTER) > 0) {
+            behaviour.reconnectInitialMs = (mq_time_t)(int32_t)mq_millisOf(stSessionConfig.TFIRSTRECONNECTAFTER);
         }
-        if ((int32_t)mq_millisOf(stSessionConfig.TRECONNECTMAX) > 0) {
-            behaviour.reconnectMaximumMs = (mq_time_t)(int32_t)mq_millisOf(stSessionConfig.TRECONNECTMAX);
+        if ((int32_t)mq_millisOf(stSessionConfig.TMAXRECONNECTAFTER) > 0) {
+            behaviour.reconnectMaximumMs = (mq_time_t)(int32_t)mq_millisOf(stSessionConfig.TMAXRECONNECTAFTER);
         }
         if ((int32_t)mq_millisOf(stSessionConfig.TCONNECTTIMEOUT) > 0) {
             behaviour.connectTimeoutMs = (mq_time_t)(int32_t)mq_millisOf(stSessionConfig.TCONNECTTIMEOUT);
         }
-        // stSessionConfig.tMaxSilence: nothing from the broker this long ends the
+        // stSessionConfig.tReconnectAfterSilence: nothing from the broker this long ends the
         // connection however our own bytes move (a modem says "sent" either way).
-        if ((int32_t)mq_millisOf(stSessionConfig.TMAXSILENCE) > 0) {
-            behaviour.maxSilenceMs = (mq_time_t)(int32_t)mq_millisOf(stSessionConfig.TMAXSILENCE);
+        if ((int32_t)mq_millisOf(stSessionConfig.TRECONNECTAFTERSILENCE) > 0) {
+            behaviour.maxSilenceMs = (mq_time_t)(int32_t)mq_millisOf(stSessionConfig.TRECONNECTAFTERSILENCE);
         }
         behaviour.autoReconnect = (bool)stSessionConfig.BAUTORECONNECT;
 
@@ -2834,7 +2826,7 @@ void loop()
         // a PLC repeating a rejected password every second is how a site gets
         // itself banned - but every five minutes, never giving up, so a remote
         // site whose broker is fixed at the other end comes back by itself.
-        behaviour.retryRejectedCredentials = (bool)stSessionConfig.BRETRYREJECTEDCREDENTIAL;
+        behaviour.retryRejectedCredentials = (bool)stSessionConfig.BRETRYREFUSEDLOGIN;
 
         fresh->client.begin(fresh->link->clientTransport(), connection, behaviour);
 
@@ -2849,7 +2841,7 @@ void loop()
         nWiFiKeyHash = wifiKey();
         }   // end of the "not already built" branch
 
-        bLinkUp = true;
+        bLinkBuilt = true;
         bError = false;
         eErrorId = E_MQTTRESULT::OK;
         sLastError = "";
@@ -2868,7 +2860,7 @@ void loop()
     // changed, the bConnect rewritten when only the session did.
     //
     // A PINNED KEY IS NOT FORGOTTEN BY A NEW ADDRESS. A different broker shows
-    // a different key and is refused until bTrustNew is switched off and on,
+    // a different key and is refused until bTrustFirstBrokerKey is switched off and on,
     // exactly as a replaced broker is: an address typed on a panel must not be
     // a way round the pin.
     {
@@ -2901,12 +2893,13 @@ void loop()
                 client->client.disconnect(mq_goodbyeReason(client->client));
             }
             client->client.poll();
-            bLinkUp = false;
+            bLinkBuilt = false;
             bConnected = false;
-            tHeardAgo = mq_timeOf(0);
+            tSinceLastHeard = mq_timeOf(0);
             bConnectAsked = false;
             bTried = false;
             eConnectionState = (E_MQTTSTATE)(int32_t)(int)client->client.status().state;
+            bLinkOpen = mq_socketOpen((E_MQTTSTATE)eConnectionState);
             return;
         }
     }
@@ -2933,8 +2926,9 @@ void loop()
     // Connected with only a provisioning key is not connected as this PLC:
     // nothing it publishes would be allowed, so the program is told to wait.
     bConnected = client->client.isConnected() && !(bool)bProvisioning;
-    tHeardAgo = mq_timeOf((int32_t)client->client.heardAgoMs());
+    tSinceLastHeard = mq_timeOf((int32_t)client->client.heardAgoMs());
     eConnectionState = (E_MQTTSTATE)(int32_t)(int)status.state;
+    bLinkOpen = mq_socketOpen((E_MQTTSTATE)eConnectionState);
     bSessionPresent = client->client.capabilities().sessionPresent;
 
     // The broker may assign one when we sent an empty identifier, and a
@@ -2942,9 +2936,9 @@ void loop()
     // in the broker's own logs.
     const MqttSpan& assigned = client->client.capabilities().assignedClientIdentifier;
     if (!assigned.empty()) {
-        sAssignedId = std::string((const char*)assigned.data, assigned.length).c_str();
+        sClientIdInUse = std::string((const char*)assigned.data, assigned.length).c_str();
     } else {
-        sAssignedId = sClientId.c_str();
+        sClientIdInUse = sClientId.c_str();
     }
 
     // WHAT THE BROKER ACTUALLY PRESENTED, on a pin, whether or not anything is
@@ -2954,31 +2948,31 @@ void loop()
     // fingerprint nobody checks.
     if (client->link != nullptr) {
         const char* seen = client->link->seenKey();
-        sBrokerKey = (seen != nullptr) ? seen : "";
+        sBrokerKeyFingerprint = (seen != nullptr) ? seen : "";
 
-        // --- bTrustNew, AND WHAT IT NOW MEANS ---
+        // --- bTrustFirstBrokerKey, AND WHAT IT NOW MEANS ---
         //
-        // Trust on first use, the way SSH does it. With bTrustNew on and
+        // Trust on first use, the way SSH does it. With bTrustFirstBrokerKey on and
         // nothing stored, the first key the broker shows is learned and kept.
-        // ONCE LEARNED IT IS ENFORCED, whether bTrustNew stays on or not, and
-        // across restarts - so a bTrustNew left wired TRUE, which is what most
+        // ONCE LEARNED IT IS ENFORCED, whether bTrustFirstBrokerKey stays on or not, and
+        // across restarts - so a bTrustFirstBrokerKey left wired TRUE, which is what most
         // projects do, still protects the link after its first connection.
         //
         // A BROKER REPLACED ON PURPOSE is refused like any other: both
         // fingerprints on the Runtime, "TLS: not the pinned key" on a board,
-        // with the key it showed on sBrokerKey. To accept it, switch bTrustNew
+        // with the key it showed on sBrokerKeyFingerprint. To accept it, switch bTrustFirstBrokerKey
         // off and on: the rising
         // edge forgets the stored key, and the next connection learns its
         // replacement.
         //
         // THIS REPLACES A RULE THAT WAS NEVER TRUE. The block used to say a
-        // reinstalled broker was "silently trusted" while bTrustNew was left
+        // reinstalled broker was "silently trusted" while bTrustFirstBrokerKey was left
         // on. In fact the pin was enforced after any restart regardless, and
         // within a run it was never applied at all - so a new broker was let
         // in but its key was never stored, and the PLC then refused that same
         // broker after its next reboot. And there was no way for an operator
         // to accept a legitimately replaced broker short of a new program.
-        const bool trusting = (bool)bTrustNew;
+        const bool trusting = (bool)bTrustFirstBrokerKey;
         if ((bool)bTrustSeen && trusting && !(bool)bLastTrust &&
             eSecurity == E_MQTTSECURITY::TLSPINNED) {
             sPinnedKey = "";
@@ -3050,7 +3044,7 @@ void loop()
         // link beside a sentence saying the broker refused the connection is
         // the log line nobody can act on: a fallback tries 5.0, is refused,
         // retries at 3.1.1 and succeeds, and the pin kept the refusal for
-        // ever. bLinkUp and sLastError have to agree.
+        // ever. bConnected and sLastError have to agree.
         sLastError = "";
     }
 
@@ -3076,45 +3070,45 @@ void loop()
     if (client->client.outOfMemory()) {
         sLastError = "out of memory for topics or subscriptions";
     }
-    // MAX_PENDING is taken when the client is made; if the memory for it was
+    // nMaxPendingOperations is taken when the client is made; if the memory for it was
     // not there, the queue kept its size, and a PLC told it could hold more
     // than it does would lose data at the next outage without a word.
     if (client->client.queueOutOfMemory()) {
         char line[80];
-        snprintf(line, sizeof line, "out of memory for MAX_PENDING - the queue holds %u",
+        snprintf(line, sizeof line, "nMaxPendingOperations: no memory, the queue holds %u",
                  (unsigned)client->client.operations().capacity());
         sLastError = line;
     }
 
-    // stTlsConfig: a client certificate goes with its key.
-    if ((stTlsConfig.SCERTFILE.length() > 0) != (stTlsConfig.SKEYFILE.length() > 0)) {
+    // stTls: a client certificate goes with its key.
+    if ((stTls.SCLIENTCERTIFICATEFILE.length() > 0) != (stTls.SCLIENTPRIVATEKEYFILE.length() > 0)) {
         bError = true;
         eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
-        sLastError = "stTlsConfig: sCertFile and sKeyFile go together";
+        sLastError = "stTls: client certificate and private key go together";
     }
 #if defined(MQTT_PLATFORM_HOST)
     // stNetworkConfig is a board's; the Runtime is on its machine's network.
-    if (stNetworkConfig.SSSID.length() > 0 || stNetworkConfig.SMAC.length() > 0) {
+    if (stNetworkConfig.SSSID.length() > 0 || stNetworkConfig.SMACADDRESS.length() > 0) {
         bError = true;
         eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
         sLastError = "stNetworkConfig is for a board; the Runtime uses its machine's network";
     }
 #endif
 
-    // stWillConfig: 'online' on every connection; the broker sends the Will
+    // stWill: 'online' on every connection; the broker sends the Will
     // ('offline') when this device is gone. Sparkplug carries its own Will
     // (its death certificate), so the two do not share a client.
-    if (stWillConfig.STOPIC.length() > 0) {
+    if (stWill.STOPIC.length() > 0) {
         if (client->client.willOwner() != nullptr) {
             bError = true;
             eErrorId = E_MQTTRESULT::REFUSED;
-            sLastError = "the Will is Sparkplug's on this client: leave stWillConfig.sTopic empty";
+            sLastError = "the Will is Sparkplug's on this client: leave stWill.sTopic empty";
         } else if (client->client.isConnected() &&
                    (int32_t)client->client.status().connects != (int32_t)nWillConnects) {
-            const char* text = stWillConfig.SONLINE.length() > 0 ? stWillConfig.SONLINE.c_str() : "online";
-            const MqttResult sent = client->client.publish(stWillConfig.STOPIC.c_str(), text,
-                                                           (uint8_t)(int)(E_MQTTQOS)stWillConfig.EQOS,
-                                                           (bool)stWillConfig.BRETAIN);
+            const char* text = stWill.SONLINEMESSAGE.length() > 0 ? stWill.SONLINEMESSAGE.c_str() : "online";
+            const MqttResult sent = client->client.publish(stWill.STOPIC.c_str(), text,
+                                                           (uint8_t)(int)(E_MQTTQOS)stWill.EQOS,
+                                                           (bool)stWill.BRETAIN);
             if (mq_tolerated(sent)) {
                 nWillConnects = (int32_t)client->client.status().connects;
             } else {
@@ -3150,7 +3144,7 @@ E_MQTTRESULT Publish()
         // Outcomes are running totals on the topic, so none is missed however
         // seldom this is called.
         if (r->pending) {
-            if (client == nullptr || !(bool)bLinkUp) {
+            if (client == nullptr || !(bool)bLinkBuilt) {
                 r->pending = false;
                 r->result = E_MQTTRESULT::NOTCONNECTED;
             } else {
@@ -3208,13 +3202,13 @@ E_MQTTRESULT Report()
         MqRecord* r = mq_recordOf(m, MQ_REC_REPORT, anyValue, sTopic.c_str());
         if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
         auto done = [&](E_MQTTRESULT result) -> E_MQTTRESULT {
-            nSent = r->sent;
-            tAge = mq_timeOf(r->ageMs);
+            nMessageSentCount = r->sent;
+            tSinceLastSent = mq_timeOf(r->ageMs);
             return result;
         };
 
         MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
-        if (client == nullptr || !(bool)bLinkUp) return done(E_MQTTRESULT::NOTCONNECTED);
+        if (client == nullptr || !(bool)bLinkBuilt) return done(E_MQTTRESULT::NOTCONNECTED);
 
         const mq_time_t now = mq_millis();
         if (r->ever) r->ageMs = (int32_t)mq_elapsed((mq_time_t)(uint32_t)r->at, now);
@@ -3237,7 +3231,7 @@ E_MQTTRESULT Report()
         if (length == 0 && !mq_isEmptyText(anyValue)) return done(E_MQTTRESULT::INVALIDARGUMENT);
 
         const E_MQTTTRIGGER trigger = (E_MQTTTRIGGER)eTrigger;
-        const int32_t intervalMs = mq_millisOf(tPeriod);
+        const int32_t intervalMs = mq_millisOf(tSendInterval);
         // ChangedEvery is the Sparkplug node's.
         if (trigger == E_MQTTTRIGGER::CHANGEDEVERY) return done(E_MQTTRESULT::INVALIDARGUMENT);
 
@@ -3263,7 +3257,7 @@ E_MQTTRESULT Report()
                     due = mq_fingerprint(payload, length) != r->lastHash;
                 }
             }
-            // The heartbeat: an unchanged value still goes every tPeriod.
+            // The heartbeat: an unchanged value still goes every tSendInterval.
             if (!due && intervalMs > 0 && r->ever) {
                 due = (int32_t)mq_elapsed((mq_time_t)(uint32_t)r->at, now) >= intervalMs;
             }
@@ -3292,7 +3286,7 @@ E_MQTTRESULT Subscribe()
 {
     const E_MQTTRESULT result = [&]() -> E_MQTTRESULT {
         if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
-        bNewValue = false;
+        bValueReceived = false;
         MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
         nMethods = (strucpp::XWORD_t)(uintptr_t)m;
         MqRecord* r = mq_recordOf(m, MQ_REC_SUBSCRIBE, anyValue, sTopic.c_str());
@@ -3300,17 +3294,17 @@ E_MQTTRESULT Subscribe()
         auto done = [&](E_MQTTRESULT result) -> E_MQTTRESULT {
             bSubscribed = r->subscribed;
             eQuality = r->quality;
-            bSeen = r->ever;
-            tAge = mq_timeOf(r->ageMs);
-            nReceived = r->received;
-            nMalformed = r->malformed;
+            bValueEverReceived = r->ever;
+            tValueAge = mq_timeOf(r->ageMs);
+            nMessageReceivedCount = r->received;
+            nMalformedCount = r->malformed;
             return result;
         };
 
         MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
-        if (client == nullptr || !(bool)bLinkUp) {
+        if (client == nullptr || !(bool)bLinkBuilt) {
             r->subscribed = false;
-            r->quality = mq_qualityOf(r->ever, false, r->ageMs, mq_millisOf(tExpect));
+            r->quality = mq_qualityOf(r->ever, false, r->ageMs, mq_millisOf(tExpectedInterval));
             return done(E_MQTTRESULT::NOTCONNECTED);
         }
 
@@ -3362,13 +3356,13 @@ E_MQTTRESULT Subscribe()
                 r->at = (int32_t)(uint32_t)now;
                 r->ever = true;
                 r->ageMs = 0;
-                bNewValue = true;
+                bValueReceived = true;
             } else {
                 r->malformed++;
             }
         }
 
-        r->quality = mq_qualityOf(r->ever, client->isConnected(), r->ageMs, mq_millisOf(tExpect));
+        r->quality = mq_qualityOf(r->ever, client->isConnected(), r->ageMs, mq_millisOf(tExpectedInterval));
         return done(E_MQTTRESULT::OK);
     }();
     return mq_noteCall((strucpp::XWORD_t)nMethods, "Subscribe", &anyValue, sTopic.c_str(), result);
@@ -3381,17 +3375,17 @@ E_MQTTRESULT Statistics()
     if (client == nullptr) return E_MQTTRESULT::NOTINITIALISED;
     // Counted across outages: the reconnects are worth reading most while the link is down.
     const MqttStatus& s = client->status();
-    nVersion = (uint8_t)s.version;
-    nConnects = (int32_t)s.connects;
-    nDisconnects = (int32_t)s.disconnects;
-    nReconnects = (int32_t)s.reconnects;
-    nPublished = (int32_t)s.published;
-    nReceived = (int32_t)s.received;
-    nPublishFailures = (int32_t)s.publishFailures;
-    nProtocolErrors = (int32_t)s.protocolErrors;
-    nPending = (int32_t)client->operations().pending();
-    nReasonCode = s.lastReasonCode;
-    return (bool)bLinkUp ? E_MQTTRESULT::OK : E_MQTTRESULT::NOTCONNECTED;
+    nProtocolVersion = (uint8_t)s.version;
+    nConnectCount = (int32_t)s.connects;
+    nDisconnectCount = (int32_t)s.disconnects;
+    nReconnectCount = (int32_t)s.reconnects;
+    nMessageSentCount = (int32_t)s.published;
+    nMessageReceivedCount = (int32_t)s.received;
+    nPublishFailureCount = (int32_t)s.publishFailures;
+    nProtocolErrorCount = (int32_t)s.protocolErrors;
+    nPendingOperations = (int32_t)client->operations().pending();
+    nLastReasonCode = s.lastReasonCode;
+    return (bool)bLinkBuilt ? E_MQTTRESULT::OK : E_MQTTRESULT::NOTCONNECTED;
 }
 
 // A STRUCT record's member table, made again for a new base or a first bind.
@@ -3409,20 +3403,20 @@ E_MQTTRESULT PublishStruct()
 {
     const E_MQTTRESULT result = [&]() -> E_MQTTRESULT {
         if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
-        nChanged = 0;
+        nMessagesSentThisScan = 0;
         MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
         nMethods = (strucpp::XWORD_t)(uintptr_t)m;
-        MqRecord* r = mq_recordOf(m, MQ_REC_PUBLISH_STRUCT, anyData, sBase.c_str());
+        MqRecord* r = mq_recordOf(m, MQ_REC_PUBLISH_STRUCT, anyData, sBaseTopic.c_str());
         if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
         auto done = [&](E_MQTTRESULT result) -> E_MQTTRESULT {
-            nPoints = r->points;
-            nSkipped = r->skipped;
-            nSent = r->sent;
+            nMembers = r->points;
+            nMembersRefused = r->skipped;
+            nMessageSentCount = r->sent;
             return result;
         };
 
         MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
-        if (client == nullptr || !(bool)bLinkUp) return done(E_MQTTRESULT::NOTCONNECTED);
+        if (client == nullptr || !(bool)bLinkBuilt) return done(E_MQTTRESULT::NOTCONNECTED);
 
         const strucpp::TypeDesc* layout = anyData.TYPEDESC;
         if (anyData.TYPECLASS != strucpp::TYPE_USERDEF || !layout || !anyData.PVALUE) {
@@ -3430,7 +3424,7 @@ E_MQTTRESULT PublishStruct()
             return done(E_MQTTRESULT::INVALIDARGUMENT);
         }
         // A different base is a different set of topics: nothing carries over.
-        if (!mq_bindMembers(r, sBase.c_str(), layout->MEMBERCOUNT)) {
+        if (!mq_bindMembers(r, sBaseTopic.c_str(), layout->MEMBERCOUNT)) {
             return done(E_MQTTRESULT::QUEUEFULL);
         }
 
@@ -3440,7 +3434,7 @@ E_MQTTRESULT PublishStruct()
 
         if (!(bool)bEnable) return done(E_MQTTRESULT::OK);
 
-        const int32_t intervalMs = mq_millisOf(tPeriod);
+        const int32_t intervalMs = mq_millisOf(tSendInterval);
         const E_MQTTTRIGGER trigger = (E_MQTTTRIGGER)eTrigger;
         if ((trigger == E_MQTTTRIGGER::ONINTERVAL && intervalMs <= 0) ||
             trigger == E_MQTTTRIGGER::CHANGEDEVERY) {
@@ -3500,7 +3494,7 @@ E_MQTTRESULT PublishStruct()
             if (!due) continue;
 
             char topic[256];
-            if (!mq_memberTopic(sBase.c_str(), member.NAME, topic, sizeof topic)) {
+            if (!mq_memberTopic(sBaseTopic.c_str(), member.NAME, topic, sizeof topic)) {
                 refused++;
                 if (worst == MqttResult::Ok) worst = MqttResult::InvalidTopic;
                 continue;
@@ -3517,7 +3511,7 @@ E_MQTTRESULT PublishStruct()
             table[i].sentAt = (int32_t)(uint32_t)now;
             r->ever = true;
             r->sent++;
-            nChanged = (int16_t)((int16_t)nChanged + 1);
+            nMessagesSentThisScan = (int16_t)((int16_t)nMessagesSentThisScan + 1);
         }
         if (sendAll) r->at = (int32_t)(uint32_t)now;
 
@@ -3525,32 +3519,32 @@ E_MQTTRESULT PublishStruct()
         r->skipped = (int16_t)refused;
         return done(worst != MqttResult::Ok ? (E_MQTTRESULT)(int32_t)(int)worst : E_MQTTRESULT::OK);
     }();
-    return mq_noteCall((strucpp::XWORD_t)nMethods, "PublishStruct", &anyData, sBase.c_str(), result);
+    return mq_noteCall((strucpp::XWORD_t)nMethods, "PublishStruct", &anyData, sBaseTopic.c_str(), result);
 }
 
 E_MQTTRESULT SubscribeStruct()
 {
     const E_MQTTRESULT result = [&]() -> E_MQTTRESULT {
         if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
-        nNewValues = 0;
+        nMembersReceivedThisScan = 0;
         MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
         nMethods = (strucpp::XWORD_t)(uintptr_t)m;
-        MqRecord* r = mq_recordOf(m, MQ_REC_SUBSCRIBE_STRUCT, anyData, sBase.c_str());
+        MqRecord* r = mq_recordOf(m, MQ_REC_SUBSCRIBE_STRUCT, anyData, sBaseTopic.c_str());
         if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
         auto done = [&](E_MQTTRESULT result) -> E_MQTTRESULT {
-            nPoints = r->points;
-            nSkipped = r->skipped;
+            nMembers = r->points;
+            nMembersRefused = r->skipped;
             bSubscribed = r->subscribed;
-            eQuality = r->quality;
-            bSeen = r->ever;
-            tOldest = mq_timeOf(r->ageMs);
-            nReceived = r->received;
-            nMalformed = r->malformed;
+            eWorstMemberQuality = r->quality;
+            bAllMembersEverReceived = r->ever;
+            tOldestMemberAge = mq_timeOf(r->ageMs);
+            nMessageReceivedCount = r->received;
+            nMalformedCount = r->malformed;
             return result;
         };
 
         MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
-        if (client == nullptr || !(bool)bLinkUp) {
+        if (client == nullptr || !(bool)bLinkBuilt) {
             r->subscribed = false;
             r->quality = E_MQTTQUALITY::BAD;
             return done(E_MQTTRESULT::NOTCONNECTED);
@@ -3562,8 +3556,8 @@ E_MQTTRESULT SubscribeStruct()
             r->subscribed = false;
             return done(E_MQTTRESULT::INVALIDARGUMENT);
         }
-        const bool rebind = r->members == nullptr || r->topic != sBase.c_str();
-        if (!mq_bindMembers(r, sBase.c_str(), layout->MEMBERCOUNT)) {
+        const bool rebind = r->members == nullptr || r->topic != sBaseTopic.c_str();
+        if (!mq_bindMembers(r, sBaseTopic.c_str(), layout->MEMBERCOUNT)) {
             r->subscribed = false;
             return done(E_MQTTRESULT::QUEUEFULL);
         }
@@ -3586,7 +3580,7 @@ E_MQTTRESULT SubscribeStruct()
         const uint16_t count = layout->MEMBERCOUNT < r->memberCount ? layout->MEMBERCOUNT : r->memberCount;
         const bool enabled = (bool)bEnable;
         const uint8_t qos = mq_qosOf((E_MQTTQOS)eQos);
-        const int32_t expectMs = mq_millisOf(tExpect);
+        const int32_t expectMs = mq_millisOf(tExpectedInterval);
 
         int bound = 0, refused = 0;
         bool allAsked = true;
@@ -3608,7 +3602,7 @@ E_MQTTRESULT SubscribeStruct()
             if (!mq_memberAsAny(member, base, &any)) { refused++; continue; }
 
             char topic[256];
-            if (!mq_memberTopic(sBase.c_str(), member.NAME, topic, sizeof topic)) {
+            if (!mq_memberTopic(sBaseTopic.c_str(), member.NAME, topic, sizeof topic)) {
                 refused++;
                 if (worst == MqttResult::Ok) worst = MqttResult::InvalidTopic;
                 continue;
@@ -3646,7 +3640,7 @@ E_MQTTRESULT SubscribeStruct()
                     r->received++;
                     table[i].arrivedAt = (int32_t)(uint32_t)now;
                     table[i].ever = true;
-                    nNewValues = (int16_t)((int16_t)nNewValues + 1);
+                    nMembersReceivedThisScan = (int16_t)((int16_t)nMembersReceivedThisScan + 1);
                 } else {
                     r->malformed++;
                 }
@@ -3670,14 +3664,14 @@ E_MQTTRESULT SubscribeStruct()
         r->quality = bound == 0 ? E_MQTTQUALITY::UNKNOWN : worstQuality;
         return done(worst != MqttResult::Ok ? (E_MQTTRESULT)(int32_t)(int)worst : E_MQTTRESULT::OK);
     }();
-    return mq_noteCall((strucpp::XWORD_t)nMethods, "SubscribeStruct", &anyData, sBase.c_str(), result);
+    return mq_noteCall((strucpp::XWORD_t)nMethods, "SubscribeStruct", &anyData, sBaseTopic.c_str(), result);
 }
 
 E_MQTTRESULT Message()
 {
     const E_MQTTRESULT result = [&]() -> E_MQTTRESULT {
         if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
-        bNewMessage = false;
+        bMessageReceived = false;
         if (anyPayload.TYPECLASS != strucpp::TYPE_STRING || !anyPayload.wired()) {
             return E_MQTTRESULT::INVALIDARGUMENT;
         }
@@ -3686,14 +3680,14 @@ E_MQTTRESULT Message()
         MqRecord* r = mq_recordOf(m, MQ_REC_MESSAGE, anyPayload, sTopic.c_str());
         if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
         auto done = [&](E_MQTTRESULT result) -> E_MQTTRESULT {
-            nLen = (int16_t)r->length;
+            nPayloadLength = (int16_t)r->length;
             bTruncated = r->truncated;
-            nReceived = r->received;
+            nMessageReceivedCount = r->received;
             return result;
         };
 
         MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
-        if (client == nullptr || !(bool)bLinkUp) return done(E_MQTTRESULT::NOTCONNECTED);
+        if (client == nullptr || !(bool)bLinkBuilt) return done(E_MQTTRESULT::NOTCONNECTED);
 
         const char* topic = sTopic.c_str();
         bool changed = false;
@@ -3734,7 +3728,7 @@ E_MQTTRESULT Message()
                 r->length = (int32_t)shown;
                 r->truncated = cutByRegistry || shown != length;
                 r->received++;
-                bNewMessage = true;
+                bMessageReceived = true;
             }
         }
         return done(E_MQTTRESULT::OK);
@@ -3748,11 +3742,11 @@ E_MQTTRESULT Request()
         if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
         MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
         nMethods = (strucpp::XWORD_t)(uintptr_t)m;
-        MqRecord* r = mq_recordOf(m, MQ_REC_REQUEST, anyValue, sTopic.c_str());
+        MqRecord* r = mq_recordOf(m, MQ_REC_REQUEST, anyRequest, sTopic.c_str());
         if (r == nullptr) return E_MQTTRESULT::QUEUEFULL;
         auto done = [&]() -> E_MQTTRESULT {
             sReply = r->reply.c_str();
-            nReplyLen = (int16_t)r->reply.size();
+            nReplyLength = (int16_t)r->reply.size();
             return r->result;
         };
         MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
@@ -3761,7 +3755,7 @@ E_MQTTRESULT Request()
         const bool rising = execute && !r->lastExecute;
         r->lastExecute = execute;
 
-        if (client == nullptr || !(bool)bLinkUp) {
+        if (client == nullptr || !(bool)bLinkBuilt) {
             if (rising) r->reply.clear();
             if (r->pending || rising) {
                 r->pending = false;
@@ -3772,7 +3766,7 @@ E_MQTTRESULT Request()
 
         // The reply topic is subscribed and kept, so an answer cannot arrive
         // before anyone listens. Latched while a request waits.
-        const std::string replyTopic = r->pending ? r->replyTopic : std::string(sReplyTopic.c_str());
+        const std::string replyTopic = r->pending ? r->replyTopic : std::string(sResponseTopic.c_str());
         MqttTopicHandle reply = MQTT_TOPIC_HANDLE_NONE;
         if (!replyTopic.empty()) {
             bool changed = false;
@@ -3806,7 +3800,7 @@ E_MQTTRESULT Request()
             } else if ((int32_t)mq_elapsed((mq_time_t)(uint32_t)r->at, now) >= r->limitMs) {
                 // Unanswered: said, so a sequence waiting on it does not hang.
                 r->pending = false;
-                r->result = E_MQTTRESULT::KEEPALIVETIMEOUT;
+                r->result = E_MQTTRESULT::NOREPLY;
             }
             return done();
         }
@@ -3833,8 +3827,8 @@ E_MQTTRESULT Request()
             return done();
         }
         char payload[512];
-        const size_t length = mq_formatAny(anyValue, payload, sizeof payload);
-        if (length == 0 && !mq_isEmptyText(anyValue)) {
+        const size_t length = mq_formatAny(anyRequest, payload, sizeof payload);
+        if (length == 0 && !mq_isEmptyText(anyRequest)) {
             r->result = E_MQTTRESULT::INVALIDARGUMENT;
             return done();
         }
@@ -3863,14 +3857,14 @@ E_MQTTRESULT Request()
         r->result = E_MQTTRESULT::QUEUED;
         return done();
     }();
-    return mq_noteCall((strucpp::XWORD_t)nMethods, "Request", &anyValue, sTopic.c_str(), result);
+    return mq_noteCall((strucpp::XWORD_t)nMethods, "Request", &anyRequest, sTopic.c_str(), result);
 }
 
 E_MQTTRESULT Response()
 {
     const E_MQTTRESULT result = [&]() -> E_MQTTRESULT {
         if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
-        bNewRequest = false;
+        bRequestReceived = false;
         MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
         nMethods = (strucpp::XWORD_t)(uintptr_t)m;
         MqRecord* r = mq_recordOf(m, MQ_REC_RESPONSE, anyRequest, sTopic.c_str());
@@ -3878,8 +3872,8 @@ E_MQTTRESULT Response()
         auto done = [&](E_MQTTRESULT result) -> E_MQTTRESULT {
             bAwaitingReply = r->answerable;
             sResponseTopic = r->replyTopic.c_str();
-            nReceived = r->received;
-            nMalformed = r->malformed;
+            nRequestReceivedCount = r->received;
+            nMalformedCount = r->malformed;
             return result;
         };
 
@@ -3888,7 +3882,7 @@ E_MQTTRESULT Response()
         r->lastExecute = execute;
 
         MqttClient* client = mq_clientOf((strucpp::XWORD_t)nApi);
-        if (client == nullptr || !(bool)bLinkUp) return done(E_MQTTRESULT::NOTCONNECTED);
+        if (client == nullptr || !(bool)bLinkBuilt) return done(E_MQTTRESULT::NOTCONNECTED);
         // The request's properties reach the record through the hook.
         client->attach(m->hook);
 
@@ -3928,7 +3922,7 @@ E_MQTTRESULT Response()
         size_t length = 0;
         while (client->takeMessage(handle, buffer, sizeof buffer, length)) {
             r->received++;
-            bNewRequest = true;
+            bRequestReceived = true;
             if (anyRequest.wired() && !mq_parseAny((const char*)buffer, length, anyRequest)) {
                 r->malformed++;
             }
@@ -3966,8 +3960,8 @@ E_MQTTRESULT Provision()
     const E_MQTTRESULT result = [&]() -> E_MQTTRESULT {
         // What the key handed this PLC, as kept: valid before the first connect,
         // so a Sparkplug node's Will is on the right group from the start.
-        sGroup = sProvGroup.c_str();
-        sPrefix = sProvPrefix.c_str();
+        sGroupId = sProvGroup.c_str();
+        sTopicPrefix = sProvPrefix.c_str();
         if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
         MqMethods* m = mq_methodsFor((strucpp::XWORD_t)nMethods, (strucpp::XWORD_t)nApi);
         nMethods = (strucpp::XWORD_t)(uintptr_t)m;
@@ -3975,12 +3969,12 @@ E_MQTTRESULT Provision()
         MqProvision& p = m->provision;
         auto done = [&]() -> E_MQTTRESULT {
             bProvisioned = p.provisioned;
-            bPending = p.waiting;
-            bRefused = p.refused;
-            sUserName = p.userName.c_str();
-            sGroup = sProvGroup.c_str();
-            sPrefix = sProvPrefix.c_str();
-            sReason = p.reason.c_str();
+            bAwaitingApproval = p.waiting;
+            bRegistrationRefused = p.refused;
+            sProvisionedUserName = p.userName.c_str();
+            sGroupId = sProvGroup.c_str();
+            sTopicPrefix = sProvPrefix.c_str();
+            sRefusalReason = p.reason.c_str();
             return p.status;
         };
         const mq_time_t now = mq_millis();
@@ -3991,32 +3985,32 @@ E_MQTTRESULT Provision()
             return done();
         }
         const bool haveLogin = sProvLoginUser.length() > 0 && sProvLoginSecret.length() > 0;
-        if (!haveLogin && sKey.length() == 0) {
+        if (!haveLogin && sProvisioningKey.length() == 0) {
             p.status = E_MQTTRESULT::INVALIDARGUMENT;
-            p.reason = "set sKey - from `modbee key create` on the broker";
+            p.reason = "set sProvisioningKey - from `modbee key create` on the broker";
             return done();
         }
 
-        // bForget's rising edge - not at program start, where one wired TRUE
+        // bForgetStoredLogin's rising edge - not at program start, where one wired TRUE
         // would throw the login away on every reboot.
-        const bool forget = (bool)bForget;
+        const bool forget = (bool)bForgetStoredLogin;
         if (p.forgetSeen && forget && !p.lastForget) {
             sProvLoginUser = "";
             sProvLoginSecret = "";
-            if ((bool)bLinkUp) p.switchTo = 2;
+            if ((bool)bLinkBuilt) p.switchTo = 2;
         }
         p.lastForget = forget;
         p.forgetSeen = true;
 
         // Before the client builds its link: which login it uses.
-        if (!(bool)bLinkUp) {
+        if (!(bool)bLinkBuilt) {
             const bool stored = sProvLoginUser.length() > 0 && sProvLoginSecret.length() > 0;
             if (stored) {
                 sProvUser = sProvLoginUser.c_str();
                 sProvPassword = sProvLoginSecret.c_str();
             } else {
                 sProvUser = "$provision";
-                sProvPassword = sKey.c_str();
+                sProvPassword = sProvisioningKey.c_str();
             }
             p.usingKey = !stored;
             p.withoutWill = false;
@@ -4048,7 +4042,7 @@ E_MQTTRESULT Provision()
                 c.registration = toKey || withoutWill;
                 if (toKey) {
                     c.userName = "$provision";
-                    c.password.assign(sKey.c_str(), sKey.c_str() + sKey.length());
+                    c.password.assign(sProvisioningKey.c_str(), sProvisioningKey.c_str() + sProvisioningKey.length());
                 } else {
                     c.userName = std::string(sProvLoginUser.c_str(), sProvLoginUser.length());
                     c.password.assign(sProvLoginSecret.c_str(),
@@ -4099,7 +4093,7 @@ E_MQTTRESULT Provision()
             // Its own login. Refused as wrong (reset by an admin, or taken over
             // by a replacement): ask again with the key, keeping the old login
             // until a new one is issued; it is retried every five minutes.
-            if (badLogin && p.switchTo == 0 && sKey.length() > 0) {
+            if (badLogin && p.switchTo == 0 && sProvisioningKey.length() > 0) {
                 p.oldTriedAt = (int32_t)(uint32_t)now;
                 p.switchTo = 2;
             }

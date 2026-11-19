@@ -88,7 +88,7 @@ plant/tank-01/status  =  "online"    published by the device
 plant/tank-01/status  =  "offline"   published by the broker, when it vanishes
 ```
 
-`stWillConfig` on the client is that pair, set in one structure.
+`stWill` on the client is that pair, set in one structure.
 
 ## What this library adds
 

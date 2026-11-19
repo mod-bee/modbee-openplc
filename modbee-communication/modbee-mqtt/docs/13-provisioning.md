@@ -31,14 +31,14 @@ before the client's own call:
 ```st
 VAR
   mqtt : FB_MqttClient;
-  sKey : STRING(127) := 'site-north.eDjPQkJQq6X9L0q9paHAxReD9KZc72PH';
+  sProvisioningKey : STRING(127) := 'site-north.eDjPQkJQq6X9L0q9paHAxReD9KZc72PH';
   bProvisioned : BOOL;
   sSiteGroup : STRING(64);
 END_VAR
 
-mqtt.Provision(sKey := sKey, bProvisioned => bProvisioned, sGroup => sSiteGroup);
+mqtt.Provision(sProvisioningKey := sProvisioningKey, bProvisioned => bProvisioned, sGroupId => sSiteGroup);
 mqtt(eTransport := E_MqttTransport.RuntimeTcp, eSecurity := E_MqttSecurity.TlsVerify,
-     sHost := 'mqtt.example.com', sClientId := 'pump-station-3');
+     sHostName := 'mqtt.example.com', sClientId := 'pump-station-3');
 ```
 
 That is all. **Leave `stSessionConfig`'s `sUserName` and `sUserPassword`
@@ -63,7 +63,7 @@ the key would be allowed anyway.
 The other methods need nothing different. Subscriptions are made again on the
 PLC's own connection by themselves.
 
-## What the key tells the PLC: sGroup and sPrefix
+## What the key tells the PLC: sGroupId and sTopicPrefix
 
 A key can carry values for the devices it registers (`modbee key create ...
 --data group=north-plant --data prefix=acme/north`, or set by your platform).
@@ -72,8 +72,8 @@ login - valid from the first scan - and asks again at every connect:
 
 | Output | Is | Wire it to |
 | --- | --- | --- |
-| `sGroup` | the site's Sparkplug group | `FB_SparkplugNode`'s `sGroupId` - with a `SEL` to a group of your own when it is empty (a broker whose keys carry none) |
-| `sPrefix` | the start of this PLC's own topics | e.g. firmware updates: `<sPrefix>/<sClientId>/$ota` as `FB_OtaNode`'s `sBaseTopic` (modbee-ota) |
+| `sGroupId` | the site's Sparkplug group | `FB_SparkplugNode`'s `sGroupId` - with a `SEL` to a group of your own when it is empty (a broker whose keys carry none) |
+| `sTopicPrefix` | the start of this PLC's own topics | e.g. firmware updates: `<sTopicPrefix>/<sClientId>/$ota` as `FB_OtaNode`'s `sBaseTopic` (modbee-ota) |
 
 So whoever sets the PLC up types the key and its name - not the group, not a
 topic path - and renaming the PLC moves everything built from its name.
@@ -85,36 +85,36 @@ topic path - and renaming the PLC moves everything built from its name.
 | The PLC restarts | It connects with the retained login, without asking again |
 | A PLC is replaced | Download the same program - same `sClientId`, same key - to the new one. Once the old PLC is offline it registers with the same key (nothing to change on the broker), and the old PLC's login stops working. While the old PLC is still connected, the new one is refused and asks again every five minutes - a copy of the key never knocks a working PLC off |
 | A PLC is stolen or lost | An admin disables its login (`modbee user disable pump-station-3`): it is signed out at once and stays out. Nothing else changes - not the key, not another PLC |
-| The key's devices at once are online (`--devices`) | A key may limit how many of the PLCs it let in are online at the same time - any of them. One more is refused (`bRefused`, the broker's reason in `sReason`) and asks again every five minutes, until one goes or the key is raised (`modbee key set ... --devices`) |
+| The key's devices at once are online (`--devices`) | A key may limit how many of the PLCs it let in are online at the same time - any of them. One more is refused (`bRegistrationRefused`, the broker's reason in `sRefusalReason`) and asks again every five minutes, until one goes or the key is raised (`modbee key set ... --devices`) |
 | The key is turned off (`modbee key set ... --devices 0`) | Every PLC it let in is signed out and refused until the key is raised again - the same key, nothing to download |
 | An admin resets its login (`modbee user reset pump-station-3`) | The stored login is refused, so the PLC registers again with its key by itself. No site visit |
 | Registering again is pending or refused | The old login is **kept** until the broker issues a new one, so the PLC is never left with no login at all, and it tries the old one again every five minutes - a login put back on the broker works again by itself |
 | An admin disables it (`modbee user disable ...`) | It stays out. Registering again does not undo it - an admin enables it |
-| The key needs approval (`--approval manual`) | `bPending` is TRUE until an admin runs `modbee user approve pump-station-3`. The PLC asks again every thirty seconds |
-| The key is wrong, or removed | `bRefused` is TRUE and the method returns `NotAuthorized`, with the broker's reason in `sReason`. It asks again every five minutes |
-| The site's group is changed on the broker | The broker refuses a connect whose Will (the Sparkplug NDEATH) is on the old group. The PLC connects once without its Will, asks again, and reconnects on the new `sGroup` - by itself |
-| Its rights no longer cover its Will, and the group is the same (`modbee user permissions ...`) | `bRefused` is TRUE and the method returns `NotAuthorized`, `sReason` says the broker refuses its Will. It tries again every five minutes, so rights put back work again by itself |
+| The key needs approval (`--approval manual`) | `bAwaitingApproval` is TRUE until an admin runs `modbee user approve pump-station-3`. The PLC asks again every thirty seconds |
+| The key is wrong, or removed | `bRegistrationRefused` is TRUE and the method returns `NotAuthorized`, with the broker's reason in `sRefusalReason`. It asks again every five minutes |
+| The site's group is changed on the broker | The broker refuses a connect whose Will (the Sparkplug NDEATH) is on the old group. The PLC connects once without its Will, asks again, and reconnects on the new `sGroupId` - by itself |
+| Its rights no longer cover its Will, and the group is the same (`modbee user permissions ...`) | `bRegistrationRefused` is TRUE and the method returns `NotAuthorized`, `sRefusalReason` says the broker refuses its Will. It tries again every five minutes, so rights put back work again by itself |
 | Its values are changed on the broker (`modbee user set ... --data`) | It has them at its next connect |
 
-`bForget` (a rising edge) throws the stored login away and registers again.
+`bForgetStoredLogin` (a rising edge) throws the stored login away and registers again.
 It is rarely needed: a login that stops working is replaced by itself.
 
 ## The method
 
-`mqtt.Provision(sKey, bForget, bProvisioned =>, bPending =>, bRefused =>,
-sUserName =>, sGroup =>, sPrefix =>, sReason =>)`
+`mqtt.Provision(sProvisioningKey, bForgetStoredLogin, bProvisioned =>, bAwaitingApproval =>, bRegistrationRefused =>,
+sProvisionedUserName =>, sGroupId =>, sTopicPrefix =>, sRefusalReason =>)`
 
 | | |
 | --- | --- |
-| `sKey` | the provisioning key |
-| `bForget` | rising edge: forget the stored login and register again. Not at program start, so one wired TRUE does not throw the login away on every reboot |
+| `sProvisioningKey` | the provisioning key |
+| `bForgetStoredLogin` | rising edge: forget the stored login and register again. Not at program start, so one wired TRUE does not throw the login away on every reboot |
 | `bProvisioned` | this PLC has its own login, and is connected with it |
-| `bPending` | waiting for an admin to approve it |
-| `bRefused` | the broker said no; `sReason` says why |
-| `sUserName` | the login in use |
-| `sGroup`, `sPrefix` | what the key hands its devices |
-| `sReason` | what the broker said, in words |
-| returns | `Ok`; `InvalidArgument` with no `sClientId`, or no `sKey` and no stored login; `NotAuthorized` when refused; `WrongTask` outside the client's task |
+| `bAwaitingApproval` | waiting for an admin to approve it |
+| `bRegistrationRefused` | the broker said no; `sRefusalReason` says why |
+| `sProvisionedUserName` | the login in use |
+| `sGroupId`, `sTopicPrefix` | what the key hands its devices |
+| `sRefusalReason` | what the broker said, in words |
+| returns | `Ok`; `InvalidArgument` with no `sClientId`, or no `sProvisioningKey` and no stored login; `NotAuthorized` when refused; `WrongTask` outside the client's task |
 
 The client's `sClientId` is the PLC's name, and must be set.
 

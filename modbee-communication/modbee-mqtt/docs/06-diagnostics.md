@@ -14,44 +14,44 @@ The counters are a method, safe to call on any page. It reports and changes
 nothing.
 
 ```st
-mqtt.Statistics(nVersion => nMqttVersion, nReconnects => nMqttReconnects,
-                nPublished => nMqttPublished, nPublishFailures => nMqttFailures,
-                nProtocolErrors => nMqttProtocolErrors, nPending => nMqttPending);
+mqtt.Statistics(nProtocolVersion => nMqttVersion, nReconnectCount => nMqttReconnects,
+                nMessageSentCount => nMqttPublished, nPublishFailureCount => nMqttFailures,
+                nProtocolErrorCount => nMqttProtocolErrors, nPendingOperations => nMqttPending);
 ```
 
 It returns `Ok`, or `NotConnected` while there is no link. The figures are
-written either way: they count across outages, and `nReconnects` is worth
+written either way: they count across outages, and `nReconnectCount` is worth
 reading most while the link is down.
 
 ## The numbers worth a screen
 
-**`nConnects` and `nReconnects`.** A link that works but reconnects nightly is
+**`nConnectCount` and `nReconnectCount`.** A link that works but reconnects nightly is
 a completely different problem from one that has never worked, and nothing
-else on the list tells them apart. An `nReconnects` that climbs at the same
+else on the list tells them apart. An `nReconnectCount` that climbs at the same
 time each day is a lease expiring or a scheduled job on the broker. One that
 climbs with the weather is a radio.
 
-**`nPublishFailures` against `nPublished`.** A handful during a reconnect is
+**`nPublishFailureCount` against `nMessageSentCount`.** A handful during a reconnect is
 ordinary. A steady ratio means something is *refusing* messages rather than
 losing them - read the result of the method that sends them, which names the
 reason.
 
-**`nVersion`.** 5 or 4, whichever is actually in force. Ask for
+**`nProtocolVersion`.** 5 or 4, whichever is actually in force. Ask for
 `E_MqttProtocol.V5ThenV311` and you may be speaking either; a 5.0-only feature
 quietly unavailable makes much more sense when this says 4.
 
-**`nPending`.** Operations accepted and not yet concluded. A number that climbs
+**`nPendingOperations`.** Operations accepted and not yet concluded. A number that climbs
 and does not come down is a broker that has stopped acknowledging, or a link
 that is saturated.
 
-**`nProtocolErrors`.** The broker said something the standard does not allow.
+**`nProtocolErrorCount`.** The broker said something the standard does not allow.
 Not zero means one of the two ends has a bug.
 
-**`nReasonCode`.** The broker's own last reason code. Zero at 3.1.1 always -
+**`nLastReasonCode`.** The broker's own last reason code. Zero at 3.1.1 always -
 that version has no way to say why.
 
-**`tHeardAgo`** on the client. A healthy broker is heard at least once a
-keep-alive - it answers our ping - so `bConnected` with `tHeardAgo` under three
+**`tSinceLastHeard`** on the client. A healthy broker is heard at least once a
+keep-alive - it answers our ping - so `bConnected` with `tSinceLastHeard` under three
 keep-alives proves the broker is really there, which a modem that only buffers
 our bytes cannot fake.
 
@@ -106,6 +106,7 @@ configuration, or stop asking.
 | `E_MqttResult.PayloadFormatInvalid` | we said it was UTF-8 text and it was not |
 | `E_MqttResult.QuotaExceededByPeer` | the broker's own limit, not ours |
 | `E_MqttResult.PacketIdentifierInUse` | the two ends disagree about what is in flight |
+| `E_MqttResult.NoReply` | a `Request` got no answer within `tTimeout` |
 
 ### Link faults
 
@@ -116,7 +117,7 @@ configuration, or stop asking.
 | `E_MqttResult.ConnectionRefused` | the broker's CONNACK said no |
 | `E_MqttResult.ProtocolError` | the broker said something the standard does not allow |
 | `E_MqttResult.MalformedPacket` | the broker's bytes did not parse |
-| `E_MqttResult.KeepAliveTimeout` | no answer inside the interval. Also what a `Request` timeout looks like |
+| `E_MqttResult.KeepAliveTimeout` | the broker did not answer inside the keep-alive interval |
 | `E_MqttResult.SessionTakenOver` | **another connection claimed our client identifier** |
 
 **`E_MqttResult.SessionTakenOver` is the one people meet first on a new site.** MQTT
@@ -133,9 +134,9 @@ the application layer is fine.
 ## A health rung
 
 ```st
-mqtt.Statistics(nProtocolErrors => nMqttProtocolErrors, nReconnects => nMqttReconnects);
+mqtt.Statistics(nProtocolErrorCount => nMqttProtocolErrors, nReconnectCount => nMqttReconnects);
 bMqttHealthy := mqtt.bConnected AND (nMqttProtocolErrors = 0)
-                AND (mqtt.tHeardAgo < T#3m);
+                AND (mqtt.tSinceLastHeard < T#3m);
 ```
 
 and somewhere an operator can see `nMqttReconnects`.

@@ -6,13 +6,13 @@ out of that picture and Write sends one back down.
 sHostId     this host's Sparkplug Host ID. It is a topic element and MUST be
            unique in the system. An edge node's sPrimaryHostId carries this
            same string. Up to 47 characters.
-sGroupId    the group to watch, or empty for every group. Narrow it on a real
+sWatchedGroupId  the group to watch, or empty for every group. Narrow it on a real
            plant: a host on spBv1.0/# receives every other line's traffic.
-bPrimary    TRUE (default): ask for a rebirth when a node's sequence skips.
+bRequestRebirthOnGap  TRUE (default): ask for a rebirth when a node's sequence skips.
            Nothing in the protocol marks a host primary - the NODES name it -
            so this only decides whether a gap asks; two hosts both asking
            double the traffic for one missed message.
-tReorder    how long to let a gap fill before asking. T#5s by default; T#0s
+tSequenceGapDelay  how long to let a gap fill before asking. T#5s by default; T#0s
            asks at once. A link that reorders now and then should not cost a
            full birth each time.
 bEnable     FALSE publishes the offline STATE and stands the host down; the
@@ -20,15 +20,15 @@ bEnable     FALSE publishes the offline STATE and stands the host down; the
 fbClient    the FB_MqttClient this host rides on. Must be assigned; broker,
            TLS, login and protocol are set there.
 
-bLinkUp     the client's session is up.
-bBorn       our STATE birth certificate is published, so nodes may rely on us.
+bConnected  the client's bConnected: the broker has accepted it.
+bHostOnline  our STATE birth certificate is published, so nodes may rely on us.
            A node waiting for this host starts birthing once it sees it.
-nNodes      edge nodes heard from. A node that died stays tracked: knowing it
+nNodesKnown  edge nodes heard from. A node that died stays tracked: knowing it
            is gone is worth more than forgetting it existed.
-nOnline     how many of them are online now.
-nGaps       sequence gaps seen, every node together.
-nRebirths   rebirths asked for. Both climbing together is a lossy link; gaps
-           climbing alone means tReorder is absorbing them.
+nNodesOnline  how many of them are online now.
+nSequenceGapCount  sequence gaps seen, every node together.
+nRebirthRequestCount  rebirths asked for. Both climbing together is a lossy link; gaps
+           climbing alone means tSequenceGapDelay is absorbing them.
 bError, eErrorId  E_MqttResult.Ok when fine; WrongTask: not in its client's
            task.
 sLastError  what the host waits for, or what failed: "out of memory for
@@ -41,8 +41,8 @@ METHODS
 Both run in the host's task and return E_MqttResult.WrongTask in any other.
 A call is found again by anyValue's declared name and type with sMetricName.
 
-  host.Watch(sMetricName, anyValue, sEdgeNodeId, sNodeGroupId, sDeviceId,
-             bValid =>, bTypeOk =>, bFresh =>, nAge =>, nReadCnt =>)
+  host.Watch(sMetricName, anyValue, sEdgeNodeId, sGroupId, sDeviceId,
+             bValid =>, bTypeMatches =>, bValueReceived =>, nValueAgeMs =>, nReadingCount =>)
      READS ONE METRIC into a variable of your own type. Standing: call it
      every scan while the value is wanted; stop and anyValue holds its last
      value.
@@ -55,23 +55,23 @@ A call is found again by anyValue's declared name and type with sMetricName.
      anyValue      where to put it. Any IEC type matching the birth.
      sEdgeNodeId   which node. Empty: the first node heard from - convenient
                    with one node, wrong with two.
-     sNodeGroupId  which group. Empty: any group the host watches.
+     sGroupId      which group. Empty: any group the host watches.
      sDeviceId     for a metric of a device rather than the node.
      bValid        this call wrote anyValue.
-     bTypeOk       FALSE: anyValue's type is not the declared one.
-     bFresh        the reading changed since the last call.
-     nAge          milliseconds since the NODE's timestamp on it - not since
+     bTypeMatches  FALSE: anyValue's type is not the declared one.
+     bValueReceived  the reading changed since the last call.
+     nValueAgeMs   milliseconds since the NODE's timestamp on it - not since
                    we received it; on a slow link those differ by more than a
                    control decision should ignore.
-     nReadCnt      readings written into anyValue.
+     nReadingCount  readings written into anyValue.
      Ok when anyValue holds a valid reading; NotInitialised while the host is
      not built, the node not heard or the metric not published (a plant
      starting up spends its first seconds here); NotConnected while the
      client is down; InvalidArgument for an empty sMetricName or a type
      mismatch.
 
-  host.Write(sMetricName, anyValue, sEdgeNodeId, sNodeGroupId, sDeviceId,
-             bExecute, nSentCnt =>)
+  host.Write(sMetricName, anyValue, sEdgeNodeId, sGroupId, sDeviceId,
+             bExecute, nSentCommandCount =>)
      WRITES ONE METRIC on an edge node: an NCMD, or a DCMD for a device
      metric. The node applies it to whatever it reports under that name and
      reports the new value back under the SAME name, so Watch that name to
@@ -85,7 +85,7 @@ A call is found again by anyValue's declared name and type with sMetricName.
      arrives a minute after the operator let go is worse than one that never
      arrived. Then Ok (sent), Refused (the client would not take it) or
      InvalidArgument (empty sMetricName, or an IEC type with no Sparkplug
-     datatype), held until the next rising edge. nSentCnt: commands this
+     datatype), held until the next rising edge. nSentCommandCount: commands this
      call has sent.
 
 ---
@@ -99,7 +99,7 @@ WHAT A HOST DOES THAT A NODE DOES NOT, and why this is a separate block:
   - It reads names out of BIRTH certificates and resolves them against the
     aliases data messages carry. A conformant node puts names only in its
     births; without the dictionary a host receives numbers it cannot name.
-  - It notices gaps in a node's sequence number and, with bPrimary, asks for
+  - It notices gaps in a node's sequence number and, with bRequestRebirthOnGap, asks for
     a rebirth.
 
 sPrimaryHostId on the node and sHostId here are the same string. A node
@@ -108,7 +108,7 @@ is how a plant avoids nodes publishing into a SCADA that is not listening.
 
 ONE CONNECTION, SHARED. The host is a layer on its client's session and
 takes its Will - the offline STATE - and a clean session on every CONNECT, so
-no stWillConfig and no FB_SparkplugNode on the same client: a connection
+no stWill and no FB_SparkplugNode on the same client: a connection
 carries one Will. Started on a session already up, it reconnects it once so
 the next CONNECT carries the STATE.
 
@@ -117,44 +117,44 @@ the rest of the program trades values with them through globals. *)
 
 FUNCTION_BLOCK FB_SparkplugHost
   VAR_INPUT
-    sHostId         : STRING(47);           (* this host's Sparkplug Host ID *)
+    sHostId         : STRING(47);           (* this host's Sparkplug Host ID; nodes' sPrimaryHostId is this string *)
     (* The group to watch, or empty for every group. Narrowing matters on a
        real plant: a host subscribed to spBv1.0/# in a large estate receives
        every other line's traffic to discard. *)
-    sGroupId        : STRING(47);
+    sWatchedGroupId : STRING(47); (* the group to watch; empty for every group *)
     (* Whether to act as the PRIMARY host.
        Nothing in the protocol marks a host as primary - the NODES are
        configured with its id - so this only decides whether a sequence gap
        produces a rebirth request. Two hosts both asking would double the
        traffic for one missed message. *)
-    bPrimary        : BOOL := TRUE;
+    bRequestRebirthOnGap : BOOL := TRUE; (* ask a node for a rebirth when its sequence skips (all this pin does) *)
     (* How long to wait for a gap to fill before asking for a rebirth.
        A link that reorders occasionally should not trigger a full birth every
        time. T#0s disables the window and asks immediately. *)
-    tReorder        : TIME := T#5s;
-    bEnable         : BOOL := TRUE;         (* FALSE publishes the offline STATE *)
+    tSequenceGapDelay : TIME := T#5s; (* how long a sequence gap may fill before a rebirth is asked; T#0s asks at once *)
+    bEnable : BOOL := TRUE; (* FALSE publishes the offline STATE and stands the host down *)
   END_VAR
   VAR_IN_OUT
-    fbClient        : FB_MqttClient;        (* the connection this host rides on *)
+    fbClient : FB_MqttClient; (* the connection this host rides on *)
   END_VAR
   VAR_OUTPUT
-    bLinkUp         : BOOL;                 (* the client's session is up *)
+    bConnected : BOOL; (* the client's broker connection is accepted (the client's bConnected): interlock on this *)
     (* Our own STATE birth certificate is published and the plant may rely on
        us. An edge node waiting for this host starts birthing once it sees it. *)
-    bBorn           : BOOL;
+    bHostOnline : BOOL; (* our online STATE is published, so nodes may rely on us *)
     (* How many edge nodes we have heard from, and how many are online now. A
        node that has died stays tracked - knowing it is gone is worth more than
        forgetting it existed. *)
-    nNodes          : INT;
-    nOnline         : INT;
+    nNodesKnown : INT; (* edge nodes heard from, dead ones included *)
+    nNodesOnline : INT; (* of those, online now *)
     (* Sequence gaps seen and rebirths asked for, across every node. Both
        climbing together is a lossy link; gaps climbing alone means the window
        is absorbing them, which is what it is for. *)
-    nGaps           : DINT;
-    nRebirths       : DINT;
-    bError          : BOOL;
-    eErrorId        : E_MqttResult;
-    sLastError      : STRING(64);           (* what the host waits for, or what failed *)
+    nSequenceGapCount : DINT; (* sequence gaps seen, all nodes together *)
+    nRebirthRequestCount : DINT; (* rebirths asked for *)
+    bError : BOOL; (* something failed *)
+    eErrorId : E_MqttResult; (* why; Ok when fine, WrongTask outside the client's task *)
+    sLastError : STRING(64); (* what the host waits for, or what failed *)
   END_VAR
   VAR
     nApi            : __XWORD;              (* the host, for the methods *)
@@ -163,7 +163,6 @@ FUNCTION_BLOCK FB_SparkplugHost
     nTask           : __XWORD;              (* the task this block runs in *)
     nCalls          : __XWORD;              (* the methods' per-call state *)
   END_VAR
-
 (* Reads one metric of a watched node into anyValue, called every scan. The
    metric's declared type must match anyValue's. Ok while anyValue holds a
    valid reading; NotInitialised until the node and the metric are heard. *)
@@ -171,16 +170,16 @@ METHOD PUBLIC Watch : E_MqttResult
   VAR_INPUT
     sMetricName     : STRING(96);           (* the metric, as the node declared it *)
     anyValue        : ANY;                  (* where to put it; its type must match the birth *)
-    sEdgeNodeId     : STRING(47);           (* empty: the first node heard from *)
-    sNodeGroupId    : STRING(47);           (* empty: any watched group *)
-    sDeviceId       : STRING(47);           (* for a device metric *)
+    sEdgeNodeId     : STRING(47);           (* which node; empty = the first node heard from *)
+    sGroupId    : STRING(47);           (* the node's Sparkplug Group ID; empty = any watched group *)
+    sDeviceId       : STRING(47);           (* for a device metric; empty for a node metric *)
   END_VAR
   VAR_OUTPUT
-    bValid          : BOOL;                 (* anyValue was written by this call *)
-    bTypeOk         : BOOL;                 (* FALSE: anyValue's type is not the declared one *)
-    bFresh          : BOOL;                 (* the reading changed since the last call *)
-    nAge            : DINT;                 (* ms since the node's timestamp on it *)
-    nReadCnt        : DINT;                 (* readings written *)
+    bValid          : BOOL;                 (* anyValue holds a valid reading, written by this call *)
+    bTypeMatches         : BOOL;                 (* anyValue's type is the declared one *)
+    bValueReceived          : BOOL;                 (* a new reading arrived since the last call (same name as Subscribe) *)
+    nValueAgeMs            : DINT;                 (* ms since the node's timestamp on it *)
+    nReadingCount        : DINT;                 (* readings written into anyValue *)
   END_VAR
 END_METHOD
 
@@ -191,14 +190,14 @@ END_METHOD
 METHOD PUBLIC Write : E_MqttResult
   VAR_INPUT
     sMetricName     : STRING(96);           (* the metric, as the node declared it *)
-    anyValue        : ANY;                  (* what to write; its type must match the birth *)
-    sEdgeNodeId     : STRING(47);           (* empty: the first node heard from *)
-    sNodeGroupId    : STRING(47);           (* empty: any watched group *)
-    sDeviceId       : STRING(47);           (* for a device metric *)
-    bExecute        : BOOL;                 (* rising edge sends *)
+    anyValue        : ANY;                  (* the value to write; its type must match the birth *)
+    sEdgeNodeId     : STRING(47);           (* which node; empty = the first node heard from *)
+    sGroupId    : STRING(47);           (* the node's Sparkplug Group ID; empty = any watched group *)
+    sDeviceId       : STRING(47);           (* for a device metric (DCMD) *)
+    bExecute        : BOOL;                 (* rising edge sends; falling before the node is heard cancels *)
   END_VAR
   VAR_OUTPUT
-    nSentCnt        : DINT;                 (* commands sent *)
+    nSentCommandCount        : DINT;                 (* commands this call has sent *)
   END_VAR
 END_METHOD
 
@@ -363,12 +362,12 @@ static const MqttSparkplugTrackedNode* mq_spHostNode(MqttSparkplugHost& host,
 
 void setup()
 {
-    bLinkUp = false;
-    bBorn = false;
-    nNodes = 0;
-    nOnline = 0;
-    nGaps = 0;
-    nRebirths = 0;
+    bConnected = false;
+    bHostOnline = false;
+    nNodesKnown = 0;
+    nNodesOnline = 0;
+    nSequenceGapCount = 0;
+    nRebirthRequestCount = 0;
     bError = false;
     eErrorId = E_MQTTRESULT::OK;
     sLastError = "";
@@ -385,8 +384,8 @@ void loop()
     // host is a layer on that session and takes the Will (its offline STATE)
     // and Clean Start on every CONNECT.
     if (!mq_inTask((strucpp::XWORD_t)fbClient.NTASK)) {   // one task per client
-        bLinkUp = false;
-        bBorn = false;
+        bConnected = false;
+        bHostOnline = false;
         bError = true;
         eErrorId = E_MQTTRESULT::WRONGTASK;
         sLastError = "put FB_SparkplugHost in its FB_MqttClient's task";
@@ -394,8 +393,8 @@ void loop()
     }
     MqttClient* client = mq_clientOf((strucpp::XWORD_t)fbClient.NAPI);
     if (client == nullptr) {
-        bLinkUp = false;
-        bBorn = false;
+        bConnected = false;
+        bHostOnline = false;
         bError = false;
         eErrorId = E_MQTTRESULT::NOTINITIALISED;
         sLastError = "waiting for its FB_MqttClient";
@@ -410,8 +409,8 @@ void loop()
             host->disconnect();
             host->poll();
         }
-        bLinkUp = client->isConnected();
-        bBorn = false;
+        bConnected = client->isConnected();
+        bHostOnline = false;
         bConnectAsked = false;
         bError = false;
         eErrorId = E_MQTTRESULT::OK;
@@ -448,16 +447,16 @@ void loop()
             sLastError = "sHostId is empty or contains + / or #";
             return;
         }
-        // sGroupId empty watches every group.
-        if (!host->watch(sGroupId.length() != 0 ? sGroupId.c_str() : nullptr)) {
+        // sWatchedGroupId empty watches every group.
+        if (!host->watch(sWatchedGroupId.length() != 0 ? sWatchedGroupId.c_str() : nullptr)) {
             delete host;
             bError = true;
             eErrorId = E_MQTTRESULT::INVALIDTOPIC;
-            sLastError = "sGroupId contains + / or #";
+            sLastError = "sWatchedGroupId contains + / or #";
             return;
         }
-        host->actAsPrimary((bool)bPrimary);
-        host->reorderTimeout((mq_time_t)mq_millisOf(tReorder));
+        host->actAsPrimary((bool)bRequestRebirthOnGap);
+        host->reorderTimeout((mq_time_t)mq_millisOf(tSequenceGapDelay));
         mqSpHostsOwned().hosts.push_back(host);
         nApi = (strucpp::XWORD_t)(uintptr_t)host;
         nClient = (strucpp::XWORD_t)(uintptr_t)client;
@@ -474,9 +473,9 @@ void loop()
     if (!bConnectAsked) bConnectAsked = host->connect();
     host->poll();
 
-    bLinkUp = client->isConnected();
-    bBorn = host->isBorn();
-    nNodes = (int16_t)host->nodeCount();
+    bConnected = client->isConnected();
+    bHostOnline = host->isBorn();
+    nNodesKnown = (int16_t)host->nodeCount();
     int16_t online = 0;
     int32_t gaps = 0;
     int32_t rebirths = 0;
@@ -487,9 +486,9 @@ void loop()
         gaps += (int32_t)node->gaps;
         rebirths += (int32_t)node->rebirthsRequested;
     }
-    nOnline = online;
-    nGaps = gaps;
-    nRebirths = rebirths;
+    nNodesOnline = online;
+    nSequenceGapCount = gaps;
+    nRebirthRequestCount = rebirths;
 
     if (!bConnectAsked) {
         bError = true;
@@ -511,14 +510,14 @@ void loop()
         return;
     }
     bError = false;
-    eErrorId = bLinkUp ? E_MQTTRESULT::OK : E_MQTTRESULT::NOTCONNECTED;
-    sLastError = bLinkUp ? "" : "FB_MqttClient is not connected";
+    eErrorId = bConnected ? E_MQTTRESULT::OK : E_MQTTRESULT::NOTCONNECTED;
+    sLastError = bConnected ? "" : "FB_MqttClient is not connected";
 }
 
 E_MQTTRESULT Watch()
 {
     bValid = false;
-    bFresh = false;
+    bValueReceived = false;
     if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
 
     strucpp::XWORD_t handle = (strucpp::XWORD_t)nCalls;
@@ -526,9 +525,9 @@ E_MQTTRESULT Watch()
     nCalls = handle;
     if (calls == nullptr) return E_MQTTRESULT::QUEUEFULL;
     MqSpWatchCall& call = *mq_spWatchCall(*calls, anyValue);
-    bTypeOk = call.typeOk;
-    nAge = call.age;
-    nReadCnt = call.reads;
+    bTypeMatches = call.typeOk;
+    nValueAgeMs = call.age;
+    nReadingCount = call.reads;
 
     if (sMetricName.length() == 0) return E_MQTTRESULT::INVALIDARGUMENT;
 
@@ -541,7 +540,7 @@ E_MQTTRESULT Watch()
     // Nothing heard from, declared but never published, or never declared:
     // all mean the same thing to a rung - do not act on this.
     const MqttSparkplugTrackedNode* tracked =
-        mq_spHostNode(*host, sEdgeNodeId.c_str(), sNodeGroupId.c_str());
+        mq_spHostNode(*host, sEdgeNodeId.c_str(), sGroupId.c_str());
     if (tracked == nullptr) return E_MQTTRESULT::NOTINITIALISED;
     const MqttSparkplugTrackedMetric* metric =
         tracked->find(sMetricName.c_str(), sDeviceId.length() != 0 ? sDeviceId.c_str() : nullptr);
@@ -552,7 +551,7 @@ E_MQTTRESULT Watch()
         // contract; writing a coerced value would hide a misread one until
         // something acted on a truncated number.
         call.typeOk = false;
-        bTypeOk = false;
+        bTypeMatches = false;
         return E_MQTTRESULT::INVALIDARGUMENT;
     }
 
@@ -562,7 +561,7 @@ E_MQTTRESULT Watch()
     // Age from the NODE's timestamp, which is when the reading happened, not
     // when we received it.
     const int64_t at = (int64_t)metric->at;
-    bFresh = !call.ever || at != call.lastAt;
+    bValueReceived = !call.ever || at != call.lastAt;
     call.lastAt = at;
     call.ever = true;
 
@@ -577,9 +576,9 @@ E_MQTTRESULT Watch()
     }
 
     bValid = true;
-    bTypeOk = true;
-    nAge = call.age;
-    nReadCnt = call.reads;
+    bTypeMatches = true;
+    nValueAgeMs = call.age;
+    nReadingCount = call.reads;
     return E_MQTTRESULT::OK;
 }
 
@@ -602,7 +601,7 @@ E_MQTTRESULT Write()
         // Every input is taken here; changing them while busy has no effect.
         call.busy = false;
         call.node = sEdgeNodeId.c_str();
-        call.group = sNodeGroupId.c_str();
+        call.group = sGroupId.c_str();
         call.device = sDeviceId.c_str();
         call.isText = anyValue.TYPECLASS == strucpp::TYPE_STRING && anyValue.PVALUE != nullptr;
         call.text = call.isText ? (const char*)anyValue.PVALUE : "";
@@ -654,7 +653,7 @@ E_MQTTRESULT Write()
         }
     }
 
-    nSentCnt = call.sent;
+    nSentCommandCount = call.sent;
     return call.busy ? E_MQTTRESULT::QUEUED : call.result;
 }
 

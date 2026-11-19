@@ -3,76 +3,76 @@ listener and takes no FB_MqttClient. Call it once every scan, in the network
 task; each device's account is a call of its User method.
 
 bEnable            TRUE listens. A falling edge stops and releases the port.
-sListenOn          which interface to listen on. Empty for all of them.
+sListenInterface   which interface to listen on. Empty for all of them.
                    Ignored on a board, which listens where its core is up.
-nPort              0 for 1883.
+nLocalPort         0 for 1883.
 nMaxClients        connections served at once. 0 for 32 (4 on a board).
-nMaxRetained       retained messages held. 0 for 256 (32 on a board).
+nMaxRetainedMessages  retained messages held. 0 for 256 (32 on a board).
 eSecurity          E_MqttSecurity.Plain serves clear text. Anything else
                    serves TLS, and then:
-                     no sCertFile      the broker makes its OWN certificate on
+                     no sServerCertificateFile      the broker makes its OWN certificate on
                                        first start, keeps it beside the
                                        program and presents the same one every
                                        start after. Zero configuration;
-                                       clients pin sBrokerKey.
-                     sCertFile + sKeyFile
+                                       clients pin sBrokerKeyFingerprint.
+                     sServerCertificateFile + sServerPrivateKeyFile
                                        a real certificate - from the site's
                                        own CA, or a public one. Clients verify
                                        it the ordinary way, host name and all,
                                        with nothing pinned.
-sCertFile          a certificate to present, as a path on the Runtime. Empty
+sServerCertificateFile  a certificate to present, as a path on the Runtime. Empty
                    to make one. Refused on a board, which has no file system
                    this block may assume.
-sKeyFile           its private key. One without the other is refused rather
+sServerPrivateKeyFile  its private key. One without the other is refused rather
                    than half applied.
-nMaxSubscriptions  subscriptions each client session may hold. 0 for 32
+nMaxSubscriptionsPerClient  subscriptions each client session may hold. 0 for 32
                    (8 on a board).
-nMaxQueued         messages held for each client while it is away or slow.
+nMaxQueuedPerClient  messages held for each client while it is away or slow.
                    0 for 64 (16 on a board).
-nMaxMsgSize        the largest message, in bytes, a client may send or be
+nMaxMessageBytes   the largest message, in bytes, a client may send or be
                    sent; also each connection's buffer size. 0 for 8192
                    (1024 on a board).
-tMaxSessionExpiry  how long a session is kept after its client goes: a 3.1.1
+tMaxSessionExpiryInterval  how long a session is kept after its client goes: a 3.1.1
                    client's persistent session, and the most a 5.0 client may
                    ask for. T#0s for 1 h. Read when the broker starts.
 
 bListening         the port is open.
-nClients           connections attached now. THIS PLC COUNTS AS ONE of them
+nClientsConnected  connections attached now. THIS PLC COUNTS AS ONE of them
                    if it also runs an FB_MqttClient against itself, which is
                    how a broker PLC publishes anything: a broker holds no
                    values of its own.
-nSessions          sessions held, including those of clients currently away
+nSessionsHeld      sessions held, including those of clients currently away
                    whose state has not expired.
-nAccepted          connections accepted at the socket.
-nAdmitted          of those, how many earned a successful CONNACK. A socket
+nAcceptedConnectionCount  connections accepted at the socket.
+nAdmittedClientCount  of those, how many earned a successful CONNACK. A socket
                    that opens and never becomes a client is a scanner, or bad
                    credentials.
-nRefused           and how many were turned away - a client with another
+nRefusedConnectionCount  and how many were turned away - a client with another
                    login than the one that made an existing session among
                    them.
-nFromClients       messages accepted from clients.
-nToClients         messages sent to clients.
-nDropped           deliveries a full client queue could not take. Not silent:
+nMessageReceivedCount  messages accepted from clients.
+nMessageSentCount  messages sent to clients.
+nDroppedDeliveryCount  deliveries a full client queue could not take. Not silent:
                    at QoS above 0 the publisher is told (0x97) rather than
                    left believing it arrived.
-nTakeovers         times a client identifier was claimed by a second
+nClientIdTakeoverCount  times a client identifier was claimed by a second
                    connection with the same login, and the first was
                    disconnected. Climbing usually means two devices share an
                    identifier.
 bError             something failed.
 eErrorId           why. E_MqttResult.Ok when fine.
-sBrokerKey         the SHA-256 of this broker's public key, 64 hexadecimal
+sBrokerKeyFingerprint  the SHA-256 of this broker's public key, 64 hexadecimal
                    characters: what a client pins against. Empty while
                    serving plain.
 
 METHODS
 
-  broker.User(sUserName, sUserPassword, bAllow, bActive =>, nLoginCnt =>,
-              nRefusedCnt =>)
+  broker.User(sUserName, sUserPassword, bAllowLogin, bAccountActive =>, nLoginCount =>,
+              nRefusedLoginCount =>)
 
      ONE ACCOUNT ON THIS PLC'S BROKER. Standing: call it every scan, once per
      device that connects, in the broker's task. Declaring ANY account makes
-     accounts REQUIRED for every connection - including one whose bAllow is
+     accounts REQUIRED for every connection - including one whose bAllowLogin is
      FALSE, so switching off the last account locks the broker rather than
      quietly opening it. With no User call at all the broker admits anybody;
      on a network that is not isolated, declare accounts.
@@ -87,11 +87,11 @@ METHODS
                     included. The call's key.
      sUserPassword  its password. Up to 64 characters; compared in full,
                     never stopping at the first difference.
-     bAllow         FALSE refuses this device without forgetting it.
+     bAllowLogin    FALSE refuses this device without forgetting it.
 
-     bActive        the account is declared and allowed.
-     nLoginCnt      times this device has connected successfully.
-     nRefusedCnt    times a connection under this name was turned away - a
+     bAccountActive  the account is declared and allowed.
+     nLoginCount    times this device has connected successfully.
+     nRefusedLoginCount  times a connection under this name was turned away - a
                     wrong password, or the account switched off. Climbing on
                     one device and not the others is that device's settings.
 
@@ -117,17 +117,17 @@ the link does not, and comes back in step when it returns.
 
 A BROKER DOES NOT PUBLISH. It routes what clients send. A PLC that is the
 broker and also publishes runs an FB_MqttClient against itself
-(sHost := '127.0.0.1') beside this block, in the same task.
+(sHostName := '127.0.0.1') beside this block, in the same task.
 
 ON A BOARD TOO. The routing, the retained store, the session registry and
 takeover compile anywhere, and an Arduino listener accepts connections
 without a BSD socket, so an ESP32 running this block is a real broker. What
 differs on a board:
 
-  sListenOn        ignored.
-  sCertFile,
-  sKeyFile         refused rather than ignored: they are paths.
-  sBrokerKey       the fingerprint of a certificate made on THIS run. There is
+  sListenInterface  ignored.
+  sServerCertificateFile,
+  sServerPrivateKeyFile  refused rather than ignored: they are paths.
+  sBrokerKeyFingerprint  the fingerprint of a certificate made on THIS run. There is
                    nowhere on a board to keep a key, so it moves on every
                    restart - either re-pin after a reflash, or serve plain on
                    an isolated line and put the TLS on the FB_MqttBridge that
@@ -136,7 +136,7 @@ differs on a board:
                    buffers, 32 retained, 8 subscriptions and 16 queued
                    messages per session. Every one is a pin: raise the ones a
                    site needs, within the board's memory - each connection
-                   holds two nMaxMsgSize buffers.
+                   holds two nMaxMessageBytes buffers.
 
 Serving TLS on a board also needs wolfSSL on the include path; serving plain
 needs nothing at all. WiFi comes with the ESP32 core, and Ethernet is opt-in:
@@ -145,17 +145,17 @@ MQTT_ENABLE_ETHERNET, a define in the board package's compiler flags.
 SELF-SIGNED IS THE DEFAULT, NOT A CEILING. The obstacle was never the TLS
 library; it was that a certificate does not fit on a pin, and a path does.
 
-nTakeovers IS THE PIN TO WATCH ON A NEW SITE. MQTT says a second connection
+nClientIdTakeoverCount IS THE PIN TO WATCH ON A NEW SITE. MQTT says a second connection
 using an existing client identifier displaces the first, so two devices
 flashed with the same identifier knock each other off for ever, each looking
 healthy on its own. This counter is the only place that shows from the
 middle. A session belongs to the login that made it: a client with another
 login and an existing identifier is refused (CONNACK 0x85; 0x02 at 3.1.1) and
-counts on nRefused, not here. Without logins every client is the same
+counts on nRefusedConnectionCount, not here. Without logins every client is the same
 nobody, so takeovers work as before.
 
 SESSIONS EXPIRE. A persistent session of a 3.1.1 client is kept for
-tMaxSessionExpiry after it goes (an hour unless set), then dropped. A 5.0
+tMaxSessionExpiryInterval after it goes (an hour unless set), then dropped. A 5.0
 client says how long itself, up to the same limit. Raise it for devices that
 sleep longer; every session held keeps its queue. Sessions and retained
 messages are in RAM: a power cut loses them, which is legal MQTT.
@@ -168,54 +168,54 @@ user name are refused or disconnected. A 3.1.1 QoS 2 message when the
 client's inbound table is full closes the connection rather than being
 acknowledged and lost.
 
-ITS COST SCALES WITH nClients: it services each connection once per call.
+ITS COST SCALES WITH nClientsConnected: it services each connection once per call.
 Still bounded, still non-blocking, not free. Put it in the network task. *)
 
 FUNCTION_BLOCK FB_MqttBroker
   VAR_INPUT
     bEnable           : BOOL := TRUE;       (* TRUE listens; a falling edge releases the port *)
-    sListenOn         : STRING(48);         (* the interface to listen on; empty for all *)
-    nPort             : UINT;               (* 0 for 1883 *)
-    nMaxClients       : INT;                (* connections served at once; 0 for the default *)
-    nMaxRetained      : INT;                (* retained messages held; 0 for the default *)
-    eSecurity         : E_MqttSecurity;     (* E_MqttSecurity.Plain, or TLS *)
-    sCertFile         : STRING(128);        (* a certificate to present (Runtime); empty to make one *)
-    sKeyFile          : STRING(128);        (* its private key *)
-    nMaxSubscriptions : INT;                (* subscriptions per client session; 0 for the default *)
-    nMaxQueued        : INT;                (* messages held per client while away; 0 for the default *)
-    nMaxMsgSize       : DINT;               (* the largest message in bytes; 0 for the default *)
-    tMaxSessionExpiry : TIME;               (* how long a session outlives its client; T#0s for 1 h *)
+    sListenInterface : STRING(48); (* the interface to listen on; empty for all; ignored on a board *)
+    nLocalPort : UINT; (* the port to listen on; 0 = 1883 *)
+    nMaxClients : INT; (* connections served at once; 0 = 32 (4 on a board) *)
+    nMaxRetainedMessages : INT; (* retained messages held; 0 = 256 (32 on a board) *)
+    eSecurity : E_MqttSecurity; (* Plain serves clear text; anything else serves TLS *)
+    sServerCertificateFile : STRING(128); (* Runtime: certificate to present; empty = make its own *)
+    sServerPrivateKeyFile : STRING(128); (* Runtime: that certificate's private key *)
+    nMaxSubscriptionsPerClient : INT; (* subscriptions each client session may hold; 0 = 32 (8 on a board) *)
+    nMaxQueuedPerClient : INT; (* messages held per client while away or slow; 0 = 64 (16 on a board) *)
+    nMaxMessageBytes : DINT; (* largest message a client may send or be sent; 0 = 8192 (1024 on a board) *)
+    tMaxSessionExpiryInterval : TIME; (* longest a session outlives its client; T#0s = 1 h; the MQTT 5 Session Expiry Interval cap *)
   END_VAR
   VAR_OUTPUT
     bListening        : BOOL;               (* the port is open *)
-    nClients          : INT;                (* connections attached now *)
-    nSessions         : INT;                (* sessions held, away clients included *)
-    nAccepted         : DINT;               (* connections accepted at the socket *)
-    nAdmitted         : DINT;               (* of those, given a successful CONNACK *)
-    nRefused          : DINT;               (* of those, turned away *)
+    nClientsConnected : INT; (* connections attached now, this PLC's own client included *)
+    nSessionsHeld : INT; (* sessions held, away clients included *)
+    nAcceptedConnectionCount : DINT; (* connections accepted at the socket *)
+    nAdmittedClientCount : DINT; (* of those, given a successful CONNACK *)
+    nRefusedConnectionCount : DINT; (* of those, turned away *)
     (* LINT AND NOT DINT, FOR THE THREE THAT COUNT MESSAGES.
 
        A DINT running total goes NEGATIVE at 2,147,483,648 and then keeps
        going, which breaks precisely the consumer these pins are for: a rung
        computing `now - last` sees a huge number, or a negative one.
 
-       Only these three. nAccepted, nAdmitted, nRefused and nTakeovers count
+       Only these three. nAcceptedConnectionCount, nAdmittedClientCount, nRefusedConnectionCount and nClientIdTakeoverCount count
        CONNECTs and faults, which do not reach two billion in a plant that is
        working, and 64-bit arithmetic is not free on a 32-bit MCU reading them
        every scan. *)
-    nFromClients      : LINT;               (* messages accepted from clients *)
-    nToClients        : LINT;               (* messages sent to clients *)
-    nDropped          : LINT;               (* deliveries a full client queue could not take *)
-    nTakeovers        : DINT;               (* client identifiers claimed by a second connection *)
-    bError            : BOOL;
-    eErrorId          : E_MqttResult;
+    nMessageReceivedCount : LINT; (* messages accepted from clients *)
+    nMessageSentCount : LINT; (* messages sent to clients *)
+    nDroppedDeliveryCount : LINT; (* deliveries a full client queue could not take *)
+    nClientIdTakeoverCount : DINT; (* a client id claimed by a second connection; climbing = two devices share an id *)
+    bError : BOOL; (* something failed *)
+    eErrorId : E_MqttResult; (* why; Ok when fine *)
     (* The SHA-256 of this broker's own public key, 64 hexadecimal characters.
        This is the number a client pins against: read it off the panel once at
        commissioning and it does not change again, because it is a fingerprint
        of the KEY rather than of the certificate - so it survives the
        certificate being reissued. Empty while the broker is serving plain
        TCP. *)
-    sBrokerKey        : STRING(64);
+    sBrokerKeyFingerprint : STRING(64); (* SHA-256 of this broker's own key, what clients pin; empty when plain *)
   END_VAR
   VAR
     nBroker           : __XWORD;            (* the broker and its listeners *)
@@ -230,7 +230,6 @@ FUNCTION_BLOCK FB_MqttBroker
     nRetryAt          : DINT;
     nTask             : __XWORD;            (* the task this block runs in *)
   END_VAR
-
 (* One account on this broker, called every scan, once per device. Any
    account makes accounts required for every connection. Ok;
    InvalidArgument for an empty sUserName; QuotaExceeded out of memory. *)
@@ -238,12 +237,12 @@ METHOD PUBLIC User : E_MqttResult
   VAR_INPUT
     sUserName         : STRING(64);         (* the name the device logs in with; case-sensitive *)
     sUserPassword     : STRING(64);         (* its password *)
-    bAllow            : BOOL := TRUE;       (* FALSE refuses this device without forgetting it *)
+    bAllowLogin            : BOOL := TRUE;       (* FALSE refuses this device without forgetting it *)
   END_VAR
   VAR_OUTPUT
-    bActive           : BOOL;               (* the account is declared and allowed *)
-    nLoginCnt         : DINT;               (* times this device has connected *)
-    nRefusedCnt       : DINT;               (* connections under this name turned away *)
+    bAccountActive           : BOOL;               (* the account is declared and allowed *)
+    nLoginCount         : DINT;               (* times this device has connected *)
+    nRefusedLoginCount       : DINT;               (* connections under this name turned away *)
   END_VAR
 END_METHOD
 
@@ -457,7 +456,7 @@ struct MqBrokerPair {
     MqttBrokerConfig config;
     bool needsBegin = false;
 
-    // TWO ACCEPTORS ON ONE nPort, and only ever one of them started. An
+    // TWO ACCEPTORS ON ONE nLocalPort, and only ever one of them started. An
     // Arduino server takes its port in the constructor - Ethernet's has no
     // other way to be told - so both are built and the eSecurity pin decides
     // which one begins. An acceptor that never begins holds no socket.
@@ -497,15 +496,15 @@ struct MqBrokerPair {
 void setup()
 {
     bListening = false;
-    nClients = 0;
-    nSessions = 0;
-    nAccepted = 0;
-    nAdmitted = 0;
-    nRefused = 0;
-    nFromClients = 0;
-    nToClients = 0;
-    nDropped = 0;
-    nTakeovers = 0;
+    nClientsConnected = 0;
+    nSessionsHeld = 0;
+    nAcceptedConnectionCount = 0;
+    nAdmittedClientCount = 0;
+    nRefusedConnectionCount = 0;
+    nMessageReceivedCount = 0;
+    nMessageSentCount = 0;
+    nDroppedDeliveryCount = 0;
+    nClientIdTakeoverCount = 0;
     bError = false;
     eErrorId = E_MQTTRESULT::OK;
     nBroker = (strucpp::XWORD_t)0;
@@ -573,9 +572,9 @@ void loop()
             pair->needsBegin = true;
         }
         bListening = false;
-        sBrokerKey = "";
-        nClients = 0;
-        nSessions = 0;
+        sBrokerKeyFingerprint = "";
+        nClientsConnected = 0;
+        nSessionsHeld = 0;
         bTried = false;
         bError = false;
         eErrorId = E_MQTTRESULT::OK;
@@ -599,7 +598,7 @@ void loop()
         bTried = true;
         nRetryAt = (int32_t)(uint32_t)(now + 2000);
 
-        const uint16_t port = (uint16_t)nPort != 0 ? (uint16_t)nPort
+        const uint16_t port = (uint16_t)nLocalPort != 0 ? (uint16_t)nLocalPort
                                                   : (uint16_t)MQ_PORT_TCP;
         const bool wantsTls = (eSecurity != E_MQTTSECURITY::PLAIN);
 
@@ -619,17 +618,17 @@ void loop()
             config.maxConnections = (int16_t)nMaxClients > 0
                 ? (size_t)(int16_t)nMaxClients : (size_t)4;
             config.maxSessions = config.maxConnections * 2;
-            config.maxSubscriptionsPerSession = (int16_t)nMaxSubscriptions > 0
-                ? (size_t)(int16_t)nMaxSubscriptions : (size_t)8;
-            config.maxQueuedPerSession = (int16_t)nMaxQueued > 0
-                ? (size_t)(int16_t)nMaxQueued : (size_t)16;
-            const size_t message = (int32_t)nMaxMsgSize > 0
-                ? (size_t)(int32_t)nMaxMsgSize : (size_t)1024;
+            config.maxSubscriptionsPerSession = (int16_t)nMaxSubscriptionsPerClient > 0
+                ? (size_t)(int16_t)nMaxSubscriptionsPerClient : (size_t)8;
+            config.maxQueuedPerSession = (int16_t)nMaxQueuedPerClient > 0
+                ? (size_t)(int16_t)nMaxQueuedPerClient : (size_t)16;
+            const size_t message = (int32_t)nMaxMessageBytes > 0
+                ? (size_t)(int32_t)nMaxMessageBytes : (size_t)1024;
             config.receiveBufferSize = message;
             config.transmitBufferSize = message;
             config.maximumPacketSize = (uint32_t)message;
-            config.maxRetained = (int16_t)nMaxRetained > 0
-                ? (size_t)(int16_t)nMaxRetained : (size_t)32;
+            config.maxRetained = (int16_t)nMaxRetainedMessages > 0
+                ? (size_t)(int16_t)nMaxRetainedMessages : (size_t)32;
 
             // NO CONNECTION LIVES FOR EVER. A client that asks for no keep
             // alive and then loses its cellular link sends no FIN and no
@@ -639,9 +638,9 @@ void loop()
             // none; a client's own interval is honoured.
             config.defaultKeepAlive = 120;
 
-            // How long a session outlives its client (tMaxSessionExpiry; 0:
+            // How long a session outlives its client (tMaxSessionExpiryInterval; 0:
             // the library's hour). Whole seconds, at least one.
-            const int32_t expiryMs = mq_millisOf(tMaxSessionExpiry);
+            const int32_t expiryMs = mq_millisOf(tMaxSessionExpiryInterval);
             if (expiryMs > 0) config.maximumSessionExpiry = expiryMs < 1000 ? 1u : (uint32_t)(expiryMs / 1000);
 
             pair->config = config;
@@ -670,7 +669,7 @@ void loop()
         const size_t pool = (int16_t)nMaxClients > 0
             ? (size_t)(int16_t)nMaxClients : (size_t)4;
 
-        // sListenOn IS NOT A BOARD CONCEPT and is ignored rather than
+        // sListenInterface IS NOT A BOARD CONCEPT and is ignored rather than
         // half-honoured. An Arduino server listens on whatever interface the
         // core brought up; there is no second one to choose between.
 
@@ -687,7 +686,7 @@ void loop()
                 eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
                 return;
             }
-            sBrokerKey = "";
+            sBrokerKeyFingerprint = "";
         } else {
 #if !MQTT_TLS_AVAILABLE
             // No engine on the board, so nothing to encrypt through. The plain
@@ -696,12 +695,12 @@ void loop()
             eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
             return;
 #else
-            // sCertFile AND sKeyFile ARE PATHS, AND A BOARD HAS NO PATHS.
+            // sServerCertificateFile AND sServerPrivateKeyFile ARE PATHS, AND A BOARD HAS NO PATHS.
             // MqttIdentity compiles its file forms only on the Runtime -
             // wolfSSL is built NO_FILESYSTEM here - so naming one is refused
             // rather than quietly ignored, which would serve a different
             // certificate than the one the pins asked for.
-            if (sCertFile.length() > 0 || sKeyFile.length() > 0) {
+            if (sServerCertificateFile.length() > 0 || sServerPrivateKeyFile.length() > 0) {
                 bError = true;
                 eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
                 return;
@@ -715,7 +714,7 @@ void loop()
             // AND IT MOVES ON EVERY RESTART, which is the one thing to know
             // before pinning it. There is nowhere on a board for this block to
             // keep a key: no file system it can assume, and a PEM does not fit
-            // in a retained variable. So sBrokerKey is the fingerprint of THIS
+            // in a retained variable. So sBrokerKeyFingerprint is the fingerprint of THIS
             // run. On the Runtime the identity is written beside the program
             // and the fingerprint holds; on a board, either re-pin after a
             // reflash or serve plain on an isolated line and encrypt the
@@ -733,7 +732,7 @@ void loop()
                 eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
                 return;
             }
-            sBrokerKey = pair->secure.fingerprint().c_str();
+            sBrokerKeyFingerprint = pair->secure.fingerprint().c_str();
 #endif
         }
 
@@ -747,15 +746,15 @@ void loop()
     pair->broker.poll();
 
     const MqttBrokerStatus& s = pair->broker.status();
-    nClients = (int16_t)pair->broker.connectionCount();
-    nSessions = (int16_t)pair->broker.sessionCount();
-    nAccepted = (int32_t)s.accepted;
-    nAdmitted = (int32_t)s.connected;
-    nRefused = (int32_t)s.refused;
-    nFromClients = (int64_t)s.published;
-    nToClients = (int64_t)s.delivered;
-    nDropped = (int64_t)s.dropped;
-    nTakeovers = (int32_t)s.takeovers;
+    nClientsConnected = (int16_t)pair->broker.connectionCount();
+    nSessionsHeld = (int16_t)pair->broker.sessionCount();
+    nAcceptedConnectionCount = (int32_t)s.accepted;
+    nAdmittedClientCount = (int32_t)s.connected;
+    nRefusedConnectionCount = (int32_t)s.refused;
+    nMessageReceivedCount = (int64_t)s.published;
+    nMessageSentCount = (int64_t)s.delivered;
+    nDroppedDeliveryCount = (int64_t)s.dropped;
+    nClientIdTakeoverCount = (int32_t)s.takeovers;
     bListening = pair->listener.isListening()
 #if MQTT_TLS_AVAILABLE
                 || pair->secure.isListening()
@@ -797,9 +796,9 @@ void loop()
             pair->needsBegin = true;
         }
         bListening = false;
-        sBrokerKey = "";
-        nClients = 0;
-        nSessions = 0;
+        sBrokerKeyFingerprint = "";
+        nClientsConnected = 0;
+        nSessionsHeld = 0;
         bTried = false;
         bError = false;
         eErrorId = E_MQTTRESULT::OK;
@@ -839,19 +838,19 @@ void loop()
                 // slept.
                 config.maxSessions = config.maxConnections * 2;
             }
-            if ((int16_t)nMaxRetained > 0) {
-                config.maxRetained = (size_t)(int16_t)nMaxRetained;
+            if ((int16_t)nMaxRetainedMessages > 0) {
+                config.maxRetained = (size_t)(int16_t)nMaxRetainedMessages;
             }
-            if ((int16_t)nMaxSubscriptions > 0) {
-                config.maxSubscriptionsPerSession = (size_t)(int16_t)nMaxSubscriptions;
+            if ((int16_t)nMaxSubscriptionsPerClient > 0) {
+                config.maxSubscriptionsPerSession = (size_t)(int16_t)nMaxSubscriptionsPerClient;
             }
-            if ((int16_t)nMaxQueued > 0) {
-                config.maxQueuedPerSession = (size_t)(int16_t)nMaxQueued;
+            if ((int16_t)nMaxQueuedPerClient > 0) {
+                config.maxQueuedPerSession = (size_t)(int16_t)nMaxQueuedPerClient;
             }
-            if ((int32_t)nMaxMsgSize > 0) {
-                config.receiveBufferSize = (size_t)(int32_t)nMaxMsgSize;
-                config.transmitBufferSize = (size_t)(int32_t)nMaxMsgSize;
-                config.maximumPacketSize = (uint32_t)(int32_t)nMaxMsgSize;
+            if ((int32_t)nMaxMessageBytes > 0) {
+                config.receiveBufferSize = (size_t)(int32_t)nMaxMessageBytes;
+                config.transmitBufferSize = (size_t)(int32_t)nMaxMessageBytes;
+                config.maximumPacketSize = (uint32_t)(int32_t)nMaxMessageBytes;
             }
 
             // NO CONNECTION LIVES FOR EVER. A client that asks for no keep
@@ -862,9 +861,9 @@ void loop()
             // none; a client's own interval is honoured.
             config.defaultKeepAlive = 120;
 
-            // How long a session outlives its client (tMaxSessionExpiry; 0:
+            // How long a session outlives its client (tMaxSessionExpiryInterval; 0:
             // the library's hour). Whole seconds, at least one.
-            const int32_t expiryMs = mq_millisOf(tMaxSessionExpiry);
+            const int32_t expiryMs = mq_millisOf(tMaxSessionExpiryInterval);
             if (expiryMs > 0) config.maximumSessionExpiry = expiryMs < 1000 ? 1u : (uint32_t)(expiryMs / 1000);
             pair->config = config;
             pair->broker.begin(config);
@@ -879,7 +878,7 @@ void loop()
             nBroker = (strucpp::XWORD_t)(uintptr_t)pair;
         }
 
-        const uint16_t port = (uint16_t)nPort != 0 ? (uint16_t)nPort
+        const uint16_t port = (uint16_t)nLocalPort != 0 ? (uint16_t)nLocalPort
                                                   : (uint16_t)MQ_PORT_TCP;
         // SWITCHED BACK ON after bEnable was cycled: the broker was ended, so it
         // is begun again - and the accounts installed again - before any
@@ -897,7 +896,7 @@ void loop()
         const bool wantsTls = (eSecurity != E_MQTTSECURITY::PLAIN);
 
         if (!wantsTls) {
-            pair->listener.configure(sListenOn.c_str(), port, pool);
+            pair->listener.configure(sListenInterface.c_str(), port, pool);
 
             if (!pair->listener.begin()) {
                 bError = true;
@@ -910,7 +909,7 @@ void loop()
                 eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
                 return;
             }
-            sBrokerKey = "";
+            sBrokerKeyFingerprint = "";
         } else {
 #if !MQTT_TLS_SOCKETS
             bError = true;
@@ -932,8 +931,8 @@ void loop()
             // The obstacle was never the engine - it was that a certificate
             // does not fit on a pin, and a PATH does.
             bool ready = false;
-            if (sCertFile.length() > 0 && sKeyFile.length() > 0) {
-                ready = pair->identity.loadFiles(sCertFile.c_str(), sKeyFile.c_str());
+            if (sServerCertificateFile.length() > 0 && sServerPrivateKeyFile.length() > 0) {
+                ready = pair->identity.loadFiles(sServerCertificateFile.c_str(), sServerPrivateKeyFile.c_str());
                 if (!ready) {
                     bError = true;
                     eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
@@ -945,9 +944,9 @@ void loop()
                 // identity that cannot be written down still serves this run;
                 // it just moves on the next one, and loadOrGenerate says so.
                 std::string base = "modbee-broker";
-                if (nPort != 0) {
+                if (nLocalPort != 0) {
                     char suffix[16];
-                    snprintf(suffix, sizeof suffix, "-%u", (unsigned)(uint16_t)nPort);
+                    snprintf(suffix, sizeof suffix, "-%u", (unsigned)(uint16_t)nLocalPort);
                     base += suffix;
                 }
                 const std::string certPath = base + ".crt";
@@ -963,7 +962,7 @@ void loop()
                 }
             }
 
-            pair->secure.configure(sListenOn.c_str(), port, pool);
+            pair->secure.configure(sListenInterface.c_str(), port, pool);
             pair->secure.useCertificate(pair->identity.certificatePem().c_str(),
                                         pair->identity.privateKeyPem().c_str());
 
@@ -978,7 +977,7 @@ void loop()
                 eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
                 return;
             }
-            sBrokerKey = pair->identity.fingerprint().c_str();
+            sBrokerKeyFingerprint = pair->identity.fingerprint().c_str();
 #endif
         }
 
@@ -995,15 +994,15 @@ void loop()
     pair->broker.poll();
 
     const MqttBrokerStatus& s = pair->broker.status();
-    nClients = (int16_t)pair->broker.connectionCount();
-    nSessions = (int16_t)pair->broker.sessionCount();
-    nAccepted = (int32_t)s.accepted;
-    nAdmitted = (int32_t)s.connected;
-    nRefused = (int32_t)s.refused;
-    nFromClients = (int64_t)s.published;
-    nToClients = (int64_t)s.delivered;
-    nDropped = (int64_t)s.dropped;
-    nTakeovers = (int32_t)s.takeovers;
+    nClientsConnected = (int16_t)pair->broker.connectionCount();
+    nSessionsHeld = (int16_t)pair->broker.sessionCount();
+    nAcceptedConnectionCount = (int32_t)s.accepted;
+    nAdmittedClientCount = (int32_t)s.connected;
+    nRefusedConnectionCount = (int32_t)s.refused;
+    nMessageReceivedCount = (int64_t)s.published;
+    nMessageSentCount = (int64_t)s.delivered;
+    nDroppedDeliveryCount = (int64_t)s.dropped;
+    nClientIdTakeoverCount = (int32_t)s.takeovers;
     // WHICHEVER LISTENER IS ACTUALLY SERVING, not "the plain one". Asking only
     // pair->listener meant that a TLS broker reported bListening false while
     // its socket was bound and accepting - and because the start path above
@@ -1021,7 +1020,7 @@ void loop()
 
 E_MQTTRESULT User()
 {
-    bActive = false;
+    bAccountActive = false;
     if (!mq_inTask((strucpp::XWORD_t)nTask)) return E_MQTTRESULT::WRONGTASK;
 
     // The table is made here if this call comes before the broker's first
@@ -1044,15 +1043,15 @@ E_MQTTRESULT User()
     // the counters survive because set() only resets them for a NEW account.
     // STRING(64) cannot exceed the field size, so the only way left to fail is
     // a table memory could not grow.
-    if (!accounts->set(sUserName.c_str(), sUserPassword.c_str(), (bool)bAllow)) {
+    if (!accounts->set(sUserName.c_str(), sUserPassword.c_str(), (bool)bAllowLogin)) {
         return E_MQTTRESULT::QUOTAEXCEEDED;
     }
     call.seen = true;
     call.retired = false;
 
-    bActive = (bool)bAllow;
-    nLoginCnt = (int32_t)accounts->logins(sUserName.c_str());
-    nRefusedCnt = (int32_t)accounts->refusals(sUserName.c_str());
+    bAccountActive = (bool)bAllowLogin;
+    nLoginCount = (int32_t)accounts->logins(sUserName.c_str());
+    nRefusedLoginCount = (int32_t)accounts->refusals(sUserName.c_str());
     return E_MQTTRESULT::OK;
 }
 

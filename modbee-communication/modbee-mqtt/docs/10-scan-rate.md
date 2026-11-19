@@ -118,10 +118,10 @@ PROGRAM netrun                       (* NET_TASK *)
   VAR
     mqtt : FB_MqttClient;
   END_VAR
-  mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHost := '10.0.0.20',
+  mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHostName := '10.0.0.20',
        sClientId := 'plc-intake');
   mqtt.Report(anyValue := PLANT.rLevel, sTopic := 'plant/intake/level',
-              fDeadband := 0.05, tPeriod := T#1m);
+              fDeadband := 0.05, tSendInterval := T#1m);
   mqtt.Subscribe(anyValue := PLANT.rSetpoint, sTopic := 'plant/intake/setpoint');
 END_PROGRAM
 ```
@@ -171,7 +171,7 @@ Every other block in this library costs a constant amount per scan. These two
 do not:
 
 - **`FB_MqttBroker`** services each connected client once per call, so its cost
-  scales with `nClients`. Thirty-two clients is thirty-two socket checks per
+  scales with `nClientsConnected`. Thirty-two clients is thirty-two socket checks per
   scan. It is still bounded and still non-blocking, but it is not free, and it
   belongs on the network task rather than anywhere else.
 - **`FB_MqttBridge`** polls two clients, so it costs roughly twice a client.

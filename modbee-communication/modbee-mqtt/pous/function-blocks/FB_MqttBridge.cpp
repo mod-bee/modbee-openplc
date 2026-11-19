@@ -5,12 +5,12 @@ rule, in the network task.
 bEnable             TRUE connects both ends and starts forwarding. FALSE
                     closes both and forgets the rules, which are collected
                     again on the next start.
-sLocalHost          the near broker. Usually the site one, often this PLC
+sLocalHostName      the near broker. Usually the site one, often this PLC
                     itself ('127.0.0.1').
-nLocalPort          0 for the standard port.
+nLocalHostPort      0 for the standard port.
 eLocalSecurity      plain or TLS on the near side.
-sRemoteHost         the far broker. Usually head office or a cloud service.
-nRemotePort         0 for the standard port.
+sRemoteHostName     the far broker. Usually head office or a cloud service.
+nRemoteHostPort     0 for the standard port.
 eRemoteSecurity     plain or TLS on the far side. Separate pins because the
                     two sides are genuinely different: a site broker on the
                     same switch needs no TLS, and the link out of the building
@@ -31,8 +31,8 @@ eDirection          E_MqttDirection.Out local to remote (readings going up),
                     Both unless you mean it: a tree carried both ways is the
                     shape that loops.
 eQos                the most this rule carries. Never higher than it arrived.
-sLocalPrefix        what the near side sees in front of the topic.
-sRemotePrefix       and the far side. 'site7/' on the remote turns
+sLocalTopicPrefix   what the near side sees in front of the topic.
+sRemoteTopicPrefix  and the far side. 'site7/' on the remote turns
                     'plant/a/temp' into 'site7/plant/a/temp' upstream, so ten
                     sites can share one broker without colliding.
 bForwardRetained    whether a retained message stays retained across. FALSE
@@ -42,12 +42,12 @@ bForwardRetained    whether a retained message stays retained across. FALSE
                     none.
 
 eBridgeState        Idle, Connecting, Up or Degraded.
-bLocalUp            the near end is connected.
-bRemoteUp           the far end is connected.
-nForwardedOut       running total carried local to remote.
-nForwardedIn        and the other way.
-nRefusedOut         the far side would not take it.
-nRefusedIn          the near side would not take it.
+bLocalBrokerConnected  the near end is connected.
+bRemoteBrokerConnected  the far end is connected.
+nForwardedToRemoteCount  running total carried local to remote.
+nForwardedToLocalCount  and the other way.
+nRefusedByRemoteCount  the far side would not take it.
+nRefusedByLocalCount  the near side would not take it.
 bError              something failed.
 eErrorId            why. E_MqttResult.Ok when fine; InvalidArgument for a
                     configuration refused at start (below).
@@ -88,33 +88,33 @@ publishes runs an FB_MqttClient of its own beside it. *)
 
 FUNCTION_BLOCK FB_MqttBridge
   VAR_INPUT
-    bEnable             : BOOL := TRUE;     (* connects both ends and forwards *)
-    sLocalHost          : STRING(64);       (* the near broker *)
-    nLocalPort          : UINT;             (* 0 for the standard port *)
-    eLocalSecurity      : E_MqttSecurity;   (* plain or TLS on the near side *)
-    sRemoteHost         : STRING(64);       (* the far broker *)
-    nRemotePort         : UINT;             (* 0 for the standard port *)
-    eRemoteSecurity     : E_MqttSecurity;   (* plain or TLS on the far side *)
-    sRemoteUserName     : STRING(64);       (* the far side's login; empty for none *)
-    sRemoteUserPassword : STRING(64);
-    sBridgeName         : STRING(48);       (* part of both client identifiers; empty for 'bridge' *)
-    sTopic              : STRING(128);      (* one rule: what to carry, wildcards allowed *)
-    eDirection          : E_MqttDirection;  (* Out, In or Both *)
-    eQos                : E_MqttQos;        (* the most this rule carries *)
-    sLocalPrefix        : STRING(64);       (* in front of the topic on the near side *)
-    sRemotePrefix       : STRING(64);       (* in front of the topic on the far side *)
-    bForwardRetained    : BOOL;             (* a retained message stays retained across *)
+    bEnable             : BOOL := TRUE;     (* connects both ends and forwards; FALSE closes both *)
+    sLocalHostName : STRING(64); (* the near broker, often this PLC ('127.0.0.1') *)
+    nLocalHostPort : UINT; (* its port; 0 = standard *)
+    eLocalSecurity : E_MqttSecurity; (* plain or TLS on the near side *)
+    sRemoteHostName : STRING(64); (* the far broker, e.g. head office or a cloud service *)
+    nRemoteHostPort : UINT; (* its port; 0 = standard *)
+    eRemoteSecurity : E_MqttSecurity; (* plain or TLS on the far side *)
+    sRemoteUserName : STRING(64); (* the far side's login; empty for none *)
+    sRemoteUserPassword : STRING(64); (* its password *)
+    sBridgeName : STRING(48); (* part of both client ids; empty = 'bridge' *)
+    sTopic : STRING(128); (* one rule: the topic filter to carry, without prefixes; wildcards allowed *)
+    eDirection : E_MqttDirection; (* Out local to remote, In remote to local, or Both *)
+    eQos : E_MqttQos; (* the highest QoS this rule carries (as a subscription's QoS) *)
+    sLocalTopicPrefix : STRING(64); (* put in front of the topic on the near side *)
+    sRemoteTopicPrefix : STRING(64); (* put in front of the topic on the far side *)
+    bForwardRetained : BOOL; (* a retained message stays retained across the bridge *)
   END_VAR
   VAR_OUTPUT
-    eBridgeState        : E_MqttBridgeState;
-    bLocalUp            : BOOL;             (* the near end is connected *)
-    bRemoteUp           : BOOL;             (* the far end is connected *)
-    nForwardedOut       : DINT;             (* carried local to remote *)
-    nForwardedIn        : DINT;             (* carried remote to local *)
-    nRefusedOut         : DINT;             (* the far side would not take it *)
-    nRefusedIn          : DINT;             (* the near side would not take it *)
-    bError              : BOOL;
-    eErrorId            : E_MqttResult;
+    eBridgeState        : E_MqttBridgeState; (* Idle, Connecting, Up, or Degraded (one end down: alarm on this) *)
+    bLocalBrokerConnected : BOOL; (* the near end is connected *)
+    bRemoteBrokerConnected : BOOL; (* the far end is connected *)
+    nForwardedToRemoteCount : DINT; (* messages carried local to remote *)
+    nForwardedToLocalCount : DINT; (* messages carried remote to local *)
+    nRefusedByRemoteCount : DINT; (* messages the far side would not take *)
+    nRefusedByLocalCount : DINT; (* messages the near side would not take *)
+    bError : BOOL; (* something failed *)
+    eErrorId : E_MqttResult; (* why; InvalidArgument for a configuration refused at start *)
   END_VAR
   VAR
     nBridge             : __XWORD;          (* both connections and the bridge over them *)
@@ -178,12 +178,12 @@ MqBridgesOwned& mqBridgesOwned() {
 void setup()
 {
     eBridgeState = E_MQTTBRIDGESTATE::IDLE;
-    bLocalUp = false;
-    bRemoteUp = false;
-    nForwardedOut = 0;
-    nForwardedIn = 0;
-    nRefusedOut = 0;
-    nRefusedIn = 0;
+    bLocalBrokerConnected = false;
+    bRemoteBrokerConnected = false;
+    nForwardedToRemoteCount = 0;
+    nForwardedToLocalCount = 0;
+    nRefusedByRemoteCount = 0;
+    nRefusedByLocalCount = 0;
     bError = false;
     eErrorId = E_MQTTRESULT::OK;
     nBridge = (strucpp::XWORD_t)0;
@@ -212,8 +212,8 @@ void loop()
             rig->config.topics.clear();
         }
         eBridgeState = E_MQTTBRIDGESTATE::IDLE;
-        bLocalUp = false;
-        bRemoteUp = false;
+        bLocalBrokerConnected = false;
+        bRemoteBrokerConnected = false;
         bStarted = false;
         bSettled = false;
         bError = false;
@@ -255,8 +255,8 @@ void loop()
             uint8_t qos = (uint8_t)(int)(E_MQTTQOS)eQos;
             if (qos > MQ_QOS_2) qos = MQ_QOS_2;
             rule.qos = qos;
-            rule.localPrefix = sLocalPrefix.c_str();
-            rule.remotePrefix = sRemotePrefix.c_str();
+            rule.localPrefix = sLocalTopicPrefix.c_str();
+            rule.remotePrefix = sRemoteTopicPrefix.c_str();
             rule.forwardRetain = (bool)bForwardRetained;
 
             // A rule repeated in the same scan is one rule, not two. A block
@@ -295,8 +295,8 @@ void loop()
 
         // --- The two connections ---
 
-        rig->localHost = sLocalHost.c_str();
-        rig->remoteHost = sRemoteHost.c_str();
+        rig->localHost = sLocalHostName.c_str();
+        rig->remoteHost = sRemoteHostName.c_str();
         if (rig->localHost.empty() || rig->remoteHost.empty()) {
             bError = true;
             eErrorId = E_MQTTRESULT::INVALIDARGUMENT;
@@ -322,7 +322,7 @@ void loop()
         // nothing in common, and a bridge that verified against the system
         // store when the engineer asked it to pin one key is trusting every
         // public CA instead of exactly one broker. Put the pinned end on an
-        // FB_MqttClient, which has bTrustNew and keeps the pinned key.
+        // FB_MqttClient, which has bTrustFirstBrokerKey and keeps the pinned key.
         if (localSecurity == E_MQTTSECURITY::TLSPINNED ||
             remoteSecurity == E_MQTTSECURITY::TLSPINNED) {
             bError = true;
@@ -331,11 +331,11 @@ void loop()
         }
 #endif
 
-        const uint16_t localPort = (uint16_t)nLocalPort != 0
-            ? (uint16_t)nLocalPort
+        const uint16_t localPort = (uint16_t)nLocalHostPort != 0
+            ? (uint16_t)nLocalHostPort
             : (localTls ? (uint16_t)MQ_PORT_TLS : (uint16_t)MQ_PORT_TCP);
-        const uint16_t remotePort = (uint16_t)nRemotePort != 0
-            ? (uint16_t)nRemotePort
+        const uint16_t remotePort = (uint16_t)nRemoteHostPort != 0
+            ? (uint16_t)nRemoteHostPort
             : (remoteTls ? (uint16_t)MQ_PORT_TLS : (uint16_t)MQ_PORT_TCP);
 
         if (!localTls) {
@@ -430,12 +430,12 @@ void loop()
         default:
             eBridgeState = E_MQTTBRIDGESTATE::IDLE; break;
     }
-    bLocalUp = s.localUp;
-    bRemoteUp = s.remoteUp;
-    nForwardedOut = (int32_t)s.forwardedOut;
-    nForwardedIn = (int32_t)s.forwardedIn;
-    nRefusedOut = (int32_t)s.refusedOut;
-    nRefusedIn = (int32_t)s.refusedIn;
+    bLocalBrokerConnected = s.localUp;
+    bRemoteBrokerConnected = s.remoteUp;
+    nForwardedToRemoteCount = (int32_t)s.forwardedOut;
+    nForwardedToLocalCount = (int32_t)s.forwardedIn;
+    nRefusedByRemoteCount = (int32_t)s.refusedOut;
+    nRefusedByLocalCount = (int32_t)s.refusedIn;
 #endif
 }
 

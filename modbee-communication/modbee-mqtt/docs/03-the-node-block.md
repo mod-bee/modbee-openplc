@@ -7,9 +7,9 @@ ride on it.
 ## Call it first, every scan
 
 ```st
-mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHost := '10.0.0.20',
+mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHostName := '10.0.0.20',
      sClientId := 'plc-intake');
-mqtt.Report(anyValue := rLevel, sTopic := 'plant/intake/level', tPeriod := T#1m);
+mqtt.Report(anyValue := rLevel, sTopic := 'plant/intake/level', tSendInterval := T#1m);
 ```
 
 The block call keeps the connection, the queues and the timers going. Its
@@ -38,10 +38,10 @@ could explain.
 
 | `E_MqttTransport` | runs on | what matters |
 | --- | --- | --- |
-| `RuntimeTcp` | the Runtime | `sHost`, `nPort` |
-| `ArduinoWiFi` | a board | `sHost`, `nPort`, and `stNetworkConfig.sSsid` - or node-uio's `NETWORK` joins the network |
-| `ArduinoEthernet` | a board | `sHost`, `nPort`, and `stNetworkConfig`'s MAC and address |
-| `Cellular` | a board | `sHost`, `nPort`, and a modem block (`FB_GsmModemA7670` or `FB_GsmModemSim7070`) from the `modbee-gsm` library |
+| `RuntimeTcp` | the Runtime | `sHostName`, `nHostPort` |
+| `ArduinoWiFi` | a board | `sHostName`, `nHostPort`, and `stNetworkConfig.sSsid` - or node-uio's `NETWORK` joins the network |
+| `ArduinoEthernet` | a board | `sHostName`, `nHostPort`, and `stNetworkConfig`'s MAC and address |
+| `Cellular` | a board | `sHostName`, `nHostPort`, and a modem block (`FB_GsmModemA7670` or `FB_GsmModemSim7070`) from the `modbee-gsm` library |
 | `External` | either | `nExternalLink`, and nothing else |
 
 | `E_MqttSecurity` | |
@@ -55,12 +55,12 @@ Choosing a transport the target does not have is reported on `bError`,
 `eErrorId` and `sLastError` - never built, and never a build failure. *"that
 transport needs a board, not the Runtime"* is a sentence you can act on.
 
-`nPort := 0` means the standard one for the security chosen: 1883 or 8883.
+`nHostPort := 0` means the standard one for the security chosen: 1883 or 8883.
 
 ### Which `eSecurity` for a board
 
 **A board talking to its own broker** - a site Mosquitto, or a ModBee PLC
-broker - uses `E_MqttSecurity.TlsPinned` with `bTrustNew`, and a login
+broker - uses `E_MqttSecurity.TlsPinned` with `bTrustFirstBrokerKey`, and a login
 (`stSessionConfig.sUserName` and `sUserPassword`). Nothing to install and
 nothing to define: the broker's key is learned on the first connection and
 enforced from then on (see *About TlsPinned* below). This is the simple
@@ -80,11 +80,11 @@ controller with the mbedTLS the board already carries for its Wi-Fi. So:
   `MQTT_CA_CERT_PEM`, a define the board package supplies (see *Defines*).
   Dates are not judged: a controller has no clock to judge them with until
   something sets it.
-- `TlsPinned` and `bTrustNew` work exactly as on the Runtime, below.
-- `sBrokerKey` shows the broker's key on every medium.
+- `TlsPinned` and `bTrustFirstBrokerKey` work exactly as on the Runtime, below.
+- `sBrokerKeyFingerprint` shows the broker's key on every medium.
 - Mutual TLS takes the board's own certificate and key from the
   `MQTT_CLIENT_CERT_PEM` and `MQTT_CLIENT_KEY_PEM` defines, also from the
-  board package. `stTlsConfig`'s files are the Runtime's: a board has no files.
+  board package. `stTls`'s files are the Runtime's: a board has no files.
 - Opening the socket and the handshake run on a short task of their own,
   below the PLC's tasks: the block's task never waits for them, and
   `eConnectionState` says `Connecting` meanwhile. A plain connection's socket
@@ -103,7 +103,7 @@ nothing. A board **without** mbedTLS keeps what its medium offers:
 It encrypts the traffic and does not check who is at the other end, which
 means an encrypted conversation with whoever answered. It is named at length
 so nobody selects it by accident, and it is a pin on the client rather than a
-member of `stTlsConfig` so the decision is visible where the connection is
+member of `stTls` so the decision is visible where the connection is
 made.
 
 Use it to get a link working on a bench. Take it off before the plant runs.
@@ -119,13 +119,13 @@ type:
 ```st
 mqtt(eTransport := E_MqttTransport.RuntimeTcp,
      eSecurity  := E_MqttSecurity.TlsPinned,
-     sHost      := '10.0.0.10',
-     nPort      := 8883,
+     sHostName      := '10.0.0.10',
+     nHostPort      := 8883,
      sClientId  := 'plc-intake',
-     bTrustNew  := bCommissioning);   (* TRUE once, FALSE for ever after *)
+     bTrustFirstBrokerKey  := bCommissioning);   (* TRUE once, FALSE for ever after *)
 ```
 
-`bTrustNew` TRUE, on a link that has never connected, brings it up unverified
+`bTrustFirstBrokerKey` TRUE, on a link that has never connected, brings it up unverified
 exactly once so the broker's key can be learned. The block keeps it in **its
 own retained variable** - no pin to wire, nothing to name, nothing to mistype,
 and nothing a user can accidentally un-retain: IEC 61131-3 6.5.6.2 says a
@@ -133,17 +133,17 @@ and nothing a user can accidentally un-retain: IEC 61131-3 6.5.6.2 says a
 
 Once learned the key is the pin. A broker showing a different one is refused
 - on the Runtime `sLastError` names both fingerprints, on a board it reads
-*TLS: not the pinned key* and `sBrokerKey` shows the key that was presented -
+*TLS: not the pinned key* and `sBrokerKeyFingerprint` shows the key that was presented -
 because the useful question is always which one moved: a broker that was
-reinstalled, or an address that is wrong. **Wiring `bTrustNew` TRUE is safe**:
+reinstalled, or an address that is wrong. **Wiring `bTrustFirstBrokerKey` TRUE is safe**:
 it learns only when nothing is stored.
 
-To accept a broker **replaced on purpose**, switch `bTrustNew` FALSE and TRUE
+To accept a broker **replaced on purpose**, switch `bTrustFirstBrokerKey` FALSE and TRUE
 again: the rising edge forgets the stored key and the next connection learns
 the new one.
 
-`FB_MqttBroker` publishes its own key on `sBrokerKey`, and the client shows
-what it was shown on `sBrokerKey` too. Read one, compare with the other.
+`FB_MqttBroker` publishes its own key on `sBrokerKeyFingerprint`, and the client shows
+what it was shown on `sBrokerKeyFingerprint` too. Read one, compare with the other.
 
 > **Turn on persistent storage.** The pin is a retained variable, and a project
 > without storage configured starts every retained variable at its initial
@@ -178,19 +178,19 @@ to that scanner - so the library can be installed, the guard still reports it
 missing, and the block says "install the Arduino Ethernet library" for ever.
 WiFi needs no flag because it ships inside the ESP32 core.
 
-**Give a board a fixed address.** `stNetworkConfig.sIp` empty (or `'dhcp'`)
+**Give a board a fixed address.** `stNetworkConfig.sIpAddress` empty (or `'dhcp'`)
 asks DHCP, which the Arduino library may block on for a minute; the client
 bounds it to one second an attempt and retries on its own timer, so it works
 and it costs a stall each time. A plant network rarely runs DHCP anyway. Every
-board on a segment needs its own `sMac`.
+board on a segment needs its own `sMacAddress`.
 
 ```st
 VAR
-  net : ST_MqttNetworkConfig := (sMac := 'DE:AD:BE:EF:00:01', sIp := '10.0.0.51',
-                                 sGateway := '10.0.0.1', sSubnet := '255.255.255.0');
+  net : ST_MqttNetworkConfig := (sMacAddress := 'DE:AD:BE:EF:00:01', sIpAddress := '10.0.0.51',
+                                 sGatewayAddress := '10.0.0.1', sSubnetMask := '255.255.255.0');
 END_VAR
 
-mqtt(eTransport := E_MqttTransport.ArduinoEthernet, sHost := '10.0.0.20',
+mqtt(eTransport := E_MqttTransport.ArduinoEthernet, sHostName := '10.0.0.20',
      sClientId := 'panel-3', stNetworkConfig := net);
 ```
 
@@ -211,7 +211,7 @@ reason code `0x84`, or a 3.1.1 return code `0x01`. Never on an authentication
 failure, never on a network error. Treating those as a version problem would
 hide them, and you would spend an afternoon on the wrong thing.
 
-`mqtt.Statistics(nVersion => ...)` reports what is actually in force: 5 or 4.
+`mqtt.Statistics(nProtocolVersion => ...)` reports what is actually in force: 5 or 4.
 Worth putting on a screen, because a 5.0-only feature quietly unavailable makes
 much more sense when that says 4.
 
@@ -225,27 +225,27 @@ or member by member from an HMI - they are read every scan.
 | | |
 | --- | --- |
 | `stSessionConfig : ST_MqttSessionConfig` | keep-alive, clean start, session expiry, login, queue and message sizes, reconnect backoff, silence, retrying a refused login |
-| `stTlsConfig : ST_MqttTlsConfig` | the certificate authority, and mutual TLS - files on the Runtime |
+| `stTls : ST_MqttTlsConfig` | the certificate authority, and mutual TLS - files on the Runtime |
 | `stNetworkConfig : ST_MqttNetworkConfig` | SSID, MAC, IP - the things only a board has. Refused on the Runtime |
-| `stWillConfig : ST_MqttWillConfig` | presence: the online message and the Will that answers for it |
+| `stWill : ST_MqttWillConfig` | presence: the online message and the Will that answers for it |
 
 Every member is in [07 Block reference](07-block-reference.md#structures).
 Three are worth thinking about:
 
 **`bCleanStart`.** TRUE (the default) is right for a sensor that publishes the
 current value and has nothing to catch up on. FALSE, with a
-`tSessionExpiry`, is right for anything that must not lose a message across a
+`tSessionExpiryInterval`, is right for anything that must not lose a message across a
 dropped link - a totaliser, a command channel - and it costs the broker memory
 per client.
 
-**`nMaxMsgIn` and `nMaxMsgOut`** answer one symptom: a message plainly being
+**`nMaxIncomingMessageBytes` and `nMaxOutgoingMessageBytes`** answer one symptom: a message plainly being
 published that plainly never arrives. The default 4096 bytes suits readings
 and setpoints and is too small for a JSON document of any size. Raise
-`nMaxMsgIn` on the subscribing end and `nMaxMsgOut` on the publishing one; they
+`nMaxIncomingMessageBytes` on the subscribing end and `nMaxOutgoingMessageBytes` on the publishing one; they
 cost RAM per client whether or not a big message ever comes.
 
 **`bAutoReconnect`.** On Wi-Fi or wired the reconnect is milliseconds and you
-want it on. On cellular `tMaxSilence` is the one to set - three keep-alives -
+want it on. On cellular `tReconnectAfterSilence` is the one to set - three keep-alives -
 because a modem takes our bytes into its own buffer and says "sent" whether or
 not anything reaches the broker.
 
@@ -253,25 +253,25 @@ not anything reaches the broker.
 
 ```st
 VAR
-  will : ST_MqttWillConfig := (sTopic := 'plant/intake/status', tDelay := T#30s);
+  will : ST_MqttWillConfig := (sTopic := 'plant/intake/status', tWillDelayInterval := T#30s);
 END_VAR
 
-mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHost := '10.0.0.20',
-     sClientId := 'plc-intake', stWillConfig := will);
+mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHostName := '10.0.0.20',
+     sClientId := 'plc-intake', stWill := will);
 ```
 
-`sOnline` (`'online'` when empty) goes out on every connection before anything
+`sOnlineMessage` (`'online'` when empty) goes out on every connection before anything
 else queued, so a subscriber sees this device come up before it sees its first
-reading. `sOffline` (`'offline'`) is the Will, published **by the broker** when
+reading. `sOfflineMessage` (`'offline'`) is the Will, published **by the broker** when
 the connection dies without a goodbye - a power cut, a pulled cable, a modem
-out of coverage. `tDelay` makes the broker wait, and a reconnect inside it
+out of coverage. `tWillDelayInterval` makes the broker wait, and a reconnect inside it
 cancels the announcement; it is MQTT 5 only, and at 3.1.1 the client refuses
 to connect rather than drop it, because a delay silently lost turns a flapping
 link into a stream of false alarms.
 
 **Not with Sparkplug.** A connection carries one Will, and an
 `FB_SparkplugNode` or `FB_SparkplugHost` on the client owns it: its birth and
-death certificates are the presence. Leave `stWillConfig.sTopic` empty there,
+death certificates are the presence. Leave `stWill.sTopic` empty there,
 or the client says *"the Will is Sparkplug's on this client"*.
 
 ## Logins
@@ -283,14 +283,14 @@ password at all: [13 Provisioning](13-provisioning.md). Otherwise it lives in
 ```st
 VAR
   session : ST_MqttSessionConfig;
-  tls     : ST_MqttTlsConfig := (sCaFile := '/etc/ssl/certs/ca-certificates.crt');
+  tls     : ST_MqttTlsConfig := (sCaCertificateFile := '/etc/ssl/certs/ca-certificates.crt');
 END_VAR
 
 session.sUserName := 'plant-operator';
 session.sUserPassword := sPassword;
 mqtt(eTransport := E_MqttTransport.RuntimeTcp, eSecurity := E_MqttSecurity.TlsVerify,
-     sHost := 'mqtt.example.com', nPort := 8883, sClientId := 'plc-intake',
-     stSessionConfig := session, stTlsConfig := tls);
+     sHostName := 'mqtt.example.com', nHostPort := 8883, sClientId := 'plc-intake',
+     stSessionConfig := session, stTls := tls);
 ```
 
 **A user name and password travel in the clear unless `eSecurity` is a TLS
@@ -313,7 +313,7 @@ fixed at the other end comes back by itself.
 
 Where the login really is expected to become valid on its own - a broker whose
 access list loads after it starts listening -
-`stSessionConfig.bRetryRejectedCredential := TRUE` retries at the backoff.
+`stSessionConfig.bRetryRefusedLogin := TRUE` retries at the backoff.
 
 ## Standing down
 
@@ -330,7 +330,7 @@ HMI settings page takes effect at once, without a restart:
 1. the client says goodbye on the old settings (a DISCONNECT, so the broker
    does not publish the Will), giving it up to a second to leave;
 2. it comes back on the new ones - on a rebuilt connection when `eTransport`,
-   `eSecurity`, `sHost`, `nPort`, the TLS files or the board's network
+   `eSecurity`, `sHostName`, `nHostPort`, the TLS files or the board's network
    settings changed, on the same connection when only the CONNECT changed
    (login, `sClientId`, `eProtocol`, keep-alive, session, Will).
 
@@ -341,8 +341,8 @@ A Wi-Fi login in `stNetworkConfig` that changes makes the client leave the
 network and join again with the new one (a radio node-uio's `NETWORK` brought
 up is `NETWORK`'s to rejoin).
 
-**A pinned key stays pinned.** With `TlsPinned`, a new `sHost` is a new broker
-with a different key, and it is refused until `bTrustNew` is switched off and
+**A pinned key stays pinned.** With `TlsPinned`, a new `sHostName` is a new broker
+with a different key, and it is refused until `bTrustFirstBrokerKey` is switched off and
 on - exactly as for a broker replaced on purpose. An address typed on a panel
 is not a way round the pin.
 

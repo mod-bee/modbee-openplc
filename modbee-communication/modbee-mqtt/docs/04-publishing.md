@@ -9,9 +9,9 @@ an event that happens, `PublishStruct` for a whole STRUCT.
 mqtt.Report(anyValue  := rTankLevel,
             sTopic    := 'plant/intake/level',
             fDeadband := 0.05,
-            tPeriod   := T#1m,
+            tSendInterval   := T#1m,
             bRetain   := TRUE,
-            nSent     => nLevelSent);
+            nMessageSentCount     => nLevelSent);
 ```
 
 Standing - no `bExecute`, no edge to arrange. Call it every scan; it watches
@@ -25,14 +25,14 @@ transmitter that jitters by 0.02 m is not telling you anything, and publishing
 that four times a second for a year is thirty million messages nobody reads.
 Set it to the smallest change an operator would act on.
 
-`tPeriod` sends it anyway after that long, unchanged. **Leaving it at `T#0s` is
+`tSendInterval` sends it anyway after that long, unchanged. **Leaving it at `T#0s` is
 the mistake worth avoiding.** A value that never moves publishes nothing, and a
 consumer cannot tell that from a device that has died - it just sees silence.
 Set it to a minute or two and the silence becomes meaningful, which is exactly
 what lets the subscribing end run a quality on it (page 05).
 
 Deadband is measured on the number, so it has no meaning for a `STRING`: there
-the text is compared, any change at all is a change, and `tPeriod` still
+the text is compared, any change at all is a change, and `tSendInterval` still
 applies. A `BOOL` counts as 1.0 or 0.0, so a deadband of 1.0 or more would
 freeze one - leave it 0 for anything that is not an analogue. An empty
 `STRING` has nothing to send: the call returns `InvalidArgument` until it has
@@ -42,13 +42,13 @@ text.
 
 | | |
 | --- | --- |
-| `E_MqttTrigger.OnChange` (default) | when it moves by `fDeadband`, and every `tPeriod` anyway |
-| `E_MqttTrigger.OnInterval` | every `tPeriod`, changed or not. `tPeriod := T#0s` is refused with `InvalidArgument`, never turned into "every scan" |
+| `E_MqttTrigger.OnChange` (default) | when it moves by `fDeadband`, and every `tSendInterval` anyway |
+| `E_MqttTrigger.OnInterval` | every `tSendInterval`, changed or not. `tSendInterval := T#0s` is refused with `InvalidArgument`, never turned into "every scan" |
 | `E_MqttTrigger.OnRequest` | on a rising edge of `bExecute`, and nothing else - no first value, no heartbeat |
 
 `bEnable := FALSE` stops it without losing the record; an edge of `bExecute`
-raised meanwhile does not fire on enabling. `nSent` counts messages; `tAge` is
-the time since the last one, `T#0s` before the first, which `nSent = 0` tells
+raised meanwhile does not fire on enabling. `nMessageSentCount` counts messages; `tSinceLastSent` is
+the time since the last one, `T#0s` before the first, which `nMessageSentCount = 0` tells
 apart.
 
 ## An event that happens
@@ -118,9 +118,9 @@ call, found again each scan by **the variable it is about** - `anyValue`'s
 declared name and type - and the method. So:
 
 ```st
-mqtt.Report(anyValue := rLevel,    sTopic := 'plant/intake/level',    tPeriod := T#1m);
-mqtt.Report(anyValue := rFlow,     sTopic := 'plant/intake/flow',     tPeriod := T#1m);
-mqtt.Report(anyValue := rPressure, sTopic := 'plant/intake/pressure', tPeriod := T#1m);
+mqtt.Report(anyValue := rLevel,    sTopic := 'plant/intake/level',    tSendInterval := T#1m);
+mqtt.Report(anyValue := rFlow,     sTopic := 'plant/intake/flow',     tSendInterval := T#1m);
+mqtt.Report(anyValue := rPressure, sTopic := 'plant/intake/pressure', tSendInterval := T#1m);
 ```
 
 is three reports, each with its own last value and its own deadband. A literal
@@ -167,14 +167,14 @@ link that is real money. Publish readings at 0 and commands at 2.
 
 ```st
 mqtt.PublishStruct(anyData  := stIntake,
-                   sBase    := 'plant/intake',
+                   sBaseTopic    := 'plant/intake',
                    eTrigger := E_MqttTrigger.OnChange,
-                   tPeriod  := T#1m,
+                   tSendInterval  := T#1m,
                    bRetain  := TRUE,
-                   nSkipped => nIntakeSkipped);
+                   nMembersRefused => nIntakeSkipped);
 ```
 
-Every member of `stIntake` becomes its own topic under `sBase`, published only
+Every member of `stIntake` becomes its own topic under `sBaseTopic`, published only
 when it moves:
 
 ```
@@ -194,7 +194,7 @@ scheme. Rename a member and you rename a topic - worth knowing before the
 third device is commissioned.
 
 **A member the wire cannot carry is refused, not skipped quietly.** An array, a
-nested STRUCT, a `TIME`: counted on `nSkipped`, and the call returns
+nested STRUCT, a `TIME`: counted on `nMembersRefused`, and the call returns
 `InvalidArgument` while the other members still go. A member silently missing
 from a payload is the kind of fault that survives commissioning and turns up
 months later in an argument about whose data is wrong.
@@ -210,11 +210,11 @@ the data:
 
 | | |
 | --- | --- |
-| `OnChange` | setpoints, commands, states - things that move when somebody moves them. `tPeriod` is then the heartbeat that keeps the far end's quality good while nothing happens |
+| `OnChange` | setpoints, commands, states - things that move when somebody moves them. `tSendInterval` is then the heartbeat that keeps the far end's quality good while nothing happens |
 | `OnInterval` | analogues that never stop moving. A wet well level changes every scan, so on-change would publish at the task rate - send the set on a clock instead |
 | `OnRequest` | a recipe download. `bExecute` sends the **whole** set, changed or not, so the receiving end gets something complete to act on rather than the three values that happened to differ |
 
-`nPoints` counts the members published, `nSent` the messages, and `nChanged`
+`nMembers` counts the members published, `nMessageSentCount` the messages, and `nMessagesSentThisScan`
 those sent by this call.
 
 **Next:** [05 Subscribing](05-subscribing.md)

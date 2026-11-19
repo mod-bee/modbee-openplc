@@ -5,25 +5,25 @@
 
 ```st
 eResult := sp.Record(anyData    := PUMP1,
-                     sSettings  := 'sts = now; tot = log, db = 0.1, u = h; cmd = cmd, pulse = 500',
-                     sPrefix    := 'pump1/',
-                     nMetricCnt => nPump1Metrics,
-                     nBadClause => nPump1Bad);
+                     anyPointList  := 'sts = now; tot = log, db = 0.1, u = h; cmd = cmd, pulse = 500',
+                     sMetricNamePrefix    := 'pump1/',
+                     nRecordMetrics => nPump1Metrics,
+                     nFirstBadClause => nPump1Bad);
 ```
 
 | Parameter | |
 | --- | --- |
 | `anyData` | the record: a STRUCT, nested STRUCTs and arrays included |
-| `sSettings` | its point list: a `STRING` variable of any length, or a literal |
-| `sPrefix` | put before every metric name, up to 32 characters. Empty for none |
-| `nMetricCnt` | metrics the record declared |
-| `nBadClause` | the first clause that cannot be used, counting from 1; `0` none; `-1` when `anyData` is not a STRUCT or `sSettings` not a STRING; `-4` when another variable already records with the same name and `sPrefix` |
-| `nLostCnt` | host writes to `cmd` and `set` members dropped because four were already waiting (0.2.1) |
+| `anyPointList` | its point list: a `STRING` variable of any length, or a literal |
+| `sMetricNamePrefix` | put before every metric name, up to 32 characters. Empty for none |
+| `nRecordMetrics` | metrics the record declared |
+| `nFirstBadClause` | the first clause that cannot be used, counting from 1; `0` none; `-1` when `anyData` is not a STRUCT or `anyPointList` not a STRING; `-4` when another variable already records with the same name and `sMetricNamePrefix` |
+| `nLostWriteCount` | host writes to `cmd` and `set` members dropped because four were already waiting |
 
 A record is found by where it is, so two instances of one function block can each
-record their own local. Give each its own `sPrefix`: with the same prefix their
+record their own local. Give each its own `sMetricNamePrefix`: with the same prefix their
 metric names would collide, and the second is refused (`InvalidArgument`,
-`nBadClause` `-4`).
+`nFirstBadClause` `-4`).
 
 It returns `Ok` while the node is born, `NotConnected` while it is not (the
 record is kept and goes in the next birth), `InvalidArgument` for a bad clause
@@ -81,13 +81,13 @@ The class says when a value goes, where, and whether SCADA may write it.
 | Class | Goes | Where | SCADA writes it |
 | --- | --- | --- | --- |
 | `now` | at once, always | the node | no |
-| `cmd` | at once, always | the node | while `bRemoteControl` |
+| `cmd` | at once, always | the node | while `bAllowHostWrites` |
 | `view` | at once while someone views the node; otherwise held | the node | no |
 | `log` | what moved past its deadband, every `tLogInterval`; every `tLiveInterval` while viewed | the node | no |
 | `live` | what moved, every `tLiveInterval`, while a host demands it | device `live` | no |
-| `set:<page>` | at once while a host demands it | device `cfg-<page>` | while `bRemoteControl` |
+| `set:<page>` | at once while a host demands it | device `cfg-<page>` | while `bAllowHostWrites` |
 | `every:<time>` | all of them every `<time>` (`T#1m`, `30s`, `1h30m`), moved or not; a birth counts as a send | the node | no |
-| `onreq` | all of them on a rising edge of Record's `bSend` | the node | no |
+| `onreq` | all of them on a rising edge of Record's `bSendOnRequest` | the node | no |
 
 The timing and remote control are the node's, in `stReportConfig`:
 
@@ -95,8 +95,8 @@ The timing and remote control are the node's, in `stReportConfig`:
 | --- | --- | --- |
 | `tLogInterval` | `T#15m` | how often `log` looks for what moved. At most `T#15m`; `T#0s` is refused |
 | `tLiveInterval` | `T#30s` | how often `live` sends, and `log` while viewed. `T#0s` is refused - never every scan |
-| `fDeadbandPct` | `0` | the `log` class's deadband in %, for a REAL or LREAL whose clause gives no `pct=` |
-| `bRemoteControl` | `FALSE` | `cmd` and `set:` take writes. FALSE: a write is dropped at once and the member reported back unchanged |
+| `fLogDeadbandPct` | `0` | the `log` class's deadband in %, for a REAL or LREAL whose clause gives no `pct=` |
+| `bAllowHostWrites` | `FALSE` | `cmd` and `set:` take writes. FALSE: a write is dropped at once and the member reported back unchanged |
 
 What each is for:
 
@@ -117,7 +117,7 @@ What each is for:
 - **`every:<time>`** - a set that must go whole on a clock, whether it moved
   or not: a status report a host checks for freshness.
 - **`onreq`** - a set sent whole when the program says so:
-  `sp.Record(anyData := DEV.batch, sSettings := '* = onreq', bSend := bBatchDone)`.
+  `sp.Record(anyData := DEV.batch, anyPointList := '* = onreq', bSendOnRequest := bBatchDone)`.
 
 An **interval class** (`log`, `live`, `every:`, `onreq`) is held between its sends: its values
 stay current in the node, so a birth carries them as they are, but they do not
@@ -150,7 +150,7 @@ clause that gave it that class.
 | `u=@<member>` | the units are the `STRING` member of the node's `anyUnits` STRUCT with that path |
 | `lo=<n>`, `hi=<n>` | the range a SCADA gauge or trend should show (`engLow`, `engHigh`). Equal is none |
 | `pulse=<ms>` | `cmd` and `set:` only: this many **milliseconds** after a write, the PLC puts the member back to 0, FALSE or `''`. For a command that acts on an edge, so writing it again acts again |
-| `dev=<name>` | `now`, `cmd`, `view`, `log`, `every:` and `onreq`: the clause's members go under the program's own device `<name>` instead of the node - `'* = now, dev=skid2'`. The program brings it on and off line with `sp.Device(sDeviceId := 'skid2', bOnline := ...)`; Live Demand never touches it. Not `live` or `cfg-...` |
+| `dev=<name>` | `now`, `cmd`, `view`, `log`, `every:` and `onreq`: the clause's members go under the program's own device `<name>` instead of the node - `'* = now, dev=skid2'`. The program brings it on and off line with `sp.Device(sDeviceId := 'skid2', bBringOnline := ...)`; Live Demand never touches it. Not `live` or `cfg-...` |
 
 - A deadband is measured from the value **last sent**, so a slow drift still
   adds up.
@@ -168,7 +168,7 @@ VAR
 END_VAR
 
 sp(fbClient := mqtt, sGroupId := 'Plant1', sEdgeNodeId := 'pumps1', anyUnits := UNITS);
-sp.Record(anyData := TANK, sSettings := 'level = log, u = @uLevel; flow = log, u = @uFlow');
+sp.Record(anyData := TANK, anyPointList := 'level = log, u = @uLevel; flow = log, u = @uFlow');
 ```
 
 `anyUnits` is optional: a STRUCT of STRINGs the point lists name with
@@ -177,9 +177,9 @@ sp.Record(anyData := TANK, sSettings := 'level = log, u = @uLevel; flow = log, u
 
 ## Metric names
 
-The metric name is `sPrefix` and the path:
+The metric name is `sMetricNamePrefix` and the path:
 
-| `sPrefix` | path | class | metric | on |
+| `sMetricNamePrefix` | path | class | metric | on |
 | --- | --- | --- | --- | --- |
 | `'pump1/'` | `sts.fault` | `now` | `pump1/sts.fault` | the node |
 | `'pump1/'` | `spare[2]` | `log` | `pump1/spare[2]` | the node |
@@ -191,9 +191,9 @@ shape of a record is `sts`, `det`, `set`, `cmd`, and on its own device the
 group name says nothing. Only a leading `det.` or `set.` is dropped, and only
 for those classes.
 
-Use `sPrefix` to keep two records' names apart - `'pump1/'`, `'pump2/'` - or
+Use `sMetricNamePrefix` to keep two records' names apart - `'pump1/'`, `'pump2/'` - or
 to put a group in its own folder at the SCADA end. A name already taken on the
-node or device is refused, and that clause is reported on `nBadClause`.
+node or device is refused, and that clause is reported on `nFirstBadClause`.
 
 **The member name IS the metric name**, so the STRUCT declaration is the tag
 list. Rename a member and you rename a tag.
@@ -204,27 +204,27 @@ Each metric's datatype is its IEC type (BOOL Boolean, INT Int16, REAL Float,
 STRING String...). A TIME goes as Int64 milliseconds, both ways. An enumeration
 goes as the unsigned integer it is stored as, both ways. DATE and TIME_OF_DAY
 have no Sparkplug type and are left out; a clause that covers nothing else is
-reported on `nBadClause`.
+reported on `nFirstBadClause`.
 
 ## When the point list is read
 
 - **Membership is read at the first call.** Which members, and which class each
   has, are fixed then: the birth has described them. A record is found again
-  by its declared name and type, and `sPrefix` - the same STRUCT with two
+  by its declared name and type, and `sMetricNamePrefix` - the same STRUCT with two
   prefixes is two records.
 - **Options follow the text.** Change a `db=`, a `u=`, a range or a pulse while
   it runs - from an HMI, by writing the STRING - and it applies at once; units
   and ranges show at the next birth. A change of `anyUnits` or of
-  `fDeadbandPct` is applied the same way.
+  `fLogDeadbandPct` is applied the same way.
 - **Adding or removing a clause later is refused**: the clauses would not line
-  up with the members read at the first call, and `nBadClause` reports it
+  up with the members read at the first call, and `nFirstBadClause` reports it
   (the first clause past the shorter list). Change membership with a restart.
 - **A record first called after the birth makes the node birth again**, so the
   host has a birth for every name. Call every `Record` from the first scan.
 
 ## What makes a clause bad
 
-`nBadClause` names the first; the others still apply.
+`nFirstBadClause` names the first; the others still apply.
 
 - no `=`, an empty member, or an unknown class or option key;
 - an option value that is not a number, or a negative `db=`, `pct=` or `pulse=`;

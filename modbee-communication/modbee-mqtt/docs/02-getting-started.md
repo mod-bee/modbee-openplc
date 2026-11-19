@@ -14,7 +14,7 @@ VAR
 END_VAR
 
 mqtt(eTransport := E_MqttTransport.RuntimeTcp,
-     sHost      := '10.0.0.20',
+     sHostName      := '10.0.0.20',
      sClientId  := 'plc-intake');
 ```
 
@@ -69,14 +69,14 @@ Not every scan. When it moves:
 mqtt.Report(anyValue  := rTankLevel,
             sTopic    := 'plant/intake/level',
             fDeadband := 0.05,
-            tPeriod   := T#1m,
+            tSendInterval   := T#1m,
             bRetain   := TRUE);
 ```
 
 `anyValue : ANY` takes the variable itself, and its declared type is what
 travels: a `REAL` goes as `23.5`, an `INT` as `42`, a `BOOL` as `true`.
 
-`fDeadband` stops a jittering transmitter filling the broker. `tPeriod` sends
+`fDeadband` stops a jittering transmitter filling the broker. `tSendInterval` sends
 it anyway once a minute, so a value that never changes still proves the device
 is alive - which is what lets the other end run a quality on it. **Setting the
 first without the second is the common mistake.**
@@ -113,18 +113,18 @@ you to opposite ends of the site, which is why they are different values.
 
 ```st
 VAR
-  will : ST_MqttWillConfig := (sTopic := 'plant/intake/status', tDelay := T#30s);
+  will : ST_MqttWillConfig := (sTopic := 'plant/intake/status', tWillDelayInterval := T#30s);
 END_VAR
 
-mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHost := '10.0.0.20',
-     sClientId := 'plc-intake', stWillConfig := will);
+mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHostName := '10.0.0.20',
+     sClientId := 'plc-intake', stWill := will);
 ```
 
 No extra block: presence is a structure on the client. It publishes `online`
 every time the connection comes up, retained, and registers `offline` with the
 broker to be published if this device ever vanishes without saying goodbye.
 
-`tDelay := T#30s` stops a marginal radio crying wolf: the broker waits half a
+`tWillDelayInterval := T#30s` stops a marginal radio crying wolf: the broker waits half a
 minute before announcing the loss, and a reconnect inside that window cancels
 the announcement entirely.
 
@@ -133,14 +133,14 @@ the announcement entirely.
 ```st
 VAR
   mqtt : FB_MqttClient;
-  will : ST_MqttWillConfig := (sTopic := 'plant/intake/status', tDelay := T#30s);
+  will : ST_MqttWillConfig := (sTopic := 'plant/intake/status', tWillDelayInterval := T#30s);
   eSpQuality : E_MqttQuality;
 END_VAR
 
-mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHost := '10.0.0.20',
-     sClientId := 'plc-intake', stWillConfig := will);
+mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHostName := '10.0.0.20',
+     sClientId := 'plc-intake', stWill := will);
 mqtt.Report(anyValue := PLANT.rTankLevel, sTopic := 'plant/intake/level',
-            fDeadband := 0.05, tPeriod := T#1m, bRetain := TRUE);
+            fDeadband := 0.05, tSendInterval := T#1m, bRetain := TRUE);
 mqtt.Subscribe(anyValue := PLANT.rSetpoint, sTopic := 'plant/intake/cmd/level-setpoint',
                eQos := E_MqttQos.AtLeastOnceDelivery, eQuality => eSpQuality);
 PLANT.bSetpointGood := eSpQuality = E_MqttQuality.Good;

@@ -1,9 +1,9 @@
 {
   "name": "modbee-mqtt",
   "displayName": "MQTT",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "namespace": "modbee_mqtt",
-  "description": "Function blocks that put MQTT inside an OpenPLC program, one block per connection with the work as its methods. FB_MqttClient covers every combination - MQTT 5.0 or 3.1.1, plain or TLS, on a board over Wi-Fi, Ethernet or cellular, or on the Runtime - with Publish, Report (on change with a deadband, or on a clock), Subscribe with a data quality that says how much to believe a number, a whole STRUCT at once, MQTT 5 request and response, and option structures for the session, TLS, the board's network and the online/offline Will. A PLC can register itself with a provisioning key and keep the login it is given. FB_SparkplugNode reports a whole STRUCT to SCADA from one point list (sp.Record), each member by its class, offers Live Demand to a viewing host, keeps events through a link outage and sends them afterwards flagged historical, and publishes daily totals on every birth; FB_SparkplugHost is the other end. The PLC can be the site broker (FB_MqttBroker), and a bridge carries topics between two brokers. Every setting may change while running: the client reconnects by itself. Nothing here blocks, connect included, so a scan cycle never waits on a network.",
+  "description": "MQTT and Sparkplug B inside an OpenPLC program: FB_MqttClient connects plain or over TLS, on a board over Wi-Fi, Ethernet or cellular or on the Runtime, with publishing, subscribing and request/response as its methods; FB_SparkplugNode and FB_SparkplugHost report to and read from SCADA, FB_MqttBroker makes the PLC the site broker and FB_MqttBridge links two brokers. Nothing here blocks the scan and every setting may change while it runs; the library's documentation covers the rest.",
   "build": {
     "verify": "arduino",
     "core": "esp32:esp32"

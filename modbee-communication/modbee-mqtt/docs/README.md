@@ -1,6 +1,6 @@
 # modbee-mqtt
 
-Function blocks that put MQTT inside an OpenPLC program. Version 0.2.0.
+Function blocks that put MQTT inside an OpenPLC program. Version 0.3.0.
 
 One block per connection. `FB_MqttClient` is one connection to one broker;
 everything you publish or subscribe on it is a **method** of that block:
@@ -21,11 +21,11 @@ VAR
   eQuality : E_MqttQuality;
 END_VAR
 
-mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHost := '10.0.0.20',
+mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHostName := '10.0.0.20',
      sClientId := 'plc-intake');
 
 mqtt.Report(anyValue := rLevel, sTopic := 'plant/intake/level',
-            fDeadband := 0.05, tPeriod := T#1m, bRetain := TRUE);
+            fDeadband := 0.05, tSendInterval := T#1m, bRetain := TRUE);
 
 mqtt.Subscribe(anyValue := rSetpoint, sTopic := 'plant/intake/cmd/setpoint',
                eQos := E_MqttQos.AtLeastOnceDelivery, eQuality => eQuality);
@@ -44,17 +44,17 @@ VAR
   PUMP : S_PUMP;              (* your STRUCT: sts, tot, cmd, ... *)
 END_VAR
 
-mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHost := '10.0.0.20',
+mqtt(eTransport := E_MqttTransport.RuntimeTcp, sHostName := '10.0.0.20',
      sClientId := 'site1-pumps');
 sp(fbClient := mqtt, sGroupId := 'Site1', sEdgeNodeId := 'pumps');
 
-sp.Record(anyData := PUMP, sPrefix := 'pump1/',
-          sSettings := 'sts = now; tot = log, db = 0.5, u = h; cmd = cmd, pulse = 500');
+sp.Record(anyData := PUMP, sMetricNamePrefix := 'pump1/',
+          anyPointList := 'sts = now; tot = log, db = 0.5, u = h; cmd = cmd, pulse = 500');
 ```
 
 Every member of `sts` goes at once when it changes, the totals every 15
 minutes when they moved by more than 0.5 h, and SCADA may write `cmd` once
-`stReportConfig.bRemoteControl` is TRUE. The point list is page 15.
+`stReportConfig.bAllowHostWrites` is TRUE. The point list is page 15.
 
 ## Where to start
 
@@ -96,8 +96,8 @@ over Wi-Fi, Ethernet or cellular.
 The client's settings that are not where it connects are grouped in four
 option structures on its inputs, checked by the compiler and settable from an
 HMI: `stSessionConfig` (keep-alive, session, login, queue, reconnecting),
-`stTlsConfig` (certificates), `stNetworkConfig` (a board's Wi-Fi or Ethernet)
-and `stWillConfig` (online/offline presence). Leave them out and the defaults
+`stTls` (certificates), `stNetworkConfig` (a board's Wi-Fi or Ethernet)
+and `stWill` (online/offline presence). Leave them out and the defaults
 are the ones you want.
 
 **`FB_MqttBroker` and `FB_MqttBridge` take no client**, because neither is

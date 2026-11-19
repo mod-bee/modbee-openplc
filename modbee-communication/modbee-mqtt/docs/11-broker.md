@@ -5,7 +5,7 @@ standalone - it owns its own listener and takes no client. Call it every scan
 in the network task.
 
 ```st
-broker(bEnable := TRUE, nPort := 1883, nMaxClients := 32);
+broker(bEnable := TRUE, nLocalPort := 1883, nMaxClients := 32);
 ```
 
 ## Why put a broker in a PLC
@@ -42,9 +42,9 @@ reason the client needs it (page 03).
 
 | | |
 | --- | --- |
-| `sListenOn` | ignored. An Arduino server listens on whatever interface the core brought up; there is no second one to choose between |
-| `sCertFile`, `sKeyFile` | **refused**, not ignored. They are paths on a file system, and a board has none this block may assume. Naming one sets `bError` rather than quietly serving a different certificate than the pins asked for |
-| `sBrokerKey` | the fingerprint of a certificate made on **this run**. See below |
+| `sListenInterface` | ignored. An Arduino server listens on whatever interface the core brought up; there is no second one to choose between |
+| `sServerCertificateFile`, `sServerPrivateKeyFile` | **refused**, not ignored. They are paths on a file system, and a board has none this block may assume. Naming one sets `bError` rather than quietly serving a different certificate than the pins asked for |
+| `sBrokerKeyFingerprint` | the fingerprint of a certificate made on **this run**. See below |
 | the defaults | sized for a panel: four connections, eight sessions, 1 kB buffers, 32 retained. The Runtime's defaults would be tens of kilobytes |
 | TLS | needs wolfSSL on the include path. Without it, `eSecurity` other than `E_MqttSecurity.Plain` sets `bError`; plain still works |
 
@@ -65,12 +65,12 @@ keeps it beside the program, and presents the same one every start after:
 
 ```st
 broker(bEnable   := TRUE,
-       nPort     := 8883,
+       nLocalPort     := 8883,
        eSecurity := E_MqttSecurity.TlsVerify,
-       sBrokerKey => sMyBrokerKey);
+       sBrokerKeyFingerprint => sMyBrokerKey);
 ```
 
-`sBrokerKey` is 64 hexadecimal characters - the SHA-256 of the broker's public
+`sBrokerKeyFingerprint` is 64 hexadecimal characters - the SHA-256 of the broker's public
 key. That is the number every client pins against. Read it once at
 commissioning and write it on the panel: it is a fingerprint of the **key**, so
 it stays true when the certificate is reissued.
@@ -79,8 +79,8 @@ it stays true when the certificate is reissued.
 
 | | how | clients use |
 | --- | --- | --- |
-| nothing on the pins | made here, on the first start | `E_MqttSecurity.TlsPinned` and `sBrokerKey` |
-| `sCertFile` + `sKeyFile` | files on the Runtime, from the site's own CA | `E_MqttSecurity.TlsVerify`, the ordinary way |
+| nothing on the pins | made here, on the first start | `E_MqttSecurity.TlsPinned` and `sBrokerKeyFingerprint` |
+| `sServerCertificateFile` + `sServerPrivateKeyFile` | files on the Runtime, from the site's own CA | `E_MqttSecurity.TlsVerify`, the ordinary way |
 
 **Self-signed is the zero-configuration default, not a ceiling.** The obstacle
 was never the TLS library - it was that a certificate does not fit on an IEC
@@ -113,13 +113,13 @@ VAR
   nBrokerClients : INT;
 END_VAR
 
-broker(bEnable := TRUE, nPort := 1883, nClients => nBrokerClients);  (* be the broker *)
+broker(bEnable := TRUE, nLocalPort := 1883, nClientsConnected => nBrokerClients);  (* be the broker *)
 
 mqtt(eTransport := E_MqttTransport.RuntimeTcp,                        (* and a client of it *)
-     sHost := '127.0.0.1', sClientId := 'plc-broker', stWillConfig := will);
+     sHostName := '127.0.0.1', sClientId := 'plc-broker', stWill := will);
 
 mqtt.Report(anyValue := nBrokerClients, sTopic := 'plant/broker/clients',
-            tPeriod := T#5s);
+            tSendInterval := T#5s);
 ```
 
 Two blocks, two roles, and nothing special about it: **everything that
@@ -135,27 +135,27 @@ Without accounts the broker admits anybody, which is right on an isolated line
 and wrong anywhere else. Each device gets one call, every scan:
 
 ```st
-broker(bEnable := TRUE, nPort := 1883);
+broker(bEnable := TRUE, nLocalPort := 1883);
 broker.User(sUserName := 'panel-1', sUserPassword := sPanel1Password);
 broker.User(sUserName := 'panel-2', sUserPassword := sPanel2Password,
-            bAllow := bPanel2Allowed, nRefusedCnt => nPanel2Refused);
+            bAllowLogin := bPanel2Allowed, nRefusedLoginCount => nPanel2Refused);
 ```
 
 - **Declaring any account makes accounts required** for every connection -
-  including one whose `bAllow` is FALSE, so switching off the last account
+  including one whose `bAllowLogin` is FALSE, so switching off the last account
   locks the broker rather than quietly opening it.
 - **One call per device, each its own password.** A shared password cannot be
   revoked from one controller without changing all of them, and a log that
   says "plant-user refused" does not say which panel to go to.
 - `sUserName` is compared exactly, case included; `sUserPassword` up to 64
   characters, compared in full.
-- `bAllow := FALSE` refuses the device without forgetting it.
+- `bAllowLogin := FALSE` refuses the device without forgetting it.
 - **An account whose call stops** - renamed while running, or no longer
   called - is switched off and its password wiped at the broker's next scan,
   so nothing can still log in under a name nobody can see in the program. It
   still counts as declared, so the broker stays locked. Call it again and it is
   back, its counters kept.
-- `bActive`, `nLoginCnt` and `nRefusedCnt` per device. A refused count that
+- `bAccountActive`, `nLoginCount` and `nRefusedLoginCount` per device. A refused count that
   climbs on one device and not the others is that device's settings.
 - Returns `Ok`, `InvalidArgument` for an empty `sUserName`, `QuotaExceeded`
   when memory for one more account ran out, or `WrongTask` outside the
@@ -175,11 +175,11 @@ the part that matters: a client told it may publish 8 kB and then refused at
 | --- | --- | --- |
 | `nMaxClients` | 32 | connections served at once |
 | sessions | 2× clients | held, including those of clients currently away |
-| `nMaxRetained` | 256 | retained messages |
-| `nMaxSubscriptions` | 32 | subscriptions each client session holds |
-| `nMaxQueued` | 64 | messages held for a client that is away or slow |
-| `nMaxMsgSize` | 8 kB | maximum packet size, and each connection's buffers |
-| `tMaxSessionExpiry` | 1 h | how long a session outlives its client: a 3.1.1 persistent session, and the most a 5.0 client may ask for |
+| `nMaxRetainedMessages` | 256 | retained messages |
+| `nMaxSubscriptionsPerClient` | 32 | subscriptions each client session holds |
+| `nMaxQueuedPerClient` | 64 | messages held for a client that is away or slow |
+| `nMaxMessageBytes` | 8 kB | maximum packet size, and each connection's buffers |
+| `tMaxSessionExpiryInterval` | 1 h | how long a session outlives its client: a 3.1.1 persistent session, and the most a 5.0 client may ask for |
 | receive maximum | 32 | QoS > 0 messages in flight per client |
 | maximum QoS | 2 | |
 
@@ -187,7 +187,7 @@ The defaults are the Runtime's. On a board they are sized for a panel: four
 connections, eight sessions, 32 retained, 8 subscriptions and 16 queued
 messages per session, 1 kB messages. Every one is a pin, so a site that needs
 more raises it - within the board's memory: each connection holds two
-`nMaxMsgSize` buffers. Accounts (`broker.User`) have no fixed number on a
+`nMaxMessageBytes` buffers. Accounts (`broker.User`) have no fixed number on a
 board; the table grows with the calls.
 
 **Sessions outnumber connections on purpose.** A plant at three in the morning
@@ -200,26 +200,26 @@ moment a device slept.
 | | |
 | --- | --- |
 | `bListening` | the port is open |
-| `nClients` | attached right now |
-| `nSessions` | held, including absent clients |
-| `nAccepted` | connections accepted at the socket |
-| `nAdmitted` | of those, how many earned a successful CONNACK |
-| `nRefused` | and how many were turned away |
-| `nFromClients` | messages accepted from clients |
-| `nToClients` | messages sent to clients |
-| `nDropped` | deliveries a full client queue could not take |
-| `nTakeovers` | a client identifier claimed by a second connection with the same login |
+| `nClientsConnected` | attached right now |
+| `nSessionsHeld` | held, including absent clients |
+| `nAcceptedConnectionCount` | connections accepted at the socket |
+| `nAdmittedClientCount` | of those, how many earned a successful CONNACK |
+| `nRefusedConnectionCount` | and how many were turned away |
+| `nMessageReceivedCount` | messages accepted from clients |
+| `nMessageSentCount` | messages sent to clients |
+| `nDroppedDeliveryCount` | deliveries a full client queue could not take |
+| `nClientIdTakeoverCount` | a client identifier claimed by a second connection with the same login |
 
-**`nAccepted` climbing while `nAdmitted` does not** means something is opening
+**`nAcceptedConnectionCount` climbing while `nAdmittedClientCount` does not** means something is opening
 sockets and failing the handshake - a port scanner, or a client with bad
-credentials retrying. `nRefused` says how many got as far as a CONNACK - a
+credentials retrying. `nRefusedConnectionCount` says how many got as far as a CONNACK - a
 client that uses another login with an existing client identifier among them.
 
-**`nDropped` is not silent.** When a client's queue fills, the drop is counted
+**`nDroppedDeliveryCount` is not silent.** When a client's queue fills, the drop is counted
 here *and* at QoS above 0 the publisher is told with reason `0x97` rather than
 being allowed to believe it arrived.
 
-**`nTakeovers` is the pin to watch on a new site.** MQTT says a second
+**`nClientIdTakeoverCount` is the pin to watch on a new site.** MQTT says a second
 connection using an existing client identifier displaces the first, so two
 devices flashed with the same identifier knock each other off for ever - each
 reconnecting, each looking healthy on its own. This counter is the only place
@@ -227,13 +227,13 @@ that is visible from the middle.
 
 **A session belongs to the login that made it.** A client that connects with
 another login and an existing client identifier is refused - CONNACK `0x85`
-(`0x02` at 3.1.1) - and counts on `nRefused`, not `nTakeovers`: one device cannot
+(`0x02` at 3.1.1) - and counts on `nRefusedConnectionCount`, not `nClientIdTakeoverCount`: one device cannot
 take another's session just by copying its identifier. The same login and the
 same identifier take over as before. Without logins every client is the same
 nobody, so takeovers work as they always did.
 
 **Sessions expire.** A persistent session (clean session off) of a 3.1.1
-client is kept for `tMaxSessionExpiry` after the client goes - an hour unless
+client is kept for `tMaxSessionExpiryInterval` after the client goes - an hour unless
 set - then dropped; before, it was kept until the broker restarted. A 5.0
 client sets its own expiry, up to the same limit. Raise it for devices that
 sleep longer than an hour, and keep in mind that every session held keeps its
@@ -250,7 +250,7 @@ all in one.
 
 ## Scan cost
 
-Unlike every other block here, this one's cost scales with `nClients`: it
+Unlike every other block here, this one's cost scales with `nClientsConnected`: it
 services each connection once per call. Thirty-two clients is thirty-two
 socket checks per scan. Still bounded, still non-blocking, not free.
 

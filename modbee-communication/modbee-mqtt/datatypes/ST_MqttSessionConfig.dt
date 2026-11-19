@@ -1,18 +1,18 @@
 TYPE
   ST_MqttSessionConfig : STRUCT
-    tKeepAlive               : TIME;               (* how often the client and the broker show they are there; T#0s = 60 s *)
-    bCleanStart              : BOOL := TRUE;       (* start a fresh session on every connection *)
-    tSessionExpiry           : TIME;               (* how long the broker keeps the session after a disconnect (MQTT 5); T#0s = not at all *)
-    sUserName                : STRING(64);         (* the login; empty for none *)
-    sUserPassword            : STRING(64);
-    nMaxPending              : DINT;               (* publishes and subscribes that may wait for the broker; 0 = the library's default *)
-    nMaxMsgIn                : DINT;               (* the largest message accepted, in bytes; 0 = the library's default *)
-    nMaxMsgOut               : DINT;               (* the largest message sent, in bytes; 0 = the library's default *)
-    tReconnect               : TIME;               (* the first wait before reconnecting; T#0s = the library's default *)
-    tReconnectMax            : TIME;               (* the longest wait between attempts; T#0s = the library's default *)
-    tConnectTimeout          : TIME;               (* how long one connection attempt may take; T#0s = the library's default *)
-    tMaxSilence              : TIME;               (* reconnect when nothing arrives for this long; T#0s = never *)
-    bAutoReconnect           : BOOL := TRUE;       (* reconnect by itself after a loss *)
-    bRetryRejectedCredential : BOOL;               (* keep retrying a login the broker refused *)
+    tKeepAlive : TIME; (* how often client and broker prove they are there; T#0s = 60 s *)
+    bCleanStart : BOOL := TRUE; (* TRUE starts a fresh session on every connection *)
+    tSessionExpiryInterval : TIME; (* MQTT 5: how long the broker keeps the session after a disconnect; T#0s = not at all; the MQTT 5 Session Expiry Interval *)
+    sUserName : STRING(64); (* the broker login; empty for none or when Provision gives it *)
+    sUserPassword : STRING(64); (* the login's password *)
+    nMaxPendingOperations : DINT; (* publishes and subscribes that may wait for the broker at once; 0 = 32 *)
+    nMaxIncomingMessageBytes : DINT; (* largest message accepted, in bytes; 0 = 4096 *)
+    nMaxOutgoingMessageBytes : DINT; (* largest message sent, in bytes; 0 = 4096 *)
+    tFirstReconnectAfter : TIME; (* first wait before reconnecting; T#0s = 1 s *)
+    tMaxReconnectAfter : TIME; (* longest wait between reconnect attempts; T#0s = 1 min; the wait doubles from tFirstReconnectAfter up to this *)
+    tConnectTimeout : TIME; (* how long one connection attempt may take; T#0s = 20 s *)
+    tReconnectAfterSilence : TIME; (* reconnect when nothing arrives from the broker for this long; T#0s = never *)
+    bAutoReconnect : BOOL := TRUE; (* reconnect by itself after a loss *)
+    bRetryRefusedLogin : BOOL; (* retry a refused login at the normal backoff, not every 5 min *)
   END_STRUCT;
 END_TYPE

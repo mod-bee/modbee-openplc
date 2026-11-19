@@ -1,10 +1,10 @@
 TYPE
   ST_MqttNetworkConfig : STRUCT
-    sSsid         : STRING(48);   (* E_MqttTransport.ArduinoWiFi: the network to join *)
-    sWiFiPassword : STRING(64);
-    sMac          : STRING(32);   (* E_MqttTransport.ArduinoEthernet: the board's MAC, 'DE:AD:BE:EF:FE:ED' *)
-    sIp           : STRING(32);   (* a fixed address; empty = DHCP *)
-    sGateway      : STRING(32);
-    sSubnet       : STRING(32);
+    sSsid : STRING(48); (* Wi-Fi: the network (SSID) to join; empty when the board's NETWORK block joins it *)
+    sWiFiPassword : STRING(64); (* Wi-Fi: its password; empty for an open network *)
+    sMacAddress : STRING(32); (* Ethernet: this board's MAC, e.g. 'DE:AD:BE:EF:FE:ED'; unique per board *)
+    sIpAddress : STRING(32); (* a fixed address; empty or 'dhcp' = DHCP *)
+    sGatewayAddress : STRING(32); (* the router's address, with a fixed address *)
+    sSubnetMask : STRING(32); (* the subnet mask, with a fixed address *)
   END_STRUCT;
 END_TYPE
