@@ -9,9 +9,9 @@ variable, so sixteen subscriptions are sixteen calls on sixteen variables, and
 each line says what it brings in and where the value lands.
 
 ```
-node.Subscribe(anyValue := rOutsideTemp, nPeer := 4, sName := 'outside_temp', nTopicId := 1, ...);
-node.Subscribe(anyValue := rWindSpeed,   nPeer := 4, sName := 'wind_speed',   nTopicId := 2, ...);
-node.Subscribe(anyValue := rRainfall,    nPeer := 4, sName := 'rainfall_mm',  nTopicId := 3, ...);
+node.Subscribe(anyValue := rOutsideTemp, nPeerNodeId := 4, sTopic := 'outside_temp', nTopicId := 1, ...);
+node.Subscribe(anyValue := rWindSpeed,   nPeerNodeId := 4, sTopic := 'wind_speed',   nTopicId := 2, ...);
+node.Subscribe(anyValue := rRainfall,    nPeerNodeId := 4, sTopic := 'rainfall_mm',  nTopicId := 3, ...);
 ```
 
 **The node first.** Always, at the top, with its methods after it. Once the
@@ -52,11 +52,11 @@ IF stepTicks >= 25 THEN          (* every half second at a 20 ms scan *)
     IF iStep > 3 THEN iStep := 0; END_IF;
 END_IF;
 
-node.ModbusRead(anyData := aCoils, nPeer := 20, eTable := E_BeeBusModbusTable.Coil,
-                nAddress := 0, bExecute := bFire AND iStep = 0);
-node.ModbusRead(anyData := aHolding, nPeer := 20, nAddress := 0, bExecute := bFire AND iStep = 1);
-node.ModbusRead(anyData := sText, nPeer := 20, nAddress := 100, bExecute := bFire AND iStep = 2);
-node.ModbusRead(anyData := aRange, nPeer := 20, nAddress := 200, bExecute := bFire AND iStep = 3);
+node.ModbusRead(anyData := aCoils, nPeerNodeId := 20, eTable := E_BeeBusModbusTable.Coil,
+                nStartAddress := 0, bExecute := bFire AND iStep = 0);
+node.ModbusRead(anyData := aHolding, nPeerNodeId := 20, nStartAddress := 0, bExecute := bFire AND iStep = 1);
+node.ModbusRead(anyData := sText, nPeerNodeId := 20, nStartAddress := 100, bExecute := bFire AND iStep = 2);
+node.ModbusRead(anyData := aRange, nPeerNodeId := 20, nStartAddress := 200, bExecute := bFire AND iStep = 3);
 ```
 
 One request per turn, in order, forever. It reads well and it never floods.
@@ -82,10 +82,10 @@ bAwake := cycleTicks < 500;
 node(nNodeId := 88, bConnect := bAwake);
 
 (* hold the readings taken while asleep *)
-node.Buffer(sName := 'soil_temp', nDepth := 8);
+node.Buffer(sTopic := 'soil_temp', nOfflineBufferDepth := 8);
 
 (* report once the ring has taken us back *)
-node.Publish(anyValue := rSoilTemp, sName := 'soil_temp', nTopicId := 1,
+node.Publish(anyValue := rSoilTemp, sTopic := 'soil_temp', nTopicId := 1,
              bExecute := bAwake AND node.bConnected);
 ```
 
@@ -112,21 +112,21 @@ side. The full chapter is [11 - Settings both ways](11-bidirectional-binding.md)
 On the PLC:
 
 ```
-node.Serve(anyData := SET, nTopicId := 300, bWritable := TRUE);
-node.Serve(anyData := CMD, nTopicId := 400, bWritable := TRUE, bCommand := TRUE,
-           tPulse := T#500ms);
+node.Serve(anyData := SET, nFirstTopicId := 300, bPeersMayChange := TRUE);
+node.Serve(anyData := CMD, nFirstTopicId := 400, bPeersMayChange := TRUE, bMembersAreCommands := TRUE,
+           tPulseLength := T#500ms);
 ```
 
 On the panel:
 
 ```
-node.Bind(anyData := SET, nPeer := 1, nTopicId := 300, bReliable := TRUE);
-node.Bind(anyData := CMD, nPeer := 1, nTopicId := 400, bReliable := TRUE);
+node.Bind(anyData := SET, nPeerNodeId := 1, nFirstTopicId := 300, bDeliverEveryChange := TRUE);
+node.Bind(anyData := CMD, nPeerNodeId := 1, nFirstTopicId := 400, bDeliverEveryChange := TRUE);
 ```
 
 The block that uses a setting decides it, as it always did: one that refuses a
 value and puts its own back is reported to the panel as `Changed`, with the
-value kept, which the panel member already shows. `bReliable` for settings and
+value kept, which the panel member already shows. `bDeliverEveryChange` for settings and
 commands; live values stay Live.
 
 ## Commanding a device, and knowing it arrived
@@ -137,9 +137,9 @@ subscribes to it.**
 On the commander:
 
 ```
-eCmd := node.Publish(anyValue := rDemand, sName := 'pump_speed_cmd', nTopicId := 20,
-                     ePublishMode := E_BeeBusPublishMode.ToPeer, nPeer := 31,
-                     bConfirmed := TRUE, bExecute := bSendCmd);
+eCmd := node.Publish(anyValue := rDemand, sTopic := 'pump_speed_cmd', nTopicId := 20,
+                     ePublishMode := E_BeeBusPublishMode.ToPeer, nPeerNodeId := 31,
+                     bRequireAcknowledge := TRUE, bExecute := bSendCmd);
 IF bSendCmd AND eCmd <> E_BeeBusResult.Queued THEN
     IF eCmd = E_BeeBusResult.Ok THEN udCmdSent := udCmdSent + 1;
     ELSE udCmdFailed := udCmdFailed + 1; eCmdStatus := eCmd;
@@ -151,8 +151,8 @@ END_IF;
 On the pump:
 
 ```
-node.Subscribe(anyValue := rSpeedSetpoint, nPeer := 200, sName := 'pump_speed_cmd',
-               nTopicId := 20, tPeriod := T#5s, eQuality => eCmdQuality);
+node.Subscribe(anyValue := rSpeedSetpoint, nPeerNodeId := 200, sTopic := 'pump_speed_cmd',
+               nTopicId := 20, tMaxSendInterval := T#5s, eQuality => eCmdQuality);
 
 (* the setpoint is only as good as the link that delivered it *)
 IF eCmdQuality = E_BeeBusQuality.Bad THEN
@@ -161,15 +161,15 @@ IF eCmdQuality = E_BeeBusQuality.Bad THEN
 END_IF;
 ```
 
-`ToPeer` with `bConfirmed` means `Ok` is *the pump has it*, not *it was sent*.
+`ToPeer` with `bRequireAcknowledge` means `Ok` is *the pump has it*, not *it was sent*.
 And the pump gets staleness detection for free.
 
 A register write does the same job if the far end is a Modbus address rather
 than a topic:
 
 ```
-node.ModbusWrite(anyData := iRunMinutes, nPeer := 60, nAddress := 300,
-                 bConfirmed := TRUE, bExecute := bSend);
+node.ModbusWrite(anyData := iRunMinutes, nPeerNodeId := 60, nStartAddress := 300,
+                 bRequireAcknowledge := TRUE, bExecute := bSend);
 ```
 
 ## Failsafe on a setpoint
@@ -178,33 +178,33 @@ The device that receives a command should decide what happens if the commander
 goes quiet. That belongs on the receiving node, at the address:
 
 ```
-node(nNodeId := 60, bFailsafe := TRUE);
-node.ModbusMap(anyData := iRunMinutes, nAddress := 300,
-               eOnLoss := E_BeeBusModbusFailsafe.ResetToValue, nSafeValue := 5,
-               bSafeApplied => bSafeNow);
+node(nNodeId := 60, bApplySafeValueOnWriterLoss := TRUE);
+node.ModbusMap(anyData := iRunMinutes, nStartAddress := 300,
+               eActionOnWriterLoss := E_BeeBusModbusFailsafe.ResetToValue, nSafeValue := 5,
+               bSafeValueApplied => bSafeNow);
 IF bSafeNow THEN
     bWentToSafeState := TRUE;      (* worth logging *)
 END_IF;
 ```
 
 The commander disappears, the setpoint falls back to 5 by itself, and the
-program is told it happened. Note `bFailsafe := TRUE` on the node. Without it
-`eOnLoss` does nothing.
+program is told it happened. Note `bApplySafeValueOnWriterLoss := TRUE` on the node. Without it
+`eActionOnWriterLoss` does nothing.
 
 ## A SCADA node
 
 One that watches everything and commands a little.
 
 ```
-node(nNodeId := 200, bFailsafe := TRUE);
+node(nNodeId := 200, bApplySafeValueOnWriterLoss := TRUE);
 
 (* one call per value, so each line says what it brings in *)
-node.Subscribe(anyValue := rOutsideTempC, nPeer := 4, sName := 'outside_temp',
-               nTopicId := 1, fDeadband := 0.2, tPeriod := T#5s);
-node.Subscribe(anyValue := rTankALevelPct, nPeer := 17, sName := 'tank_a_level',
-               nTopicId := 1, fDeadband := 0.5, tPeriod := T#2s, eQuality => eTankQuality);
-node.Subscribe(anyValue := rFlowLps, nPeer := 31, sName := 'flow_lps',
-               nTopicId := 3, fDeadband := 0.1, tPeriod := T#2s);
+node.Subscribe(anyValue := rOutsideTempC, nPeerNodeId := 4, sTopic := 'outside_temp',
+               nTopicId := 1, fDeadband := 0.2, tMaxSendInterval := T#5s);
+node.Subscribe(anyValue := rTankALevelPct, nPeerNodeId := 17, sTopic := 'tank_a_level',
+               nTopicId := 1, fDeadband := 0.5, tMaxSendInterval := T#2s, eQuality => eTankQuality);
+node.Subscribe(anyValue := rFlowLps, nPeerNodeId := 31, sTopic := 'flow_lps',
+               nTopicId := 3, fDeadband := 0.1, tMaxSendInterval := T#2s);
 
 (* alarms come from quality, not from the numbers *)
 bTankCommsLost := eTankQuality = E_BeeBusQuality.Bad;
@@ -232,10 +232,10 @@ serialNode(nNodeId := 1, eTransport := E_BeeBusTransport.RuntimeSerial, stSerial
 udpNode(nNodeId := 1, eTransport := E_BeeBusTransport.RuntimeUdp);
 
 (* in on the serial segment *)
-serialNode.Subscribe(anyValue := rFieldValue, nPeer := 5, sName := 'well_level',
-                     nTopicId := 1, fDeadband := 0.1, tPeriod := T#2s);
+serialNode.Subscribe(anyValue := rFieldValue, nPeerNodeId := 5, sTopic := 'well_level',
+                     nTopicId := 1, fDeadband := 0.1, tMaxSendInterval := T#2s);
 (* out on the plant segment *)
-udpNode.Topic(anyValue := rFieldValue, sName := 'well_level', nTopicId := 1);
+udpNode.Topic(anyValue := rFieldValue, sTopic := 'well_level', nTopicId := 1);
 ```
 
 The same variable is a subscriber's landing spot on one segment and an owned
@@ -244,12 +244,12 @@ topic on the other - two records, on two nodes. Node ids only have to be unique
 
 ## Choosing deadband and period
 
-| the value | `fDeadband` | `tPeriod` |
+| the value | `fDeadband` | `tMaxSendInterval` |
 | --- | --- | --- |
 | a temperature | 0.2-0.5 °C | `T#5s` |
 | a tank level | 0.5 % | `T#2s` |
 | a flow that matters | 0.1 | `T#1s` |
-| a setpoint or command | 0.0 (every change), or `bReliable` | `T#5s` |
+| a setpoint or command | 0.0 (every change), or `bDeliverEveryChange` | `T#5s` |
 | an on/off state | 0.0 | `T#5s` |
 
 The deadband keeps noise off the network. The period is what proves the link is
@@ -268,9 +268,9 @@ run's result, held.
 **One variable for two records.** `node.Write(anyValue := bOne ...)` called for
 forty topics in a loop is one record: give each its own variable.
 
-**Forgetting `bFailsafe := TRUE`** and wondering why `eOnLoss` does nothing.
+**Forgetting `bApplySafeValueOnWriterLoss := TRUE`** and wondering why `eActionOnWriterLoss` does nothing.
 
-**`bConfirmed := TRUE` with `E_BeeBusPublishMode.All`.** Nothing acknowledges a
+**`bRequireAcknowledge := TRUE` with `E_BeeBusPublishMode.All`.** Nothing acknowledges a
 broadcast, so it is refused with `InvalidArgument`. Confirmation needs a named
 peer.
 

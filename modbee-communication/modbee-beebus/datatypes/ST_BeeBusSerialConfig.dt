@@ -1,9 +1,9 @@
 TYPE
   ST_BeeBusSerialConfig : STRUCT
-    sDevice  : STRING(127);   (* E_BeeBusTransport.RuntimeSerial: the device, '/dev/ttyUSB0' or a /dev/serial/by-id/ path *)
-    nBaud    : DINT;          (* 0 = the transport's default: 115200 *)
-    nPort    : BYTE;          (* E_BeeBusTransport.ArduinoSerial: the board's hardware serial, 0 = the first *)
-    nRxPin   : INT := -1;     (* ArduinoSerial on an ESP32: the receive pin; -1 = the board's own *)
-    nTxPin   : INT := -1;     (* ArduinoSerial on an ESP32: the transmit pin; -1 = the board's own *)
+    sDevice : STRING(127); (* E_BeeBusTransport.RuntimeSerial: the device, '/dev/ttyUSB0' or a /dev/serial/by-id/ path *)
+    nBaudRate : DINT; (* 0 = the transport's default: 115200 *)
+    nUart : BYTE; (* E_BeeBusTransport.ArduinoSerial: the board's hardware serial, 0 = the first *)
+    nRxPin : INT := -1; (* ArduinoSerial on an ESP32: the receive pin; -1 = the board's own *)
+    nTxPin : INT := -1; (* ArduinoSerial on an ESP32: the transmit pin; -1 = the board's own *)
   END_STRUCT;
 END_TYPE

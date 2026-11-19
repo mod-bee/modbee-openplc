@@ -6,8 +6,8 @@ what is wrong with it, and one enumeration answers *"why did that fail?"*
 ## The node and its segment - `node.Statistics`
 
 ```
-node.Statistics(nMembers => nMembers, tRotation => tRotation,
-                nCrcErrors => nCrcErrors, nNoiseBytes => nNoiseBytes);
+node.Statistics(nNodesInRing => nNodesInRing, tTokenRotationTime => tTokenRotationTime,
+                nChecksumErrorCount => nChecksumErrorCount, nNoiseByteCount => nNoiseByteCount);
 ```
 
 Nothing on it is a setting. Every number is measured. It returns `Ok` once the
@@ -15,22 +15,22 @@ node has started, `NotInitialised` before.
 
 | output | |
 | --- | --- |
-| `nIdInUse` | the address this node holds |
-| `nMembers` | how many nodes are in the ring, including this one |
-| `tRotation` | how long a turn takes to come round, measured. `T#0s` until it has |
-| `nPendingOps` | operations queued and not yet finished |
-| `nCrcErrors` | frames that arrived corrupt |
-| `nNoiseBytes` | bytes discarded while hunting for a frame start |
+| `nNodeIdInUse` | the address this node holds |
+| `nNodesInRing` | how many nodes are in the ring, including this one |
+| `tTokenRotationTime` | how long a turn takes to come round, measured. `T#0s` until it has |
+| `nPendingOperations` | operations queued and not yet finished |
+| `nChecksumErrorCount` | frames that arrived corrupt |
+| `nNoiseByteCount` | bytes discarded while hunting for a frame start |
 
 Whether this node is in a ring is `node.bConnected`, on the block itself.
 
 ### What to watch, and what it means
 
-**`nMembers`** is the first number to look at. It should equal the number of
+**`nNodesInRing`** is the first number to look at. It should equal the number of
 nodes you expect. Less means somebody is not joining; the count on each node
 tells you who can see whom.
 
-**`nCrcErrors` and `nNoiseBytes` are the two that judge a link.** On a quiet bus
+**`nChecksumErrorCount` and `nNoiseByteCount` are the two that judge a link.** On a quiet bus
 they should sit still. Climbing steadily means a physical problem, not a
 software one:
 
@@ -41,15 +41,15 @@ software one:
 A handful at start-up is normal. A number that keeps rising is a fault to go
 and look at with a meter.
 
-**`tRotation`** is how fast the network actually is. It grows as nodes are
+**`tTokenRotationTime`** is how fast the network actually is. It grows as nodes are
 added and as a link slows. Watch it when you add a node: if it jumps far more
 than one node's worth, that node's link is the slow one.
 
-**`nPendingOps`** sitting high means work is being queued faster than the ring
+**`nPendingOperations`** sitting high means work is being queued faster than the ring
 can carry it. Usually a program raising a request every scan instead of on an
 edge.
 
-**`bDebug`** on the node prints the protocol's own running commentary to the
+**`bDebugToConsole`** on the node prints the protocol's own running commentary to the
 runtime console. Useful when commissioning, noisy in production; it may be
 switched while running. On a ModBee Node the commentary is left out of the
 firmware to save flash, so it prints nothing there unless the firmware is built
@@ -58,39 +58,39 @@ with `BEEBUS_ENABLE_DEBUG` defined; on a Runtime it always works.
 ## One peer - `node.PeerStatus`
 
 ```
-node.PeerStatus(nPeer := 31, bAlive => bPumpAlive, bSeen => bPumpSeen,
-                tSilent => tPumpSilent, tHop => tPumpHop, tHopTimeout => tPumpHopTimeout);
+node.PeerStatus(nPeerNodeId := 31, bInRing => bPumpAlive, bEverHeard => bPumpSeen,
+                tSinceLastHeard => tPumpSilent, tTokenHopTime => tPumpHop, tTokenHopTimeout => tPumpHopTimeout);
 ```
 
 | output | |
 | --- | --- |
-| `bAlive` | that peer is in the ring and being heard from |
-| `bSeen` | it has been heard from at least once since the program started: `bSeen` FALSE is a peer never fitted, or given the wrong id; `bSeen` with `bAlive` FALSE is one that has gone |
-| `tSilent` | how long since it last said anything |
-| `tHop` | how quick it is to take its turn, measured |
-| `tHopTimeout` | how long it is allowed before its turn is presumed lost |
+| `bInRing` | that peer is in the ring and being heard from |
+| `bEverHeard` | it has been heard from at least once since the program started: `bEverHeard` FALSE is a peer never fitted, or given the wrong id; `bEverHeard` with `bInRing` FALSE is one that has gone |
+| `tSinceLastHeard` | how long since it last said anything |
+| `tTokenHopTime` | how quick it is to take its turn, measured |
+| `tTokenHopTimeout` | how long it is allowed before its turn is presumed lost |
 
 It returns `Ok`, `NotInitialised` before the node started, or `InvalidArgument`
-for `nPeer` 0 or 255.
+for `nPeerNodeId` 0 or 255.
 
-**`bAlive` is the one to gate logic on.** It answers exactly the same question
-as the check every read and write makes, so if `bAlive` is `TRUE` an operation
+**`bInRing` is the one to gate logic on.** It answers exactly the same question
+as the check every read and write makes, so if `bInRing` is `TRUE` an operation
 to that peer will not be refused for want of the peer:
 
 ```
 IF bPumpAlive THEN
-    eRead := node.ModbusRead(anyData := rFlow, nPeer := 31, nAddress := 10, bExecute := bFire);
+    eRead := node.ModbusRead(anyData := rFlow, nPeerNodeId := 31, nStartAddress := 10, bExecute := bFire);
 ELSE
     bPumpCommsAlarm := TRUE;
 END_IF;
 ```
 
-**`tHop` against `tHopTimeout`** is how much headroom a peer has. A hop creeping
+**`tTokenHopTime` against `tTokenHopTimeout`** is how much headroom a peer has. A hop creeping
 toward its timeout is a link degrading before it fails - a radio path getting
 worse, a cable starting to fail. It is the earliest warning the network gives
 you.
 
-`tSilent` is the plain number for an alarm: *"node 31 has said nothing for
+`tSinceLastHeard` is the plain number for an alarm: *"node 31 has said nothing for
 thirty seconds."*
 
 ## The node's own outputs
@@ -98,7 +98,7 @@ thirty seconds."*
 `node.bError`, `node.eErrorId` and `node.sLastError` say what is wrong, most
 fundamental first:
 
-1. **the link** - it did not open (`NotInitialised`, tried again; `tRetryIn`
+1. **the link** - it did not open (`NotInitialised`, tried again; `tRetryTimeLeft`
    counts down), or a setting is wrong (`InvalidArgument`);
 2. **another device on this id** (`DuplicateNodeId`);
 3. **a member of an option structure for the other target** (`InvalidArgument`,
@@ -145,7 +145,7 @@ refused with it at once, never queued for later.
 
 **`InvalidArgument`** - something the method cannot make sense of, and
 `sLastError` says what. Usually a `WSTRING`, a name longer than 255 characters,
-a `REAL` in a coil table, `bConfirmed` on a broadcast, or a record's topic or
+a `REAL` in a coil table, `bRequireAcknowledge` on a broadcast, or a record's topic or
 address changed after it bound.
 
 **`DuplicateNodeId`** - two devices on one id. Without this code the node looks
@@ -156,15 +156,15 @@ other device goes.
 
 ```
 node(nNodeId := 10);
-node.Statistics(nMembers => nMembers, nCrcErrors => nCrcErrors);
+node.Statistics(nNodesInRing => nNodesInRing, nChecksumErrorCount => nChecksumErrorCount);
 
-bHealthy := node.bReady AND node.bConnected
-            AND (nMembers >= 3)              (* however many you expect *)
+bHealthy := node.bLinkOpen AND node.bConnected
+            AND (nNodesInRing >= 3)              (* however many you expect *)
             AND NOT node.bError;
 bCommsFault := NOT bHealthy;
 ```
 
-Put `nCrcErrors` on a trend and you will see a link going bad weeks before it
+Put `nChecksumErrorCount` on a trend and you will see a link going bad weeks before it
 strands you.
 
 ---

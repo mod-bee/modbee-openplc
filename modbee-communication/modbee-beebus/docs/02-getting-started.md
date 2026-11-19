@@ -49,17 +49,17 @@ Read what the node says about itself, and ask it for its statistics:
 ```
 VAR
     node     : FB_BeeBusNode;
-    nMembers : BYTE;
+    nNodesInRing : BYTE;
 END_VAR
 
 node(nNodeId := 10, eTransport := E_BeeBusTransport.RuntimeUdp);
-node.Statistics(nMembers => nMembers);
+node.Statistics(nNodesInRing => nNodesInRing);
 ```
 
-`nMembers` is how many nodes are in the ring, including this one. On its own it
+`nNodesInRing` is how many nodes are in the ring, including this one. On its own it
 reads **1**. When the second node joins it becomes **2**.
 
-`node.bReady` is `TRUE` once the node started. If it is `FALSE`,
+`node.bLinkOpen` is `TRUE` once the node started. If it is `FALSE`,
 `node.eErrorId` says why as an `E_BeeBusResult` and `node.sLastError` says it in
 the operating system's own words - *"Address already in use"* and the like.
 `node.bConnected` is `TRUE` once it is in a ring with somebody.
@@ -75,7 +75,7 @@ VAR
 END_VAR
 
 node(nNodeId := 10, eTransport := E_BeeBusTransport.RuntimeUdp);
-node.Topic(anyValue := rLevel, sName := 'tank_level', nTopicId := 1);
+node.Topic(anyValue := rLevel, sTopic := 'tank_level', nTopicId := 1);
 
 (* something to watch *)
 rLevel := rLevel + 0.1;
@@ -88,7 +88,7 @@ Four things to notice:
 the variable and it goes out. `Topic` returns `E_BeeBusResult.Ok` while the
 topic is bound.
 
-**`sName` is the identity.** Peers ask for `'tank_level'`. Up to 253 characters.
+**`sTopic` is the identity.** Peers ask for `'tank_level'`. Up to 253 characters.
 
 **`nTopicId` is stated once, here.** 1 to 32767, unique on this node. It is
 what travels on the wire - the name is for you. Ids under 128 cost one byte
@@ -115,24 +115,24 @@ VAR
 END_VAR
 
 node(nNodeId := 20, eTransport := E_BeeBusTransport.RuntimeUdp);
-node.Subscribe(anyValue := rLevelFromTank, nPeer := 10, sName := 'tank_level',
-               nTopicId := 1, fDeadband := 0.0, tPeriod := T#5s);
+node.Subscribe(anyValue := rLevelFromTank, nPeerNodeId := 10, sTopic := 'tank_level',
+               nTopicId := 1, fDeadband := 0.0, tMaxSendInterval := T#5s);
 END_PROGRAM
 ```
 
-Download it, and watch `rLevelFromTank` climb. `nMembers` reads **2** on both
+Download it, and watch `rLevelFromTank` climb. `nNodesInRing` reads **2** on both
 nodes now.
 
 ### What the subscribe parameters mean
 
-**`nPeer` is who owns the topic** - node 10. **`sName` and `nTopicId` must match
+**`nPeerNodeId` is who owns the topic** - node 10. **`sTopic` and `nTopicId` must match
 what that node bound.**
 
 **`fDeadband`** is how much the value has to move before it is worth sending.
 `0.0` means every change. `0.5` on a temperature means you get told when it
 moves half a degree, and the small wobbles stay off the network.
 
-**`tPeriod`** is the longest you will go without hearing anything, even if
+**`tMaxSendInterval`** is the longest you will go without hearing anything, even if
 nothing changed. It is what tells you the link is alive rather than the value
 being flat.
 
@@ -150,9 +150,9 @@ VAR
     bLevelGood    : BOOL;
 END_VAR
 
-node.Subscribe(anyValue := rLevelFromTank, nPeer := 10, sName := 'tank_level',
-               nTopicId := 1, tPeriod := T#5s,
-               eQuality => eLevelQuality, tAge => tLevelAge);
+node.Subscribe(anyValue := rLevelFromTank, nPeerNodeId := 10, sTopic := 'tank_level',
+               nTopicId := 1, tMaxSendInterval := T#5s,
+               eQuality => eLevelQuality, tValueAge => tLevelAge);
 bLevelGood := eLevelQuality = E_BeeBusQuality.Good;
 ```
 
@@ -165,17 +165,17 @@ bLevelGood := eLevelQuality = E_BeeBusQuality.Good;
 | `E_BeeBusQuality.Bad` | long overdue, or the peer has gone |
 | `E_BeeBusQuality.Unknown` | nothing has arrived yet |
 
-**`tAge`** is how long since the last one, `T#0s` before the first; `bSeen`
+**`tValueAge`** is how long since the last one, `T#0s` before the first; `bValueEverReceived`
 tells that zero apart, and is the one a ladder rung uses.
 
 Now stop the first runtime and watch. `rLevelFromTank` **stops at the last
 value it had** - it does not go to zero, because zero would be a lie. But
-`eQuality` goes `Uncertain` and then `Bad`, and `tAge` climbs.
+`eQuality` goes `Uncertain` and then `Bad`, and `tValueAge` climbs.
 
 That is the failure a polled register hides: the number looks perfectly healthy
 and is quietly hours old. Start the runtime again and it recovers on its own.
 
-**`nMissed`** counts updates that went astray - a running total, so a gap three
+**`nMissedUpdateCount`** counts updates that went astray - a running total, so a gap three
 minutes ago is still visible.
 
 ## Step 6 - share a register too
@@ -188,7 +188,7 @@ VAR
 END_VAR
 
 iLevel := REAL_TO_INT(rLevel);
-node.ModbusMap(anyData := iLevel, nAddress := 40);   (* HoldingRegister is the default *)
+node.ModbusMap(anyData := iLevel, nStartAddress := 40);   (* HoldingRegister is the default *)
 ```
 
 `iLevel` **is** holding register 40 now. Any peer reading address 40 gets what
@@ -203,7 +203,7 @@ VAR
     eRead   : E_BeeBusResult;
 END_VAR
 
-eRead := node.ModbusRead(anyData := iRemote, nPeer := 10, nAddress := 40,
+eRead := node.ModbusRead(anyData := iRemote, nPeerNodeId := 10, nStartAddress := 40,
                          bExecute := bRead);
 ```
 

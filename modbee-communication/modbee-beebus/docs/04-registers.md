@@ -52,7 +52,7 @@ not `ARRAY [*]`.
 
 ### How a value is laid out
 
-Every value takes the registers its type needs, from `nAddress` on, one after
+Every value takes the registers its type needs, from `nStartAddress` on, one after
 the other in declaration order:
 
 | type | registers | on the wire |
@@ -92,7 +92,7 @@ after it.
 ## Sharing your variables - `node.ModbusMap`
 
 ```
-node.ModbusMap(anyData := iSpeed, nAddress := 40);
+node.ModbusMap(anyData := iSpeed, nStartAddress := 40);
 ```
 
 `iSpeed` **is** holding register 40 from that moment. A peer reading gets what
@@ -102,41 +102,41 @@ request. Call it every scan; it returns `Ok` while the addresses are live.
 A range works the same way:
 
 ```
-node.ModbusMap(anyData := aTrend, nAddress := 100);
+node.ModbusMap(anyData := aTrend, nStartAddress := 100);
 ```
 
 `aTrend : ARRAY[0..99] OF WORD` at address 100 becomes addresses 100 to 199. The
-array's lower bound maps to `nAddress` whatever that bound is.
+array's lower bound maps to `nStartAddress` whatever that bound is.
 
 ### Outputs
 
 | | |
 | --- | --- |
-| `nCount` | how many addresses were taken: registers, or coils |
-| `bWritten` | a peer wrote some of them since the last call |
-| `sWrittenName` | which member, e.g. `levelHiMm` or `spare[3]` (held until the next write) |
-| `nWrittenIndex` | its position, from 1, every array element and nested member one position (held) |
-| `nWrittenAddr` | its first address (held) |
-| `nWritten` | how many members that write covered (held) |
-| `bSafeApplied` | the safe value was applied since the last call |
+| `nAddressesUsed` | how many addresses were taken: registers, or coils |
+| `bWrittenByPeer` | a peer wrote some of them since the last call |
+| `sFirstWrittenMember` | which member, e.g. `levelHiMm` or `spare[3]` (held until the next write) |
+| `nFirstWrittenIndex` | its position, from 1, every array element and nested member one position (held) |
+| `nFirstWrittenAddress` | its first address (held) |
+| `nMembersWritten` | how many members that write covered (held) |
+| `bSafeValueApplied` | the safe value was applied since the last call |
 
-**`bWritten` is the one to use.** It tells you a peer changed the value rather
+**`bWrittenByPeer` is the one to use.** It tells you a peer changed the value rather
 than your own program doing it:
 
 ```
-node.ModbusMap(anyData := iSetpoint, nAddress := 40, bWritten => bSetpointWritten);
+node.ModbusMap(anyData := iSetpoint, nStartAddress := 40, bWrittenByPeer => bSetpointWritten);
 IF bSetpointWritten THEN
     bNewSetpoint := TRUE;      (* somebody sent us a new setpoint - act on it *)
 END_IF;
 ```
 
 When one write covers several members - an HMI sending a whole block - the
-`sWrittenName`, `nWrittenIndex` and `nWrittenAddr` name the first (lowest
-address) and `nWritten` says how many there were.
+`sFirstWrittenMember`, `nFirstWrittenIndex` and `nFirstWrittenAddress` name the first (lowest
+address) and `nMembersWritten` says how many there were.
 
 ### One variable, one mapping
 
-`eTable`, `nAddress`, `eOnLoss` and `nSafeValue` are taken on the first call
+`eTable`, `nStartAddress`, `eActionOnWriterLoss` and `nSafeValue` are taken on the first call
 that binds. A later call that changes them returns `InvalidArgument` and the
 mapping goes on as bound. Two separate ranges are two variables - or one
 `STRUCT`.
@@ -154,12 +154,12 @@ TYPE PLANT_CFG : STRUCT
   siteName    : STRING(16);       (* 7..15  9 registers *)
 END_STRUCT END_TYPE
 
-node.ModbusMap(anyData := CFG, nAddress := 0, bWritten => bCfgWritten,
-               sWrittenName => sCfgWrittenName);
+node.ModbusMap(anyData := CFG, nStartAddress := 0, bWrittenByPeer => bCfgWritten,
+               sFirstWrittenMember => sCfgWrittenName);
 ```
 
-The HMI writes straight into `CFG`. `bWritten` says a write happened and
-`sWrittenName` which setting, so the program can check it and put the old value
+The HMI writes straight into `CFG`. `bWrittenByPeer` says a write happened and
+`sFirstWrittenMember` which setting, so the program can check it and put the old value
 back when it is out of range:
 
 ```
@@ -189,33 +189,33 @@ A writable address has a problem: the peer that was driving it goes quiet, and
 the last value it sent sits there forever. On a setpoint that can be dangerous.
 
 ```
-node(nNodeId := 60, bFailsafe := TRUE);
-node.ModbusMap(anyData := iSetpoint, nAddress := 40,
-               eOnLoss := E_BeeBusModbusFailsafe.ResetToValue, nSafeValue := 5,
-               bSafeApplied => bWentSafe);
+node(nNodeId := 60, bApplySafeValueOnWriterLoss := TRUE);
+node.ModbusMap(anyData := iSetpoint, nStartAddress := 40,
+               eActionOnWriterLoss := E_BeeBusModbusFailsafe.ResetToValue, nSafeValue := 5,
+               bSafeValueApplied => bWentSafe);
 ```
 
-| `eOnLoss` | |
+| `eActionOnWriterLoss` | |
 | --- | --- |
 | `E_BeeBusModbusFailsafe.HoldLastValue` | leave it where it was (the default) |
 | `E_BeeBusModbusFailsafe.ResetToValue` | put `nSafeValue` in it, in the variable's own type: 5 on a `REAL` is 5.0 |
 
-`bSafeApplied` is `TRUE` on the call after it happens, so you can log it or
+`bSafeValueApplied` is `TRUE` on the call after it happens, so you can log it or
 raise an alarm.
 
 Two things to know:
 
-**`bFailsafe := TRUE` on the node turns the whole mechanism on.** Without it,
-`eOnLoss` does nothing.
+**`bApplySafeValueOnWriterLoss := TRUE` on the node turns the whole mechanism on.** Without it,
+`eActionOnWriterLoss` does nothing.
 
 **Only a single value has a safe state.** A range has no one safe value and a
-string has no numeric one, so `eOnLoss` applies to a single number on a writable
+string has no numeric one, so `eActionOnWriterLoss` applies to a single number on a writable
 table. Anything else ignores it.
 
 ## Reading a peer - `node.ModbusRead`
 
 ```
-eRead := node.ModbusRead(anyData := iRemoteLevel, nPeer := 20, nAddress := 40,
+eRead := node.ModbusRead(anyData := iRemoteLevel, nPeerNodeId := 20, nStartAddress := 40,
                          bExecute := bReadNow);
 ```
 
@@ -231,7 +231,7 @@ taken at that edge. Holding `bExecute` high gives you one read, not a stream.
 The usual shape:
 
 ```
-eRead := node.ModbusRead(anyData := iRemoteLevel, nPeer := 20, nAddress := 40,
+eRead := node.ModbusRead(anyData := iRemoteLevel, nPeerNodeId := 20, nStartAddress := 40,
                          bExecute := bReadNow);
 IF bReadNow AND eRead <> E_BeeBusResult.Queued THEN
     bReadNow := FALSE;                     (* ended: Ok, or the reason *)
@@ -247,10 +247,10 @@ scan on, as above.
 A range is the same, with an array:
 
 ```
-node.ModbusRead(anyData := aRemoteTrend, nPeer := 20, nAddress := 100, bExecute := bReadNow);
+node.ModbusRead(anyData := aRemoteTrend, nPeerNodeId := 20, nStartAddress := 100, bExecute := bReadNow);
 ```
 
-`nLength` lets you move fewer values than the variable holds - `0` uses all of
+`nQuantity` lets you move fewer values than the variable holds - `0` uses all of
 it. Asking for more than it holds is refused (`InvalidArgument`) rather than
 reading off the end.
 
@@ -264,8 +264,8 @@ member as it was and ends the read with `TypeMismatch`.
 ## Writing to a peer - `node.ModbusWrite`
 
 ```
-eWrite := node.ModbusWrite(anyData := iNewSetpoint, nPeer := 20, nAddress := 40,
-                           bConfirmed := TRUE, bExecute := bSend);
+eWrite := node.ModbusWrite(anyData := iNewSetpoint, nPeerNodeId := 20, nStartAddress := 40,
+                           bRequireAcknowledge := TRUE, bExecute := bSend);
 ```
 
 **Only two of the four tables can be written**: `Coil` and `HoldingRegister`.
@@ -280,18 +280,18 @@ variable of that member's type to that member's address - a `REAL` to its two
 registers, a `STRING(16)` to its nine. A peer refuses a value its member cannot
 hold, and the write ends in an error.
 
-### `bConfirmed` - the parameter that matters
+### `bRequireAcknowledge` - the parameter that matters
 
-**`bConfirmed := FALSE`** puts the value on the wire once and forgets it. The
+**`bRequireAcknowledge := FALSE`** puts the value on the wire once and forgets it. The
 result is `Ok` at the edge: *it was sent*. Nothing is retried, and a lost frame
 is a lost value you will not hear about. That is the right trade for a value
 you send often anyway, where the next one is along shortly.
 
-**`bConfirmed := TRUE`** keeps it queued until the peer says it took it,
+**`bRequireAcknowledge := TRUE`** keeps it queued until the peer says it took it,
 retries if nothing comes back, and reports failure. `Queued`, then `Ok` means
 *the peer has it*.
 
-**Use `bConfirmed := TRUE` for setpoints and commands.** A lost setpoint looks
+**Use `bRequireAcknowledge := TRUE` for setpoints and commands.** A lost setpoint looks
 exactly like a delivered one otherwise, and you find out when the plant does
 the wrong thing.
 
@@ -301,7 +301,7 @@ A `STRING` maps like anything else:
 
 ```
 node.ModbusMap(anyData := sStatusText, eTable := E_BeeBusModbusTable.InputRegister,
-               nAddress := 200);
+               nStartAddress := 200);
 ```
 
 It is packed two characters to a register, then the terminator, so a
@@ -310,7 +310,7 @@ characters. A peer reads it with `ModbusRead` into its own `STRING` and gets the
 text back. A `STRING` on its own is written with the length of its text, not
 the size of the field it lands in.
 
-`bWritten` comes once for the whole string rather than once per register.
+`bWrittenByPeer` comes once for the whole string rather than once per register.
 
 ## What can go wrong
 
@@ -322,9 +322,9 @@ the size of the field it lands in.
 | `Timeout` | a confirmed write was never acknowledged |
 | `NodeLost` | the peer left before it was delivered |
 | `Refused` | the peer rejected it |
-| `InvalidArgument` | wrong table for the type, a count Modbus disallows, `nLength` past the variable; `sLastError` says which |
+| `InvalidArgument` | wrong table for the type, a count Modbus disallows, `nQuantity` past the variable; `sLastError` says which |
 | `TypeMismatch` | a read brought a number a member cannot hold; that member kept its value |
-| `QueueFull` | more requests than `nMaxPending` at once; raise it the next scan |
+| `QueueFull` | more requests than `nMaxPendingOperations` at once; raise it the next scan |
 | `Superseded` | a newer write to the same address replaced it before it went out |
 
 `Superseded` is not a fault. If you write the same address twice before the

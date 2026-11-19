@@ -93,8 +93,8 @@ PROGRAM netrun
     rTemp : REAL;
   END_VAR
 
-node(nNodeId := 10, bFailsafe := TRUE, bConnect := NET.bAwake);
-node.Subscribe(anyValue := rTemp, nPeer := 4, sName := 'temp', nTopicId := 1);
+node(nNodeId := 10, bApplySafeValueOnWriterLoss := TRUE, bConnect := NET.bAwake);
+node.Subscribe(anyValue := rTemp, nPeerNodeId := 4, sTopic := 'temp', nTopicId := 1);
 NET.rTemp := rTemp;
 END_PROGRAM
 ```
@@ -146,7 +146,7 @@ PROGRAM main
     node : FB_BeeBusNode;
   END_VAR
 
-node(nNodeId := 10, bFailsafe := TRUE);
+node(nNodeId := 10, bApplySafeValueOnWriterLoss := TRUE);
 (* its methods, then your logic *)
 END_PROGRAM
 ```
@@ -175,7 +175,7 @@ Add `--cap-add=SYS_NICE` to the container if you want them honoured.
 ## What you get
 
 Measured on nine OpenPLC runtimes in containers, reading the rotation the node
-reports (`tRotation` from `node.Statistics`):
+reports (`tTokenRotationTime` from `node.Statistics`):
 
 | | 3-node ring | 6-node plant |
 | --- | --- | --- |
@@ -193,7 +193,7 @@ A sleeping node's rejoin improved in the same proportion - 460 ms down to
 ## Watch it, do not guess it
 
 ```
-node.Statistics(tRotation => tRotation);     (* in netrun, after the node *)
+node.Statistics(tTokenRotationTime => tTokenRotationTime);     (* in netrun, after the node *)
 ```
 
 Divide it by your node count and you have the cost of a hop. If that number is

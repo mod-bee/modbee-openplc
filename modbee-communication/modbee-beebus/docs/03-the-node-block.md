@@ -19,8 +19,8 @@ Runtime"*), never built.
 
 ```
 node(nNodeId := 10, eTransport := E_BeeBusTransport.RuntimeUdp);
-node.Serve(anyData := SET, nTopicId := 300, bWritable := TRUE);
-node.Subscribe(anyValue := rFlow, nPeer := 31, sName := 'flow', nTopicId := 3);
+node.Serve(anyData := SET, nFirstTopicId := 300, bPeersMayChange := TRUE);
+node.Subscribe(anyValue := rFlow, nPeerNodeId := 31, sTopic := 'flow', nTopicId := 3);
 ```
 
 The block itself runs the protocol: it receives, takes the node's turn and
@@ -57,8 +57,8 @@ a request's progress, what arrived) in a record of its own. So:
 A method's outputs are read with `=>`:
 
 ```
-eQ := node.Subscribe(anyValue := rFlow, nPeer := 31, sName := 'flow', nTopicId := 3,
-                     eQuality => eFlowQuality, bSeen => bFlowSeen);
+eQ := node.Subscribe(anyValue := rFlow, nPeerNodeId := 31, sTopic := 'flow', nTopicId := 3,
+                     eQuality => eFlowQuality, bValueEverReceived => bFlowSeen);
 ```
 
 Every method returns an `E_BeeBusResult`. A **request** (`Publish`, `Write`,
@@ -76,21 +76,21 @@ change while it runs.
 
 | `eTransport` | what matters |
 | --- | --- |
-| `RuntimeUdp` | `stNetworkConfig`: `sGroupAddr`, `nUdpPort`, `nTtl`, `sInterfaceAddr` |
-| `RuntimeSerial` | `stSerialConfig`: `sDevice`, `nBaud` |
+| `RuntimeUdp` | `stNetworkConfig`: `sMulticastAddress`, `nUdpPort`, `nMulticastHops`, `sInterfaceAddress` |
+| `RuntimeSerial` | `stSerialConfig`: `sDevice`, `nBaudRate` |
 
 **UDP is the easy one.** Leave `stNetworkConfig` at its defaults and the node
 uses the protocol's own multicast group and port. Two containers on one host,
 or two PCs on one subnet, find each other with no configuration.
 
-Set `sGroupAddr` and `nUdpPort` only to run **two separate BeeBus networks on
+Set `sMulticastAddress` and `nUdpPort` only to run **two separate BeeBus networks on
 one wire** - different group or port and they cannot hear each other.
 
-`nTtl` is how many routers a frame may cross; 0 is 1, this subnet, which is
-usually what you want on a plant. `sInterfaceAddr` picks which network card to
+`nMulticastHops` is how many routers a frame may cross; 0 is 1, this subnet, which is
+usually what you want on a plant. `sInterfaceAddress` picks which network card to
 send from, on a machine with several.
 
-**Serial** is `stSerialConfig.sDevice := '/dev/ttyUSB0'`, and `nBaud` (0 for
+**Serial** is `stSerialConfig.sDevice := '/dev/ttyUSB0'`, and `nBaudRate` (0 for
 the default, 115200).
 
 ```
@@ -99,7 +99,7 @@ VAR
     serial : ST_BeeBusSerialConfig;
 END_VAR
 serial.sDevice := '/dev/ttyUSB0';
-serial.nBaud := 115200;
+serial.nBaudRate := 115200;
 node(nNodeId := 10, eTransport := E_BeeBusTransport.RuntimeSerial, stSerialConfig := serial);
 ```
 
@@ -112,18 +112,18 @@ reported on `bError`, never ignored; the node runs on regardless.
 
 | `eTransport` | `stSerialConfig` | `stNetworkConfig` |
 | --- | --- | --- |
-| `ArduinoSerial` | `nPort`, `nBaud`, `nRxPin`, `nTxPin` | |
-| `ArduinoWiFi` | | `sSsid`, `sWiFiPassword`, `sGroupAddr`, `nUdpPort` |
-| `ArduinoEthernet` | | `sMac`, `sIp`, `sGroupAddr`, `nUdpPort` |
+| `ArduinoSerial` | `nUart`, `nBaudRate`, `nRxPin`, `nTxPin` | |
+| `ArduinoWiFi` | | `sSsid`, `sWiFiPassword`, `sMulticastAddress`, `nUdpPort` |
+| `ArduinoEthernet` | | `sMacAddress`, `sIpAddress`, `sMulticastAddress`, `nUdpPort` |
 
 ```
-serial.nPort := 1;
+serial.nUart := 1;
 serial.nRxPin := 18;
 serial.nTxPin := 17;
 node(nNodeId := 10, eTransport := E_BeeBusTransport.ArduinoSerial, stSerialConfig := serial);
 ```
 
-`nPort` is the hardware serial port: 0 for the first, 1 for `Serial1`. A port
+`nUart` is the hardware serial port: 0 for the first, 1 for `Serial1`. A port
 the board has not got is refused (`InvalidArgument`), never quietly opened on
 UART0 - on the ModBee Node UART0 is the HAT port, where a modem sits. `nRxPin`
 and `nTxPin` are taken only by cores that can remap them (in practice ESP32);
@@ -141,8 +141,8 @@ SPI. It cannot be detected the way Wi-Fi is: Wi-Fi ships inside the core, so its
 header is always on the include path, while a user library is only found when a
 plain `#include` fails and sends arduino-cli looking for it.
 
-`sIp` empty means DHCP, bounded to a second per attempt rather than the
-library's default minute. Give it a fixed address where you can. `sMac` empty
+`sIpAddress` empty means DHCP, bounded to a second per attempt rather than the
+library's default minute. Give it a fixed address where you can. `sMacAddress` empty
 takes a built-in default: fine for one device on a network, a collision the
 moment there are two.
 
@@ -150,19 +150,19 @@ moment there are two.
 
 | | |
 | --- | --- |
-| `bReady` | the node started: its link is open |
-| `bLinkUp` | the network under it is up: Wi-Fi joined, Ethernet cable in and an address held. The same as `bReady` on the Runtime and on a serial line |
+| `bLinkOpen` | the node started: its link is open |
+| `bNetworkUp` | the network under it is up: Wi-Fi joined, Ethernet cable in and an address held. The same as `bLinkOpen` on the Runtime and on a serial line |
 | `bConnected` | in the ring, holding a place in the rotation. The one to interlock on |
 | `bError` | something failed: the link, a setting, or a method call |
 | `eErrorId` | why, as an `E_BeeBusResult`; `Ok` when fine |
 | `sLastError` | what failed, in words |
-| `nAttempts` | how many times the link has been opened, or tried |
-| `tRetryIn` | while a failed open waits, how long until the next try |
+| `nLinkOpenAttemptCount` | how many times the link has been opened, or tried |
+| `tRetryTimeLeft` | while a failed open waits, how long until the next try |
 
-**`bReady` and `bConnected` are different questions.** `bReady` says the node
+**`bLinkOpen` and `bConnected` are different questions.** `bLinkOpen` says the node
 started and holds its socket or port. `bConnected` says it is in a ring with
-somebody. A node alone on a network is `bReady` and not `bConnected`, which is
-correct and not an error. `bLinkUp` without `bConnected` is a board on its
+somebody. A node alone on a network is `bLinkOpen` and not `bConnected`, which is
+correct and not an error. `bNetworkUp` without `bConnected` is a board on its
 network with no ring - exactly what you want to be able to tell apart.
 
 **`sLastError` is worth wiring to something you can see.** A code cannot say
@@ -179,19 +179,19 @@ network is doing: *"joining the network"*, *"no address from DHCP yet"*.
 A USB adapter plugged in after boot, an interface that comes up after the PLC,
 a port another program holds for a while: the node does not give up.
 `eErrorId` reads `NotInitialised`, `sLastError` says why, and the open is tried
-again after 1 s, then 2, 4, 8, 16, and every 30 s from then on. `tRetryIn`
-counts down to the next try. The moment it opens `bError` clears and `bReady` is
+again after 1 s, then 2, 4, 8, 16, and every 30 s from then on. `tRetryTimeLeft`
+counts down to the next try. The moment it opens `bError` clears and `bLinkOpen` is
 set - nothing in your program has to do it. Until then every method returns
 `NotInitialised` and keeps its record.
 
 A **wrong setting** is not retried, because trying again cannot fix it: an
 `eTransport` the target does not have, `nNodeId` 0 or 255, a serial link with no
-`sDevice`, an `nPort` the board has not got. `eErrorId` reads `InvalidArgument`
+`sDevice`, an `nUart` the board has not got. `eErrorId` reads `InvalidArgument`
 and `sLastError` names the setting. Correct it and the link opens - no restart.
 
 ## Changing settings while it runs
 
-`nNodeId`, `eTransport`, `bFailsafe`, `nMaxPending` and every member of
+`nNodeId`, `eTransport`, `bApplySafeValueOnWriterLoss`, `nMaxPendingOperations` and every member of
 `stSerialConfig` and `stNetworkConfig` are read every scan. An HMI that moves
 this node to another id or baud rate takes effect at once:
 
@@ -202,7 +202,7 @@ this node to another id or baud rate takes effect at once:
    subscribe again when it arrives, as for any node that comes back; its own
    subscriptions are asked for again as each peer joins.
 
-`bConnected` drops for the moment it takes, and `nAttempts` counts the opening.
+`bConnected` drops for the moment it takes, and `nLinkOpenAttemptCount` counts the opening.
 A peer that addressed the old `nNodeId` must of course be told the new one.
 
 ## A duplicate id
@@ -247,7 +247,7 @@ a ring you have not joined yet has nowhere to go and is refused with
 varied between 140 ms and 800 ms on the same node:
 
 ```
-eReport := node.Publish(anyValue := rSoilTemp, sName := 'soil_temp', nTopicId := 1,
+eReport := node.Publish(anyValue := rSoilTemp, sTopic := 'soil_temp', nTopicId := 1,
                         bExecute := bAwake AND node.bConnected);
 ```
 
@@ -271,14 +271,14 @@ task's program, never in a global list.
 
 ## Failsafe
 
-`bFailsafe := TRUE` turns on safe states for this node. It does nothing on its
+`bApplySafeValueOnWriterLoss := TRUE` turns on safe states for this node. It does nothing on its
 own - what each address does is set per call of `node.ModbusMap`
-(`eOnLoss`, `nSafeValue`), in [04 - Registers](04-registers.md).
+(`eActionOnWriterLoss`, `nSafeValue`), in [04 - Registers](04-registers.md).
 
 Leave it `FALSE` and a value written by a peer simply stays where it was when
 that peer went quiet.
 
-## nMaxPending
+## nMaxPendingOperations
 
 How many requests (reads, writes, subscriptions) and how many answers can wait
 for the token at once, 1 to 255. 0, the default, is 16 on a board and 50 on the
@@ -287,9 +287,9 @@ method on a later scan. Raise it for a node that keeps many requests in flight,
 and on the node that answers them. Each place costs about 300 bytes of RAM,
 taken when the node starts.
 
-## bDebug
+## bDebugToConsole
 
-`bDebug := TRUE` prints the protocol's own running commentary - joins, token
+`bDebugToConsole := TRUE` prints the protocol's own running commentary - joins, token
 passes, refusals and why - to the console. It may be switched while running.
 On a ModBee Node the commentary is left out of the firmware to save flash, so it
 prints nothing there unless the firmware is built with `BEEBUS_ENABLE_DEBUG`.

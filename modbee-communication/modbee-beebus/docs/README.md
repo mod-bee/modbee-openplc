@@ -29,7 +29,7 @@ PLC, `node.Bind` on the panel, and nothing else in either program.
 **You are connecting an HMI.** Put what it shows in one `STRUCT` and what it
 sets in another: `node.PublishStruct` publishes the first, one topic per member
 ([05 - Topics](05-topics.md)), and `node.ModbusMap` maps the second as holding
-registers the HMI writes, with `sWrittenName` saying which setting it changed
+registers the HMI writes, with `sFirstWrittenMember` saying which setting it changed
 ([04 - Registers](04-registers.md)). One call each, whatever the size.
 
 **Something is not working.** [09 - Troubleshooting](09-troubleshooting.md)

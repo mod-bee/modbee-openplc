@@ -43,9 +43,9 @@ END_TYPE
 The PLC, node 1:
 
 ```
-node.Serve(anyData := SET, nTopicId := 300, bWritable := TRUE);
-node.Serve(anyData := CMD, nTopicId := 400, bWritable := TRUE, bCommand := TRUE,
-           tPulse := T#500ms);
+node.Serve(anyData := SET, nFirstTopicId := 300, bPeersMayChange := TRUE);
+node.Serve(anyData := CMD, nFirstTopicId := 400, bPeersMayChange := TRUE, bMembersAreCommands := TRUE,
+           tPulseLength := T#500ms);
 
 pump(RUN_TIME := SET.runTime, START := CMD.start, STOP := CMD.stop, ...);
 ```
@@ -53,9 +53,9 @@ pump(RUN_TIME := SET.runTime, START := CMD.start, STOP := CMD.stop, ...);
 The panel, node 2:
 
 ```
-node.Bind(anyData := SET, nPeer := 1, nTopicId := 300, bReliable := TRUE,
+node.Bind(anyData := SET, nPeerNodeId := 1, nFirstTopicId := 300, bDeliverEveryChange := TRUE,
           eBindState => eSetState, bInSync => bSetInSync);
-node.Bind(anyData := CMD, nPeer := 1, nTopicId := 400, bReliable := TRUE);
+node.Bind(anyData := CMD, nPeerNodeId := 1, nFirstTopicId := 400, bDeliverEveryChange := TRUE);
 ```
 
 The operator types 15 minutes into the panel's `SET.runTime`. The panel's bind
@@ -67,7 +67,7 @@ goes `Pending`, the change reaches the PLC, `SET.runTime` there becomes
 
 A change is put into the member when `Serve` is called. The program then runs -
 every block that reads the member sees the new value - and after that scan (and
-`tSettle`, if the block that judges it needs longer) the member is read back:
+`tAnswerDelay`, if the block that judges it needs longer) the member is read back:
 
 - still holding what was asked: **Accepted**;
 - holding something else: **Changed**, and the panel is told the value kept.
@@ -75,26 +75,26 @@ every block that reads the member sees the new value - and after that scan (and
 So the rule that a setting must stay in range lives where it already does, in
 the block that uses it. A block that refuses a value and puts its own back
 needs no extra rung to tell the panel; one that clamps it is reported the same
-way. `nRefused` on `Serve` counts them, and `bChanged`, `nChanged`,
-`sChangedName` and `nChangedBy` say what was taken by this call.
+way. `nRefusedChangeCount` on `Serve` counts them, and `bChangedByPeer`, `nMembersChanged`,
+`sFirstChangedMember` and `nChangedByNodeId` say what was taken by this call.
 
-`nDepth` holds each member in a ring of that many while the network is away,
+`nOfflineBufferDepth` holds each member in a ring of that many while the network is away,
 as `node.Buffer` does for one topic.
 
 ## Commands
 
-`bCommand := TRUE` makes every member a command: each change is one event for
+`bMembersAreCommands := TRUE` makes every member a command: each change is one event for
 the program, taken exactly once - not twice when an acknowledgement is lost and
 the change is sent again, and not lost when the network drops a frame. A `BOOL`
-command goes back to `FALSE` after `tPulse`, so the panel sees it go back too.
+command goes back to `FALSE` after `tPulseLength`, so the panel sees it go back too.
 
 On the panel, setting `CMD.start := TRUE` is the whole button. The bind takes it
 to the PLC, the PLC takes it once, and `start` comes back `FALSE` when the pulse
 ends.
 
-## bReliable, and when not
+## bDeliverEveryChange, and when not
 
-`bReliable := TRUE` on the bind is for setpoints, settings and configuration:
+`bDeliverEveryChange := TRUE` on the bind is for setpoints, settings and configuration:
 every change arrives, and one a lost frame took is sent again, as the current
 value, within a rotation or two. It costs about two bytes a rotation while
 values move, nothing while they do not.
@@ -111,15 +111,15 @@ cannot compare an enumeration:
 | output | show |
 | --- | --- |
 | `bInSync` | the values are the PLC's |
-| `bPending` | "sending..." - a change is with the PLC |
-| `bRefused` | "refused: kept *value*" - the member already holds the kept value; `sRefusedName` says which member |
-| `bFailed` | "not answered" - the member holds the PLC's last value |
+| `bChangePending` | "sending..." - a change is with the PLC |
+| `bSettingRefused` | "refused: kept *value*" - the member already holds the kept value; `sFirstRefusedMember` says which member |
+| `bNoDecisionReceived` | "not answered" - the member holds the PLC's last value |
 | `eBindState = E_BeeBusBindState.Offline` | the PLC is not on the network |
 | `eBindState = E_BeeBusBindState.Syncing` | waiting for the PLC's values (at start, and after it restarted) |
 
-`bRefused` and `bFailed` clear by themselves on the member's next change or the
-PLC's next value. `tOldest` is how long since the oldest member last had a value
-from the PLC, and `bNewValue` says one arrived since the last call.
+`bSettingRefused` and `bNoDecisionReceived` clear by themselves on the member's next change or the
+PLC's next value. `tOldestMemberAge` is how long since the oldest member last had a value
+from the PLC, and `bValueReceived` says one arrived since the last call.
 
 ## Restarts
 
@@ -130,9 +130,9 @@ own: `Syncing`, then `InSync` with the PLC's values. Nothing in the program.
 ## One write, with its answer
 
 For a single write that is not a bind - a value a sequence sets once -
-`node.Write` with `bWantResult := TRUE` waits for the owner's decision: the
-result is `Queued`, then `Ok` with `eOutcome` (`E_BeeBusOutcome.Accepted`,
-`Changed` ...), `bAccepted`, `bRefused` and `fKeptValue`, held until the next
+`node.Write` with `bAskOwnerDecision := TRUE` waits for the owner's decision: the
+result is `Queued`, then `Ok` with `eOwnerDecision` (`E_BeeBusOutcome.Accepted`,
+`Changed` ...), `bOwnerAccepted`, `bOwnerKeptOtherValue` and `fOwnerKeptValue`, held until the next
 edge.
 
 ## What not to write any more

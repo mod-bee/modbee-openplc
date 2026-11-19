@@ -50,7 +50,7 @@ gets it; writes address 40 and changes it.
 
 ```
 node.ModbusMap(anyData := rTankLevel, eTable := E_BeeBusModbusTable.HoldingRegister,
-               nAddress := 40);
+               nStartAddress := 40);
 ```
 
 Use registers when:
@@ -68,7 +68,7 @@ Your variable has a **name** and a type. Peers subscribe to it, and the value
 arrives on its own when it changes.
 
 ```
-node.Topic(anyValue := rTankLevel, sName := 'tank_level', nTopicId := 1);
+node.Topic(anyValue := rTankLevel, sTopic := 'tank_level', nTopicId := 1);
 ```
 
 Use topics when:
@@ -107,7 +107,7 @@ END_VAR
 node(nNodeId := 10, eTransport := E_BeeBusTransport.RuntimeUdp);
 
 (* 2. What this node shares: method calls on it, every scan. *)
-node.Topic(anyValue := rTankLevel, sName := 'tank_level', nTopicId := 1);
+node.Topic(anyValue := rTankLevel, sTopic := 'tank_level', nTopicId := 1);
 
 (* 3. Your program, as normal. *)
 rTankLevel := rTankLevel + 0.1;

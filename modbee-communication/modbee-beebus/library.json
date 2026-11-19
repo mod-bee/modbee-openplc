@@ -1,9 +1,9 @@
 {
   "name": "modbee-beebus",
   "displayName": "BeeBus",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "namespace": "modbee_beebus",
-  "description": "One function block, FB_BeeBusNode, that puts a BeeBus node inside an OpenPLC program, the work as its methods. One node per segment: serial, Wi-Fi or Ethernet on a board, serial or UDP on the Runtime, its link settings in the option structures ST_BeeBusSerialConfig and ST_BeeBusNetworkConfig, read every scan. Topics with typed values: Topic, Publish and Subscribe for one value, PublishStruct and SubscribeStruct for a whole STRUCT, Serve and Bind for settings a panel changes and the PLC decides, Write with the owner's answer, Buffer for store-and-forward, and a data quality on everything received. Registers for Modbus compatibility: ModbusMap, ModbusRead and ModbusWrite, a value to a whole STRUCT. Statistics and PeerStatus measure the ring. Nothing here configures timing: every protocol timeout is measured from the network.",
+  "description": "One function block, FB_BeeBusNode, that puts a BeeBus node inside an OpenPLC program, the work as its methods. One node per segment: serial, Wi-Fi or Ethernet on a board, serial or UDP on the Runtime, its link settings in the option structures ST_BeeBusSerialConfig and ST_BeeBusNetworkConfig, read every scan. Topics with typed values: Topic, Publish and Subscribe for one value, PublishStruct and SubscribeStruct for a whole STRUCT, Serve and Bind for settings a panel changes and the PLC decides, Write with the owner's answer, Buffer for store-and-forward, and a data quality on everything received. Registers for Modbus compatibility: ModbusMap, ModbusRead and ModbusWrite, a value to a whole STRUCT. Statistics and PeerStatus measure the ring. No timeouts to set: the protocol measures them from the network.",
   "build": {
     "verify": "arduino",
     "core": "esp32:esp32"

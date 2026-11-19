@@ -1,6 +1,8 @@
 (* A BeeBus node: this PLC's place on one segment, serial or UDP. Call it once
 every scan, in the network task. Everything the PLC owns, serves, subscribes,
 binds, reads or writes on that segment is a method of this block.
+BeeBus passes a token round the nodes; a node in the ring is one taking
+its turn, and only the node holding the token sends.
 
 nNodeId     1..254, unique on the segment.
 eTransport  which link. The target must have it; one it does not have is
@@ -10,7 +12,7 @@ eTransport  which link. The target must have it; one it does not have is
              E_BeeBusTransport.RuntimeSerial    a serial device on the
                                                 Runtime, stSerialConfig.sDevice
              E_BeeBusTransport.ArduinoSerial    a board's hardware serial,
-                                                stSerialConfig.nPort and pins
+                                                stSerialConfig.nUart and pins
              E_BeeBusTransport.ArduinoWiFi      a board's Wi-Fi, UDP multicast
              E_BeeBusTransport.ArduinoEthernet  a board's Ethernet, UDP
                                                 multicast. Needs
@@ -21,9 +23,9 @@ bConnect    be in the ring. TRUE (default) joins and stays. FALSE leaves:
            what a node that wakes, reports and sleeps again wants. Every
            binding survives the gap: nothing is registered again on waking,
            and a subscriber's stream picks up where it left off.
-bFailsafe   apply each address's safe value (ModbusMap eOnLoss) when the peer
+bApplySafeValueOnWriterLoss   apply each address's safe value (ModbusMap eActionOnWriterLoss) when the peer
            driving it goes silent.
-nMaxPending how many requests (reads, writes, subscriptions) and how many
+nMaxPendingOperations how many requests (reads, writes, subscriptions) and how many
            answers can wait for the token at once, 1..255. 0 (default) is 16
            on a board and 50 on the Runtime. Past it a request is refused
            with E_BeeBusResult.QueueFull and asked again by its method on a
@@ -31,41 +33,41 @@ nMaxPending how many requests (reads, writes, subscriptions) and how many
            and on the node that answers them. Each place costs about 300
            bytes of RAM, taken when the node starts; too many for the memory
            and the node does not start, sLastError saying so.
-bDebug      print the protocol's own debug lines to the console.
+bDebugToConsole  print the protocol's own debug lines to the console.
 stSerialConfig  ST_BeeBusSerialConfig, a serial link.
              sDevice   RuntimeSerial: the device, '/dev/ttyUSB0'
-             nBaud     0 for the default, 115200
-             nPort     ArduinoSerial: which hardware serial, 0 for the first
+             nBaudRate  0 for the default, 115200
+             nUart     ArduinoSerial: which hardware serial, 0 for the first
              nRxPin    ArduinoSerial on an ESP32: the receive pin, -1 for the
                        board's own
              nTxPin    the transmit pin, -1 for the board's own
 stNetworkConfig  ST_BeeBusNetworkConfig, a UDP link.
-             sGroupAddr      the multicast group, empty for the protocol's
+             sMulticastAddress  the multicast group, empty for the protocol's
                              own (239.192.7.126)
              nUdpPort        0 for the protocol's own (7126)
-             nTtl            RuntimeUdp: multicast hops, 0 for 1 (this subnet)
-             sInterfaceAddr  RuntimeUdp: the interface address to send from,
+             nMulticastHops  RuntimeUdp: multicast hops, 0 for 1 (this subnet)
+             sInterfaceAddress  RuntimeUdp: the interface address to send from,
                              empty to let the host choose
              sSsid           ArduinoWiFi: the network to join
              sWiFiPassword   its password, up to 63 characters (WPA2)
-             sMac            ArduinoEthernet: six hex bytes,
+             sMacAddress     ArduinoEthernet: six hex bytes,
                              'DE:AD:BE:EF:FE:ED'. Empty takes a built-in
                              default: fine for ONE device on a network
-             sIp             ArduinoEthernet: a fixed address, empty for DHCP.
+             sIpAddress      ArduinoEthernet: a fixed address, empty for DHCP.
                              Prefer a fixed address: DHCP blocks while it
                              asks, so each attempt is bounded to a second
            A member that does not apply to the target - sDevice on a board,
            sSsid on the Runtime - is reported on bError, never ignored.
 
-bReady      the node started: its link is open.
-bLinkUp     the network under it is up: Wi-Fi joined, or the Ethernet cable
-           in and an address held. The same as bReady on the Runtime and on
+bLinkOpen   the node started: its link is open.
+bNetworkUp  the network under it is up: Wi-Fi joined, or the Ethernet cable
+           in and an address held. The same as bLinkOpen on the Runtime and on
            a serial line.
 bConnected  in the ring, holding a place in the rotation. THE ONE TO
            INTERLOCK ON.
 bError      something failed: the link, a setting, or a method call.
 eErrorId    why. E_BeeBusResult.Ok when fine.
-             NotInitialised   the link did not open; tried again, below
+             NotInitialised   the link is not open yet, retrying (sLastError says why)
              InvalidArgument  a setting is wrong, or a method's record was
                               refused
              DuplicateNodeId  another device on this segment transmits under
@@ -82,8 +84,8 @@ sLastError  what failed, in words: the operating system's ("could not open
            board it also tells the network faults apart: "joining the
            network", "Ethernet cable unplugged", "no address from DHCP yet",
            "no Ethernet controller found on SPI".
-nAttempts   how many times the link has been opened, or tried.
-tRetryIn    while a failed open waits to be tried again, how long until it
+nLinkOpenAttemptCount  how many times the link has been opened, or tried.
+tRetryTimeLeft  while a failed open waits to be tried again, how long until it
            is. T#0s otherwise.
 
 METHODS
@@ -112,11 +114,11 @@ record goes on as bound. The terms (deadband, period, reliability, pulse,
 settle, depth) may change while it runs. A refused record is tried again
 when what it is changes.
 
-  node.Topic(anyValue, sName, nTopicId)
+  node.Topic(anyValue, sTopic, nTopicId)
      A TOPIC THIS NODE OWNS, bound to the variable itself. Its declared type
      is the type on the wire: BOOL, SINT, USINT, BYTE, INT, UINT, WORD,
      DINT, UDINT, DWORD, LINT, ULINT, LWORD, REAL, LREAL, LTIME (LINT
-     nanoseconds) or STRING. sName, up to 253 characters, is the identity:
+     nanoseconds) or STRING. sTopic, up to 253 characters, is the identity:
      every peer addresses the topic by it. nTopicId, 1..32767, unique on
      this node; under 128 costs one byte on the wire. Once bound the node
      publishes on its own, to every subscriber on its own terms: move the
@@ -124,162 +126,162 @@ when what it is changes.
      InvalidArgument (an empty or too long name, a type the wire cannot
      carry, an id already bound).
 
-  node.Publish(anyValue, sName, nTopicId, ePublishMode, nPeer, bConfirmed,
+  node.Publish(anyValue, sTopic, nTopicId, ePublishMode, nPeerNodeId, bRequireAcknowledge,
                bExecute)
      A TOPIC THIS NODE OWNS, SENT ON A RISING EDGE of bExecute: an event
      that must go the moment something happened. ePublishMode
      E_BeeBusPublishMode.All: every node at once, one frame however many
      listen, applied by every node holding the topic; nothing acknowledges
-     it, so bConfirmed is refused (InvalidArgument). ToPeer: nPeer only, on
-     its counted stream; with bConfirmed the frame is retried until nPeer
-     acknowledges it. Topic beside it, on the same variable, sName and
+     it, so bRequireAcknowledge is refused (InvalidArgument). ToPeer: nPeerNodeId only, on
+     its counted stream; with bRequireAcknowledge the frame is retried until nPeerNodeId
+     acknowledges it. Topic beside it, on the same variable, sTopic and
      nTopicId, also sends it on the subscribers' own terms. Queued while a
      confirmed publish waits, then Ok; unconfirmed, Ok at the edge.
      UnknownNode, Timeout, InvalidArgument.
 
-  node.Subscribe(anyValue, nPeer, sName, nTopicId, fDeadband, tPeriod,
-                 bReliable, eQuality =>, bSeen =>, tAge =>, bNewValue =>,
-                 nMissed =>)
+  node.Subscribe(anyValue, nPeerNodeId, sTopic, nTopicId, fDeadband, tMaxSendInterval,
+                 bDeliverEveryChange, eQuality =>, bValueEverReceived =>, tValueAge =>, bValueReceived =>,
+                 nMissedUpdateCount =>)
      A PEER'S TOPIC, landing in anyValue, of the type the owner bound.
      fDeadband: sent again once it has moved this far, 0 every change.
-     tPeriod: sent at least this often, moved or not, T#0s never.
-     bReliable FALSE (Live): best effort, newest wins, for levels and
+     tMaxSendInterval: sent at least this often, moved or not, T#0s never.
+     bDeliverEveryChange FALSE (Live): best effort, newest wins, for levels and
      speeds. TRUE: every change arrives, and one a lost frame took is sent
      again, as the current value, within a rotation or two; for a setpoint
      or a setting. eQuality Unknown before anything arrived, then Good,
-     Uncertain or Bad as the value ages. bSeen: a value has arrived, for a
-     ladder rung, which cannot compare an enumeration. tAge since the last
-     value. bNewValue: one arrived since the last call. nMissed: publishes
+     Uncertain or Bad as the value ages. bValueEverReceived: a value has arrived, for a
+     ladder rung, which cannot compare an enumeration. tValueAge since the last
+     value. bValueReceived: one arrived since the last call. nMissedUpdateCount: publishes
      the sequence says never arrived, a running total. Re-asked by itself
      whenever the peer rejoins. Ok, or the subscription's refusal.
 
-  node.PublishStruct(anyData, nTopicId, sPrefix, bWritable, tPulse, tSettle,
-                     nMembers =>, bWritten =>, nWritten =>, sWrittenName =>,
-                     nWrittenIndex =>, nWrittenBy =>, nLost =>)
+  node.PublishStruct(anyData, nFirstTopicId, sTopicPrefix, bPeersMayWrite, tPulseLength, tAnswerDelay,
+                     nMembers =>, bWrittenByPeer =>, nMembersWritten =>, sFirstWrittenMember =>,
+                     nFirstWrittenIndex =>, nWrittenByNodeId =>, nDroppedWriteCount =>)
      A WHOLE STRUCT AS TOPICS THIS NODE OWNS, one per member: the member
-     name is the topic name, nTopicId + its position the id. An ARRAY of
-     STRUCTs or of values works the same. bWritable: peers may write the
+     name is the topic name, nFirstTopicId + its position the id. An ARRAY of
+     STRUCTs or of values works the same. bPeersMayWrite: peers may write the
      members; a write is held and taken in this call, one per member a
-     scan, oldest first. tPulse: a BOOL member written TRUE drops back to
-     FALSE this long after. tSettle: a write that asked for a result is
+     scan, oldest first. tPulseLength: a BOOL member written TRUE drops back to
+     FALSE this long after. tAnswerDelay: a write that asked for a result is
      answered after the program has run a scan with it, plus this long.
-     bWritten: writes were taken by this call; nWritten how many,
-     sWrittenName and nWrittenIndex the first, nWrittenBy the node that
-     wrote it (held). nLost: writes dropped, a member written more than 4
+     bWrittenByPeer: writes were taken by this call; nMembersWritten how many,
+     sFirstWrittenMember and nFirstWrittenIndex the first, nWrittenByNodeId the node that
+     wrote it (held). nDroppedWriteCount: writes dropped, a member written more than 4
      times between two scans keeping its 4 newest. Ok, InvalidArgument.
 
-  node.SubscribeStruct(anyData, nPeer, nTopicId, sPrefix, fDeadband,
-                       tPeriod, bReliable, nMembers =>, eQuality =>,
-                       bSeen =>, tOldest =>, nNewValues =>, sNewName =>,
-                       nNewIndex =>, nMissed =>)
+  node.SubscribeStruct(anyData, nPeerNodeId, nFirstTopicId, sTopicPrefix, fDeadband,
+                       tMaxSendInterval, bDeliverEveryChange, nMembers =>, eQuality =>,
+                       bAllMembersEverReceived =>, tOldestMemberAge =>, nMembersReceived =>, sFirstReceivedMember =>,
+                       nFirstReceivedIndex =>, nMissedUpdateCount =>)
      A PEER'S STRUCT INTO YOURS, of the same type, member by member.
-     eQuality is the worst member's; bSeen every member has arrived;
-     tOldest the oldest member's age; nNewValues the members that arrived
-     since the last call, sNewName and nNewIndex the first (held). Ok, or a
+     eQuality is the worst member's; bAllMembersEverReceived every member has arrived;
+     tOldestMemberAge the oldest member's age; nMembersReceived the members that arrived
+     since the last call, sFirstReceivedMember and nFirstReceivedIndex the first (held). Ok, or a
      refusal.
 
-  node.Serve(anyData, nTopicId, sPrefix, bWritable, bCommand, tPulse,
-             tSettle, nDepth, nMembers =>, bChanged =>, nChanged =>,
-             sChangedName =>, nChangedIndex =>, nChangedBy =>, nRefused =>,
-             nLost =>)
+  node.Serve(anyData, nFirstTopicId, sTopicPrefix, bPeersMayChange, bMembersAreCommands, tPulseLength,
+             tAnswerDelay, nOfflineBufferDepth, nMembers =>, bChangedByPeer =>, nMembersChanged =>,
+             sFirstChangedMember =>, nFirstChangedIndex =>, nChangedByNodeId =>, nRefusedChangeCount =>,
+             nDroppedChangeCount =>)
      A STRUCT THIS NODE SERVES AND DECIDES: the owner side of Bind. A change
      a peer asks for is put into the member in this call, the program runs
-     with it, and after that scan (and tSettle) the member is read back:
+     with it, and after that scan (and tAnswerDelay) the member is read back:
      still holding what was asked, Accepted; holding something else
      because a block put its own value back, Changed, with the value kept.
-     bCommand: every member is a command, taken once and answered Accepted.
-     nDepth, 0..127: each member held in a ring of this many while the
-     network is away. bChanged: changes taken by this call (nChanged,
-     sChangedName, nChangedIndex, nChangedBy held). nRefused: changes not
+     bMembersAreCommands: every member is a command, taken once and answered Accepted.
+     nOfflineBufferDepth, 0..127: each member held in a ring of this many while the
+     network is away. bChangedByPeer: changes taken by this call (nMembersChanged,
+     sFirstChangedMember, nFirstChangedIndex, nChangedByNodeId held). nRefusedChangeCount: changes not
      kept as asked. Ok, InvalidArgument.
 
-  node.Bind(anyData, nPeer, nTopicId, sPrefix, bReliable, fDeadband,
-            nMembers =>, eBindState =>, bInSync =>, bPending =>,
-            bRefused =>, sRefusedName =>, nRefusedIndex =>, bFailed =>,
-            tOldest =>, bNewValue =>)
+  node.Bind(anyData, nPeerNodeId, nFirstTopicId, sTopicPrefix, bDeliverEveryChange, fDeadband,
+            nMembers =>, eBindState =>, bInSync =>, bChangePending =>,
+            bSettingRefused =>, sFirstRefusedMember =>, nFirstRefusedIndex =>, bNoDecisionReceived =>,
+            tOldestMemberAge =>, bValueReceived =>)
      A STRUCT BOUND TO ONE A PEER SERVES, both ways: the members hold the
      owner's values, and a member the program changes is asked of the
      owner, which decides; whatever it decides, the member ends with its
      value. eBindState, the worst member: Offline, Syncing, Failed,
-     Refused, Pending, InSync. bRefused: the owner kept another value for a
-     member, which now holds it (sRefusedName, nRefusedIndex). bFailed: no
+     Refused, Pending, InSync. bSettingRefused: the owner kept another value for a
+     member, which now holds it (sFirstRefusedMember, nFirstRefusedIndex). bNoDecisionReceived: no
      decision came back. Ok, InvalidArgument.
 
-  node.Write(anyValue, nPeer, nTopicId, bConfirmed, bWantResult, bExecute,
-             eOutcome =>, bAccepted =>, bRefused =>, fKeptValue =>)
+  node.Write(anyValue, nPeerNodeId, nTopicId, bRequireAcknowledge, bAskOwnerDecision, bExecute,
+             eOwnerDecision =>, bOwnerAccepted =>, bOwnerKeptOtherValue =>, fOwnerKeptValue =>)
      ONE VALUE INTO A PEER'S WRITABLE TOPIC, on a rising edge of bExecute.
-     bConfirmed: retried until acknowledged, applied once however often it
-     was sent. bWantResult: ask the owner what it did (makes it
-     confirmed): eOutcome Accepted, Changed (it kept another value), or
-     Refused, with fKeptValue; NoAnswer until one came. Queued while it
+     bRequireAcknowledge: retried until acknowledged, applied once however often it
+     was sent. bAskOwnerDecision: ask the owner what it did (makes it
+     confirmed): eOwnerDecision Accepted, Changed (it kept another value), or
+     Refused, with fOwnerKeptValue; NoAnswer until one came. Queued while it
      runs, then Ok. Refused (a read-only topic), TypeMismatch, Timeout (no
      decision came back), UnknownNode.
 
-  node.Buffer(sName, nDepth, nHeld =>)
+  node.Buffer(sTopic, nOfflineBufferDepth, nSamplesWaiting =>)
      STORE AND FORWARD for one of this node's topics (Topic, Publish): up to
-     nDepth samples, each with the age it was taken at, held while there
+     nOfflineBufferDepth samples, each with the age it was taken at, held while there
      is nowhere to send them, so a subscriber that comes back gets the
-     history. 0 turns it off. nHeld: samples waiting. A buffered topic
-     goes out from its ring, change by change: a subscriber's tPeriod does
+     history. 0 turns it off. nSamplesWaiting: samples waiting. A buffered topic
+     goes out from its ring, change by change: a subscriber's tMaxSendInterval does
      not apply, and a new subscriber waits for the next change. Ok,
      NotMapped (no such topic on this node).
 
-  node.ModbusMap(anyData, eTable, nAddress, eOnLoss, nSafeValue,
-                 nCount =>, bWritten =>, sWrittenName =>, nWrittenIndex =>,
-                 nWrittenAddr =>, nWritten =>, bSafeApplied =>)
+  node.ModbusMap(anyData, eTable, nStartAddress, eActionOnWriterLoss, nSafeValue,
+                 nAddressesUsed =>, bWrittenByPeer =>, sFirstWrittenMember =>, nFirstWrittenIndex =>,
+                 nFirstWrittenAddress =>, nMembersWritten =>, bSafeValueApplied =>)
      YOUR VARIABLE AT MODBUS ADDRESSES, so peers can read and write it: a
      value, an array or a whole STRUCT, laid out member by member from
-     nAddress (a REAL two registers, high word first; a STRING(n) n/2 + 1).
+     nStartAddress (a REAL two registers, high word first; a STRING(n) n/2 + 1).
      eTable: Coil, HoldingRegister (default), DiscreteInput or
-     InputRegister; a coil or input table holds BOOLs only. eOnLoss
+     InputRegister; a coil or input table holds BOOLs only. eActionOnWriterLoss
      ResetToValue: a single number goes to nSafeValue, in its own type, when
-     the peer writing it goes silent (bFailsafe). nCount: addresses taken.
-     bWritten: a peer wrote some since the last call (sWrittenName,
-     nWrittenIndex, nWrittenAddr, nWritten held). bSafeApplied: the safe
+     the peer writing it goes silent (bApplySafeValueOnWriterLoss). nAddressesUsed: addresses taken.
+     bWrittenByPeer: a peer wrote some since the last call (sFirstWrittenMember,
+     nFirstWrittenIndex, nFirstWrittenAddress, nMembersWritten held). bSafeValueApplied: the safe
      value was applied. Ok, InvalidArgument (refused whole, never a member
      skipped, which would move every address after it).
 
-  node.ModbusRead(anyData, nPeer, eTable, nAddress, nLength, bExecute)
+  node.ModbusRead(anyData, nPeerNodeId, eTable, nStartAddress, nQuantity, bExecute)
      A PEER'S ADDRESSES INTO YOUR VARIABLE, laid out as ModbusMap lays it
      out, on a rising edge of bExecute; one request for the whole range.
-     nLength: how many values, every array element and member one; 0 all.
+     nQuantity: how many values, every array element and member one; 0 all.
      The values land together when it ends, never half a value. Queued,
      then Ok. TypeMismatch (a register held a number its member cannot -
      300 for a USINT - and that member was left alone), InvalidArgument,
      UnknownNode, Timeout.
 
-  node.ModbusWrite(anyData, nPeer, eTable, nAddress, nLength, bConfirmed,
+  node.ModbusWrite(anyData, nPeerNodeId, eTable, nStartAddress, nQuantity, bRequireAcknowledge,
                    bExecute)
      YOUR VARIABLE INTO A PEER'S ADDRESSES, on a rising edge of bExecute,
      the values as they were at the edge. Coil or HoldingRegister only.
-     bConfirmed: Queued until the peer acknowledges, then Ok; unconfirmed,
+     bRequireAcknowledge: Queued until the peer acknowledges, then Ok; unconfirmed,
      Ok at the edge. InvalidArgument (a read-only table, a value the table
      cannot hold), UnknownNode, Timeout, Refused.
 
-  node.Statistics(nIdInUse =>, nMembers =>, tRotation =>, nPendingOps =>,
-                  nCrcErrors =>, nNoiseBytes =>)
-     THE NODE AND ITS SEGMENT, measured. nMembers: nodes in the ring, this
-     one included. tRotation: how long the token takes to come round.
-     nPendingOps: operations queued and not finished. nCrcErrors: frames
+  node.Statistics(nNodeIdInUse =>, nNodesInRing =>, tTokenRotationTime =>, nPendingOperations =>,
+                  nChecksumErrorCount =>, nNoiseByteCount =>)
+     THE NODE AND ITS SEGMENT, measured. nNodesInRing: nodes in the ring, this
+     one included. tTokenRotationTime: how long the token takes to come round.
+     nPendingOperations: operations queued and not finished. nChecksumErrorCount: frames
      that arrived corrupt; rising on a quiet bus is the number to judge a
-     link by. nNoiseBytes: bytes discarded hunting for a frame start;
+     link by. nNoiseByteCount: bytes discarded hunting for a frame start;
      climbing steadily means a floating bus, a missing termination or a
      baud rate mismatch. Ok; NotInitialised before the node started.
 
-  node.PeerStatus(nPeer, bAlive =>, bSeen =>, tSilent =>, tHop =>,
-                  tHopTimeout =>)
-     ONE PEER, from this node. bAlive: in the ring. bSeen: heard at least
+  node.PeerStatus(nPeerNodeId, bInRing =>, bEverHeard =>, tSinceLastHeard =>, tTokenHopTime =>,
+                  tTokenHopTimeout =>)
+     ONE PEER, from this node. bInRing: in the ring. bEverHeard: heard at least
      once since the program started: FALSE is a peer never fitted or given
-     the wrong id, TRUE with bAlive FALSE one that dropped off. tSilent:
-     since it was last heard. tHop: how long it takes to accept the token;
-     tHopTimeout: what it is allowed. A hop time creeping towards its limit
+     the wrong id, TRUE with bInRing FALSE one that dropped off. tSinceLastHeard:
+     since it was last heard. tTokenHopTime: how long it takes to accept the token;
+     tTokenHopTimeout: what it is allowed. A hop time creeping towards its limit
      is a link about to drop a node. Ok, InvalidArgument (0 or 255).
 
 ---
 
   node(nNodeId := 10, eTransport := E_BeeBusTransport.RuntimeUdp);
-  node.Serve(anyData := SET, nTopicId := 300, bWritable := TRUE);
-  node.Subscribe(anyValue := rLevel, nPeer := 2, sName := 'level', nTopicId := 100,
+  node.Serve(anyData := SET, nFirstTopicId := 300, bPeersMayChange := TRUE);
+  node.Subscribe(anyValue := rLevel, nPeerNodeId := 2, sTopic := 'level', nTopicId := 100,
                  eQuality => eLevelQuality);
 
 Call the block first in the scan and its methods after it: a method above it
@@ -290,8 +292,8 @@ A LINK THAT WILL NOT OPEN IS TRIED AGAIN. A USB adapter plugged in after
 boot, a network that comes up after the PLC, a port another program is
 holding: eErrorId reads NotInitialised, sLastError says why, and the open is
 tried again 1 s later, then 2, 4, 8, 16, and every 30 s from then on.
-tRetryIn counts down to the next try and nAttempts counts them. The moment
-it opens, bError clears and bReady is set.
+tRetryTimeLeft counts down to the next try and nLinkOpenAttemptCount counts them. The moment
+it opens, bError clears and bLinkOpen is set.
 
 A WRONG SETTING IS NOT RETRIED, because trying again cannot fix it: a link
 the target does not have, nNodeId 0 or 255, a serial link with no device, a
@@ -301,8 +303,8 @@ names the setting. Correct it and the link opens, no restart.
 ONE SCAN BEFORE OPENING. The link is built on the block's second scan, so
 every method has been called once first, wherever it sits in the program.
 
-SETTINGS MAY CHANGE WHILE IT RUNS. nNodeId, eTransport, bFailsafe,
-nMaxPending and every member of the two option structures are read every
+SETTINGS MAY CHANGE WHILE IT RUNS. nNodeId, eTransport, bApplySafeValueOnWriterLoss,
+nMaxPendingOperations and every member of the two option structures are read every
 scan. A change leaves the ring and opens again with the new ones, on the
 same node: every record the methods bound stays bound, and the node's peers
 subscribe again when it returns under its new id.
@@ -318,123 +320,121 @@ FUNCTION_BLOCK FB_BeeBusNode
   VAR_INPUT
     nNodeId : BYTE;                          (* 1..254, unique on the segment *)
     eTransport : E_BeeBusTransport;          (* RuntimeUdp (default), RuntimeSerial, ArduinoSerial, ArduinoWiFi, ArduinoEthernet *)
-    bConnect : BOOL := TRUE;                 (* TRUE joins the ring and stays; FALSE leaves it, every binding kept *)
-    bFailsafe : BOOL;                        (* apply each address's safe value when the peer driving it goes silent *)
-    nMaxPending : USINT;                     (* requests and answers waiting for the token at once; 0 = 16 on a board, 50 on the Runtime *)
-    bDebug : BOOL;                           (* the protocol's debug lines on the console *)
-    stSerialConfig : ST_BeeBusSerialConfig;  (* a serial link: the Runtime's device, a board's port and pins *)
-    stNetworkConfig : ST_BeeBusNetworkConfig;  (* a UDP link: group, port, and a board's Wi-Fi or Ethernet *)
+    bConnect : BOOL := TRUE;                 (* TRUE joins the ring and stays; FALSE leaves it: peers see this node go, nothing is lost on rejoin *)
+    bApplySafeValueOnWriterLoss : BOOL; (* apply each address's safe value when the peer driving it goes silent *)
+    nMaxPendingOperations : USINT; (* requests and answers waiting for the token at once; 0 = 16 on a board, 50 on the Runtime *)
+    bDebugToConsole : BOOL; (* the protocol's debug lines on the console *)
+    stSerialConfig : ST_BeeBusSerialConfig; (* a serial link: the Runtime's device, a board's port and pins *)
+    stNetworkConfig : ST_BeeBusNetworkConfig; (* a UDP link: group, port, and a board's Wi-Fi or Ethernet *)
   END_VAR
   VAR_OUTPUT
-    bReady : BOOL;               (* the node started: its link is open *)
-    bLinkUp : BOOL;              (* the network under it is up; bReady on the Runtime and on serial *)
-    bConnected : BOOL;           (* in the ring: the one to interlock on *)
-    bError : BOOL;               (* something failed: the link, a setting or a method call *)
-    eErrorId : E_BeeBusResult;   (* why; Ok when fine *)
-    sLastError : STRING(128);    (* why, in words *)
-    nAttempts : UDINT;           (* times the link has been opened, or tried *)
-    tRetryIn : TIME;             (* until a failed open is tried again; T#0s otherwise *)
+    bLinkOpen : BOOL; (* the node started: its link is open *)
+    bNetworkUp : BOOL; (* the network under it is up; bLinkOpen on the Runtime and on serial *)
+    bConnected : BOOL; (* in the ring: the one to interlock on *)
+    bError : BOOL; (* something failed: the link, a setting or a method call *)
+    eErrorId : E_BeeBusResult; (* why; Ok when fine *)
+    sLastError : STRING(128); (* why, in words *)
+    nLinkOpenAttemptCount : UDINT; (* times the link has been opened, or tried *)
+    tRetryTimeLeft : TIME; (* until a failed open is tried again; T#0s otherwise *)
   END_VAR
   VAR
     (* The node, its link and every method's records, made on first use. *)
     nState : __XWORD;
   END_VAR
-
-
-(* Binds anyValue as a topic this node owns, named sName, id nTopicId. Called
+(* Binds anyValue as a topic this node owns, named sTopic, id nTopicId. Called
    every scan; the node publishes it to each subscriber on its own terms.
    E_BeeBusResult.Ok while it is bound. *)
 METHOD PUBLIC Topic : E_BeeBusResult
   VAR_INPUT
     anyValue : ANY;              (* the variable; its declared type is the type on the wire *)
-    sName : STRING(254);         (* up to 253 characters: every peer addresses the topic by it *)
+    sTopic : STRING(254);         (* up to 253 characters: every peer addresses the topic by it *)
     nTopicId : UINT;             (* 1..32767, unique on this node *)
   END_VAR
 END_METHOD
 
 (* Sends anyValue, a topic this node owns, on a rising edge of bExecute: to
-   every node, or to nPeer. Inputs are taken at the edge.
+   every node, or to nPeerNodeId. Inputs are taken at the edge.
    E_BeeBusResult.Queued while a confirmed publish waits, then Ok or why not,
    until the next edge. *)
 METHOD PUBLIC Publish : E_BeeBusResult
   VAR_INPUT
     anyValue : ANY;              (* the variable; its declared type is the type on the wire *)
-    sName : STRING(254);         (* the topic's name, up to 253 characters *)
+    sTopic : STRING(254);         (* the topic's name, up to 253 characters *)
     nTopicId : UINT;             (* 1..32767, unique on this node *)
-    ePublishMode : E_BeeBusPublishMode;  (* All (default): every node, one frame; ToPeer: nPeer only *)
-    nPeer : BYTE;                (* ToPeer: the node to send to *)
-    bConfirmed : BOOL;           (* ToPeer: retried until nPeer acknowledges *)
+    ePublishMode : E_BeeBusPublishMode;  (* All (default): every node, one frame; ToPeer: nPeerNodeId only *)
+    nPeerNodeId : BYTE;                (* ToPeer: the node to send to *)
+    bRequireAcknowledge : BOOL;           (* ToPeer: retried until nPeerNodeId acknowledges *)
     bExecute : BOOL;             (* rising edge sends *)
   END_VAR
 END_METHOD
 
-(* Keeps anyValue up to date from nPeer's topic sName (nTopicId), called every
+(* Keeps anyValue up to date from nPeerNodeId's topic sTopic (nTopicId), called every
    scan. The subscription is asked again when the terms change and by itself
    when the peer rejoins. *)
 METHOD PUBLIC Subscribe : E_BeeBusResult
   VAR_INPUT
     anyValue : ANY;              (* the variable the value lands in, of the owner's type *)
-    nPeer : BYTE;                (* the node that owns the topic *)
-    sName : STRING(254);         (* its name on that node *)
+    nPeerNodeId : BYTE;                (* the node that owns the topic *)
+    sTopic : STRING(254);         (* its name on that node *)
     nTopicId : UINT;             (* its id on that node *)
     fDeadband : REAL;            (* sent again once it has moved this far; 0 = every change *)
-    tPeriod : TIME;              (* sent at least this often, moved or not; T#0s = never *)
-    bReliable : BOOL;            (* FALSE: newest wins (Live); TRUE: every change arrives *)
+    tMaxSendInterval : TIME;              (* sent at least this often, moved or not; T#0s = never *)
+    bDeliverEveryChange : BOOL;            (* FALSE: newest wins (Live); TRUE: every change arrives *)
   END_VAR
   VAR_OUTPUT
     eQuality : E_BeeBusQuality;  (* Unknown before anything arrived, then Good, Uncertain, Bad *)
-    bSeen : BOOL;                (* a value has arrived *)
-    tAge : TIME;                 (* since the last value; T#0s before the first *)
-    bNewValue : BOOL;            (* a value arrived since the last call *)
-    nMissed : UDINT;             (* publishes that never arrived, running total *)
+    bValueEverReceived : BOOL;                (* a value has arrived *)
+    tValueAge : TIME;                 (* since the last value; T#0s before the first *)
+    bValueReceived : BOOL;            (* a value arrived since the last call *)
+    nMissedUpdateCount : UDINT;             (* updates lost on the way: publishes that never arrived, running total *)
   END_VAR
 END_METHOD
 
-(* Owns every member of anyData as a topic, nTopicId + its position, named
-   sPrefix + its path. Called every scan. bWritable: peers may write the
+(* Owns every member of anyData as a topic, nFirstTopicId + its position, named
+   sTopicPrefix + its path. Called every scan. bPeersMayWrite: peers may write the
    members, taken here one per member a scan, oldest first. *)
 METHOD PUBLIC PublishStruct : E_BeeBusResult
   VAR_INPUT
     anyData : ANY;               (* a STRUCT, or an ARRAY of STRUCTs or values *)
-    nTopicId : UINT;             (* the first member's id *)
-    sPrefix : STRING(16);        (* put before every member's name; names an ARRAY *)
-    bWritable : BOOL;            (* peers may write the members *)
-    tPulse : TIME;               (* bWritable: a BOOL written TRUE drops back after this; T#0s = kept *)
-    tSettle : TIME;              (* bWritable: a write asking for a result is answered one scan and this after *)
+    nFirstTopicId : UINT;             (* the first member's id *)
+    sTopicPrefix : STRING(16);        (* put before every member's name; names an ARRAY *)
+    bPeersMayWrite : BOOL;            (* peers may write the members *)
+    tPulseLength : TIME;               (* bPeersMayWrite: a BOOL written TRUE drops back after this; T#0s = kept *)
+    tAnswerDelay : TIME;              (* bPeersMayWrite: extra wait after the scan that applied a write, before a result is answered *)
   END_VAR
   VAR_OUTPUT
     nMembers : UINT;             (* members, and so topics *)
-    bWritten : BOOL;             (* writes were taken by this call *)
-    nWritten : UINT;             (* how many members (held) *)
-    sWrittenName : STRING(64);   (* the first of them, 'set.hiMm' (held) *)
-    nWrittenIndex : UINT;        (* its position from 1 (held) *)
-    nWrittenBy : BYTE;           (* the node that wrote it (held) *)
-    nLost : UDINT;               (* writes dropped, running total *)
+    bWrittenByPeer : BOOL;             (* writes were taken by this call *)
+    nMembersWritten : UINT;             (* how many members (held) *)
+    sFirstWrittenMember : STRING(64);   (* the first of them, 'set.hiMm' (held) *)
+    nFirstWrittenIndex : UINT;        (* its position from 1 (held) *)
+    nWrittenByNodeId : BYTE;           (* the node that wrote it (held) *)
+    nDroppedWriteCount : UDINT;               (* writes dropped, running total *)
   END_VAR
 END_METHOD
 
-(* Keeps every member of anyData up to date from nPeer's PublishStruct of the
-   same type at nTopicId, sPrefix. Called every scan. eQuality is the worst
+(* Keeps every member of anyData up to date from nPeerNodeId's PublishStruct of the
+   same type at nFirstTopicId, sTopicPrefix. Called every scan. eQuality is the worst
    member's. *)
 METHOD PUBLIC SubscribeStruct : E_BeeBusResult
   VAR_INPUT
     anyData : ANY;               (* a STRUCT or ARRAY of the same type as the peer's *)
-    nPeer : BYTE;                (* the node that owns the topics *)
-    nTopicId : UINT;             (* the peer's nTopicId *)
-    sPrefix : STRING(16);        (* the peer's sPrefix *)
+    nPeerNodeId : BYTE;                (* the node that owns the topics *)
+    nFirstTopicId : UINT;             (* the peer's nFirstTopicId *)
+    sTopicPrefix : STRING(16);        (* the peer's sTopicPrefix *)
     fDeadband : REAL;            (* sent again once it has moved this far; 0 = every change *)
-    tPeriod : TIME;              (* every member at least this often; T#0s = never *)
-    bReliable : BOOL;            (* FALSE: newest wins (Live); TRUE: every change arrives *)
+    tMaxSendInterval : TIME;              (* every member at least this often; T#0s = never *)
+    bDeliverEveryChange : BOOL;            (* FALSE: newest wins (Live); TRUE: every change arrives *)
   END_VAR
   VAR_OUTPUT
     nMembers : UINT;             (* members, and so topics *)
     eQuality : E_BeeBusQuality;  (* the worst member's *)
-    bSeen : BOOL;                (* every member has arrived *)
-    tOldest : TIME;              (* the oldest member's age *)
-    nNewValues : UINT;           (* members that arrived since the last call *)
-    sNewName : STRING(64);       (* the first of them (held) *)
-    nNewIndex : UINT;            (* its position from 1 (held) *)
-    nMissed : UDINT;             (* publishes that never arrived, every member, running total *)
+    bAllMembersEverReceived : BOOL;                (* every member has arrived *)
+    tOldestMemberAge : TIME;              (* the oldest member's age *)
+    nMembersReceived : UINT;           (* members that arrived since the last call *)
+    sFirstReceivedMember : STRING(64);       (* the first of them (held) *)
+    nFirstReceivedIndex : UINT;            (* its position from 1 (held) *)
+    nMissedUpdateCount : UDINT;             (* updates lost on the way, every member, running total *)
   END_VAR
 END_METHOD
 
@@ -444,130 +444,130 @@ END_METHOD
 METHOD PUBLIC Serve : E_BeeBusResult
   VAR_INPUT
     anyData : ANY;               (* a STRUCT, or an ARRAY of STRUCTs or values *)
-    nTopicId : UINT;             (* the first member's id *)
-    sPrefix : STRING(16);        (* put before every member's name *)
-    bWritable : BOOL;            (* peers may ask to change the members; FALSE: ReadOnly *)
-    bCommand : BOOL;             (* every member is a command, taken once and answered Accepted *)
-    tPulse : TIME;               (* a BOOL written TRUE drops back after this; T#0s = kept *)
-    tSettle : TIME;              (* a change is answered one scan and this after *)
-    nDepth : USINT;              (* each member held in a ring of this many while the network is away, 0..127 *)
+    nFirstTopicId : UINT;             (* the first member's id *)
+    sTopicPrefix : STRING(16);        (* put before every member's name *)
+    bPeersMayChange : BOOL;            (* peers may ask to change the members; FALSE: ReadOnly *)
+    bMembersAreCommands : BOOL;             (* every member is a command, taken once and answered Accepted *)
+    tPulseLength : TIME;               (* a BOOL written TRUE drops back after this; T#0s = kept *)
+    tAnswerDelay : TIME;              (* extra wait after the scan that applied a change, before the answer is sent *)
+    nOfflineBufferDepth : USINT;              (* values of each member held while the network is away, 0..127 *)
   END_VAR
   VAR_OUTPUT
     nMembers : UINT;             (* members, and so topics *)
-    bChanged : BOOL;             (* changes were taken by this call *)
-    nChanged : UINT;             (* how many members (held) *)
-    sChangedName : STRING(64);   (* the first of them (held) *)
-    nChangedIndex : UINT;        (* its position from 1 (held) *)
-    nChangedBy : BYTE;           (* the node that asked (held) *)
-    nRefused : UDINT;            (* changes not kept as asked, running total *)
-    nLost : UDINT;               (* changes dropped, running total *)
+    bChangedByPeer : BOOL;             (* changes were taken by this call *)
+    nMembersChanged : UINT;             (* how many members (held) *)
+    sFirstChangedMember : STRING(64);   (* the first of them (held) *)
+    nFirstChangedIndex : UINT;        (* its position from 1 (held) *)
+    nChangedByNodeId : BYTE;           (* the node that asked (held) *)
+    nRefusedChangeCount : UDINT;            (* changes not kept as asked, running total *)
+    nDroppedChangeCount : UDINT;               (* changes dropped, running total *)
   END_VAR
 END_METHOD
 
-(* Binds every member of anyData to the one nPeer serves at nTopicId,
-   sPrefix: the owner's values land in the members, and a member the program
+(* Binds every member of anyData to the one nPeerNodeId serves at nFirstTopicId,
+   sTopicPrefix: the owner's values land in the members, and a member the program
    changes is asked of the owner. Called every scan. *)
 METHOD PUBLIC Bind : E_BeeBusResult
   VAR_INPUT
     anyData : ANY;               (* a STRUCT or ARRAY declared the same as the owner's *)
-    nPeer : BYTE;                (* the node that serves it *)
-    nTopicId : UINT;             (* the owner's nTopicId *)
-    sPrefix : STRING(16);        (* the owner's sPrefix *)
-    bReliable : BOOL;            (* TRUE for settings: every change arrives; FALSE: newest wins *)
+    nPeerNodeId : BYTE;                (* the node that serves it *)
+    nFirstTopicId : UINT;             (* the owner's nFirstTopicId *)
+    sTopicPrefix : STRING(16);        (* the owner's sTopicPrefix *)
+    bDeliverEveryChange : BOOL;            (* TRUE for settings: every change arrives; FALSE: newest wins *)
     fDeadband : REAL;            (* Live only: sent again once it has moved this far *)
   END_VAR
   VAR_OUTPUT
     nMembers : UINT;             (* members *)
     eBindState : E_BeeBusBindState;  (* the worst member's *)
     bInSync : BOOL;              (* every member holds the owner's value *)
-    bPending : BOOL;             (* a change is with the owner *)
-    bRefused : BOOL;             (* the owner kept another value for a member *)
-    sRefusedName : STRING(64);   (* the first member refused (held) *)
-    nRefusedIndex : UINT;        (* its position from 1 (held) *)
-    bFailed : BOOL;              (* no decision came back for a change *)
-    tOldest : TIME;              (* since the oldest member last had a value from the owner *)
-    bNewValue : BOOL;            (* a value arrived from the owner since the last call *)
+    bChangePending : BOOL;             (* a change is with the owner *)
+    bSettingRefused : BOOL;             (* the owner kept another value for a member *)
+    sFirstRefusedMember : STRING(64);   (* the first member refused (held) *)
+    nFirstRefusedIndex : UINT;        (* its position from 1 (held) *)
+    bNoDecisionReceived : BOOL;              (* no decision came back for a change *)
+    tOldestMemberAge : TIME;              (* since the oldest member last had a value from the owner *)
+    bValueReceived : BOOL;            (* a value arrived from the owner since the last call *)
   END_VAR
 END_METHOD
 
-(* Writes anyValue into nPeer's writable topic nTopicId on a rising edge of
+(* Writes anyValue into nPeerNodeId's writable topic nTopicId on a rising edge of
    bExecute. E_BeeBusResult.Queued while it waits for the acknowledgement or
    the owner's decision, then Ok or why not, until the next edge. *)
 METHOD PUBLIC Write : E_BeeBusResult
   VAR_INPUT
     anyValue : ANY;              (* one value of the member's type *)
-    nPeer : BYTE;                (* the node that owns the topic *)
+    nPeerNodeId : BYTE;                (* the node that owns the topic *)
     nTopicId : UINT;             (* the topic's id on that node *)
-    bConfirmed : BOOL;           (* retried until acknowledged *)
-    bWantResult : BOOL;          (* ask the owner what it did; makes it confirmed *)
+    bRequireAcknowledge : BOOL;           (* retried until acknowledged *)
+    bAskOwnerDecision : BOOL;          (* ask the owner what it did; makes it confirmed *)
     bExecute : BOOL;             (* rising edge writes *)
   END_VAR
   VAR_OUTPUT
-    eOutcome : E_BeeBusOutcome;  (* bWantResult: the owner's decision; NoAnswer before one *)
-    bAccepted : BOOL;            (* the decision was Accepted *)
-    bRefused : BOOL;             (* the owner kept another value: Changed or Refused *)
-    fKeptValue : LREAL;          (* the owner's value with the decision *)
+    eOwnerDecision : E_BeeBusOutcome;  (* bAskOwnerDecision: the owner's decision; NoAnswer before one *)
+    bOwnerAccepted : BOOL;            (* the decision was Accepted *)
+    bOwnerKeptOtherValue : BOOL;             (* the owner kept another value: Changed or Refused *)
+    fOwnerKeptValue : LREAL;          (* the owner's value with the decision *)
   END_VAR
 END_METHOD
 
-(* Holds up to nDepth samples of this node's topic sName while there is
+(* Holds up to nOfflineBufferDepth samples of this node's topic sTopic while there is
    nowhere to send them, sent oldest first when there is. Called every scan. *)
 METHOD PUBLIC Buffer : E_BeeBusResult
   VAR_INPUT
-    sName : STRING(254);         (* the topic, bound by Topic or Publish on this node *)
-    nDepth : USINT;              (* samples to hold; 0 turns it off *)
+    sTopic : STRING(254);         (* the topic, bound by Topic or Publish on this node *)
+    nOfflineBufferDepth : USINT;              (* values held while the network is away; 0 turns it off *)
   END_VAR
   VAR_OUTPUT
-    nHeld : UINT;                (* samples waiting to go out *)
+    nSamplesWaiting : UINT;                (* samples waiting to go out *)
   END_VAR
 END_METHOD
 
-(* Puts anyData at Modbus addresses from nAddress in eTable, so peers can read
+(* Puts anyData at Modbus addresses from nStartAddress in eTable, so peers can read
    and write it. Called every scan; the variable is the register. *)
 METHOD PUBLIC ModbusMap : E_BeeBusResult
   VAR_INPUT
     anyData : ANY;               (* a value, a fixed-bounds array or a STRUCT *)
     eTable : E_BeeBusModbusTable;  (* Coil, HoldingRegister (default), DiscreteInput, InputRegister *)
-    nAddress : UINT;             (* the first address *)
-    eOnLoss : E_BeeBusModbusFailsafe;  (* HoldLastValue (default) or ResetToValue when the writer goes silent *)
+    nStartAddress : UINT;             (* the first address *)
+    eActionOnWriterLoss : E_BeeBusModbusFailsafe;  (* HoldLastValue (default) or ResetToValue when the writer goes silent *)
     nSafeValue : DINT;           (* ResetToValue: the value, in the variable's own type *)
   END_VAR
   VAR_OUTPUT
-    nCount : UINT;               (* addresses taken: registers, or coils *)
-    bWritten : BOOL;             (* a peer wrote some since the last call *)
-    sWrittenName : STRING(64);   (* the first member written (held) *)
-    nWrittenIndex : UINT;        (* its position from 1 (held) *)
-    nWrittenAddr : UINT;         (* its first address (held) *)
-    nWritten : UINT;             (* members that write covered (held) *)
-    bSafeApplied : BOOL;         (* the safe value was applied since the last call *)
+    nAddressesUsed : UINT;               (* addresses taken: registers, or coils *)
+    bWrittenByPeer : BOOL;             (* a peer wrote some since the last call *)
+    sFirstWrittenMember : STRING(64);   (* the first member written (held) *)
+    nFirstWrittenIndex : UINT;        (* its position from 1 (held) *)
+    nFirstWrittenAddress : UINT;         (* its first address (held) *)
+    nMembersWritten : UINT;             (* members that write covered (held) *)
+    bSafeValueApplied : BOOL;         (* the safe value was applied since the last call *)
   END_VAR
 END_METHOD
 
-(* Reads nPeer's addresses into anyData on a rising edge of bExecute, laid out
+(* Reads nPeerNodeId's addresses into anyData on a rising edge of bExecute, laid out
    as ModbusMap lays it out. E_BeeBusResult.Queued while it runs, then Ok or
    why not, until the next edge. *)
 METHOD PUBLIC ModbusRead : E_BeeBusResult
   VAR_INPUT
     anyData : ANY;               (* a value, a fixed-bounds array or a STRUCT *)
-    nPeer : BYTE;                (* the node to read from *)
+    nPeerNodeId : BYTE;                (* the node to read from *)
     eTable : E_BeeBusModbusTable;  (* which of the peer's tables *)
-    nAddress : UINT;             (* the first address on that node *)
-    nLength : UINT;              (* values to read, each element and member one; 0 = all *)
+    nStartAddress : UINT;             (* the first address on that node *)
+    nQuantity : UINT;              (* values to read, each element and member one; 0 = all *)
     bExecute : BOOL;             (* rising edge reads *)
   END_VAR
 END_METHOD
 
-(* Writes anyData into nPeer's addresses on a rising edge of bExecute, the
+(* Writes anyData into nPeerNodeId's addresses on a rising edge of bExecute, the
    values as they were at the edge. E_BeeBusResult.Queued while a confirmed
    write waits, then Ok or why not, until the next edge. *)
 METHOD PUBLIC ModbusWrite : E_BeeBusResult
   VAR_INPUT
     anyData : ANY;               (* a value, a fixed-bounds array or a STRUCT *)
-    nPeer : BYTE;                (* the node to write to *)
+    nPeerNodeId : BYTE;                (* the node to write to *)
     eTable : E_BeeBusModbusTable;  (* Coil or HoldingRegister *)
-    nAddress : UINT;             (* the first address on that node *)
-    nLength : UINT;              (* values to write, each element and member one; 0 = all *)
-    bConfirmed : BOOL;           (* wait for the peer to acknowledge *)
+    nStartAddress : UINT;             (* the first address on that node *)
+    nQuantity : UINT;              (* values to write, each element and member one; 0 = all *)
+    bRequireAcknowledge : BOOL;           (* wait for the peer to acknowledge *)
     bExecute : BOOL;             (* rising edge writes *)
   END_VAR
 END_METHOD
@@ -575,26 +575,26 @@ END_METHOD
 (* This node and its segment, measured. *)
 METHOD PUBLIC Statistics : E_BeeBusResult
   VAR_OUTPUT
-    nIdInUse : BYTE;             (* the address this node holds, as opened *)
-    nMembers : BYTE;             (* nodes in the ring, this one included *)
-    tRotation : TIME;            (* how long the token takes to come round; T#0s until it has *)
-    nPendingOps : INT;           (* operations queued and not finished *)
-    nCrcErrors : DINT;           (* frames that arrived corrupt *)
-    nNoiseBytes : DINT;          (* bytes discarded hunting for a frame start *)
+    nNodeIdInUse : BYTE;             (* the address this node holds, as opened *)
+    nNodesInRing : BYTE;             (* nodes in the ring, this one included *)
+    tTokenRotationTime : TIME;            (* how long the token takes to come round; T#0s until it has *)
+    nPendingOperations : INT;           (* operations queued and not finished *)
+    nChecksumErrorCount : DINT;           (* frames that arrived corrupt *)
+    nNoiseByteCount : DINT;          (* bytes discarded hunting for a frame start *)
   END_VAR
 END_METHOD
 
-(* How nPeer is doing, from this node. *)
+(* How nPeerNodeId is doing, from this node. *)
 METHOD PUBLIC PeerStatus : E_BeeBusResult
   VAR_INPUT
-    nPeer : BYTE;                (* the peer, 1..254 *)
+    nPeerNodeId : BYTE;                (* the peer, 1..254 *)
   END_VAR
   VAR_OUTPUT
-    bAlive : BOOL;               (* in the ring *)
-    bSeen : BOOL;                (* heard at least once since the program started *)
-    tSilent : TIME;              (* since it was last heard; T#0s before *)
-    tHop : TIME;                 (* how long it takes to accept the token *)
-    tHopTimeout : TIME;          (* what it is allowed before the token is presumed lost *)
+    bInRing : BOOL;               (* in the ring *)
+    bEverHeard : BOOL;                (* heard at least once since the program started *)
+    tSinceLastHeard : TIME;              (* since it was last heard; T#0s before *)
+    tTokenHopTime : TIME;                 (* how long it takes to accept the token *)
+    tTokenHopTimeout : TIME;          (* what it is allowed before the token is presumed lost *)
   END_VAR
 END_METHOD
 
@@ -754,7 +754,7 @@ int32_t bb_millisOf(const strucpp::IEC_TIME& t)
 // count - which here means "it has never happened" - comes out as T#0s,
 // because TIME is unsigned in CODESYS and a pin showing a negative duration
 // would be a lie about a type. The pin beside it says which zero it is:
-// bSeen, or eQuality reading Unknown.
+// bValueEverReceived, or eQuality reading Unknown.
 strucpp::IEC_TIME bb_timeOf(int32_t milliseconds)
 {
     if (milliseconds <= 0) return strucpp::IEC_TIME((strucpp::TIME_t)0);
@@ -796,17 +796,17 @@ uint8_t bb_wireTypeOfClass(uint32_t typeClass)
 // a method casts rather than translates. A member added on one side without
 // the other is a build error here, not a wrong reason on a panel.
 static_assert((int)E_BEEBUSRESULT::BUFFERFULL + 1 == BEEBUS_RESULT_COUNT,
-              "E_BEEBUSRESULT must mirror BeeBusResult member for member");
+              "library build mismatch: reinstall modbee-beebus");
 static_assert((int)E_BEEBUSRESULT::QUEUED == (int)BeeBusResult::Queued &&
               (int)E_BEEBUSRESULT::OK == (int)BeeBusResult::Immediate &&
               (int)E_BEEBUSRESULT::TIMEOUT == (int)BeeBusResult::Timeout &&
               (int)E_BEEBUSRESULT::BUFFERFULL == (int)BeeBusResult::BufferFull,
-              "E_BEEBUSRESULT must mirror BeeBusResult member for member");
+              "library build mismatch: reinstall modbee-beebus");
 static_assert((int)E_BEEBUSQUALITY::BAD == (int)BeeBusQuality::Bad &&
               (int)E_BEEBUSBINDSTATE::FAILED == (int)BeeBusBindState::Failed &&
               (int)E_BEEBUSMODBUSTABLE::INPUTREGISTER == (int)MB_INPUT_REGISTER &&
               (int)E_BEEBUSOUTCOME::NOANSWER == BEEBUS_OUTCOME_COUNT,
-              "the enumerations must mirror the library's");
+              "library build mismatch: reinstall modbee-beebus");
 
 // =============================================================================
 // A VARIABLE AS A LIST OF VALUES - under every method that takes a STRUCT, an
@@ -861,7 +861,7 @@ struct BbRun {
   uint16_t cap = 0;          // STRING(n): n
   uint16_t regsEach = 1;     // registers (or bits) one element takes
   uint32_t firstLeaf = 0;    // number of element 0 in the whole list, from 0
-  uint32_t firstReg = 0;     // its register offset from nAddress
+  uint32_t firstReg = 0;     // its register offset from nStartAddress
   // A converted type is bound to a copy in its wire type, held in the plan's
   // shadow array from here on. `synced` (after the shadows) is what each copy
   // held when it was last brought into line with the variable, so a change in
@@ -906,7 +906,7 @@ struct BbPlan {
   uint8_t* bitBuf = nullptr; // bool-sized, so a bool* can walk it
   uint32_t ioLeaves = 0;     // values the outstanding request covers
 
-  // Writes taken from the node's queue (PublishStruct bWritable)
+  // Writes taken from the node's queue (PublishStruct bPeersMayWrite)
   void* wq = nullptr;        // the node's BbWq
   uint16_t wqRange = 0;      // this STRUCT's place in it
   // Momentary commands waiting to drop back to FALSE: room for every BOOL
@@ -1170,7 +1170,7 @@ BbRun* bbRunOf(BbPlan& p, uint32_t leaf, uint32_t& element)
 // A value's name, written into `out`: its path, numbered from 1 in an array.
 // As a topic (`topic`), an anyData that is itself an ARRAY is named from the
 // element on - "[3].set.delay", "[3]" - without the variable's own name:
-// sPrefix names the array, so the subscriber's variable need not be spelled as
+// sTopicPrefix names the array, so the subscriber's variable need not be spelled as
 // the owner's. Registers keep the variable's name, which only diagnostics show.
 void bbLeafName(const BbPlan& p, const BbRun& r, uint32_t element, const char* prefix,
                 bool topic, char* out, size_t cap)
@@ -1420,7 +1420,7 @@ bool bb_planLeafInfo(void* plan, uint32_t leaf, char* name, size_t cap, uint32_t
   return true;
 }
 
-// The value whose registers include this offset from nAddress, from 0.
+// The value whose registers include this offset from nStartAddress, from 0.
 bool bb_planLeafAt(void* plan, uint32_t regOffset, uint32_t* leaf)
 {
   if (!plan) return false;
@@ -1622,9 +1622,9 @@ bool bb_planReadDone(void* plan, bool bits)
 // ---- Topics (PublishStruct, SubscribeStruct) ----
 
 // Binds every value as a topic: this node's own (`remote` false) or `peer`'s.
-// Names are sPrefix + path, ids nTopicId + the value's number from 0. A STRING
+// Names are sTopicPrefix + path, ids nFirstTopicId + the value's number from 0. A STRING
 // member is bound to its own buffer, n characters and the terminator.
-// writable (owner only): peers may write the members (PublishStruct bWritable).
+// writable (owner only): peers may write the members (PublishStruct bPeersMayWrite).
 bool bb_planBindTopicsEx(void* plan, BeeBusAPI* node, bool remote, uint8_t peer,
                          uint16_t topicId, const char* prefix, bool writable,
                          char* err, size_t errCap)
@@ -1634,7 +1634,7 @@ bool bb_planBindTopicsEx(void* plan, BeeBusAPI* node, bool remote, uint8_t peer,
 
   if (topicId < BEEBUS_TOPIC_ID_MIN ||
       (uint32_t)topicId + p.leaves - 1 > (uint32_t)BEEBUS_TOPIC_ID_MAX) {
-    snprintf(err, errCap, "nTopicId + members runs past 32767, or nTopicId is 0");
+    snprintf(err, errCap, "nFirstTopicId + members runs past 32767, or nFirstTopicId is 0");
     return false;
   }
 
@@ -1726,7 +1726,7 @@ bool bb_planBindTopics(void* plan, BeeBusAPI* node, bool remote, uint8_t peer,
   return bb_planBindTopicsEx(plan, node, remote, peer, topicId, prefix, false, err, errCap);
 }
 
-// ---- Queued writes: PublishStruct and Serve with bWritable ------------------------
+// ---- Queued writes: PublishStruct bPeersMayWrite and Serve bPeersMayChange ------------------------
 // A peer's write to a writable STRUCT member is not stored by the node (the
 // topic is queued, BeeBusAPI::setTopicQueued): the node's written handlers put
 // it in this node's queue, from the node's task, and the STRUCT block
@@ -1876,7 +1876,7 @@ static BbWq* bbWqOf(BeeBusAPI* node)
   return q;
 }
 
-// Owner, once after a bWritable bind: every member is queued on the node, and
+// Owner, once after a bPeersMayWrite or bPeersMayChange bind: every member is queued on the node, and
 // the node's queue grows to hold this STRUCT's members too. The new storage is
 // taken aside and swapped in under the lock, what is waiting copied across.
 bool bb_planQueueWrites(void* plan, BeeBusAPI* node, char* err, size_t errCap)
@@ -2021,7 +2021,7 @@ static void bbApplyWrite(BbPlan& p, BbWq& q, const BbWqEntry& w, uint32_t pulseM
     return;
   }
   bb_scalarStore(w.value, bbElem(*r, e));
-  // A momentary command: a BOOL written TRUE goes back to FALSE after tPulse.
+  // A momentary command: a BOOL written TRUE goes back to FALSE after tPulseLength.
   // There is a place for every BOOL member, so none is ever cut short.
   if (pulseMs > 0 && r->wire == BEEBUS_T_BOOL && *(bool*)bbElem(*r, e)) {
     uint32_t slot = 0;
@@ -2102,7 +2102,7 @@ uint32_t bb_planTakeWrites(void* plan, uint32_t pulseMs, uint32_t* firstLeaf, ui
 }
 
 // Owner: the read-back's delay and whether every member is a command
-// (Serve, PublishStruct's tSettle).
+// (Serve, PublishStruct's tAnswerDelay).
 void bb_planServeTerms(void* plan, uint32_t settleMs, bool command)
 {
   BbPlan& p = *(BbPlan*)plan;
@@ -2248,7 +2248,7 @@ bool bb_planBind(void* plan, BeeBusAPI* node, uint8_t peer, uint16_t topicId,
   const char* pre = prefix ? prefix : "";
   if (topicId < BEEBUS_TOPIC_ID_MIN ||
       (uint32_t)topicId + p.leaves - 1 > (uint32_t)BEEBUS_TOPIC_ID_MAX) {
-    snprintf(err, errCap, "nTopicId + members runs past 32767, or nTopicId is 0");
+    snprintf(err, errCap, "nFirstTopicId + members runs past 32767, or nFirstTopicId is 0");
     return false;
   }
   if (!p.state || !p.seen) {
@@ -2611,14 +2611,14 @@ static void bb_debugLine(const char* category, const char* message)
 
 void setup()
 {
-  bReady = false;
-  bLinkUp = false;
+  bLinkOpen = false;
+  bNetworkUp = false;
   bConnected = false;
   bError = false;
   eErrorId = E_BEEBUSRESULT::OK;
   sLastError = "";
-  nAttempts = 0;
-  tRetryIn = bb_timeOf(0);
+  nLinkOpenAttemptCount = 0;
+  tRetryTimeLeft = bb_timeOf(0);
   nState = (strucpp::XWORD_t)0;
 }
 
@@ -2629,17 +2629,17 @@ template <typename Serial, typename Network>
 static const char* bb_misplaced(const Serial& serial, const Network& network)
 {
 #if defined(BEEBUS_PLATFORM_HOST)
-  if ((uint8_t)serial.NPORT != 0 || (int16_t)serial.NRXPIN != -1 || (int16_t)serial.NTXPIN != -1) {
-    return "stSerialConfig: nPort, nRxPin and nTxPin are a board's";
+  if ((uint8_t)serial.NUART != 0 || (int16_t)serial.NRXPIN != -1 || (int16_t)serial.NTXPIN != -1) {
+    return "stSerialConfig: nUart, nRxPin and nTxPin are a board's";
   }
   if (network.SSSID.length() > 0 || network.SWIFIPASSWORD.length() > 0 ||
-      network.SMAC.length() > 0 || network.SIP.length() > 0) {
+      network.SMACADDRESS.length() > 0 || network.SIPADDRESS.length() > 0) {
     return "stNetworkConfig: Wi-Fi and Ethernet are a board's; the Runtime uses its machine's network";
   }
 #else
   if (serial.SDEVICE.length() > 0) return "stSerialConfig.sDevice is the Runtime's";
-  if ((uint8_t)network.NTTL != 0 || network.SINTERFACEADDR.length() > 0) {
-    return "stNetworkConfig: nTtl and sInterfaceAddr are the Runtime's";
+  if ((uint8_t)network.NMULTICASTHOPS != 0 || network.SINTERFACEADDRESS.length() > 0) {
+    return "stNetworkConfig: nMulticastHops and sInterfaceAddress are the Runtime's";
   }
 #endif
   return nullptr;
@@ -2662,26 +2662,26 @@ void loop()
     uint32_t h = 2166136261u;
     h = bb_fingerprintOf(h, (uint8_t)nNodeId);
     h = bb_fingerprintOf(h, (int32_t)(E_BEEBUSTRANSPORT)eTransport);
-    h = bb_fingerprintOf(h, (bool)bFailsafe);
-    h = bb_fingerprintOf(h, (uint8_t)nMaxPending);
-    h = bb_fingerprintOf(h, (int32_t)stSerialConfig.NBAUD);
-    h = bb_fingerprintOf(h, (uint8_t)stSerialConfig.NPORT);
+    h = bb_fingerprintOf(h, (bool)bApplySafeValueOnWriterLoss);
+    h = bb_fingerprintOf(h, (uint8_t)nMaxPendingOperations);
+    h = bb_fingerprintOf(h, (int32_t)stSerialConfig.NBAUDRATE);
+    h = bb_fingerprintOf(h, (uint8_t)stSerialConfig.NUART);
     h = bb_fingerprintOf(h, (int16_t)stSerialConfig.NRXPIN);
     h = bb_fingerprintOf(h, (int16_t)stSerialConfig.NTXPIN);
     h = bb_fingerprintText(h, stSerialConfig.SDEVICE.c_str());
     h = bb_fingerprintOf(h, (uint16_t)stNetworkConfig.NUDPPORT);
-    h = bb_fingerprintOf(h, (uint8_t)stNetworkConfig.NTTL);
-    h = bb_fingerprintText(h, stNetworkConfig.SGROUPADDR.c_str());
-    h = bb_fingerprintText(h, stNetworkConfig.SINTERFACEADDR.c_str());
+    h = bb_fingerprintOf(h, (uint8_t)stNetworkConfig.NMULTICASTHOPS);
+    h = bb_fingerprintText(h, stNetworkConfig.SMULTICASTADDRESS.c_str());
+    h = bb_fingerprintText(h, stNetworkConfig.SINTERFACEADDRESS.c_str());
     h = bb_fingerprintText(h, stNetworkConfig.SSSID.c_str());
     h = bb_fingerprintText(h, stNetworkConfig.SWIFIPASSWORD.c_str());
-    h = bb_fingerprintText(h, stNetworkConfig.SMAC.c_str());
-    h = bb_fingerprintText(h, stNetworkConfig.SIP.c_str());
+    h = bb_fingerprintText(h, stNetworkConfig.SMACADDRESS.c_str());
+    h = bb_fingerprintText(h, stNetworkConfig.SIPADDRESS.c_str());
     return h;
   };
 
   [&]() {
-    if (!(bool)bReady || n->rebind) {
+    if (!(bool)bLinkOpen || n->rebind) {
       // ONE SCAN BEFORE OPENING: every method has been called once, wherever
       // it sits in the program, and opening a socket costs longer than a scan.
       if (!n->settled) {
@@ -2691,7 +2691,7 @@ void loop()
 
       // A SETTINGS CHANGE ON A RUNNING NODE: the same node is re-opened (see
       // BeeBusAPI::rebind), after a moment for it to leave the old ring.
-      BeeBusAPI* existing = (bool)bReady ? n->api : nullptr;
+      BeeBusAPI* existing = (bool)bLinkOpen ? n->api : nullptr;
       if (existing && (existing->isConnected() || existing->isLeaving()) &&
           (uint32_t)((uint32_t)bb_millis() - n->changeAt) < 1000u) {
         existing->loop();
@@ -2707,14 +2707,14 @@ void loop()
       if (n->tried) {
         const int32_t left = (int32_t)(n->retryAt - (uint32_t)bb_millis());
         if (left > 0) {
-          tRetryIn = bb_timeOf(left);
+          tRetryTimeLeft = bb_timeOf(left);
           return;
         }
       }
       n->tried = true;
       n->waiting = false;
-      tRetryIn = bb_timeOf(0);
-      nAttempts = (uint32_t)nAttempts + 1;
+      tRetryTimeLeft = bb_timeOf(0);
+      nLinkOpenAttemptCount = (uint32_t)nLinkOpenAttemptCount + 1;
 
       // A settings fault. Reported, and left: retrying cannot fix it.
       auto refuse = [&](const char* why) {
@@ -2732,7 +2732,7 @@ void loop()
         n->backoff = wait;
         n->retryAt = (uint32_t)bb_millis() + wait;
         n->waiting = true;
-        tRetryIn = bb_timeOf((int32_t)wait);
+        tRetryTimeLeft = bb_timeOf((int32_t)wait);
         n->linkError = true;
         n->linkResult = E_BEEBUSRESULT::NOTINITIALISED;
         n->linkText = why;
@@ -2750,9 +2750,9 @@ void loop()
                                link == E_BEEBUSTRANSPORT::RUNTIMESERIAL;
 
       BeeBusConfig config;
-      config.enableFailSafe = (bool)bFailsafe;
-      config.maxPendingOps = (uint8_t)nMaxPending;         // 0: the platform's default
-      config.maxPendingResponses = (uint8_t)nMaxPending;
+      config.enableFailSafe = (bool)bApplySafeValueOnWriterLoss;
+      config.maxPendingOps = (uint8_t)nMaxPendingOperations;         // 0: the platform's default
+      config.maxPendingResponses = (uint8_t)nMaxPendingOperations;
 
 #if defined(BEEBUS_PLATFORM_HOST)
       if (!runtimeLink) {
@@ -2781,7 +2781,7 @@ void loop()
         // outlives the scan and the transport may hold it.
         BeeBusSerialConfig serial;
         serial.device = stSerialConfig.SDEVICE.c_str();
-        if ((int32_t)stSerialConfig.NBAUD > 0) serial.baudRate = (uint32_t)(int32_t)stSerialConfig.NBAUD;
+        if ((int32_t)stSerialConfig.NBAUDRATE > 0) serial.baudRate = (uint32_t)(int32_t)stSerialConfig.NBAUDRATE;
         BeeBusHostSerialTransport* port = new (std::nothrow) BeeBusHostSerialTransport(serial);
         if (!port) {
           if (!existing) delete node;
@@ -2795,11 +2795,11 @@ void loop()
                                node->startError() ? node->startError() : port->lastError());
       } else {
         BeeBusUdpConfig udp;
-        if (stNetworkConfig.SGROUPADDR.length() > 0) udp.groupAddress = stNetworkConfig.SGROUPADDR.c_str();
+        if (stNetworkConfig.SMULTICASTADDRESS.length() > 0) udp.groupAddress = stNetworkConfig.SMULTICASTADDRESS.c_str();
         if ((uint16_t)stNetworkConfig.NUDPPORT != 0) udp.port = (uint16_t)stNetworkConfig.NUDPPORT;
-        if ((uint8_t)stNetworkConfig.NTTL != 0) udp.ttl = (uint8_t)stNetworkConfig.NTTL;
-        if (stNetworkConfig.SINTERFACEADDR.length() > 0) {
-          udp.interfaceAddress = stNetworkConfig.SINTERFACEADDR.c_str();
+        if ((uint8_t)stNetworkConfig.NMULTICASTHOPS != 0) udp.ttl = (uint8_t)stNetworkConfig.NMULTICASTHOPS;
+        if (stNetworkConfig.SINTERFACEADDRESS.length() > 0) {
+          udp.interfaceAddress = stNetworkConfig.SINTERFACEADDRESS.c_str();
         }
         BeeBusHostUdpTransport* socket = new (std::nothrow) BeeBusHostUdpTransport(udp);
         if (!socket) {
@@ -2840,11 +2840,11 @@ void loop()
       BeeBusTransport* made = nullptr;   // ours to free when replaced; a serial line is the node's
 
       if (link == E_BEEBUSTRANSPORT::ARDUINOSERIAL) {
-        const uint32_t baud = (int32_t)stSerialConfig.NBAUD > 0
-            ? (uint32_t)(int32_t)stSerialConfig.NBAUD : 115200u;
-        HardwareSerial* port = bbSerialPort((uint8_t)stSerialConfig.NPORT);
+        const uint32_t baud = (int32_t)stSerialConfig.NBAUDRATE > 0
+            ? (uint32_t)(int32_t)stSerialConfig.NBAUDRATE : 115200u;
+        HardwareSerial* port = bbSerialPort((uint8_t)stSerialConfig.NUART);
         if (port == nullptr) {
-          refuse("stSerialConfig.nPort is not a hardware serial on this board");
+          refuse("stSerialConfig.nUart is not a hardware serial on this board");
           return;
         }
         // Re-opened: the line in use is closed first - the same one at a new
@@ -2881,10 +2881,10 @@ void loop()
           }
           started = node->begin(port, (uint8_t)nNodeId, config, baud);
         }
-        if (started) n->openPort = (uint8_t)stSerialConfig.NPORT;
+        if (started) n->openPort = (uint8_t)stSerialConfig.NUART;
       } else {
         BeeBusUdpConfig udp;
-        if (stNetworkConfig.SGROUPADDR.length() > 0) udp.groupAddress = stNetworkConfig.SGROUPADDR.c_str();
+        if (stNetworkConfig.SMULTICASTADDRESS.length() > 0) udp.groupAddress = stNetworkConfig.SMULTICASTADDRESS.c_str();
         if ((uint16_t)stNetworkConfig.NUDPPORT != 0) udp.port = (uint16_t)stNetworkConfig.NUDPPORT;
 
         IPAddress group;
@@ -2913,10 +2913,10 @@ void loop()
           static EthernetUDP ethSocket;
           if (existing) ethSocket.stop();
           uint8_t mac[6] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
-          bbParseMac(stNetworkConfig.SMAC.c_str(), mac);
+          bbParseMac(stNetworkConfig.SMACADDRESS.c_str(), mac);
 
           IPAddress address;
-          if (address.fromString(stNetworkConfig.SIP.c_str())) {
+          if (address.fromString(stNetworkConfig.SIPADDRESS.c_str())) {
             Ethernet.begin(mac, address);
           } else {
             // DHCP blocks, and the library waits 60 s by default - on a 1 ms
@@ -2932,7 +2932,7 @@ void loop()
           ethSocket.beginMulticast(group, udp.port);
           transport = new (std::nothrow) BeeBusArduinoUdpTransport(&ethSocket, udp);
 #else
-          refuse("set BEEBUS_ENABLE_ETHERNET to use Ethernet");
+          refuse("Ethernet needs BEEBUS_ENABLE_ETHERNET in the board's build flags");
           return;
 #endif
         }
@@ -2981,16 +2981,16 @@ void loop()
       n->linkError = false;
       n->linkResult = E_BEEBUSRESULT::OK;
       n->linkText.clear();
-      bReady = true;
+      bLinkOpen = true;
       n->rebind = false;
       n->settingsKey = settingsKey();
     }
 
-    if (!(bool)bReady) return;
+    if (!(bool)bLinkOpen) return;
 
     BeeBusAPI* node = n->api;
     if (!node) {
-      bReady = false;
+      bLinkOpen = false;
       bConnected = false;
       return;
     }
@@ -3011,27 +3011,27 @@ void loop()
       return;
     }
 
-    if ((bool)bDebug != n->debug) {
-      n->debug = (bool)bDebug;
+    if ((bool)bDebugToConsole != n->debug) {
+      n->debug = (bool)bDebugToConsole;
       node->onDebug(n->debug ? &bb_debugLine : nullptr);
     }
 
     n->note.clear();
-    bLinkUp = true;
+    bNetworkUp = true;
 #if defined(BEEBUS_PLATFORM_ARDUINO)
     const E_BEEBUSTRANSPORT link = (E_BEEBUSTRANSPORT)eTransport;
     if (link == E_BEEBUSTRANSPORT::ARDUINOWIFI) {
 #if defined(BEEBUS_HAS_WIFI)
-      bLinkUp = WiFi.status() == WL_CONNECTED;
+      bNetworkUp = WiFi.status() == WL_CONNECTED;
       // Joining takes seconds, and is not a fault. Said while it lasts.
-      if (!(bool)bLinkUp) n->note = "joining the network";
+      if (!(bool)bNetworkUp) n->note = "joining the network";
 #else
-      bLinkUp = false;
+      bNetworkUp = false;
 #endif
     } else if (link == E_BEEBUSTRANSPORT::ARDUINOETHERNET) {
 #if defined(BEEBUS_HAS_ETHERNET)
-      bLinkUp = Ethernet.linkStatus() != LinkOFF;
-      if (!(bool)bLinkUp) {
+      bNetworkUp = Ethernet.linkStatus() != LinkOFF;
+      if (!(bool)bNetworkUp) {
         n->note = "Ethernet cable unplugged";
       } else if (Ethernet.localIP() == IPAddress(0, 0, 0, 0)) {
         // The cable is live but DHCP has not answered yet. Each begin() is
@@ -3039,7 +3039,7 @@ void loop()
         n->note = "no address from DHCP yet";
       }
 #else
-      bLinkUp = false;
+      bNetworkUp = false;
 #endif
     }
 #endif
@@ -3062,8 +3062,8 @@ void loop()
   // What is wrong, most fundamental first: the link, another device on this
   // id, a setting for another target, then the last failing method call.
   const char* misplaced = bb_misplaced(stSerialConfig, stNetworkConfig);
-  if (!(bool)bReady && !n->linkError) {
-    bLinkUp = false;
+  if (!(bool)bLinkOpen && !n->linkError) {
+    bNetworkUp = false;
     bConnected = false;
   }
   if (n->linkError) {
@@ -3145,7 +3145,7 @@ E_BEEBUSRESULT Topic()
     BeeBusAPI* node = n->api;
     if (node == nullptr) return E_BEEBUSRESULT::NOTINITIALISED;
     const uint16_t topicId = (uint16_t)nTopicId;
-    const uint32_t identity = bb_fingerprintOf(bb_fingerprintText(2166136261u, sName.c_str()), topicId);
+    const uint32_t identity = bb_fingerprintOf(bb_fingerprintText(2166136261u, sTopic.c_str()), topicId);
     if (!r->bound) {
       if (r->refused && r->identity == identity) {
         snprintf(why, sizeof why, "%s", r->why.c_str());
@@ -3154,8 +3154,8 @@ E_BEEBUSRESULT Topic()
       r->identity = identity;
       r->refused = true;
       // A name the wire cannot carry whole is refused rather than cut down.
-      if (sName.length() == 0 || sName.length() >= BB_NAME_PIN) {
-        r->why = "sName is empty or longer than 253 characters";
+      if (sTopic.length() == 0 || sTopic.length() >= BB_NAME_PIN) {
+        r->why = "sTopic is empty or longer than 253 characters";
       } else if ((r->wire = bb_wireTypeOfClass((uint32_t)anyValue.ELEMCLASS)) == BEEBUS_T_COUNT ||
                  anyValue.TYPECLASS == strucpp::TYPE_CLASS::TYPE_ARRAY || !anyValue.wired()) {
         r->why = "anyValue is a type BeeBus does not carry as one topic";
@@ -3165,7 +3165,7 @@ E_BEEBUSRESULT Topic()
         void* where = (void*)anyValue.PVALUE;
         const uint16_t textCap = (r->wire == BEEBUS_T_STRING && anyValue.DISIZE > 1)
                                      ? (uint16_t)anyValue.DISIZE : 0;
-        r->topicName = sName.c_str();
+        r->topicName = sTopic.c_str();
         if (node->addTopicRaw(topicId, r->wire, where, false, r->topicName.c_str(), textCap)) {
           r->refused = false;
           r->bound = true;
@@ -3183,7 +3183,7 @@ E_BEEBUSRESULT Topic()
         return E_BEEBUSRESULT::INVALIDARGUMENT;
       }
     }
-    if (!bb_sameIdentity(r, identity, why, sizeof why, "sName or nTopicId")) {
+    if (!bb_sameIdentity(r, identity, why, sizeof why, "sTopic or nTopicId")) {
       return E_BEEBUSRESULT::INVALIDARGUMENT;
     }
     // A variable that moved (online change) is bound again where it is now.
@@ -3219,7 +3219,7 @@ E_BEEBUSRESULT Publish()
     }
 
     const uint16_t topicId = (uint16_t)nTopicId;
-    const uint32_t identity = bb_fingerprintOf(bb_fingerprintText(2166136261u, sName.c_str()), topicId);
+    const uint32_t identity = bb_fingerprintOf(bb_fingerprintText(2166136261u, sTopic.c_str()), topicId);
     if (!r->bound) {
       if (r->refused && r->identity == identity) {
         snprintf(why, sizeof why, "%s", r->why.c_str());
@@ -3227,8 +3227,8 @@ E_BEEBUSRESULT Publish()
       }
       r->identity = identity;
       r->refused = true;
-      if (sName.length() == 0 || sName.length() >= BB_NAME_PIN) {
-        r->why = "sName is empty or longer than 253 characters";
+      if (sTopic.length() == 0 || sTopic.length() >= BB_NAME_PIN) {
+        r->why = "sTopic is empty or longer than 253 characters";
       } else if ((r->wire = bb_wireTypeOfClass((uint32_t)anyValue.ELEMCLASS)) == BEEBUS_T_COUNT ||
                  anyValue.TYPECLASS == strucpp::TYPE_CLASS::TYPE_ARRAY || !anyValue.wired()) {
         r->why = "anyValue is a type BeeBus does not carry as one topic";
@@ -3237,7 +3237,7 @@ E_BEEBUSRESULT Publish()
         if (r->wire == BEEBUS_T_STRING && r->text == nullptr) r->text = new (std::nothrow) std::string();
         void* where = r->wire == BEEBUS_T_STRING ? (void*)r->text : (void*)anyValue.PVALUE;
         // Topic may already own it, which is not an error: this only sends it.
-        r->topicName = sName.c_str();
+        r->topicName = sTopic.c_str();
         if (where != nullptr &&
             (node->addTopicRaw(topicId, r->wire, where, false, r->topicName.c_str()) ||
              node->topicIdOf(r->topicName.c_str()) == topicId)) {
@@ -3257,7 +3257,7 @@ E_BEEBUSRESULT Publish()
         return E_BEEBUSRESULT::INVALIDARGUMENT;
       }
     }
-    if (!bb_sameIdentity(r, identity, why, sizeof why, "sName or nTopicId")) {
+    if (!bb_sameIdentity(r, identity, why, sizeof why, "sTopic or nTopicId")) {
       return E_BEEBUSRESULT::INVALIDARGUMENT;
     }
     // A variable that moved is bound again where it is now.
@@ -3281,12 +3281,12 @@ E_BEEBUSRESULT Publish()
 
     // A start: the inputs as they are now.
     const bool toPeer = (E_BEEBUSPUBLISHMODE)ePublishMode == E_BEEBUSPUBLISHMODE::TOPEER;
-    const BeeBusDelivery delivery = (bool)bConfirmed ? BeeBusDelivery::Confirmed
+    const BeeBusDelivery delivery = (bool)bRequireAcknowledge ? BeeBusDelivery::Confirmed
                                                      : BeeBusDelivery::Unconfirmed;
     // Which peer the operation waits on, so a broadcast and a publish to one
     // node keep their own outstanding operation.
-    r->target = toPeer ? (uint8_t)nPeer : BEEBUS_NODE_BROADCAST;
-    const BeeBusResult asked = toPeer ? node->publishTo((uint8_t)nPeer, r->topicId, delivery)
+    r->target = toPeer ? (uint8_t)nPeerNodeId : BEEBUS_NODE_BROADCAST;
+    const BeeBusResult asked = toPeer ? node->publishTo((uint8_t)nPeerNodeId, r->topicId, delivery)
                                       : node->publishAll(r->topicId, delivery);
     if (!bb_accepted(asked) && asked != BeeBusResult::Duplicate) {
       r->result = bb_resultOf(asked);
@@ -3309,22 +3309,22 @@ E_BEEBUSRESULT Subscribe()
   BbNode* n = nullptr;
   char why[112] = "";
   char id[24];
-  snprintf(id, sizeof id, "%u#%u", (unsigned)(uint8_t)nPeer, (unsigned)(uint16_t)nTopicId);
+  snprintf(id, sizeof id, "%u#%u", (unsigned)(uint8_t)nPeerNodeId, (unsigned)(uint16_t)nTopicId);
   const std::string rec = bb_recordName(&anyValue, id);
   E_BEEBUSRESULT result = E_BEEBUSRESULT::OK;
   BbRecord* r = bb_begin(nState, n, BB_REC_SUBSCRIBE, rec, anyValue.TYPENAME, anyValue.PVALUE, result);
   if (r != nullptr) result = [&]() -> E_BEEBUSRESULT {
-    bNewValue = false;
-    nMissed = r->missed;
+    bValueReceived = false;
+    nMissedUpdateCount = r->missed;
     BeeBusAPI* node = n->api;
     if (node == nullptr) {
       eQuality = E_BEEBUSQUALITY::UNKNOWN;
       return E_BEEBUSRESULT::NOTINITIALISED;
     }
-    const uint8_t peer = (uint8_t)nPeer;
+    const uint8_t peer = (uint8_t)nPeerNodeId;
     const uint16_t topicId = (uint16_t)nTopicId;
     const uint32_t identity = bb_fingerprintOf(bb_fingerprintOf(
-        bb_fingerprintText(2166136261u, sName.c_str()), topicId), peer);
+        bb_fingerprintText(2166136261u, sTopic.c_str()), topicId), peer);
     if (!r->bound) {
       if (r->refused && r->identity == identity) {
         snprintf(why, sizeof why, "%s", r->why.c_str());
@@ -3332,8 +3332,8 @@ E_BEEBUSRESULT Subscribe()
       }
       r->identity = identity;
       r->refused = true;
-      if (sName.length() == 0 || sName.length() >= BB_NAME_PIN) {
-        r->why = "sName is empty or longer than 253 characters";
+      if (sTopic.length() == 0 || sTopic.length() >= BB_NAME_PIN) {
+        r->why = "sTopic is empty or longer than 253 characters";
       } else if ((r->wire = bb_wireTypeOfClass((uint32_t)anyValue.ELEMCLASS)) == BEEBUS_T_COUNT ||
                  anyValue.TYPECLASS == strucpp::TYPE_CLASS::TYPE_ARRAY || !anyValue.wired()) {
         r->why = "anyValue is a type BeeBus does not carry as one topic";
@@ -3343,7 +3343,7 @@ E_BEEBUSRESULT Subscribe()
         void* where = (void*)anyValue.PVALUE;
         const uint16_t textCap = (r->wire == BEEBUS_T_STRING && anyValue.DISIZE > 1)
                                      ? (uint16_t)anyValue.DISIZE : 0;
-        r->topicName = sName.c_str();
+        r->topicName = sTopic.c_str();
         if (node->registerTopicRaw(peer, topicId, r->wire, where, r->topicName.c_str(), textCap)) {
           r->refused = false;
           r->bound = true;
@@ -3362,7 +3362,7 @@ E_BEEBUSRESULT Subscribe()
         return E_BEEBUSRESULT::INVALIDARGUMENT;
       }
     }
-    if (!bb_sameIdentity(r, identity, why, sizeof why, "nPeer, sName or nTopicId")) {
+    if (!bb_sameIdentity(r, identity, why, sizeof why, "nPeerNodeId, sTopic or nTopicId")) {
       return E_BEEBUSRESULT::INVALIDARGUMENT;
     }
     if ((void*)anyValue.PVALUE != r->storage) {
@@ -3376,8 +3376,8 @@ E_BEEBUSRESULT Subscribe()
     // standing intent: the protocol holds it until the peer is in the ring
     // and re-establishes it if the peer restarts.
     const float deadband = (float)fDeadband;
-    const int32_t interval = bb_millisOf(tPeriod);
-    const bool reliable = (bool)bReliable;
+    const int32_t interval = bb_millisOf(tMaxSendInterval);
+    const bool reliable = (bool)bDeliverEveryChange;
     if (!r->issued || r->askedDeadband != deadband || r->askedInterval != interval ||
         r->askedReliable != reliable) {
       const BeeBusResult asked = node->subscribe(r->peer, r->topicId, deadband, (bb_time_t)interval,
@@ -3390,22 +3390,22 @@ E_BEEBUSRESULT Subscribe()
     }
     eQuality = (E_BEEBUSQUALITY)node->topicQuality(r->peer, r->topicId);
     const bb_time_t age = node->topicAge(r->peer, r->topicId);
-    tAge = bb_timeOf(age == BEEBUS_SILENCE_NEVER ? 0 : (int32_t)age);
-    bSeen = age != BEEBUS_SILENCE_NEVER;
+    tValueAge = bb_timeOf(age == BEEBUS_SILENCE_NEVER ? 0 : (int32_t)age);
+    bValueEverReceived = age != BEEBUS_SILENCE_NEVER;
 #else
-    snprintf(why, sizeof why, "this build has no topic names (BEEBUS_TOPIC_NAMES)");
+    snprintf(why, sizeof why, "no topic names: BEEBUS_TOPIC_NAMES=0 is in the board's build flags");
     outcome = E_BEEBUSRESULT::INVALIDARGUMENT;
 #endif
     // The node counts publishes and gaps; the record keeps what it last saw,
     // so two calls watching one topic do not take each other's arrivals.
     BeeBusTopicStream stream;
     if (node->topicStream(r->peer, r->topicId, stream)) {
-      bNewValue = stream.received != r->seenReceived;
+      bValueReceived = stream.received != r->seenReceived;
       r->missed += (uint16_t)(stream.missed - r->seenMissed);
       r->seenReceived = stream.received;
       r->seenMissed = stream.missed;
     }
-    nMissed = r->missed;
+    nMissedUpdateCount = r->missed;
     return outcome;
   }();
   return bb_noteCall(n, "Subscribe", rec, result, why);
@@ -3466,28 +3466,28 @@ E_BEEBUSRESULT PublishStruct()
   BbNode* n = nullptr;
   char why[112] = "";
   char id[16];
-  snprintf(id, sizeof id, "#%u", (unsigned)(uint16_t)nTopicId);
+  snprintf(id, sizeof id, "#%u", (unsigned)(uint16_t)nFirstTopicId);
   const std::string rec = bb_recordName(&anyData, id);
   E_BEEBUSRESULT result = E_BEEBUSRESULT::OK;
   BbRecord* r = bb_begin(nState, n, BB_REC_PUBLISH_STRUCT, rec, anyData.TYPENAME, anyData.PVALUE, result);
   if (r != nullptr) result = [&]() -> E_BEEBUSRESULT {
     auto done = [&](E_BEEBUSRESULT value) -> E_BEEBUSRESULT {
       nMembers = r->members;
-      nWritten = r->heldCount;
-      sWrittenName = r->heldName.c_str();
-      nWrittenIndex = r->heldIndex;
-      nWrittenBy = r->heldBy;
-      nLost = r->lost;
+      nMembersWritten = r->heldCount;
+      sFirstWrittenMember = r->heldName.c_str();
+      nFirstWrittenIndex = r->heldIndex;
+      nWrittenByNodeId = r->heldBy;
+      nDroppedWriteCount = r->lost;
       return value;
     };
-    bWritten = false;
+    bWrittenByPeer = false;
     BeeBusAPI* node = n->api;
     if (node == nullptr) return done(E_BEEBUSRESULT::NOTINITIALISED);
-    const bool writable = (bool)bWritable;
-    const uint32_t identity = bb_structIdentity((uint16_t)nTopicId, sPrefix.c_str(), 0, writable);
+    const bool writable = (bool)bPeersMayWrite;
+    const uint32_t identity = bb_structIdentity((uint16_t)nFirstTopicId, sTopicPrefix.c_str(), 0, writable);
     const bool ok = bb_planRecord(r, anyData, identity, false, why, sizeof why,
         [&](void* plan, char* reason, size_t cap) {
-          return bb_planBindTopicsEx(plan, node, false, 0, (uint16_t)nTopicId, sPrefix.c_str(),
+          return bb_planBindTopicsEx(plan, node, false, 0, (uint16_t)nFirstTopicId, sTopicPrefix.c_str(),
                                      writable, reason, cap) &&
                  (!writable || bb_planQueueWrites(plan, node, reason, cap));
         });
@@ -3497,15 +3497,15 @@ E_BEEBUSRESULT PublishStruct()
     // first, into the variable before the copies below follow it.
     uint32_t first = 0, lost = 0;
     uint8_t by = 0;
-    const int32_t pulse = bb_millisOf(tPulse);
-    const int32_t settle = bb_millisOf(tSettle);
+    const int32_t pulse = bb_millisOf(tPulseLength);
+    const int32_t settle = bb_millisOf(tAnswerDelay);
     bb_planServeTerms(r->plan, (uint32_t)(settle > 0 ? settle : 0), false);
     const uint32_t taken = bb_planTakeWrites(r->plan, (uint32_t)(pulse > 0 ? pulse : 0), &first, &by, &lost);
     r->lost += lost;
     if (taken > 0) {
       char name[65] = "";
       bb_planLeafInfo(r->plan, first, name, sizeof name, nullptr);
-      bWritten = true;
+      bWrittenByPeer = true;
       r->heldCount = (uint16_t)taken;
       r->heldName = name;
       r->heldIndex = (uint16_t)(first + 1);
@@ -3525,37 +3525,37 @@ E_BEEBUSRESULT Serve()
   BbNode* n = nullptr;
   char why[112] = "";
   char id[16];
-  snprintf(id, sizeof id, "#%u", (unsigned)(uint16_t)nTopicId);
+  snprintf(id, sizeof id, "#%u", (unsigned)(uint16_t)nFirstTopicId);
   const std::string rec = bb_recordName(&anyData, id);
   E_BEEBUSRESULT result = E_BEEBUSRESULT::OK;
   BbRecord* r = bb_begin(nState, n, BB_REC_SERVE, rec, anyData.TYPENAME, anyData.PVALUE, result);
   if (r != nullptr) result = [&]() -> E_BEEBUSRESULT {
     auto done = [&](E_BEEBUSRESULT value) -> E_BEEBUSRESULT {
       nMembers = r->members;
-      nChanged = r->heldCount;
-      sChangedName = r->heldName.c_str();
-      nChangedIndex = r->heldIndex;
-      nChangedBy = r->heldBy;
-      nRefused = r->refusedCount;
-      nLost = r->lost;
+      nMembersChanged = r->heldCount;
+      sFirstChangedMember = r->heldName.c_str();
+      nFirstChangedIndex = r->heldIndex;
+      nChangedByNodeId = r->heldBy;
+      nRefusedChangeCount = r->refusedCount;
+      nDroppedChangeCount = r->lost;
       return value;
     };
-    bChanged = false;
+    bChangedByPeer = false;
     BeeBusAPI* node = n->api;
     if (node == nullptr) return done(E_BEEBUSRESULT::NOTINITIALISED);
-    const bool writable = (bool)bWritable;
+    const bool writable = (bool)bPeersMayChange;
     const bool ok = bb_planRecord(r, anyData,
-        bb_structIdentity((uint16_t)nTopicId, sPrefix.c_str(), 0, writable ? 1u : 0u),
+        bb_structIdentity((uint16_t)nFirstTopicId, sTopicPrefix.c_str(), 0, writable ? 1u : 0u),
         false, why, sizeof why,
         [&](void* plan, char* reason, size_t cap) {
-          return bb_planBindTopicsEx(plan, node, false, 0, (uint16_t)nTopicId, sPrefix.c_str(),
+          return bb_planBindTopicsEx(plan, node, false, 0, (uint16_t)nFirstTopicId, sTopicPrefix.c_str(),
                                      writable, reason, cap) &&
                  (!writable || bb_planQueueWrites(plan, node, reason, cap));
         });
     if (!ok) return done(E_BEEBUSRESULT::INVALIDARGUMENT);
 
     // The ring's depth may change while it runs; 127 at most.
-    const uint8_t depth = (uint8_t)nDepth > 127 ? 127 : (uint8_t)nDepth;
+    const uint8_t depth = (uint8_t)nOfflineBufferDepth > 127 ? 127 : (uint8_t)nOfflineBufferDepth;
     if (!r->depthSet || r->depth != depth) {
       char reason[96] = "";
       if (!bb_planBuffer(r->plan, node, depth, reason, sizeof reason) && depth > 0) {
@@ -3563,7 +3563,7 @@ E_BEEBUSRESULT Serve()
         return done(E_BEEBUSRESULT::INVALIDARGUMENT);
       }
       if (depth == 0 && r->depthSet) {
-        for (uint32_t k = 0; k < r->members; k++) node->bufferTopic((uint16_t)(nTopicId + k), 0);
+        for (uint32_t k = 0; k < r->members; k++) node->bufferTopic((uint16_t)(nFirstTopicId + k), 0);
       }
       r->depthSet = true;
       r->depth = depth;
@@ -3574,15 +3574,15 @@ E_BEEBUSRESULT Serve()
     // with it.
     uint32_t first = 0, lost = 0;
     uint8_t by = 0;
-    const int32_t pulse = bb_millisOf(tPulse);
-    const int32_t settle = bb_millisOf(tSettle);
-    bb_planServeTerms(r->plan, (uint32_t)(settle > 0 ? settle : 0), (bool)bCommand);
+    const int32_t pulse = bb_millisOf(tPulseLength);
+    const int32_t settle = bb_millisOf(tAnswerDelay);
+    bb_planServeTerms(r->plan, (uint32_t)(settle > 0 ? settle : 0), (bool)bMembersAreCommands);
     const uint32_t taken = bb_planTakeWrites(r->plan, (uint32_t)(pulse > 0 ? pulse : 0), &first, &by, &lost);
     r->lost += lost;
     if (taken > 0) {
       char name[65] = "";
       bb_planLeafInfo(r->plan, first, name, sizeof name, nullptr);
-      bChanged = true;
+      bChangedByPeer = true;
       r->heldCount = (uint16_t)taken;
       r->heldName = name;
       r->heldIndex = (uint16_t)(first + 1);
@@ -3602,29 +3602,29 @@ E_BEEBUSRESULT SubscribeStruct()
   BbNode* n = nullptr;
   char why[112] = "";
   char id[24];
-  snprintf(id, sizeof id, "%u#%u", (unsigned)(uint8_t)nPeer, (unsigned)(uint16_t)nTopicId);
+  snprintf(id, sizeof id, "%u#%u", (unsigned)(uint8_t)nPeerNodeId, (unsigned)(uint16_t)nFirstTopicId);
   const std::string rec = bb_recordName(&anyData, id);
   E_BEEBUSRESULT result = E_BEEBUSRESULT::OK;
   BbRecord* r = bb_begin(nState, n, BB_REC_SUBSCRIBE_STRUCT, rec, anyData.TYPENAME, anyData.PVALUE, result);
   if (r != nullptr) result = [&]() -> E_BEEBUSRESULT {
     auto done = [&](E_BEEBUSRESULT value) -> E_BEEBUSRESULT {
       nMembers = r->members;
-      sNewName = r->heldName.c_str();
-      nNewIndex = r->heldIndex;
-      nMissed = r->missed;
+      sFirstReceivedMember = r->heldName.c_str();
+      nFirstReceivedIndex = r->heldIndex;
+      nMissedUpdateCount = r->missed;
       return value;
     };
-    nNewValues = 0;
+    nMembersReceived = 0;
     BeeBusAPI* node = n->api;
     if (node == nullptr) {
       eQuality = E_BEEBUSQUALITY::UNKNOWN;
       return done(E_BEEBUSRESULT::NOTINITIALISED);
     }
-    const uint8_t peer = (uint8_t)nPeer;
+    const uint8_t peer = (uint8_t)nPeerNodeId;
     const bool ok = bb_planRecord(r, anyData,
-        bb_structIdentity((uint16_t)nTopicId, sPrefix.c_str(), peer, 0), false, why, sizeof why,
+        bb_structIdentity((uint16_t)nFirstTopicId, sTopicPrefix.c_str(), peer, 0), false, why, sizeof why,
         [&](void* plan, char* reason, size_t cap) {
-          return bb_planBindTopics(plan, node, true, peer, (uint16_t)nTopicId, sPrefix.c_str(),
+          return bb_planBindTopics(plan, node, true, peer, (uint16_t)nFirstTopicId, sTopicPrefix.c_str(),
                                    reason, cap);
         });
     if (!ok) return done(E_BEEBUSRESULT::INVALIDARGUMENT);
@@ -3635,8 +3635,8 @@ E_BEEBUSRESULT SubscribeStruct()
     // peer restarts.
     E_BEEBUSRESULT outcome = E_BEEBUSRESULT::OK;
     const float deadband = (float)fDeadband;
-    const int32_t interval = bb_millisOf(tPeriod);
-    const bool reliable = (bool)bReliable;
+    const int32_t interval = bb_millisOf(tMaxSendInterval);
+    const bool reliable = (bool)bDeliverEveryChange;
     const bool again = r->issued && (r->askedDeadband != deadband || r->askedInterval != interval ||
                                      r->askedReliable != reliable);
     if (!r->issued || again) {
@@ -3658,9 +3658,9 @@ E_BEEBUSRESULT SubscribeStruct()
     int32_t oldest = 0;
     bb_planReceive(r->plan, node, &fresh, &first, &gaps, &worst, &all, &oldest);
     eQuality = (E_BEEBUSQUALITY)worst;
-    bSeen = all;
-    tOldest = bb_timeOf(oldest);
-    nNewValues = (uint16_t)fresh;
+    bAllMembersEverReceived = all;
+    tOldestMemberAge = bb_timeOf(oldest);
+    nMembersReceived = (uint16_t)fresh;
     if (fresh != 0) {
       char name[65] = "";
       bb_planLeafInfo(r->plan, first, name, sizeof name, nullptr);
@@ -3678,32 +3678,32 @@ E_BEEBUSRESULT Bind()
   BbNode* n = nullptr;
   char why[112] = "";
   char id[24];
-  snprintf(id, sizeof id, "%u#%u", (unsigned)(uint8_t)nPeer, (unsigned)(uint16_t)nTopicId);
+  snprintf(id, sizeof id, "%u#%u", (unsigned)(uint8_t)nPeerNodeId, (unsigned)(uint16_t)nFirstTopicId);
   const std::string rec = bb_recordName(&anyData, id);
   E_BEEBUSRESULT result = E_BEEBUSRESULT::OK;
   BbRecord* r = bb_begin(nState, n, BB_REC_BIND, rec, anyData.TYPENAME, anyData.PVALUE, result);
   if (r != nullptr) result = [&]() -> E_BEEBUSRESULT {
     auto done = [&](E_BEEBUSRESULT value) -> E_BEEBUSRESULT {
       nMembers = r->members;
-      sRefusedName = r->heldName.c_str();
-      nRefusedIndex = r->heldIndex;
+      sFirstRefusedMember = r->heldName.c_str();
+      nFirstRefusedIndex = r->heldIndex;
       return value;
     };
-    bNewValue = false;
+    bValueReceived = false;
     BeeBusAPI* node = n->api;
     if (node == nullptr) {
       eBindState = E_BEEBUSBINDSTATE::OFFLINE;
       return done(E_BEEBUSRESULT::NOTINITIALISED);
     }
-    const uint8_t peer = (uint8_t)nPeer;
-    const bool reliable = (bool)bReliable;
+    const uint8_t peer = (uint8_t)nPeerNodeId;
+    const bool reliable = (bool)bDeliverEveryChange;
     const float deadband = (float)fDeadband;
     uint32_t terms = reliable ? 1u : 0u;
     terms = bb_fingerprintOf(terms, deadband);
     const bool ok = bb_planRecord(r, anyData,
-        bb_structIdentity((uint16_t)nTopicId, sPrefix.c_str(), peer, terms), false, why, sizeof why,
+        bb_structIdentity((uint16_t)nFirstTopicId, sTopicPrefix.c_str(), peer, terms), false, why, sizeof why,
         [&](void* plan, char* reason, size_t cap) {
-          return bb_planBind(plan, node, peer, (uint16_t)nTopicId, sPrefix.c_str(), reliable,
+          return bb_planBind(plan, node, peer, (uint16_t)nFirstTopicId, sTopicPrefix.c_str(), reliable,
                              deadband, reason, cap);
         });
     if (!ok) return done(E_BEEBUSRESULT::INVALIDARGUMENT);
@@ -3719,9 +3719,9 @@ E_BEEBUSRESULT Bind()
     bb_planBindStatus(r->plan, node, &worst, &pending, &refused, &failed, &firstRefused, &allInSync);
     eBindState = (E_BEEBUSBINDSTATE)(int32_t)worst;
     bInSync = allInSync;
-    bPending = pending > 0;
-    bFailed = failed > 0;
-    bRefused = refused > 0;
+    bChangePending = pending > 0;
+    bNoDecisionReceived = failed > 0;
+    bSettingRefused = refused > 0;
     if (refused > 0 && (!r->wasRefused || r->heldIndex != (uint16_t)(firstRefused + 1))) {
       char name[65] = "";
       bb_planLeafInfo(r->plan, firstRefused, name, sizeof name, nullptr);
@@ -3735,8 +3735,8 @@ E_BEEBUSRESULT Bind()
     bool allSeen = false;
     int32_t oldest = 0;
     bb_planReceive(r->plan, node, &fresh, &firstNew, &missed, &quality, &allSeen, &oldest);
-    bNewValue = fresh > 0;
-    tOldest = bb_timeOf(oldest);
+    bValueReceived = fresh > 0;
+    tOldestMemberAge = bb_timeOf(oldest);
     return done(E_BEEBUSRESULT::OK);
   }();
   return bb_noteCall(n, "Bind", rec, result, why);
@@ -3747,17 +3747,17 @@ E_BEEBUSRESULT Write()
   BbNode* n = nullptr;
   char why[112] = "";
   char id[24];
-  snprintf(id, sizeof id, "%u#%u", (unsigned)(uint8_t)nPeer, (unsigned)(uint16_t)nTopicId);
+  snprintf(id, sizeof id, "%u#%u", (unsigned)(uint8_t)nPeerNodeId, (unsigned)(uint16_t)nTopicId);
   const std::string rec = bb_recordName(&anyValue, id);
   E_BEEBUSRESULT result = E_BEEBUSRESULT::OK;
   BbRecord* r = bb_begin(nState, n, BB_REC_WRITE, rec, anyValue.TYPENAME, anyValue.PVALUE, result);
   if (r != nullptr) result = [&]() -> E_BEEBUSRESULT {
     auto done = [&](E_BEEBUSRESULT value) -> E_BEEBUSRESULT {
-      eOutcome = (E_BEEBUSOUTCOME)(int32_t)(r->outcome < BEEBUS_OUTCOME_COUNT ? r->outcome
+      eOwnerDecision = (E_BEEBUSOUTCOME)(int32_t)(r->outcome < BEEBUS_OUTCOME_COUNT ? r->outcome
                                                                              : BEEBUS_OUTCOME_COUNT);
-      bAccepted = r->accepted;
-      bRefused = r->refusedValue;
-      fKeptValue = r->kept;
+      bOwnerAccepted = r->accepted;
+      bOwnerKeptOtherValue = r->refusedValue;
+      fOwnerKeptValue = r->kept;
       return value;
     };
     const bool execute = (bool)bExecute;
@@ -3803,7 +3803,7 @@ E_BEEBUSRESULT Write()
     if (!rising) return done(r->result);
 
     // A start: the inputs as they are now.
-    r->peer = (uint8_t)nPeer;
+    r->peer = (uint8_t)nPeerNodeId;
     r->topicId = (uint16_t)nTopicId;
     const uint8_t wire = bb_wireTypeOfClass((uint32_t)anyValue.ELEMCLASS);
     if (wire == BEEBUS_T_COUNT || anyValue.TYPECLASS == strucpp::TYPE_CLASS::TYPE_ARRAY ||
@@ -3814,8 +3814,8 @@ E_BEEBUSRESULT Write()
     }
     // A result is asked for only of a confirmed write: the decision answers a
     // request that arrived.
-    const bool wantResult = (bool)bWantResult;
-    const BeeBusDelivery delivery = ((bool)bConfirmed || wantResult) ? BeeBusDelivery::Confirmed
+    const bool wantResult = (bool)bAskOwnerDecision;
+    const BeeBusDelivery delivery = ((bool)bRequireAcknowledge || wantResult) ? BeeBusDelivery::Confirmed
                                                                      : BeeBusDelivery::Unconfirmed;
     if (wantResult) {
       uint8_t decided = 0;
@@ -3853,22 +3853,22 @@ E_BEEBUSRESULT Buffer()
 {
   BbNode* n = nullptr;
   char why[112] = "";
-  const std::string rec = bb_recordName(nullptr, sName.c_str());
+  const std::string rec = bb_recordName(nullptr, sTopic.c_str());
   E_BEEBUSRESULT result = E_BEEBUSRESULT::OK;
   BbRecord* r = bb_begin(nState, n, BB_REC_BUFFER, rec, "", nullptr, result);
   if (r != nullptr) result = [&]() -> E_BEEBUSRESULT {
-    nHeld = 0;
+    nSamplesWaiting = 0;
     BeeBusAPI* node = n->api;
     if (node == nullptr) return E_BEEBUSRESULT::NOTINITIALISED;
 #if BEEBUS_TOPIC_NAMES
     // Topic or Publish binds the topic; this only asks for a depth.
-    const uint16_t topicId = node->topicIdOf(sName.c_str());
+    const uint16_t topicId = node->topicIdOf(sTopic.c_str());
     if (topicId == BEEBUS_TOPIC_NONE) {
       snprintf(why, sizeof why, "no topic of this node is named so");
       r->depthSet = false;
       return E_BEEBUSRESULT::NOTMAPPED;
     }
-    const uint8_t depth = (uint8_t)nDepth;
+    const uint8_t depth = (uint8_t)nOfflineBufferDepth;
     if (!r->depthSet || r->depth != depth || r->topicId != topicId) {
       if (!node->bufferTopic(topicId, depth)) {
         snprintf(why, sizeof why, "no memory for a ring of %u", (unsigned)depth);
@@ -3878,10 +3878,10 @@ E_BEEBUSRESULT Buffer()
       r->depth = depth;
       r->topicId = topicId;
     }
-    nHeld = (uint16_t)node->bufferedCount(topicId);
+    nSamplesWaiting = (uint16_t)node->bufferedCount(topicId);
     return E_BEEBUSRESULT::OK;
 #else
-    snprintf(why, sizeof why, "this build has no topic names (BEEBUS_TOPIC_NAMES)");
+    snprintf(why, sizeof why, "no topic names: BEEBUS_TOPIC_NAMES=0 is in the board's build flags");
     return E_BEEBUSRESULT::NOTMAPPED;
 #endif
   }();
@@ -3893,26 +3893,26 @@ E_BEEBUSRESULT ModbusMap()
   BbNode* n = nullptr;
   char why[112] = "";
   char id[24];
-  snprintf(id, sizeof id, "@%d:%u", (int)(E_BEEBUSMODBUSTABLE)eTable, (unsigned)(uint16_t)nAddress);
+  snprintf(id, sizeof id, "@%d:%u", (int)(E_BEEBUSMODBUSTABLE)eTable, (unsigned)(uint16_t)nStartAddress);
   const std::string rec = bb_recordName(&anyData, id);
   E_BEEBUSRESULT result = E_BEEBUSRESULT::OK;
   BbRecord* r = bb_begin(nState, n, BB_REC_MODBUS_MAP, rec, anyData.TYPENAME, anyData.PVALUE, result);
   if (r != nullptr) result = [&]() -> E_BEEBUSRESULT {
     auto done = [&](E_BEEBUSRESULT value) -> E_BEEBUSRESULT {
-      nCount = r->members;
-      sWrittenName = r->heldName.c_str();
-      nWrittenIndex = r->heldIndex;
-      nWrittenAddr = r->heldAddress;
-      nWritten = r->heldCount;
+      nAddressesUsed = r->members;
+      sFirstWrittenMember = r->heldName.c_str();
+      nFirstWrittenIndex = r->heldIndex;
+      nFirstWrittenAddress = r->heldAddress;
+      nMembersWritten = r->heldCount;
       return value;
     };
-    bWritten = false;
-    bSafeApplied = false;
+    bWrittenByPeer = false;
+    bSafeValueApplied = false;
     BeeBusAPI* node = n->api;
     if (node == nullptr) return done(E_BEEBUSRESULT::NOTINITIALISED);
     const BeeBusRegisterType table = (BeeBusRegisterType)(int)(E_BEEBUSMODBUSTABLE)eTable;
-    const uint16_t address = (uint16_t)nAddress;
-    const bool resetOnLoss = (E_BEEBUSMODBUSFAILSAFE)eOnLoss == E_BEEBUSMODBUSFAILSAFE::RESETTOVALUE;
+    const uint16_t address = (uint16_t)nStartAddress;
+    const bool resetOnLoss = (E_BEEBUSMODBUSFAILSAFE)eActionOnWriterLoss == E_BEEBUSMODBUSFAILSAFE::RESETTOVALUE;
     const int32_t safe = (int32_t)nSafeValue;
     uint32_t identity = bb_fingerprintOf(bb_fingerprintOf(2166136261u, (int32_t)table), address);
     identity = bb_fingerprintOf(bb_fingerprintOf(identity, resetOnLoss), safe);
@@ -3969,14 +3969,14 @@ E_BEEBUSRESULT ModbusMap()
       char name[65] = "";
       uint32_t offset = 0;
       bb_planLeafInfo(r->plan, first, name, sizeof name, &offset);
-      bWritten = true;
+      bWrittenByPeer = true;
       r->heldName = name;
       r->heldIndex = (uint16_t)(first + 1);
       r->heldAddress = (uint16_t)(r->address + offset);
       r->heldCount = written;
     }
     const uint16_t safed = node->failsafeCount((BeeBusRegisterType)r->target, r->address);
-    bSafeApplied = safed != r->seenFailsafe;
+    bSafeValueApplied = safed != r->seenFailsafe;
     r->seenFailsafe = safed;
     return done(E_BEEBUSRESULT::OK);
   }();
@@ -4006,7 +4006,7 @@ E_BEEBUSRESULT ModbusRead()
   BbNode* n = nullptr;
   char why[112] = "";
   char id[24];
-  snprintf(id, sizeof id, "%u@%u", (unsigned)(uint8_t)nPeer, (unsigned)(uint16_t)nAddress);
+  snprintf(id, sizeof id, "%u@%u", (unsigned)(uint8_t)nPeerNodeId, (unsigned)(uint16_t)nStartAddress);
   const std::string rec = bb_recordName(&anyData, id);
   E_BEEBUSRESULT result = E_BEEBUSRESULT::OK;
   BbRecord* r = bb_begin(nState, n, BB_REC_MODBUS_READ, rec, anyData.TYPENAME, anyData.PVALUE, result);
@@ -4025,8 +4025,8 @@ E_BEEBUSRESULT ModbusRead()
     if (!rising) return r->result;
 
     // A start: the inputs as they are now.
-    r->peer = (uint8_t)nPeer;
-    r->address = (uint16_t)nAddress;
+    r->peer = (uint8_t)nPeerNodeId;
+    r->address = (uint16_t)nStartAddress;
     const BeeBusRegisterType table = (BeeBusRegisterType)(int)(E_BEEBUSMODBUSTABLE)eTable;
     const uint8_t wire = bb_wireTypeOfClass((uint32_t)anyData.ELEMCLASS);
     BeeBusResult asked = BeeBusResult::InvalidArgument;
@@ -4052,9 +4052,9 @@ E_BEEBUSRESULT ModbusRead()
         r->plan = bb_planBuild(anyData, r->bits, why, sizeof why);
       }
       if (r->plan != nullptr) {
-        asked = bb_planReadPeer(r->plan, node, r->peer, table, r->address, (uint32_t)(uint16_t)nLength);
+        asked = bb_planReadPeer(r->plan, node, r->peer, table, r->address, (uint32_t)(uint16_t)nQuantity);
         if (asked == BeeBusResult::InvalidArgument && why[0] == '\0') {
-          snprintf(why, sizeof why, "nLength is more than anyData holds, or past 65535 registers");
+          snprintf(why, sizeof why, "nQuantity is more than anyData holds, or past 65535 registers");
         }
       }
     }
@@ -4080,7 +4080,7 @@ E_BEEBUSRESULT ModbusWrite()
   BbNode* n = nullptr;
   char why[112] = "";
   char id[24];
-  snprintf(id, sizeof id, "%u@%u", (unsigned)(uint8_t)nPeer, (unsigned)(uint16_t)nAddress);
+  snprintf(id, sizeof id, "%u@%u", (unsigned)(uint8_t)nPeerNodeId, (unsigned)(uint16_t)nStartAddress);
   const std::string rec = bb_recordName(&anyData, id);
   E_BEEBUSRESULT result = E_BEEBUSRESULT::OK;
   BbRecord* r = bb_begin(nState, n, BB_REC_MODBUS_WRITE, rec, anyData.TYPENAME, anyData.PVALUE, result);
@@ -4099,8 +4099,8 @@ E_BEEBUSRESULT ModbusWrite()
     if (!rising) return r->result;
 
     // A start: the inputs and the values as they are now.
-    r->peer = (uint8_t)nPeer;
-    r->address = (uint16_t)nAddress;
+    r->peer = (uint8_t)nPeerNodeId;
+    r->address = (uint16_t)nStartAddress;
     const BeeBusRegisterType table = (BeeBusRegisterType)(int)(E_BEEBUSMODBUSTABLE)eTable;
     // Only two of the four tables have a write function code.
     if (!bb_tableIsWritable(table)) {
@@ -4108,7 +4108,7 @@ E_BEEBUSRESULT ModbusWrite()
       r->result = E_BEEBUSRESULT::INVALIDARGUMENT;
       return r->result;
     }
-    const BeeBusDelivery delivery = (bool)bConfirmed ? BeeBusDelivery::Confirmed
+    const BeeBusDelivery delivery = (bool)bRequireAcknowledge ? BeeBusDelivery::Confirmed
                                                      : BeeBusDelivery::Unconfirmed;
     const uint8_t wire = bb_wireTypeOfClass((uint32_t)anyData.ELEMCLASS);
     BeeBusResult asked = BeeBusResult::InvalidArgument;
@@ -4126,9 +4126,9 @@ E_BEEBUSRESULT ModbusWrite()
       r->plan = bb_planBuild(anyData, bb_tableIsBits(table), why, sizeof why);
       if (r->plan != nullptr) {
         asked = bb_planWritePeer(r->plan, node, r->peer, table, r->address,
-                                 (uint32_t)(uint16_t)nLength, delivery);
+                                 (uint32_t)(uint16_t)nQuantity, delivery);
         if (asked == BeeBusResult::InvalidArgument && why[0] == '\0') {
-          snprintf(why, sizeof why, "nLength is more than anyData holds, or past 65535 registers");
+          snprintf(why, sizeof why, "nQuantity is more than anyData holds, or past 65535 registers");
         }
       }
     }
@@ -4155,13 +4155,13 @@ E_BEEBUSRESULT Statistics()
   if (!bb_inTask(n->task)) return E_BEEBUSRESULT::WRONGTASK;
   BeeBusAPI* node = n->api;
   if (node == nullptr) return E_BEEBUSRESULT::NOTINITIALISED;
-  nIdInUse = node->getNodeID();
-  nMembers = node->getMemberCount();
-  tRotation = bb_timeOf((int32_t)node->getRotationTime());
-  nPendingOps = (int16_t)node->getPendingOpCount();
+  nNodeIdInUse = node->getNodeID();
+  nNodesInRing = node->getMemberCount();
+  tTokenRotationTime = bb_timeOf((int32_t)node->getRotationTime());
+  nPendingOperations = (int16_t)node->getPendingOpCount();
   const BeeBusIOStats stats = node->getLinkStatistics();
-  nCrcErrors = (int32_t)stats.crcErrors;
-  nNoiseBytes = (int32_t)stats.noiseBytesDiscarded;
+  nChecksumErrorCount = (int32_t)stats.crcErrors;
+  nNoiseByteCount = (int32_t)stats.noiseBytesDiscarded;
   return E_BEEBUSRESULT::OK;
 }
 
@@ -4171,20 +4171,20 @@ E_BEEBUSRESULT PeerStatus()
   if (n == nullptr) return E_BEEBUSRESULT::QUEUEFULL;
   nState = (strucpp::XWORD_t)(uintptr_t)n;
   if (!bb_inTask(n->task)) return E_BEEBUSRESULT::WRONGTASK;
-  const uint8_t peer = (uint8_t)nPeer;
+  const uint8_t peer = (uint8_t)nPeerNodeId;
   if (peer < BEEBUS_NODE_ID_MIN || peer > BEEBUS_NODE_ID_MAX) {
-    return bb_noteCall(n, "PeerStatus", "nPeer", E_BEEBUSRESULT::INVALIDARGUMENT,
-                       "nPeer must be 1..254");
+    return bb_noteCall(n, "PeerStatus", "nPeerNodeId", E_BEEBUSRESULT::INVALIDARGUMENT,
+                       "nPeerNodeId must be 1..254");
   }
-  bb_noteCall(n, "PeerStatus", "nPeer", E_BEEBUSRESULT::OK, nullptr);
+  bb_noteCall(n, "PeerStatus", "nPeerNodeId", E_BEEBUSRESULT::OK, nullptr);
   BeeBusAPI* node = n->api;
   if (node == nullptr) return E_BEEBUSRESULT::NOTINITIALISED;
-  bAlive = node->isAlive(peer);
+  bInRing = node->isAlive(peer);
   const bb_time_t silence = node->silenceFor(peer);
-  tSilent = bb_timeOf(silence == BEEBUS_SILENCE_NEVER ? 0 : (int32_t)silence);
-  bSeen = silence != BEEBUS_SILENCE_NEVER;
-  tHop = bb_timeOf((int32_t)node->getHopTime(peer));
-  tHopTimeout = bb_timeOf((int32_t)node->getHopTimeout(peer));
+  tSinceLastHeard = bb_timeOf(silence == BEEBUS_SILENCE_NEVER ? 0 : (int32_t)silence);
+  bEverHeard = silence != BEEBUS_SILENCE_NEVER;
+  tTokenHopTime = bb_timeOf((int32_t)node->getHopTime(peer));
+  tTokenHopTimeout = bb_timeOf((int32_t)node->getHopTimeout(peer));
   return E_BEEBUSRESULT::OK;
 }
 
