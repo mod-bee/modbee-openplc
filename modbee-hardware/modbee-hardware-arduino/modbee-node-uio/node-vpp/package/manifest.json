@@ -3,7 +3,7 @@
   "package": {
     "id": "com.modbee.node",
     "name": "ModBee boards",
-    "version": "1.3.0",
+    "version": "1.3.1",
     "vendor": {
       "name": "ModBee",
       "url": "https://modbee.org",
@@ -23,6 +23,7 @@
       "target": {
         "type": "arduino-cli",
         "core": "esp32:esp32",
+        "coreVersion": "3.3.12",
         "platform": "esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,PSRAM=enabled,PartitionScheme=min_spiffs",
         "partitions": "partitions/modbee-node.csv",
         "plcDataMemory": "external"
